@@ -23,6 +23,7 @@ paths:
   /health:
     get:
       tags: [health]
+      operationId: getHealth
       summary: Verifica se o serviço e o banco estão disponíveis
       security: []
       responses:
@@ -39,6 +40,7 @@ paths:
   /hotels:
     get:
       tags: [hotels]
+      operationId: listHotels
       summary: Último catálogo de hotéis conhecido (FR-008)
       responses:
         '200':
@@ -57,6 +59,7 @@ paths:
   /executions:
     post:
       tags: [executions]
+      operationId: createExecution
       summary: Inicia uma execução (FR-001) — somente operador
       requestBody:
         required: true
@@ -79,6 +82,7 @@ paths:
               schema: { $ref: '#/components/schemas/Problem' }
     get:
       tags: [executions]
+      operationId: listExecutions
       summary: Lista execuções (mais recentes primeiro)
       parameters:
         - name: status
@@ -106,6 +110,7 @@ paths:
       - $ref: '#/components/parameters/ExecutionId'
     get:
       tags: [executions]
+      operationId: getExecution
       summary: Estado completo e andamento da execução (FR-021)
       responses:
         '200':
@@ -121,6 +126,7 @@ paths:
       - $ref: '#/components/parameters/ExecutionId'
     get:
       tags: [executions]
+      operationId: streamExecutionEvents
       summary: Stream de eventos em tempo real (Server-Sent Events)
       description: |
         Cada mensagem SSE tem `id` (sequencial), `event` (tipo) e `data` (JSON de ExecutionEvent).
@@ -144,6 +150,7 @@ paths:
       - $ref: '#/components/parameters/ExecutionId'
     post:
       tags: [executions]
+      operationId: sendTwoFactor
       summary: Envia o token 2FA (FR-002) — somente operador
       requestBody:
         required: true
@@ -175,6 +182,7 @@ paths:
       - $ref: '#/components/parameters/ExecutionId'
     post:
       tags: [executions]
+      operationId: cancelExecution
       summary: Cancela a execução (FR-022) — somente operador
       responses:
         '202':
@@ -196,6 +204,7 @@ paths:
       - $ref: '#/components/parameters/ExecutionId'
     post:
       tags: [executions]
+      operationId: resumeExecution
       summary: Retoma uma execução interrompida a partir do primeiro hotel não concluído (FR-023)
       requestBody:
         required: true
@@ -225,6 +234,7 @@ paths:
   /reservations:
     get:
       tags: [reservations]
+      operationId: listReservations
       summary: Consulta reservas com filtros combináveis (FR-020)
       parameters:
         - name: executionId
@@ -286,6 +296,7 @@ paths:
         schema: { type: string }
     get:
       tags: [reservations]
+      operationId: getReservation
       summary: Detalhe de uma reserva
       responses:
         '200':
@@ -308,6 +319,7 @@ paths:
         schema: { type: string, enum: [screenshot, html, response] }
     get:
       tags: [evidence]
+      operationId: getEvidenceFile
       summary: Baixa a captura de tela, o HTML sanitizado ou a resposta JSON de uma evidência (FR-024)
       responses:
         '200':
