@@ -5,12 +5,14 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../../src/config.js';
 import { generateApiKey, hashApiKey } from '../../src/http/auth.js';
 import { startServer, type RunningServer } from '../../src/main.js';
 import { createClient } from '../../src/persistence/clients-repo.js';
 import { findExecution } from '../../src/persistence/executions-repo.js';
+import { evidence } from '../../src/persistence/schema.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/db.js';
 import { insertExecution } from '../helpers/factories.js';
 import { FakeHunit } from '../helpers/fake-hunit-gateway.js';
@@ -19,6 +21,7 @@ let database: TestDatabase;
 let evidenceDir: string;
 let server: RunningServer;
 let interruptedId: string;
+let expiredEvidenceId: string;
 const hunit = new FakeHunit({ hotels: [{ code: '10', name: 'Hotel Alfa' }] });
 const logLines: string[] = [];
 
@@ -45,6 +48,19 @@ beforeAll(async () => {
   evidenceDir = await mkdtemp(path.join(tmpdir(), 'hunit-main-'));
   // Execução que "ficou ativa" quando o processo anterior caiu.
   interruptedId = (await insertExecution(database.db, { status: 'awaiting_2fa' })).id;
+  // Evidência que venceu enquanto o servidor estava desligado (FR-029).
+  const [expired] = await database.db
+    .insert(evidence)
+    .values({
+      executionId: interruptedId,
+      kind: 'navigation_failure',
+      reason: 'vencida',
+      responsePath: `${interruptedId}/vencida.json`,
+      expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    })
+    .returning();
+  if (!expired) throw new Error('a evidência não foi inserida');
+  expiredEvidenceId = expired.id;
 
   server = await startServer({
     config: configFor(database.url),
@@ -65,6 +81,14 @@ describe('startServer (T035)', () => {
     expect((await findExecution(database.db, interruptedId))?.execution).toMatchObject({
       status: 'failed',
       endReason: 'server_restarted',
+    });
+  });
+
+  it('roda a manutenção ao subir: remove a evidência que venceu com o servidor desligado', async () => {
+    await vi.waitFor(async () => {
+      expect(
+        await database.db.select().from(evidence).where(eq(evidence.id, expiredEvidenceId)),
+      ).toEqual([]);
     });
   });
 

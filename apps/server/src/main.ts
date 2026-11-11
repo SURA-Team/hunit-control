@@ -1,6 +1,6 @@
 /**
  * Ponto de entrada do servidor (tasks.md, T035): config, logger, banco e migrations, execuções
- * interrompidas, executor com o Hunit real e a API HTTP.
+ * interrompidas, executor com o Hunit real, a API HTTP e a rotina diária de manutenção (T058).
  *
  *   node dist/main.js
  */
@@ -16,6 +16,7 @@ import type { CreateHunitGateway } from './hunit/gateway.js';
 import { createPlaywrightGatewayFactory } from './hunit/playwright-gateway.js';
 import { buildApp } from './http/app.js';
 import { createLogger, type Logger } from './logging.js';
+import { startRetentionSchedule } from './maintenance/retention.js';
 import { connectDatabase, runMigrations } from './persistence/db.js';
 import { SecretRegistry } from './secrets.js';
 
@@ -34,7 +35,10 @@ export interface RunningServer {
   logger: Logger;
   /** Endereço em que o servidor está escutando (ex.: http://127.0.0.1:3000). */
   url: string;
-  /** Desliga na ordem: para de aceitar requisições, interrompe as execuções e fecha o banco. */
+  /**
+   * Desliga na ordem: para de aceitar requisições, interrompe as execuções, espera a manutenção
+   * em andamento e fecha o banco.
+   */
   close(): Promise<void>;
 }
 
@@ -91,6 +95,14 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     const app = await buildApp({ db: database.db, logger, events, runner, evidence });
     const url = await app.listen({ port: config.port, host: options.host ?? '0.0.0.0' });
 
+    // Roda já ao subir, para recuperar o que venceu com o servidor desligado (FR-029).
+    const maintenance = startRetentionSchedule({
+      db: database.db,
+      evidence,
+      reservationRetentionYears: config.reservationRetentionYears,
+      logger,
+    });
+
     let closing: Promise<void> | null = null;
     return {
       app,
@@ -100,6 +112,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
         closing ??= (async () => {
           await app.close();
           await runner.shutdown();
+          await maintenance.stop();
           await database.close();
         })();
         return closing;

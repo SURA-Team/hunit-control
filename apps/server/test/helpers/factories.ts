@@ -4,11 +4,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Database } from '../../src/persistence/db.js';
-import { apiClients, executions, hotels } from '../../src/persistence/schema.js';
+import { apiClients, executions, hotels, reservations } from '../../src/persistence/schema.js';
 
 type NewClient = typeof apiClients.$inferInsert;
 type NewExecution = typeof executions.$inferInsert;
 type NewHotel = typeof hotels.$inferInsert;
+type NewReservation = typeof reservations.$inferInsert;
 
 export async function insertClient(db: Database, overrides: Partial<NewClient> = {}) {
   const unique = randomUUID();
@@ -49,5 +50,35 @@ export async function insertExecution(db: Database, overrides: Partial<NewExecut
     })
     .returning();
   if (!row) throw new Error('insertExecution não devolveu a linha inserida');
+  return row;
+}
+
+/** Insere uma reserva; cria o hotel e a execução se não forem informados. */
+export async function insertReservation(db: Database, overrides: Partial<NewReservation> = {}) {
+  const hotelCode = overrides.hotelCode ?? (await insertHotel(db)).code;
+  const lastExecutionId = overrides.lastExecutionId ?? (await insertExecution(db)).id;
+  const now = new Date();
+  const [row] = await db
+    .insert(reservations)
+    .values({
+      reservationNumber: '1001',
+      channel: 'Booking.com',
+      checkIn: '2026-11-03',
+      checkOut: '2026-11-05',
+      stayPeriod: '03/11/2026 - 05/11/2026',
+      totalAmount: '1234.56',
+      reservationStatus: 'active',
+      classification: 'virtual_card_pending_charge',
+      reason: 'pré-pagamento sem registro de cobrança',
+      prePaymentFound: true,
+      chargeActionVisible: true,
+      firstVerifiedAt: now,
+      lastVerifiedAt: now,
+      ...overrides,
+      hotelCode,
+      lastExecutionId,
+    })
+    .returning();
+  if (!row) throw new Error('insertReservation não devolveu a linha inserida');
   return row;
 }

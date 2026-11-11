@@ -12,12 +12,18 @@ import {
   evidence,
   executions,
   reservationObservations,
-  reservations,
 } from '../../src/persistence/schema.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/db.js';
-import { insertClient, insertExecution, insertHotel } from '../helpers/factories.js';
+import {
+  insertClient,
+  insertExecution,
+  insertReservation as insertReservationIn,
+} from '../helpers/factories.js';
 
 let database: TestDatabase;
+
+const insertReservation = (overrides: Parameters<typeof insertReservationIn>[1] = {}) =>
+  insertReservationIn(database.db, overrides);
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -37,35 +43,6 @@ async function violation(operation: Promise<unknown>) {
     return { code: databaseError.code, constraint: databaseError.constraint };
   }
   throw new Error('a operação deveria ter violado uma restrição do banco');
-}
-
-async function insertReservation(overrides: Partial<typeof reservations.$inferInsert> = {}) {
-  const hotelCode = overrides.hotelCode ?? (await insertHotel(database.db)).code;
-  const lastExecutionId = overrides.lastExecutionId ?? (await insertExecution(database.db)).id;
-  const now = new Date();
-  const [row] = await database.db
-    .insert(reservations)
-    .values({
-      reservationNumber: '1001',
-      channel: 'Booking.com',
-      checkIn: '2026-11-03',
-      checkOut: '2026-11-05',
-      stayPeriod: '03/11/2026 - 05/11/2026',
-      totalAmount: '1234.56',
-      reservationStatus: 'active',
-      classification: 'virtual_card_pending_charge',
-      reason: 'pré-pagamento sem registro de cobrança',
-      prePaymentFound: true,
-      chargeActionVisible: true,
-      firstVerifiedAt: now,
-      lastVerifiedAt: now,
-      ...overrides,
-      hotelCode,
-      lastExecutionId,
-    })
-    .returning();
-  if (!row) throw new Error('a reserva não foi inserida');
-  return row;
 }
 
 describe('migrations (T012)', () => {
