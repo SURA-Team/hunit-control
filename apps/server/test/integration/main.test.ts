@@ -96,7 +96,9 @@ describe('startServer (T035)', () => {
           status: string;
         }
       ).status;
-    await vi.waitFor(async () => expect(await status()).toBe('awaiting_2fa'));
+    // Mesmo prazo dos demais testes: com a suíte inteira em paralelo, 1 s (o padrão) é pouco.
+    const wait = { timeout: 5_000, interval: 20 };
+    await vi.waitFor(async () => expect(await status()).toBe('awaiting_2fa'), wait);
 
     const token = await fetch(`${server.url}/v1/executions/${id}/two-factor`, {
       method: 'POST',
@@ -104,7 +106,7 @@ describe('startServer (T035)', () => {
       body: JSON.stringify({ token: '123456' }),
     });
     expect(token.status).toBe(202);
-    await vi.waitFor(async () => expect(await status()).toBe('completed'));
+    await vi.waitFor(async () => expect(await status()).toBe('completed'), wait);
 
     const logs = logLines.join('');
     expect(logs).not.toContain('SENHA-DO-TESTE-MAIN');
