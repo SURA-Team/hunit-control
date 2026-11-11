@@ -94,6 +94,17 @@ Invoke-RestMethod "$api/executions/$($exec.id)" -Headers $auth
 
 ### US2 — Consulta e classificação
 
+Antes da execução completa, confira a leitura num período curto, sem gravar nada (o operador
+digita as credenciais e o token no próprio terminal):
+
+```powershell
+pnpm --filter @hunit/server build
+pnpm --filter @hunit/server hunit:reservations-check --hotel <código> --from <AAAA-MM-DD> --to <AAAA-MM-DD> --parallel-hotel <outro código> --save-dir test/fixtures/hunit/raw
+```
+
+O comando falha com "filtro não foi aplicado" se os códigos de Check-in ou Canal Collect
+estiverem errados (T022). Compare o total que ele mostra com a tela de reservas do Hunit.
+
 | Verificação | Esperado |
 |---|---|
 | Execução de 1 hotel × 1 semana concluída | `GET /v1/reservations?executionId=<id>` lista todas as reservas da listagem do Hunit (SC-001) |

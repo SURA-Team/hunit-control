@@ -125,6 +125,10 @@ até serem confirmados (ver R-13).
   Hunit; a meta de 30 min da SC-009 volta a ser plausível.
 - **Teste de verificação**: com uma sessão logada, abrir duas abas, selecionar hotéis diferentes
   em cada uma e conferir se a listagem de reservas da primeira aba continua no hotel original.
+- **Atualização 2026-11-11 (Fase 4)**: o executor processa os hotéis **sempre um por vez**;
+  `HOTEL_CONCURRENCY` é lido da configuração, mas ainda não é usado. O teste de verificação passa
+  a ser o `hunit:reservations-check --parallel-hotel <código>` (compara a leitura simultânea de
+  dois hotéis com a leitura um por vez). Só depois dele a concorrência entra no executor.
 - **Alternatives considered**: várias sessões com vários tokens (péssimo para o operador);
   paralelizar a abertura de reservas dentro do mesmo hotel (possível ganho, avaliar após medir o
   tempo do modo sequencial).
@@ -432,6 +436,41 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
     mensagens de erro seguem o padrão do Keycloak (`#input-error`, `.kc-feedback-text`,
     `.alert-error`, `[role=alert]`) e precisam ser confirmadas. Expiração da tentativa de login
     depois do token = voltar à tela de usuário e senha, ou página com título contendo "expir".
+
+- **Atualização 2026-11-11 (implementação da Fase 4, T041/T046/T048)**:
+  - **Leitores**: `network/bookings.ts` (`GetBookings`) e `network/booking-detail.ts`
+    (`BookingDetail`), conferindo cada resposta com zod. Os códigos dos filtros ficam numa única
+    constante (`BOOKING_FILTERS`): `DateTypeId=2` (Check-in) e `CollectTypeId=2` (Canal Collect),
+    como no legado, **ainda a confirmar** (T022). Se estiverem errados, o próprio leitor percebe:
+    reserva fora do período ou que não é Canal Collect recusa a página (FR-010).
+  - **Paginação**: pede `PageSize=50` e calcula as páginas com o `pageSize` que o Hunit devolve,
+    então um limite menor do Hunit não perde reservas. Supõe páginas a partir de 1 (a resposta
+    tem de devolver a página pedida, senão é recusada). Ambos a confirmar na T022.
+  - **Detalhe → `ReservationSnapshot`**: segue a tabela acima. Decisões que a tabela não cobria:
+    - campo obrigatório ausente ou com tipo errado (`statusId`, `hasCreditCardInfo`,
+      `canCharge`, `lastPaymentEvent.justValidate`, datas) → resposta não reconhecida; a reserva
+      vira erro de análise com a resposta como evidência e o hotel segue (edge case "falha ao
+      abrir uma reserva");
+    - `prePaymentStatus` fora de `Success`/`Fail`/`Unprocessed` numa reserva com cartão → sinais
+      `null` → erro de análise (linha 7 da tabela); sem cartão, o valor é ignorado;
+    - `statusId` fora de 1, 2 e 3 → situação `unknown`, com evidência, sem impedir a
+      classificação (FR-014a); se o detalhe não identificar a situação, vale a da listagem;
+    - data/hora sem fuso (formato visto nos HARs) é lida como horário de Brasília (UTC−3; o
+      Brasil não tem horário de verão desde 2019). A confirmar com as respostas reais;
+    - `prePaymentMessage` = `lastPaymentEvent.description`.
+  - **Interface**: `readReservation` recebe o item da listagem (e não só o id) e devolve o
+    retrato junto com a resposta recebida (`ReservationDetail`), para o erro de análise e a
+    situação não identificada terem evidência (US2, cenário 8; FR-014a). A listagem do registro
+    vem do `GetBookings` (o detalhe não foi mapeado para datas e canal).
+  - **Executor**: a coleta fica em `executions/hotel-collection.ts`. Sessão expirada ou parada do
+    servidor encerram a execução e o hotel em andamento fica `failed` sem gravar; os demais
+    ficam `pending`, prontos para a retomada (US3). Qualquer outra falha marca só o hotel.
+  - **Verificação no Hunit real**: `pnpm --filter @hunit/server hunit:reservations-check`
+    (`apps/server/src/hunit-reservations-check.ts`), no mesmo modelo do `hunit:login-check`. Lê
+    1 hotel num período curto, mostra o `pageSize` usado pelo Hunit, a classificação de algumas
+    reservas (sem nome de hóspede) e, com `--parallel-hotel`, compara a leitura simultânea de
+    dois hotéis com a leitura um por vez (R-08). Com `--save-dir`, guarda as respostas JSON em
+    `test/fixtures/hunit/raw/` para a T020/T021. Nada é gravado no banco.
 
 ## R-14 — Testes
 

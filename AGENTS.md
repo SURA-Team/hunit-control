@@ -128,6 +128,7 @@ PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tab
 | `docker compose exec server node dist/cli.js revoke-client --name <nome>` | Revoga um cliente: a chave deixa de ser aceita |
 | `pnpm --filter @hunit/server start` | Sobe o servidor fora do Docker (depois do `pnpm build`; exige as variáveis do `.env.example` no ambiente e um PostgreSQL) |
 | `pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw` | Verificação manual do login no Hunit **real**, rodada pelo operador num terminal interativo (depois do `pnpm build`): pede e-mail, senha e token (ocultos), mostra o resultado e as rotas barradas pela proteção e guarda as telas sanitizadas na pasta ignorada pelo Git |
+| `pnpm --filter @hunit/server hunit:reservations-check --hotel <código> --from AAAA-MM-DD --to AAAA-MM-DD --save-dir test/fixtures/hunit/raw` | Verificação manual da leitura das reservas no Hunit **real** (mesmo modo de uso do `login-check`): lê a listagem de 1 hotel com os filtros fixos, confere que o Hunit os respeitou, abre algumas reservas e mostra número, situação e classificação (nunca o hóspede); `--parallel-hotel <código>` testa a leitura de dois hotéis ao mesmo tempo; guarda as respostas JSON na pasta ignorada pelo Git. `--help` mostra as opções |
 
 Regras ao mexer em dependências e no contrato:
 
@@ -142,6 +143,8 @@ Regras ao mexer em dependências e no contrato:
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 
-O servidor responde à API desde a Fase 3 da feature 001: login com token e catálogo de hotéis.
-A consulta das reservas entra na Fase 4. Ainda não existe o app Electron; documente aqui quando
-for criado.
+O servidor responde à API desde a Fase 3 da feature 001 (login com token e catálogo de hotéis)
+e, desde a Fase 4, consulta, classifica e grava as reservas por hotel, com consulta pela API
+(`/v1/reservations`) e download de evidências. Os códigos dos filtros e o tamanho de página do
+Hunit ainda serão confirmados com o `hunit:reservations-check` (T022). Ainda não existe o app
+Electron; documente aqui quando for criado.
