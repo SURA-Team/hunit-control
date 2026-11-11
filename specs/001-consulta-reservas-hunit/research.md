@@ -129,6 +129,12 @@ até serem confirmados (ver R-13).
   `HOTEL_CONCURRENCY` é lido da configuração, mas ainda não é usado. O teste de verificação passa
   a ser o `hunit:reservations-check --parallel-hotel <código>` (compara a leitura simultânea de
   dois hotéis com a leitura um por vez). Só depois dele a concorrência entra no executor.
+- **Resultado 2026-11-11 (Hunit real)**: a leitura simultânea da primeira página dos hotéis 3544
+  e 4909 devolveu o mesmo que a leitura um por vez, sem `SelectCompany`. O hotel vai em cada
+  requisição, não na sessão: **o paralelismo entre hotéis é viável** com um único login. Ainda
+  não medido: limite de requisições simultâneas do Hunit (erros 429/5xx com mais hotéis). Próximo
+  passo: o executor passar a usar `HOTEL_CONCURRENCY` (padrão 1), subindo aos poucos em
+  homologação.
 - **Alternatives considered**: várias sessões com vários tokens (péssimo para o operador);
   paralelizar a abertura de reservas dentro do mesmo hotel (possível ganho, avaliar após medir o
   tempo do modo sequencial).
@@ -151,6 +157,8 @@ até serem confirmados (ver R-13).
   hotel + número antes da gravação do hotel.
 - **Rationale**: atende períodos retroativos longos sem depender de saber agora o limite do Hunit.
 - **Alternatives considered**: recusar períodos longos (contraria FR-010a).
+- **Atualização 2026-11-11 (Hunit real)**: um período de 3 dias foi aceito sem divisão. O limite
+  do Hunit continua desconhecido; medir com um período retroativo longo na homologação (T062).
 
 ## R-10 — Autenticação dos clientes (FR-007)
 
@@ -455,8 +463,10 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
       `null` → erro de análise (linha 7 da tabela); sem cartão, o valor é ignorado;
     - `statusId` fora de 1, 2 e 3 → situação `unknown`, com evidência, sem impedir a
       classificação (FR-014a); se o detalhe não identificar a situação, vale a da listagem;
-    - data/hora sem fuso (formato visto nos HARs) é lida como horário de Brasília (UTC−3; o
-      Brasil não tem horário de verão desde 2019). A confirmar com as respostas reais;
+    - data/hora sem fuso é lida como horário de Brasília (UTC−3; o Brasil não tem horário de
+      verão desde 2019). Nas respostas reais, `lastPaymentEvent.dateTime` **vem com fuso** e até
+      7 casas nos segundos (ex.: `…T11:30:00.1234567-03:00`); o fuso informado é respeitado.
+      Datas de check-in/check-out vêm sem fuso (`…T00:00:00`) e só a data é usada;
     - `prePaymentMessage` = `lastPaymentEvent.description`.
   - **Interface**: `readReservation` recebe o item da listagem (e não só o id) e devolve o
     retrato junto com a resposta recebida (`ReservationDetail`), para o erro de análise e a
@@ -471,6 +481,23 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
     reservas (sem nome de hóspede) e, com `--parallel-hotel`, compara a leitura simultânea de
     dois hotéis com a leitura um por vez (R-08). Com `--save-dir`, guarda as respostas JSON em
     `test/fixtures/hunit/raw/` para a T020/T021. Nada é gravado no banco.
+
+- **Resultado da verificação no Hunit real (2026-11-11, `hunit:reservations-check`)**: hotel
+  3544 e, para o paralelismo, 4909; check-in de 10 a 12/11/2026. A forma das respostas salvas foi
+  analisada só por nomes de campos, tipos e códigos, sem ler valores.
+  - **Filtros confirmados**: `DateTypeId=2` (Check-in) e `CollectTypeId=2` (Canal Collect). As 32
+    reservas devolvidas eram todas Canal Collect (`collectTypeId = 2`) e com check-in no período.
+    Falta o operador confirmar que o total (32) bate com a tela de reservas do Hunit.
+  - **Paginação**: começa em 1 (a resposta devolveu `page = 1`); `PageSize=50` foi aceito
+    (`pageSize = 50` na resposta). O máximo aceito não foi medido.
+  - **`X-Company-Id` basta**: os dois hotéis foram lidos sem `SelectCompany`.
+  - **Formato**: `GetBookings` e `BookingDetail` têm todos os campos que os leitores conferem;
+    valores vistos de `statusId` 1, 2 e 3 e de `prePaymentStatus` `Success` e `Unprocessed`. O
+    detalhe também traz `arrivalDate`, `departureDate` e `channelName`, e a resposta da listagem
+    traz totalizadores de ativas e canceladas (`generalTotalizers`, `pageTotalizers`), não usados.
+  - **Classificação**: 7 reservas abertas, todas reconhecidas (6 já cobradas, 1 cancelada
+    pendente de cobrança); 25 das 32 eram "258-" (Hotelbeds), ignoradas sem abrir. Nenhum erro de
+    análise. A conferência com a tela do Hunit (SC-002) fica para a homologação (T062).
 
 ## R-14 — Testes
 

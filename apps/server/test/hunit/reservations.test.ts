@@ -301,6 +301,19 @@ describe('readBookingDetail (BookingDetail → ReservationSnapshot)', () => {
     });
   });
 
+  it('formato real (2026-11-11): fração de 7 dígitos e fuso', async () => {
+    const body = detailFixture('charged');
+    const event = body.lastPaymentEvent as Json;
+    respondWith({
+      ...body,
+      lastPaymentEvent: { ...event, dateTime: '2026-11-02T11:30:00.1234567-03:00' },
+    });
+
+    const { snapshot } = await readBookingDetail(api, '101', item);
+
+    expect(snapshot.payment.chargedAt).toBe('2026-11-02T14:30:00.123Z');
+  });
+
   it('data com fuso é respeitada', async () => {
     const body = detailFixture('charged');
     const event = body.lastPaymentEvent as Json;

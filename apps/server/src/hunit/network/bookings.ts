@@ -9,9 +9,8 @@ import { hunitId, toDisplayDate, toIsoDate, toMoney } from './values.js';
  * Filtros fixos da consulta de reservas (FR-010), nos códigos do parâmetro de `GetBookings`
  * (research R-13a). Único lugar com esses códigos.
  *
- * ⚠️ `DateTypeId` (Check-in) e `CollectTypeId` (Canal Collect) ainda serão confirmados no
- * primeiro acesso real (tasks.md, T022): o legado usava 2 para os dois; o padrão da tela numa
- * captura foi `DateTypeId=1`.
+ * `DateTypeId=2` (Check-in) e `CollectTypeId=2` (Canal Collect) foram confirmados no Hunit real
+ * em 2026-11-11 (research R-13a, T022).
  */
 export const BOOKING_FILTERS = {
   /** Filtrar período por: Check-in. */
@@ -34,8 +33,8 @@ const CANCELLED_STATUS_ID = 3;
 const ACTIVE_STATUS_IDS: ReadonlySet<number> = new Set([1, 2]);
 
 /**
- * Reservas pedidas por página. O Hunit pode devolver menos (o limite real é verificado na
- * T022); a paginação usa o tamanho que vier na resposta, então isso não perde reservas.
+ * Reservas pedidas por página (aceito pelo Hunit real em 2026-11-11; o máximo não foi medido).
+ * Se o Hunit devolver menos, a paginação usa o tamanho que vier na resposta e não perde reservas.
  */
 export const BOOKINGS_PAGE_SIZE = 50;
 
