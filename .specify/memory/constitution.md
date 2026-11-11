@@ -1,50 +1,133 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# HUNIT Control Constitution
+
+Reescrita da automação HUNIT. O sistema legado (Python/PySide) em `legacy/` serve apenas como
+referência de comportamento; nenhum código novo pode depender dele.
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Spec-First
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+- Todo comportamento novo ou alterado MUST começar por uma spec em `specs/NNN-<nome>/`
+  antes de qualquer código.
+- Código que diverge da spec é bug. Se o comportamento desejado muda, a spec MUST ser
+  atualizada antes do código.
+- Specs descrevem **o quê** e **por quê**; decisões de **como** ficam no `plan.md`.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Justificativa**: o Hunit muda sem aviso; specs estáveis separam o que o sistema faz de
+como ele interage com a UI, tornando correções localizadas e rastreáveis.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Isolamento da UI do Hunit (Page Objects)
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- O Hunit não tem API pública. Todo seletor e toda interação com páginas do Hunit MUST
+  ficar exclusivamente na camada de Page Objects.
+- Regras de negócio, jobs e a API MUST NOT referenciar seletores, URLs internas ou
+  estrutura HTML do Hunit.
+- Seletores SHOULD preferir localizadores semânticos (role, label, texto visível) a
+  CSS/XPath acoplados à estrutura.
+- Falha de seletor ou de navegação MUST gerar erro explícito e tipado, acompanhado de
+  screenshot e HTML da página como evidência. Falhas silenciosas são proibidas.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Justificativa**: a quebra que motivou esta reescrita foi uma mudança de UI do Hunit;
+mudanças futuras devem exigir alterações apenas nos Page Objects.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. API-First com Contrato
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- Toda funcionalidade MUST ser exposta pela API HTTP/JSON.
+- O contrato OpenAPI é versionado no repositório e é a fonte da verdade da integração;
+  mudanças incompatíveis MUST incrementar a versão da API.
+- O app Electron e, futuramente, o Sura são clientes da mesma API. O Electron MUST NOT
+  conter lógica de negócio nem acessar diretamente o banco ou o navegador automatizado.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Justificativa**: integração com o Sura independe de linguagem; um contrato único
+evita que desktop e integrações divirjam.
+
+### IV. Jobs Assíncronos com Intervenção Humana
+
+- Automações MUST rodar como jobs com estados explícitos: `queued`, `running`,
+  `awaiting_2fa`, `completed`, `failed`, `cancelled`.
+- O login no Hunit exige token 2FA informado por um operador humano: o job MUST pausar
+  em `awaiting_2fa` e aceitar o token de qualquer cliente autorizado (Electron ou Sura),
+  com tempo limite definido em spec.
+- Jobs MUST ser retomáveis a partir do último hotel concluído.
+- No máximo uma automação MUST rodar por vez para a mesma conta/sessão do Hunit.
+
+**Justificativa**: execuções levam minutos e dependem de um humano; requisições
+síncronas e concorrência na mesma conta causam falhas e dados inconsistentes.
+
+### V. Servidor Central e Containers
+
+- API, worker (Playwright/Chromium headless) e PostgreSQL MUST rodar em containers
+  Docker, orquestrados por Docker Compose, num servidor central.
+- Configuração MUST vir exclusivamente de variáveis de ambiente.
+- Caminhos específicos de sistema operacional e estado em disco fora de volumes
+  declarados são proibidos.
+
+**Justificativa**: o Sura só consegue integrar com uma API acessível em rede; containers
+garantem o mesmo ambiente em desenvolvimento e produção.
+
+### VI. Dados e Segurança (NÃO NEGOCIÁVEL)
+
+- PostgreSQL é a fonte da verdade. Arquivos XLSX são exportações geradas sob demanda e o
+  Google Sheets é uma projeção sincronizada para o comercial; nenhum deles MUST ser lido
+  como fonte da verdade.
+- Dados de reservas e cartões virtuais são pessoais e financeiros. Credenciais, senha e
+  token 2FA MUST trafegar apenas em memória e MUST NOT aparecer em logs, banco,
+  evidências ou mensagens de erro.
+- Segredos MUST vir de variáveis de ambiente ou secrets; dados operacionais, evidências e
+  segredos MUST NOT ser versionados no Git.
+- Todo cliente da API MUST se autenticar com credencial própria (API key ou token).
+
+**Justificativa**: vazamento de dados de cartões e hóspedes tem impacto legal (LGPD) e
+financeiro direto.
+
+### VII. Testes em Camadas
+
+- Lógica de domínio MUST ter testes unitários.
+- Endpoints MUST ter testes de contrato validados contra o OpenAPI.
+- Page Objects MUST ser testados contra fixtures HTML salvas do Hunit, permitindo
+  detectar quebras de UI sem acessar o Hunit real. Fixtures MUST ser anonimizadas.
+- Testes são escritos junto com a implementação de cada task; uma task não está
+  concluída sem seus testes passando.
+
+**Justificativa**: a automação depende de um sistema externo instável; testes por camada
+apontam rapidamente se a falha é de domínio, de contrato ou de UI.
+
+### VIII. Simplicidade
+
+- Cada entrega começa pelo menor fluxo ponta a ponta que gera valor (YAGNI).
+- Nenhuma abstração, serviço ou infraestrutura MUST ser adicionada sem necessidade
+  descrita numa spec; exceções MUST ser justificadas na seção de complexidade do plan.
+
+**Justificativa**: o legado acumulou modos e caminhos alternativos (XLSX, Sheets, modos
+de execução) que aumentaram o custo de manutenção.
+
+## Restrições Técnicas
+
+- **Linguagem**: TypeScript em todo o projeto, sobre Node.js LTS.
+- **Estrutura**: monorepo com pacote de tipos compartilhados entre API e Electron.
+- **API**: Fastify, com contrato OpenAPI.
+- **Automação**: Playwright com Chromium; o worker usa a imagem oficial do Playwright.
+- **Banco**: PostgreSQL.
+- **Desktop**: Electron, consumindo apenas a API.
+- **Observabilidade**: logs estruturados em JSON, com id de job e hotel, sem dados
+  sensíveis.
+
+## Fluxo de Desenvolvimento
+
+- Uma branch por feature, seguindo specify → (clarify) → plan → tasks → implement.
+- Todo `plan.md` MUST passar pelo Constitution Check antes de gerar tasks; violações
+  MUST ser corrigidas ou justificadas por escrito.
+- Commits pequenos, em português, referenciando a spec correspondente.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- Esta constitution prevalece sobre qualquer outra prática ou documento do projeto.
+- Emendas MUST ser feitas neste arquivo, com justificativa, data e incremento de versão
+  semântica:
+  - MAJOR: remoção ou redefinição incompatível de princípio;
+  - MINOR: novo princípio ou seção, ou expansão material de orientação;
+  - PATCH: esclarecimentos e correções de redação.
+- Toda revisão de plan, tasks e código MUST verificar conformidade com estes princípios.
+- Orientações operacionais para agentes de código ficam em `AGENTS.md`.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-11
