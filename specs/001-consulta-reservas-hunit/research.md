@@ -723,6 +723,13 @@ integração com o Sura. Dois ambientes: desenvolvimento (máquina do dev, Hunit
   presa a `127.0.0.1` e que só o `proxy` publica porta em todas as interfaces (mesmo padrão de
   `docker-image-version.test.ts`); no quickstart, `curl` de outra máquina: HTTPS responde, HTTP
   na porta do `server` recusa a conexão.
+- **Implementado (2026-11-11, T064/T065)**: imagem `caddy:2.11.9-alpine`; o Caddyfile atende
+  `{$SERVER_HOSTNAME}` e `localhost` com `tls internal`, sem instalar a CA no sistema
+  (`skip_install_trust`) e sem redirecionamento de HTTP (só a porta HTTPS é publicada).
+  `flush_interval -1` deixa explícito o repasse imediato do SSE. Verificado com a imagem real:
+  configuração válida para nome, IP e `localhost` (repetido); certificado emitido também para IP;
+  eventos SSE chegam ao cliente no momento em que o servidor os envia; certificado raiz em
+  `/data/caddy/pki/authorities/local/root.crt` (exportado com `docker compose cp`).
 
 ## R-21 — Cópia de segurança e restauração (FR-029, FR-030, FR-031, SC-011, SC-012)
 
@@ -758,3 +765,17 @@ integração com o Sura. Dois ambientes: desenvolvimento (máquina do dev, Hunit
 - **A verificar na implementação**: se o Docker Desktop no Windows monta corretamente a pasta
   sincronizada escolhida como `BACKUP_DIR` (unidades de rede mapeadas por letra costumam não
   funcionar; pasta local sincronizada funciona).
+- **Implementado (2026-11-11, T066/T067)**:
+  - a idade de cada cópia sai da **data no nome** (`hunit-AAAAMMDD-HHMMSS`, UTC), não da data do
+    arquivo, que a sincronização com a nuvem pode alterar; o script só toca em arquivos com esse
+    padrão de nome, então a pasta pode ter outras coisas;
+  - cada cópia é decifrada e conferida com `pg_restore --list` antes de receber o nome final;
+    falha no `pg_dump`, no `gpg` ou na conferência não deixa arquivo e não apaga nenhuma cópia
+    antiga; a mais nova nunca é apagada pela retenção;
+  - a frase vai ao `gpg` por descritor de arquivo (nunca na linha de comando nem na saída);
+  - a restauração roda numa única transação (`--single-transaction --exit-on-error`): ou tudo,
+    ou nada muda. Como o serviço `backup` tem `entrypoint` próprio, o comando é
+    `docker compose run --rm --entrypoint bash backup /scripts/restore.sh <arquivo>`;
+  - **verificado no Docker Desktop (Windows)**: uma pasta local do Windows montada como
+    `BACKUP_DIR` recebe a cópia e a restauração pelo comando documentado funciona. Falta
+    conferir com a pasta sincronizada que for escolhida no PC de produção (homologação, T062).

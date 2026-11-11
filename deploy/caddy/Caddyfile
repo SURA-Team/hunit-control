@@ -1,0 +1,22 @@
+# HUNIT Control — proxy HTTPS (specs/001, research R-20, FR-032).
+#
+# Recebe as conexões da rede em HTTPS e repassa ao servidor pela rede interna do Docker Compose.
+# O certificado é emitido pela autoridade certificadora interna do Caddy para o nome ou IP do PC
+# (SERVER_HOSTNAME) e renovado sozinho. Cada máquina cliente confia uma única vez no certificado
+# raiz, exportado do volume "caddy-data" (passo a passo no README).
+{
+	# Dentro do container não há onde instalar a CA; o operador exporta o certificado raiz.
+	skip_install_trust
+	# Só a porta HTTPS é publicada: sem redirecionamento de HTTP (porta 80) para HTTPS.
+	auto_https disable_redirects
+}
+
+{$SERVER_HOSTNAME}, localhost {
+	tls internal
+
+	reverse_proxy server:3000 {
+		# Repassa cada pedaço da resposta assim que chega: o acompanhamento em tempo real (SSE)
+		# não pode ficar acumulado no proxy (SC-005).
+		flush_interval -1
+	}
+}

@@ -1,8 +1,12 @@
-# HUNIT Control — servidor (API + automação do Hunit) e banco de dados.
+# HUNIT Control — servidor (API + automação do Hunit), banco de dados, proxy HTTPS e cópia de
+# segurança.
 #
 # Toda a configuração vem de variáveis de ambiente (constitution, princípio V):
-# copie .env.example para .env, preencha POSTGRES_PASSWORD e ACCOUNT_KEY_SECRET e rode
+# copie .env.example para .env, preencha as variáveis obrigatórias e rode
 #   docker compose up -d --build
+#
+# Da rede, a API só é acessível em HTTPS, pelo proxy. A porta HTTP do servidor fica presa a
+# 127.0.0.1: só o próprio PC a alcança (FR-032, SC-013).
 name: hunit-control
 
 services:
@@ -30,9 +34,22 @@ services:
       RESERVATION_RETENTION_YEARS: ${RESERVATION_RETENTION_YEARS:-5}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - '${PORT:-3000}:3000'
+      - '127.0.0.1:${PORT:-3000}:3000'
     volumes:
       - evidence:/data/evidence
+
+  proxy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      SERVER_HOSTNAME: ${SERVER_HOSTNAME:?defina SERVER_HOSTNAME no arquivo .env (nome ou IP do PC na rede)}
+    ports:
+      - '${HTTPS_PORT:-443}:443'
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
 
   db:
     image: postgres:17
@@ -49,6 +66,27 @@ services:
       timeout: 5s
       retries: 10
 
+  backup:
+    # Mesma imagem do banco: traz pg_dump, pg_restore e gpg na versão do servidor (research R-21).
+    image: postgres:17
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ['bash', '/scripts/backup.sh']
+    environment:
+      PGHOST: db
+      PGUSER: hunit
+      PGDATABASE: hunit
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?defina BACKUP_PASSPHRASE no arquivo .env}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./deploy/backup:/scripts:ro
+      - ${BACKUP_DIR:?defina BACKUP_DIR no arquivo .env (pasta das cópias, fora do PC ou sincronizada)}:/backups
+
 volumes:
   pgdata: # dados do PostgreSQL (fonte da verdade)
   evidence: # capturas de tela, HTML e respostas guardados como evidência de falhas
+  caddy-data: # autoridade certificadora interna do Caddy e certificados (não apague: os clientes confiam nela)
