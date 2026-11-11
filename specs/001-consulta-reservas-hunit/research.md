@@ -156,10 +156,10 @@ até serem confirmados (ver R-13).
     essas strings em todos os logs e evidências gerados.
 - **Rationale**: defesa em camadas; o teste transforma SC-004 em verificação contínua.
 
-## R-13 — Mapeamento da interface atual do Hunit — **Ação necessária**
+## R-13 — Mapeamento da interface atual do Hunit — **Login e 2FA mapeados (faltam telas de erro)**
 
 - **Decision**: antes de implementar os Page Objects, gravar o fluxo real com
-  `npx playwright codegen https://extranet.hunit.com.br/HUNIT/Account/Login` e salvar o HTML das
+  `npx playwright codegen https://hunit.hsystem.com.br/login` e salvar o HTML das
   telas (login, token, seleção de hotel, filtro/listagem de reservas, detalhe de reserva em cada
   situação: sem pré-pagamento, cobrada, pendente, falha, cancelada). O HTML é **anonimizado** e vira
   fixture em `apps/server/test/fixtures/hunit/`.
@@ -167,6 +167,33 @@ até serem confirmados (ver R-13).
   permitem testar os Page Objects sem acessar o Hunit (princípio VII).
 - **Responsável**: operador com acesso ao Hunit e ao autenticador (usuário do projeto). As tasks de
   Page Objects dependem dessas fixtures.
+
+### Resultado dos HARs de login (2026-11-11, analisados sem expor valores)
+
+Com a coleta pela rede (R-13a), a tela só é usada no login. O login **não é do Hunit**: é um
+SSO **Keycloak** (OpenID Connect com PKCE) em `login.hsystem.com.br`, realm `hsystem`.
+
+1. `https://hunit.hsystem.com.br/login` → o front chama `GetCurrentUser` (401 sem sessão) e
+   redireciona para `GET hunit-api…/api/Account/SSOLogin?returnUrl=…` → **302** para
+   `login.hsystem.com.br/auth/realms/hsystem/protocol/openid-connect/auth`.
+2. **Tela de credenciais** (`<title>Entrar em hsystem</title>`, `h1#kc-page-title` "Entrar na sua
+   conta"): `form#kc-form-login`; label **"Endereço de e-mail"** → `input#username`; label
+   **"Senha"** → `input#password`; botão de envio `input#kc-login`.
+3. `POST …/login-actions/authenticate` (form urlencoded) → **tela do token**:
+   `form#kc-otp-login-form`; label **"Código de uso único"** → `input#otp`; envio `input#kc-login`;
+   `#kc-attempted-username` mostra o e-mail digitado (dado pessoal — anonimizar em fixtures).
+4. Após o token, o Keycloak devolve o código ao `hunit-api` (callback OIDC), que cria os cookies de
+   sessão e redireciona para o SPA. **Não capturado** (o DevTools limpa o HAR na navegação).
+
+- **Page Objects**: localizar por label (`getByLabel('Endereço de e-mail')`, `getByLabel('Senha')`,
+  `getByLabel('Código de uso único')`) e reconhecer a tela pelo título/`form#kc-*`. O sucesso do
+  login é detectado pela chegada a `hunit.hsystem.com.br` e por `GetCurrentUser` = 200.
+- **Faltam (T020)**: HTML das mensagens de erro de senha inválida e de token inválido/expirado
+  (Keycloak costuma mostrar `#input-error` ou `.kc-feedback-text`, a confirmar). Gravar com senha e
+  token **falsos**, nunca os verdadeiros.
+- **Segurança**: o HAR da tela de token contém o POST com usuário e senha em texto puro (o
+  "sanitizado" do Chrome não limpa corpos de requisição). HARs de login devem ser apagados logo após
+  a análise e jamais anexados ou commitados.
 
 ## R-13a — Coleta pela tela ou pelas respostas HTTP do Hunit — **Spike concluído: rede (JSON)**
 
