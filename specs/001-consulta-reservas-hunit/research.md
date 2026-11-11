@@ -96,6 +96,10 @@ até serem confirmados (ver R-13).
   provavelmente trocariam o hotel umas das outras; sessões separadas exigiriam **um token 2FA por
   sessão**, inviável para o operador. Por isso a meta realista tende a ser a de 1 hora (SC-009,
   modo sequencial).
+- **Atualização 2026-11-11 (HAR)**: a API nova recebe o hotel no cabeçalho `X-Company-Id` de cada
+  requisição; o risco de "hotel como estado de sessão" não se confirma para a API. Manter
+  `HOTEL_CONCURRENCY=1` até medir, depois subir gradualmente (ex.: 3) observando erros/limites do
+  Hunit; a meta de 30 min da SC-009 volta a ser plausível.
 - **Teste de verificação**: com uma sessão logada, abrir duas abas, selecionar hotéis diferentes
   em cada uma e conferir se a listagem de reservas da primeira aba continua no hotel original.
 - **Alternatives considered**: várias sessões com vários tokens (péssimo para o operador);
@@ -189,6 +193,36 @@ até serem confirmados (ver R-13).
   viram fixtures anonimizadas, como os HTML (princípio VII).
 - **Rationale**: o domínio recebe `ReservationSnapshot` nos dois casos (R-06), então a escolha
   afeta só a camada do Hunit — exatamente o isolamento que o princípio II pede.
+
+### Resultado parcial do spike (HAR sanitizado de 2026-11-11, analisado sem expor valores)
+
+- O Hunit novo é uma SPA em `hunit.hsystem.com.br` que consome uma **API JSON** em
+  `hunit-api.hsystem.com.br` (domínios diferentes do legado `extranet.hunit.com.br`).
+- **Listagem**: `GET /api/Entity/GetBookings` com parâmetros `DateTypeId`, `StartDate`, `EndDate`
+  (ISO `YYYY-MM-DD`), `StatusId`, `CollectTypeId`, `PrePaymentStatus`, `IntegrationStatusId`,
+  `ChannelId`, `RoomRateId`, `GuestName`, `ChannelIdentifier`, `PMSIdentifier`, `Page`, `PageSize`.
+  Mapeamento dos filtros da FR-010 observado: `DateTypeId=2` (Check-in), `StatusId=0` (Todas),
+  `CollectTypeId=2` (Canal), `PrePaymentStatus=0` (Todos), `IntegrationStatusId=0` (Todas) —
+  coincide com os códigos do legado (`runtime_options.py`).
+- Resposta: `items.items[]` com `id`, `channelIdentifier`, `guestFullName`, `channelName`,
+  `roomStayDescription`, `createDateTime`, `arrivalDate`, `departureDate`, `statusId`,
+  `collectTypeId`, `prePaymentStatus` (valores vistos: `Unprocessed`, `Success`),
+  `integrationStatusId`, `pmsIdentifier`, `bookingRetrievalId`, `lastUpdateDateTime`, `comission`,
+  `total`; paginação em `items.page`, `items.pageSize`, `items.total`; totalizadores de ativas e
+  canceladas.
+- **Hotel por requisição**: cabeçalho `X-Company-Id` em cada chamada → o hotel **não** é estado de
+  sessão. Isso invalida o principal risco do R-08: vários hotéis podem ser consultados em paralelo
+  com um único login/token.
+- Chamadas observadas são todas GET (mais `OPTIONS` de CORS) → compatível com FR-012.
+- **Pendências** para concluir o spike: (1) requisição de **detalhe** da reserva com dados de
+  cobrança (cobrado em, por quem, valor, autorização, transação, parcelamento, falha);
+  (2) origem do catálogo de hotéis e dos IDs de `X-Company-Id` (`GetCurrentUser`/
+  `MenuCapabilities` apareceram só como `OPTIONS`); (3) mecanismo de autenticação da API (o HAR
+  sanitizado remove `Authorization`/cookies); (4) significado de `statusId` (vistos 1, 2, 3) para
+  ativa/cancelada.
+- **Direção provisória**: coleta **híbrida** — login e token pela interface (Playwright); listagem
+  e detalhe lidos da API JSON com a sessão autenticada do navegador, somente GET, credenciais de
+  sessão mantidas apenas em memória; HTML/tela apenas como diagnóstico.
 
 ## R-14 — Testes
 
