@@ -1,0 +1,257 @@
+---
+
+description: "Task list for feature 001 — Consulta de Reservas de Cartão Virtual no Hunit"
+---
+
+# Tasks: Consulta de Reservas de Cartão Virtual no Hunit
+
+**Input**: Design documents from `/specs/001-consulta-reservas-hunit/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
+[data-model.md](./data-model.md), [contracts/openapi.yaml](./contracts/openapi.yaml),
+[quickstart.md](./quickstart.md)
+
+**Tests**: INCLUÍDOS — exigidos pela constitution (princípio VII: domínio unitário, contrato,
+Page Objects contra fixtures). Escreva os testes de cada história antes da implementação e
+confirme que falham.
+
+**Organization**: tarefas agrupadas por história de usuário (US1 = P1, US2 = P2, US3 = P3).
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: pode rodar em paralelo (arquivos diferentes, sem dependência de tarefa incompleta)
+- **[Story]**: história atendida (US1, US2, US3)
+- **⛔ HUNIT**: depende das fixtures/spike do Hunit (T020–T022); pode ser adiada sem bloquear o
+  restante, usando o `FakeHunitGateway` (T019)
+
+## Path Conventions
+
+Monorepo pnpm (ver plan.md): `apps/server/`, `packages/domain/`, `packages/contracts/`.
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: inicializar o monorepo, ferramentas e containers.
+
+- [ ] T001 Criar o monorepo na raiz: `package.json` (`"packageManager": "pnpm@<versão atual>"`, scripts `build`, `test`, `lint`, `typecheck`), `pnpm-workspace.yaml` (`apps/*`, `packages/*`), `tsconfig.base.json` (`strict: true`, `module`/`moduleResolution: "NodeNext"`, `target: "ES2023"`) e `.nvmrc` com `24`
+- [ ] T002 [P] Configurar ESLint (flat config) e Prettier na raiz em `eslint.config.js` e `.prettierrc.json`, incluindo regra que proíbe `packages/domain` de importar `playwright`, `pg`, `drizzle-orm` ou `fastify` (princípio II)
+- [ ] T003 [P] Configurar Vitest com projetos por pacote em `vitest.workspace.ts`
+- [ ] T004 [P] Criar o pacote `packages/domain` (`package.json` sem dependências de runtime, `tsconfig.json`, `src/index.ts`)
+- [ ] T005 [P] Criar o pacote `packages/contracts`: copiar `specs/001-consulta-reservas-hunit/contracts/openapi.yaml` para `packages/contracts/openapi.yaml` (passa a ser a fonte da verdade), script `generate` com `openapi-typescript` gerando `packages/contracts/src/generated.ts` e script `lint` com `@redocly/cli lint openapi.yaml`
+- [ ] T006 Criar o app `apps/server` (`package.json` com `fastify`, `fastify-openapi-glue`, `playwright`, `drizzle-orm`, `pg`, `pino`, `zod`; devDeps `drizzle-kit`, `@testcontainers/postgresql`, `ajv`, `ajv-formats`; `tsconfig.json`; `src/main.ts` vazio) dependendo de `@hunit/domain` e `@hunit/contracts`
+- [ ] T007 [P] Criar `apps/server/Dockerfile` multi-stage a partir de `mcr.microsoft.com/playwright:v<MESMA versão do pacote playwright>-noble`, executando como usuário não-root, e `docker-compose.yml` na raiz com serviços `server` (porta 3000, volume `evidence:/data/evidence`, `depends_on: db` com healthcheck) e `db` (`postgres:17`, volume `pgdata`)
+- [ ] T008 [P] Criar `.env.example` na raiz com: `PORT=3000`, `DATABASE_URL`, `ACCOUNT_KEY_SECRET=` (vazio), `HUNIT_BASE_URL=https://extranet.hunit.com.br/HUNIT/Account/Login`, `TWO_FACTOR_TIMEOUT_SECONDS=120`, `HOTEL_CONCURRENCY=1`, `MAX_PERIOD_DAYS=` (vazio = sem divisão), `EVIDENCE_DIR=/data/evidence`, `EVIDENCE_RETENTION_DAYS=30`, `RESERVATION_RETENTION_YEARS=5`, `LOG_LEVEL=info`; adicionar `*.har` e `apps/server/test/fixtures/hunit/raw/` ao `.gitignore`
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites)
+
+**Purpose**: base que todas as histórias usam.
+
+**⚠️ CRITICAL**: nenhuma história começa antes desta fase. T020–T022 (Hunit) bloqueiam apenas as
+tarefas marcadas ⛔ HUNIT.
+
+### Domínio e configuração
+
+- [ ] T009 [P] Definir tipos de domínio em `packages/domain/src/types.ts`: `Classification` = `ignored_hotelbeds_258` | `not_virtual_card` | `virtual_card_charge_error` | `virtual_card_already_charged` | `virtual_card_pending_charge` | `analysis_error`; `ReservationStatus` = `active` | `cancelled` | `unknown`; `ReservationSnapshot` exatamente como em data-model.md ("Qualquer `null` nos campos que decidem a classificação leva a `analysis_error`")
+- [ ] T010 [P] Implementar leitura e validação das variáveis de ambiente com zod em `apps/server/src/config.ts` (falha ao iniciar se `ACCOUNT_KEY_SECRET` ou `DATABASE_URL` faltarem; `HOTEL_CONCURRENCY` ≥ 1; `MAX_PERIOD_DAYS` opcional)
+
+### Banco de dados
+
+- [ ] T011 Escrever o schema Drizzle de todas as tabelas de data-model.md em `apps/server/src/persistence/schema.ts`, incluindo: enums `client_role`, `execution_status`, `execution_end_reason`, `hotel_run_status`, `classification`, `reservation_status`, `evidence_kind` com os valores literais do data-model; restrição `period_from <= period_to`; "índice único parcial em `account_key` onde `status in ('queued','running','awaiting_2fa')`"; PK composta `hotel_code` + `reservation_number` em `reservations`; `verification_count` ≥ 1; `numeric(12,2)` para valores; índices listados em data-model.md
+- [ ] T012 Gerar a migration inicial com `drizzle-kit` em `apps/server/src/persistence/migrations/` e criar `apps/server/src/persistence/db.ts` (pool `pg`, execução das migrations no startup)
+- [ ] T013 [P] Criar helper de testes com PostgreSQL efêmero (Testcontainers) aplicando as migrations em `apps/server/test/helpers/db.ts`
+
+### HTTP, autenticação e observabilidade
+
+- [ ] T014 [P] Configurar o logger Pino em `apps/server/src/logging.ts` com `redact` para `password`, `token`, `authorization`, `credentials.*`, `req.headers.authorization` e `req.body` (R-12)
+- [ ] T015 [P] Implementar respostas de erro RFC 9457 em `apps/server/src/http/problem.ts` com os códigos do contrato: `validation_error`, `unauthorized`, `forbidden_for_role`, `not_found`, `execution_already_active`, `not_awaiting_two_factor`, `execution_already_finished`, `nothing_to_resume`, `evidence_expired`
+- [ ] T016 Criar a fábrica da aplicação Fastify em `apps/server/src/http/app.ts` carregando `packages/contracts/openapi.yaml` via `fastify-openapi-glue` (validação de request e response), handler de erros → problem+json e handler `GET /v1/health` em `apps/server/src/http/handlers/health.ts`
+- [ ] T017 Implementar autenticação por chave em `apps/server/src/http/auth.ts`: `Authorization: Bearer <chave>` → SHA-256 → `api_clients` (`revoked_at` preenchido → 401); guarda de nível que recusa com 403 `forbidden_for_role` para `reader` nas operações `createExecution`, `sendTwoFactor`, `cancelExecution`, `resumeExecution` (FR-007); e CLI `create-client --name --role` / `revoke-client --name` em `apps/server/src/cli.ts` (chave exibida uma única vez)
+- [ ] T018 [P] Criar helper de validação de respostas contra `packages/contracts/openapi.yaml` (ajv + ajv-formats) em `apps/server/test/helpers/contract.ts` e testes de autenticação em `apps/server/test/contract/auth.test.ts` (sem chave → 401; chave revogada → 401; `reader` em `POST /v1/executions` → 403)
+
+### Camada do Hunit (interface) e evidências
+
+- [ ] T019 Definir a interface `HunitGateway` (`login`, `submitToken`, `listHotels`, `selectHotel`, `searchReservations`, `readReservation` → `ReservationSnapshot`) em `apps/server/src/hunit/gateway.ts`, os erros tipados `InvalidCredentialsError`, `InvalidTokenError`, `TwoFactorTimeoutError`, `HunitUnavailableError`, `ScreenNotRecognizedError`, `SessionExpiredError` em `apps/server/src/hunit/errors.ts`, e um `FakeHunitGateway` programável por roteiro em `apps/server/test/helpers/fake-hunit-gateway.ts`
+- [ ] T020 ⛔ HUNIT Capturar as telas atuais do Hunit (R-13): `npx playwright codegen` do fluxo completo e HTML salvo de login, token, seleção de hotel, filtro/listagem e detalhe de reserva em cada situação (sem pré-pagamento, cobrada, pendente, falha na cobrança, cancelada), guardando os originais apenas em `apps/server/test/fixtures/hunit/raw/` (ignorado pelo Git)
+- [ ] T021 ⛔ HUNIT Criar o script de anonimização em `apps/server/scripts/anonymize-fixtures.ts` (substitui nomes de hóspedes, e-mails, telefones, documentos, números de cartão, códigos de autorização e transação por valores fictícios; remove `value` de inputs) e gerar as fixtures versionadas em `apps/server/test/fixtures/hunit/*.html`
+- [ ] T022 ⛔ HUNIT Executar o spike R-13a (HAR sanitizado, login feito antes da gravação) e o teste de duas abas do R-08; registrar as conclusões e a decisão final (coleta por rede, por tela ou mista; paralelismo sim/não) em `specs/001-consulta-reservas-hunit/research.md`
+- [ ] T023 [P] Implementar a captura de evidências em `apps/server/src/evidence/capture.ts`: screenshot com `mask` sobre todos os `input`, HTML sanitizado (remove atributo `value` de todo `<input>`), arquivos em `${EVIDENCE_DIR}/<executionId>/`, registro em `evidence` com "`expires_at` = `created_at + 30 dias`"; teste do sanitizador em `apps/server/test/unit/evidence-sanitize.test.ts`
+- [ ] T024 Implementar o barramento de eventos em `apps/server/src/executions/events.ts`: publica em memória para assinantes SSE e persiste em `execution_events` (`message` "sem credenciais nem nome de hóspede")
+
+**Checkpoint**: base pronta — histórias podem começar.
+
+---
+
+## Phase 3: User Story 1 - Acesso ao Hunit com token 2FA (Priority: P1) 🎯 MVP
+
+**Goal**: iniciar uma execução pela API, pausar em `awaiting_2fa`, receber o token e concluir o
+acesso (lendo o catálogo de hotéis como prova), ou falhar com motivo distinto.
+
+**Independent Test**: quickstart.md › US1 — iniciar com credenciais válidas, enviar o token e ver
+`completed` com o catálogo atualizado; repetir com senha errada, token errado, sem token e com
+execução já ativa.
+
+### Tests for User Story 1 ⚠️
+
+- [ ] T025 [P] [US1] Testes de contrato de `POST /v1/executions`, `GET /v1/executions/{id}`, `POST /v1/executions/{id}/two-factor` e `GET /v1/hotels` em `apps/server/test/contract/executions-us1.test.ts` (inclui 409 `execution_already_active` e 409 `not_awaiting_two_factor`)
+- [ ] T026 [P] [US1] Testes de integração do runner com `FakeHunitGateway` + banco em `apps/server/test/integration/execution-login.test.ts`: `awaiting_2fa` com `two_factor_deadline`; token correto → acesso concluído; `invalid_credentials` sem pedir token; `invalid_token`; `two_factor_timeout` (timers falsos, `TWO_FACTOR_TIMEOUT_SECONDS`); `hunit_screen_not_recognized` com evidência; segunda execução na mesma conta → recusada; reinício do servidor marca execuções ativas como `failed/server_restarted`
+- [ ] T027 [P] [US1] ⛔ HUNIT Testes dos Page Objects de acesso contra fixtures em `apps/server/test/hunit/login.test.ts` (login, tela de token, leitura do catálogo; tela alterada → `ScreenNotRecognizedError`)
+
+### Implementation for User Story 1
+
+- [ ] T028 [P] [US1] Implementar `account_key = HMAC-SHA256(usuário normalizado (trim + minúsculas), ACCOUNT_KEY_SECRET)` em `apps/server/src/executions/account-key.ts` (R-11)
+- [ ] T029 [P] [US1] Implementar o repositório de execuções em `apps/server/src/persistence/executions-repo.ts`: criar (violação do índice único parcial → erro `execution_already_active`), transições de estado do diagrama do data-model, `end_reason` obrigatório em `failed`/`cancelled`, e `failAllActive('server_restarted')`
+- [ ] T030 [P] [US1] Implementar o repositório de hotéis em `apps/server/src/persistence/hotels-repo.ts`: upsert do catálogo atualizando `last_seen_at` e marcando `available = false` para hotéis ausentes no último catálogo (FR-008)
+- [ ] T031 [US1] Implementar o runner em `apps/server/src/executions/runner.ts`: credenciais mantidas apenas na closure da execução; `awaiting_2fa` + evento `status_changed` publicado imediatamente (SC-005); espera do token com prazo `TWO_FACTOR_TIMEOUT_SECONDS`; credenciais e token descartados logo após o acesso; leitura do catálogo; mapeamento de cada erro tipado para o `end_reason` correspondente; evidência em falha de tela
+- [ ] T032 [US1] ⛔ HUNIT Implementar o navegador e os Page Objects de acesso em `apps/server/src/hunit/browser.ts` (Chromium headless, contexto por execução), `apps/server/src/hunit/login-page.ts`, `apps/server/src/hunit/two-factor-page.ts` e `apps/server/src/hunit/hotel-selection-page.ts` (`listHotels`), e a implementação `PlaywrightHunitGateway` em `apps/server/src/hunit/playwright-gateway.ts`; localizadores por role/label/texto (princípio II)
+- [ ] T033 [P] [US1] Implementar os handlers `createExecution`, `getExecution`, `listExecutions` e `sendTwoFactor` em `apps/server/src/http/handlers/executions.ts` e `listHotels` em `apps/server/src/http/handlers/hotels.ts` (respostas conforme schemas `Execution`, `ExecutionSummary`, `Hotel`)
+- [ ] T034 [US1] Implementar o stream SSE `GET /v1/executions/{id}/events` com reenvio a partir de `Last-Event-ID` em `apps/server/src/http/handlers/execution-events.ts`
+- [ ] T035 [US1] Montar tudo em `apps/server/src/main.ts`: config, logger, migrations, `failAllActive('server_restarted')`, runner com `PlaywrightHunitGateway`, servidor HTTP
+
+**Checkpoint**: US1 funciona sozinha (com Fake, e com o Hunit real após T032).
+
+---
+
+## Phase 4: User Story 2 - Consulta e classificação das reservas (Priority: P2)
+
+**Goal**: com acesso concluído, percorrer hotéis, períodos e páginas, classificar cada reserva com
+as regras de domínio, gravar por hotel com histórico e permitir consultas filtradas.
+
+**Independent Test**: quickstart.md › US2 — executar 1 hotel × 1 semana e comparar 50 reservas
+com o Hunit (SC-002); filtro "canceladas pendentes"; segunda execução incrementa
+`verificationCount`.
+
+### Tests for User Story 2 ⚠️
+
+- [ ] T036 [P] [US2] Testes unitários da classificação em `packages/domain/test/classification.test.ts`: cada regra da FR-013 na ordem (1 "258-" sem abrir … 6 `analysis_error`); `null` em campo decisivo → `analysis_error` (FR-015); reserva cancelada recebe a mesma classificação que teria ativa (FR-014a); `reason` sempre preenchido (FR-014)
+- [ ] T037 [P] [US2] Testes unitários do histórico em `packages/domain/test/verification.test.ts`: reserva nova (`verification_count = 1`); conhecida (`first_verified_at` preservado, `changed_fields`, `previous_classification`, `previous_reservation_status`, `status_changed_at`); ativa → cancelada conta como mudança (FR-018); `not_found_since = coalesce(not_found_since, agora)` só para check-in dentro do período (FR-018a); reaparecimento limpa a marcação
+- [ ] T038 [P] [US2] Testes unitários de período em `packages/domain/test/period.test.ts`: `from <= to`; períodos retroativos e maiores que uma semana aceitos; divisão em blocos de `MAX_PERIOD_DAYS` sem lacunas nem sobreposição (FR-010a)
+- [ ] T039 [P] [US2] Testes de integração da coleta com `FakeHunitGateway` + banco em `apps/server/test/integration/execution-hotels.test.ts`: transação única por hotel; hotel com falha não grava nada e a execução segue (`completed` com hotel `failed`); reservas repetidas entre páginas gravadas uma vez; `reservation_observations` por execução; marcação "não encontrada" só em hotel concluído; nenhuma chamada de escrita no gateway
+- [ ] T040 [P] [US2] Testes de contrato de `GET /v1/reservations` (filtros combinados `classification` + `reservationStatus` + `notFound` + `executionId`, paginação por cursor), `GET /v1/reservations/{hotelCode}/{reservationNumber}` e `GET /v1/evidence/{id}/{file}` (410 após expirar) em `apps/server/test/contract/reservations.test.ts`
+- [ ] T041 [P] [US2] ⛔ HUNIT Testes dos componentes de consulta contra fixtures em `apps/server/test/hunit/reservations.test.ts`: filtros da FR-010 aplicados; total de páginas descoberto; snapshot correto para cada situação de detalhe; filtro restritivo ausente → `ScreenNotRecognizedError`
+
+### Implementation for User Story 2
+
+- [ ] T042 [P] [US2] Implementar `classifyReservation(reservationNumber, snapshot | null)` em `packages/domain/src/classification.ts` seguindo a ordem da FR-013 e retornando `{ classification, reason, reservationStatus }`
+- [ ] T043 [P] [US2] Implementar `mergeVerification(existing | null, observed, now)` e `markNotFound(...)` em `packages/domain/src/verification.ts` conforme "Regras de atualização (FR-018)" do data-model
+- [ ] T044 [P] [US2] Implementar validação e divisão de período em `packages/domain/src/period.ts`
+- [ ] T045 [US2] Implementar a proteção de somente-leitura em `apps/server/src/hunit/read-only-guard.ts`: `page.route` que aborta e registra evento para toda requisição ao domínio do Hunit com método diferente de GET, exceto a lista explícita de requisições de login/token/seleção de hotel/filtro identificadas em T022 (FR-012)
+- [ ] T046 [US2] ⛔ HUNIT Implementar a coleta conforme a decisão de T022: Page Objects `apps/server/src/hunit/reservations-search-page.ts` (filtros fixos: Filtrar período por = Check-in; Status da reserva = Todas; Tipo coleta pagamento = Canal; Status da cobrança = Todos; Status da integração (PMS) = Todas; demais campos sem filtro), `apps/server/src/hunit/reservation-list-page.ts` (paginação dinâmica) e `apps/server/src/hunit/reservation-detail-page.ts` (→ `ReservationSnapshot`, nunca aciona a ação de cobrar) e/ou leitores de resposta HTTP em `apps/server/src/hunit/network/`; completar `selectHotel`, `searchReservations` e `readReservation` em `apps/server/src/hunit/playwright-gateway.ts`
+- [ ] T047 [US2] Implementar o repositório de reservas em `apps/server/src/persistence/reservations-repo.ts`: `commitHotel(executionId, hotelCode, period, records)` em uma transação (upsert com `mergeVerification`, `reservation_observations`, `markNotFound`, atualização de `execution_hotels`), e consulta com filtros e cursor (FR-020)
+- [ ] T048 [US2] Estender o runner em `apps/server/src/executions/runner.ts`: hotéis solicitados ou todos (FR-009); para cada hotel → blocos de período → páginas → "258-" ignorada sem abrir → `readReservation` → `classifyReservation` → buffer; falha de reserva → `analysis_error` + evidência; falha de hotel → evidência + hotel `failed` e segue; contagens e eventos `hotel_started`, `page_done`, `reservation_classified`, `hotel_completed`, `hotel_failed`
+- [ ] T049 [P] [US2] Implementar os handlers `listReservations` e `getReservation` em `apps/server/src/http/handlers/reservations.ts` (valores monetários como string decimal; `guestName` `null` quando anonimizada)
+- [ ] T050 [P] [US2] Implementar o download de evidências em `apps/server/src/http/handlers/evidence.ts` (410 `evidence_expired` após `expires_at`)
+
+**Checkpoint**: US1 e US2 funcionam; a consulta de rotina é possível.
+
+---
+
+## Phase 5: User Story 3 - Acompanhamento, cancelamento e retomada (Priority: P3)
+
+**Goal**: acompanhar o andamento com estimativa de tempo, cancelar em até 15 s e retomar a partir
+do primeiro hotel não concluído.
+
+**Independent Test**: quickstart.md › US3 — execução com 3+ hotéis, cancelar no 2º, retomar com
+novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403 nas ações.
+
+### Tests for User Story 3 ⚠️
+
+- [ ] T051 [P] [US3] Testes de integração em `apps/server/test/integration/execution-control.test.ts`: cancelamento → `cancelled/cancelled_by_client` em ≤ 15 s sem gravar o hotel em andamento (SC-008); `cancelled_by_client_id` preenchido; retomada cria execução com `parent_execution_id` e `requested_hotel_codes` = hotéis não `completed` (SC-007); retomada sem hotéis pendentes → 409 `nothing_to_resume`
+- [ ] T052 [P] [US3] Testes unitários da estimativa em `apps/server/test/unit/timing.test.ts`: média por reserva (exclui "258-"), média histórica no início, estimativa restante (R-08a)
+- [ ] T053 [P] [US3] Testes de contrato de `POST /v1/executions/{id}/cancel`, `POST /v1/executions/{id}/resume`, `GET /v1/executions` (filtro `status`, cursor) e campos `current`, `hotels[].durationSeconds`, `timing` de `GET /v1/executions/{id}` em `apps/server/test/contract/executions-us3.test.ts`
+
+### Implementation for User Story 3
+
+- [ ] T054 [P] [US3] Implementar cálculo de médias e tempo restante em `apps/server/src/executions/timing.ts` (R-08a) e gravar `started_at`, `finished_at` e `reservations_opened` em `execution_hotels` (FR-021a)
+- [ ] T055 [US3] Implementar o cancelamento cooperativo com `AbortController` no runner (`apps/server/src/executions/runner.ts`): checagem entre reservas e páginas, fechamento forçado do contexto do navegador após 10 s, hotel em andamento marcado `cancelled` sem commit
+- [ ] T056 [US3] Implementar a retomada em `apps/server/src/executions/resume.ts` (valida execução encerrada com hotéis pendentes e ausência de execução ativa na conta; cria a nova execução e inicia o runner com as novas credenciais)
+- [ ] T057 [US3] Implementar os handlers `cancelExecution` e `resumeExecution` em `apps/server/src/http/handlers/executions.ts` e completar `getExecution` com `current`, `hotels[]` (duração, contagens, `failureReason`), `timing` e os 50 eventos mais recentes (FR-021)
+
+**Checkpoint**: todas as histórias funcionam de forma independente.
+
+---
+
+## Phase 6: Polish & Cross-Cutting Concerns
+
+- [ ] T058 [P] Implementar a rotina diária de manutenção em `apps/server/src/maintenance/retention.ts` (remove arquivos e registros de evidência com `expires_at` vencido — FR-025; anonimiza `guest_name` de reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos, preenchendo `anonymized_at` — FR-026/FR-027), agendada no `main.ts`, com teste em `apps/server/test/integration/retention.test.ts`
+- [ ] T059 [P] Escrever o teste de segurança SC-004 em `apps/server/test/security/no-secrets.test.ts`: executa US1+US2 com `FakeHunitGateway` (e com fixtures, se disponíveis) usando senha e token marcadores e procura esses valores em todos os logs capturados, linhas do banco e arquivos de evidência
+- [ ] T060 [P] Atualizar `AGENTS.md` (estrutura do repositório e seção "Comandos": instalar, testar, gerar tipos, subir containers, criar cliente) e criar `README.md` na raiz
+- [ ] T061 Rodar `pnpm --filter @hunit/contracts lint` e corrigir avisos do contrato; confirmar que `packages/contracts/openapi.yaml` e `specs/001-consulta-reservas-hunit/contracts/openapi.yaml` estão iguais
+- [ ] T062 ⛔ HUNIT Executar a validação de homologação do [quickstart.md](./quickstart.md) (US1, US2, US3, SC-002 com 50 reservas, SC-003, SC-004) e registrar em `specs/001-consulta-reservas-hunit/research.md` a duração da rotina, o tempo médio por hotel e por reserva e a meta resultante da SC-009 (R-08, R-08a)
+
+---
+
+## Dependencies & Execution Order
+
+### Phase Dependencies
+
+- **Setup (Phase 1)**: sem dependências.
+- **Foundational (Phase 2)**: depende do Setup; bloqueia as histórias. T020 → T021 → T022 formam
+  a trilha do Hunit e bloqueiam somente as tarefas ⛔ HUNIT.
+- **US1 (Phase 3)**: depende da Phase 2 (exceto T020–T022).
+- **US2 (Phase 4)**: depende da Phase 2; usa o runner e os repositórios de execução de US1
+  (T029, T031) — implemente depois de US1, mas seus testes de domínio (T036–T038) e o domínio
+  (T042–T044) podem começar já na Phase 2.
+- **US3 (Phase 5)**: depende de US1 (runner) e usa o processamento de hotéis de US2 para
+  cancelamento/retomada significativos.
+- **Polish (Phase 6)**: após as histórias desejadas; T062 exige o Hunit real.
+
+### Within Each User Story
+
+- Testes primeiro (devem falhar) → domínio/repositórios → runner → handlers → integração.
+- Commit ao final de cada tarefa ou grupo lógico, citando `specs/001` e o ID da tarefa.
+
+### Parallel Opportunities
+
+- Phase 1: T002–T005, T007, T008 em paralelo após T001.
+- Phase 2: T009, T010, T013, T014, T015, T018, T023 em paralelo; trilha do Hunit (T020–T022) em
+  paralelo com todo o restante.
+- US2: todo o domínio (T036–T038 testes, T042–T044 implementação) é independente de navegador e
+  banco.
+
+---
+
+## Parallel Example: User Story 2
+
+```text
+# Testes de domínio juntos:
+Task: "T036 Testes de classificação em packages/domain/test/classification.test.ts"
+Task: "T037 Testes de histórico em packages/domain/test/verification.test.ts"
+Task: "T038 Testes de período em packages/domain/test/period.test.ts"
+
+# Implementação de domínio juntos:
+Task: "T042 classifyReservation em packages/domain/src/classification.ts"
+Task: "T043 mergeVerification em packages/domain/src/verification.ts"
+Task: "T044 período em packages/domain/src/period.ts"
+```
+
+---
+
+## Implementation Strategy
+
+### MVP First (User Story 1)
+
+1. Phase 1 (Setup) + Phase 2 (Foundational), iniciando em paralelo a trilha do Hunit (T020–T022).
+2. Phase 3 (US1) com `FakeHunitGateway`; ligar o `PlaywrightHunitGateway` (T032) quando as
+   fixtures estiverem prontas.
+3. **PARAR E VALIDAR**: quickstart.md › US1 contra o Hunit real.
+
+### Incremental Delivery
+
+1. Setup + Foundational → base pronta.
+2. US1 → validar acesso com 2FA (MVP técnico).
+3. US2 → validar classificação com 50 reservas (SC-002) — primeiro valor para o Financeiro.
+4. US3 → validar cancelamento/retomada e estimativa.
+5. Polish → retenção, segurança SC-004, documentação, homologação e medição da SC-009.
+
+---
+
+## Notes
+
+- [P] = arquivos diferentes, sem dependência pendente.
+- ⛔ HUNIT = depende das telas atuais do Hunit; nunca copie seletores do `legacy/`.
+- Nenhuma tarefa pode adicionar ação de escrita no Hunit (FR-012); o `read-only-guard` (T045) é a
+  rede de segurança.
+- Fixtures e HAR brutos nunca entram no Git; somente fixtures anonimizadas (T021).
