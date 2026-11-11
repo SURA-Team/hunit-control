@@ -109,6 +109,7 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 | `execution_id` | uuid FK | |
 | `at` | timestamptz | |
 | `type` | text | ex.: `status_changed`, `hotel_started`, `page_done`, `reservation_classified`, `hotel_failed` |
+| `status` | `execution_status` null | novo estado da execução, nos eventos `status_changed` |
 | `hotel_code`, `reservation_number` | text null | |
 | `message` | text | sem credenciais nem nome de hóspede |
 

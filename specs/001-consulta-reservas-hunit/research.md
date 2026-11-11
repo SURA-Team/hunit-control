@@ -401,6 +401,26 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
   ainda não foi observada: está liberada provisoriamente como `/signin-oidc` (o padrão desse tipo
   de login). Se estiver errada, o login falha e o bloqueio informa a rota pedida.
 
+- **Atualização 2026-11-11 (implementação da Fase 3, T032)**:
+  - **Limite do Playwright descoberto nos testes**: a interceptação (`context.route`) só alcança
+    o primeiro endereço de um redirecionamento HTTP; o salto seguinte ("302, vá para X") sai do
+    navegador sem poder ser abortado. A proteção passa a **detectar** esses saltos
+    (`context.on('request')` com `redirectedFrom()`), informando-os com `sent: true`, e o gateway
+    interrompe o acesso com `ScreenNotRecognizedError` citando a rota. Risco residual: só o login
+    (Keycloak e o próprio `hunit-api`) redireciona, e um redirecionamento vira GET sem corpo
+    (exceto 307/308). Requisições feitas pela página (XHR/fetch, navegação por script) continuam
+    sendo abortadas antes de sair.
+  - Esse mesmo mecanismo revela a rota real de retorno do login: se não for `/signin-oidc`, o
+    primeiro login real falha mostrando a rota, que entra na lista de permissão com teste.
+  - **Verificação manual do login** (`apps/server/src/hunit-login-check.ts`): o operador roda no
+    próprio terminal, digita e-mail, senha e token (senha e token ocultos, nada gravado) e vê o
+    resultado e as rotas barradas; com `--save-dir test/fixtures/hunit/raw` guarda as telas
+    sanitizadas para a T020. Credenciais nunca passam pelo chat nem pelo agente.
+  - Até a T020, os testes do login usam fixtures **reconstruídas** a partir dos HARs; as
+    mensagens de erro seguem o padrão do Keycloak (`#input-error`, `.kc-feedback-text`,
+    `.alert-error`, `[role=alert]`) e precisam ser confirmadas. Expiração da tentativa de login
+    depois do token = voltar à tela de usuário e senha, ou página com título contendo "expir".
+
 ## R-14 — Testes
 
 - **Decision**: Vitest em todos os pacotes.

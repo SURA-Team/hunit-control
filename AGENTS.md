@@ -84,6 +84,8 @@ Não altere nada dentro de `legacy/`. O histórico completo está em
   - `apps/server/src/hunit/read-only-guard.ts`: toda requisição ao Hunit passa por ela. Só as
     rotas de leitura da lista de permissão são aceitas; rotas de cobrança, cartão e alteração
     são bloqueadas. Uma rota nova só entra na lista com teste e registro em `research.md`.
+    Limite conhecido: saltos de redirecionamento HTTP não podem ser abortados, só detectados; o
+    gateway interrompe o acesso quando detecta um fora da lista (research R-13a).
 
 ## Hunit (sistema externo)
 
@@ -95,6 +97,9 @@ Não altere nada dentro de `legacy/`. O histórico completo está em
   role/label/texto a CSS/XPath.
 - Para mapear a UI nova, peça ao usuário para gravar o fluxo com `npx playwright codegen` ou
   salvar o HTML das páginas (anonimizado).
+- **Nunca peça nem aceite usuário, senha ou token do Hunit no chat.** Para testar o login real, o
+  usuário roda `hunit:login-check` (tabela de comandos) e digita as credenciais no próprio
+  terminal.
 
 ## Comandos
 
@@ -121,6 +126,8 @@ PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tab
 | `docker compose up -d --build` | Sobe `server` e `db` (antes, copie `.env.example` para `.env` e preencha) |
 | `docker compose exec server node dist/cli.js create-client --name <nome> --role <operator\|reader>` | Cadastra um cliente da API e mostra a chave dele, uma única vez |
 | `docker compose exec server node dist/cli.js revoke-client --name <nome>` | Revoga um cliente: a chave deixa de ser aceita |
+| `pnpm --filter @hunit/server start` | Sobe o servidor fora do Docker (depois do `pnpm build`; exige as variáveis do `.env.example` no ambiente e um PostgreSQL) |
+| `pnpm --filter @hunit/server hunit:login-check -- --save-dir test/fixtures/hunit/raw` | Verificação manual do login no Hunit **real**, rodada pelo operador num terminal interativo (depois do `pnpm build`): pede e-mail, senha e token (ocultos), mostra o resultado e as rotas barradas pela proteção e guarda as telas sanitizadas na pasta ignorada pelo Git |
 
 Regras ao mexer em dependências e no contrato:
 
@@ -135,7 +142,6 @@ Regras ao mexer em dependências e no contrato:
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 
-O servidor ainda não responde requisições de verdade (o `main.ts` é montado na Fase 3 da
-feature 001), então por enquanto o `docker compose up` só serve para o banco e para o CLI de
-clientes. Ainda não existem: comando para rodar o servidor em desenvolvimento e o Electron.
-Documente aqui quando forem criados.
+O servidor responde à API desde a Fase 3 da feature 001: login com token e catálogo de hotéis.
+A consulta das reservas entra na Fase 4. Ainda não existe o app Electron; documente aqui quando
+for criado.

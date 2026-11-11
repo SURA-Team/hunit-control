@@ -48,14 +48,39 @@ Guarde as chaves exibidas (aparecem uma única vez). Nos exemplos abaixo: `$OP` 
 
 ### US1 — Acesso com token 2FA
 
-```powershell
-# terminal 1: acompanhar eventos
-curl -N -H "Authorization: Bearer $OP" http://localhost:3000/v1/executions/<id>/events
+**Antes**: confira o login no Hunit real com a verificação manual (não precisa do servidor nem
+do banco). Ela pede e-mail, senha e token no próprio terminal, sem gravar nada:
 
-# terminal 2: iniciar
-curl -X POST -H "Authorization: Bearer $OP" -H "Content-Type: application/json" `
-  -d '{"credentials":{"username":"...","password":"..."},"period":{"from":"2026-11-01","to":"2026-11-07"},"hotelCodes":["<um hotel>"]}' `
-  http://localhost:3000/v1/executions
+```powershell
+pnpm build
+pnpm --filter @hunit/server hunit:login-check -- --save-dir test/fixtures/hunit/raw
+```
+
+Se aparecer uma rota "(redirecionamento — passou)", ela é a rota real de retorno do login (T022):
+registre em research.md antes de seguir.
+
+Pela API — a senha e o token são lidos sem aparecer na tela e sem ir para o histórico do
+PowerShell (nunca escreva credenciais direto na linha de comando):
+
+```powershell
+$api = 'http://localhost:3000/v1'
+$auth = @{ Authorization = "Bearer $OP" }
+$user = Read-Host 'E-mail do Hunit'
+$pass = [Net.NetworkCredential]::new('', (Read-Host 'Senha' -AsSecureString)).Password
+$body = @{ credentials = @{ username = $user; password = $pass }
+           period = @{ from = '2026-11-01'; to = '2026-11-07' } } | ConvertTo-Json -Depth 3
+$exec = Invoke-RestMethod -Method Post "$api/executions" -Headers $auth -ContentType 'application/json' -Body $body
+Remove-Variable pass, body
+
+# acompanhar os eventos: num segundo terminal, com $OP, $api e o id da execução definidos ali
+# (use curl.exe; no PowerShell 5.1, "curl" é outro comando)
+curl.exe -N -H "Authorization: Bearer $OP" "$api/executions/$($exec.id)/events"
+
+# quando o estado for awaiting_2fa:
+$token = [Net.NetworkCredential]::new('', (Read-Host 'Token' -AsSecureString)).Password
+Invoke-RestMethod -Method Post "$api/executions/$($exec.id)/two-factor" -Headers $auth `
+  -ContentType 'application/json' -Body (@{ token = $token } | ConvertTo-Json)
+Invoke-RestMethod "$api/executions/$($exec.id)" -Headers $auth
 ```
 
 | Verificação | Esperado |

@@ -141,6 +141,9 @@ paths:
         Cada mensagem SSE tem `id` (sequencial), `event` (tipo) e `data` (JSON de ExecutionEvent).
         Reconexão com o cabeçalho `Last-Event-ID` reenvia os eventos posteriores.
         O evento `status_changed` com `status = awaiting_2fa` é enviado em até 5 s (SC-005).
+        O stream termina depois do evento `status_changed` com estado final (`completed`,
+        `failed` ou `cancelled`); para uma execução já encerrada, envia os eventos posteriores ao
+        `Last-Event-ID` (se houver) e termina.
       parameters:
         - name: Last-Event-ID
           in: header
