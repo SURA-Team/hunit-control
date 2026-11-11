@@ -227,7 +227,7 @@ export interface components {
              * @description Código estável para tratamento pelos clientes
              * @enum {string}
              */
-            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "evidence_expired";
+            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "evidence_expired" | "internal_error";
         };
         HunitCredentials: {
             username: string;
@@ -387,7 +387,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description Requisição inválida */
+        /** @description Requisição inválida (parâmetro, corpo ou formato fora do contrato) */
         BadRequest: {
             headers: {
                 [name: string]: unknown;
@@ -456,6 +456,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description Serviço indisponível (o banco de dados não respondeu) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listHotels: {
@@ -506,6 +515,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };
@@ -565,6 +575,7 @@ export interface operations {
                     "application/json": components["schemas"]["Execution"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
@@ -591,6 +602,7 @@ export interface operations {
                     "text/event-stream": components["schemas"]["ExecutionEvent"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
@@ -619,6 +631,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
@@ -653,6 +666,7 @@ export interface operations {
                     "application/json": components["schemas"]["Execution"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
@@ -693,6 +707,7 @@ export interface operations {
                     "application/json": components["schemas"]["Execution"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
@@ -765,6 +780,7 @@ export interface operations {
                     "application/json": components["schemas"]["Reservation"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
@@ -792,6 +808,7 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             /** @description Evidência expirada (retenção de 30 dias — FR-025) */
@@ -799,7 +816,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
             };
         };
     };
