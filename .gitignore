@@ -46,8 +46,11 @@ legacy/.codex/
 # Logs, execuções e evidências
 # ============================================================
 *.log
-executions/
-screenshots/
+# Pastas de saída na raiz. O "/" inicial é importante: sem ele, a regra também esconderia
+# pastas de código com o mesmo nome (ex.: apps/server/src/executions/).
+/executions/
+/screenshots/
+/data/
 test-results/
 playwright-report/
 playwright/.cache/
