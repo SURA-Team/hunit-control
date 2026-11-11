@@ -121,6 +121,9 @@ estiverem errados (T022). Compare o total que ele mostra com a tela de reservas 
 | Execução com 3+ hotéis, `GET /executions/<id>` | hotel/página/reserva atuais e contagens |
 | `POST /executions/<id>/cancel` durante o 2º hotel | `cancelled` em até 15 s (SC-008); 1º hotel gravado, 2º sem dados parciais |
 | `POST /executions/<id>/resume` com credenciais + novo token | nova execução começa no 2º hotel; o 1º não é reprocessado (SC-007) |
+| Na metade dos hotéis, anotar `timing.estimatedRemainingSeconds` de `GET /executions/<id>` e comparar com o tempo que realmente faltou | erro de no máximo 20% (SC-010) |
+| `POST /executions/<id>/resume` de novo na mesma execução | `409 execution_already_resumed`, citando a retomada a usar |
+| Retomar com outra conta do Hunit que não acessa um dos hotéis pendentes | evento `warning`; o hotel fica `pending` com o motivo; nova retomada com a conta que tem acesso o processa (FR-009a) |
 | Chave `$RD` tentando iniciar/cancelar | `403 forbidden_for_role`; GETs funcionam |
 
 ### Desempenho (SC-009)
@@ -135,3 +138,29 @@ validado.
 docker compose logs server | Select-String -Pattern "<senha usada>","<token usado>"   # → nenhum resultado
 Get-ChildItem -Recurse <volume de evidências> | Select-String -Pattern "<senha usada>"  # → nenhum resultado
 ```
+
+## 5. Implantação e continuidade (SC-011, SC-012, SC-013)
+
+Feito no PC de produção, depois de seguir a seção de implantação do `README.md` (IP fixo, firewall,
+`SERVER_HOSTNAME`, `BACKUP_DIR`, `BACKUP_PASSPHRASE`).
+
+**Conexão cifrada (SC-013)** — de **outra máquina** da rede, com o certificado raiz do Caddy
+instalado nela:
+
+```powershell
+curl.exe https://<SERVER_HOSTNAME>/v1/health          # → {"status":"ok"}
+curl.exe http://<SERVER_HOSTNAME>:3000/v1/health      # → falha de conexão (porta só em 127.0.0.1)
+```
+
+**Cópia em atraso (SC-012)** — com o PC desligado por mais de um dia (ou com a cópia mais nova
+movida para outra pasta): ligar o PC, esperar o Docker Desktop subir e conferir que um novo
+`hunit-*.dump.gpg` aparece no `BACKUP_DIR` em até 1 hora.
+
+**Restauração (SC-011)** — de preferência num segundo computador, com o mesmo `.env`
+(`ACCOUNT_KEY_SECRET` e `BACKUP_PASSPHRASE` originais), seguindo o passo a passo do `README.md`:
+
+1. Antes, anotar a quantidade de reservas e execuções (`GET /v1/reservations` e
+   `GET /v1/executions`).
+2. Restaurar a cópia mais recente com o `server` parado e subir de novo.
+3. Conferir que as quantidades batem com as do momento da cópia e que as chaves dos clientes da API
+   continuam aceitas.

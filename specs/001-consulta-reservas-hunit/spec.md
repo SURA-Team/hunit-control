@@ -59,6 +59,23 @@ comercial, relatórios e painéis, e exportação de planilhas.
   retroativos de qualquer tamanho para encontrar reservas antigas que passaram sem cobrança.
 - Q: Por quanto tempo guardar os dados das reservas? → A: 5 anos após o check-in; depois, dados
   pessoais do hóspede são anonimizados e os dados financeiros são mantidos.
+- Q: Contas do Hunit diferentes podem ter acesso a hotéis diferentes; como tratar? (revisão da
+  US3) → A: O sistema guarda o catálogo de cada conta. Um hotel pedido que a conta usada não acessa
+  fica pendente, com o motivo, para ser consultado numa retomada com outra conta. Quando a última
+  leitura da conta já mostra que ela não acessa algum hotel pedido, o sistema só avisa o operador e
+  segue com os demais.
+
+### Session 2026-11-11 (implantação)
+
+- Q: Onde o sistema roda nesta fase e quem o usa? → A: Num computador comum da empresa, ligado e
+  desligado manualmente, usado por 2 pessoas em máquinas diferentes da mesma rede. Existem só dois
+  ambientes: desenvolvimento e produção; a validação com o Hunit real é feita em produção, o que é
+  seguro porque o sistema só lê o Hunit (FR-012). É uma solução temporária: com a integração com o
+  Sura, o sistema passa para a nuvem (AWS), mudando a implantação, não o comportamento.
+- Q: Como proteger os dados com o servidor num computador comum? → A: Cópia de segurança diária e
+  cifrada, guardada fora desse computador, com restauração documentada; e acesso pela rede somente
+  por conexão cifrada, porque usuário, senha e token do Hunit trafegam das máquinas dos operadores
+  até o servidor.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -148,7 +165,7 @@ Hunit.
 ### User Story 3 - Acompanhamento, cancelamento e retomada (Priority: P3)
 
 O operador acompanha a execução em andamento, pode cancelá-la a qualquer momento e pode retomar
-uma execução interrompida a partir do último hotel concluído.
+uma execução interrompida a partir do primeiro hotel não concluído.
 
 **Why this priority**: execuções percorrem muitos hotéis e podem levar bastante tempo; sem
 acompanhamento e retomada, uma falha no meio obriga a recomeçar tudo. Agrega robustez, mas a
@@ -172,6 +189,10 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 5. **Given** um cliente com nível "consulta", **When** ele tenta iniciar, cancelar ou retomar uma
    execução ou enviar token, **Then** a ação é recusada com motivo claro, e ele continua podendo
    acompanhar a execução e consultar os resultados.
+6. **Given** uma execução com hotéis pendentes, **When** o operador a retoma com uma conta do Hunit
+   que não acessa alguns desses hotéis, **Then** ele é avisado, os hotéis acessíveis são
+   processados e os demais continuam pendentes, com o motivo, para uma nova retomada com uma conta
+   que tenha acesso (FR-009a).
 
 ---
 
@@ -190,6 +211,9 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   evidência, e a execução segue para a próxima.
 - Falha repetida em um hotel inteiro: o hotel é marcado como falho e a execução segue para o
   próximo hotel; o resultado final aponta os hotéis falhos.
+- Um hotel pedido não está no catálogo da conta usada: se outra conta já o acessou, ele fica
+  pendente para retomar com outra conta (FR-009a); se nenhuma conta conhecida o acessa (ex.: código
+  digitado errado), é marcado como falho.
 - Um token chega depois que a execução já expirou ou foi cancelada: é recusado com motivo claro.
 - O token do autenticador muda a cada poucos segundos: um token que expirou entre a leitura e o
   envio é rejeitado pelo Hunit e a execução encerra com "token inválido"; o operador inicia nova
@@ -234,9 +258,15 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 **Hotéis e consulta**
 
 - **FR-008**: O sistema MUST obter o catálogo de hotéis disponíveis na conta do Hunit a cada
-  execução e disponibilizar aos clientes o último catálogo conhecido.
+  execução e guardá-lo por conta, porque contas diferentes podem acessar hotéis diferentes. Aos
+  clientes, MUST disponibilizar o catálogo conhecido de todas as contas, com o hotel disponível
+  enquanto alguma conta o acessar.
 - **FR-009**: Quando nenhum hotel for informado, a execução MUST processar todos os hotéis do
-  catálogo.
+  catálogo da conta usada.
+- **FR-009a**: Um hotel pedido que a conta usada não acessa MUST ficar pendente, com o motivo, sem
+  ser contado como falha, para ser consultado numa retomada com uma conta que tenha acesso
+  (FR-023). Quando o último catálogo conhecido da conta já indica, ao iniciar ou retomar, que ela
+  não acessa algum hotel pedido, o sistema MUST avisar o operador e seguir com os demais hotéis.
 - **FR-010**: Para cada hotel, o sistema MUST consultar as reservas do período informado aplicando
   um conjunto fixo de filtros do Hunit, equivalente ao usado pelo legado (nomes conforme a tela de
   reservas atual do Hunit, em 2026-11-11):
@@ -330,7 +360,8 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   aguardar o fim do hotel atual.
 - **FR-023**: O sistema MUST permitir retomar uma execução interrompida a partir do primeiro hotel
   não concluído, exigindo novo acesso com token. Uma execução concluída em que algum hotel falhou
-  também pode ser retomada; só os hotéis não concluídos são consultados (research R-19).
+  também pode ser retomada; só os hotéis não concluídos são consultados. Cada execução é retomada
+  no máximo uma vez: para continuar, retoma-se a última execução da sequência (research R-19).
 
 **Evidências**
 
@@ -348,16 +379,37 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **FR-027**: A anonimização MUST ocorrer automaticamente, sem ação do operador, e reservas
   anonimizadas MUST continuar consultáveis pelos demais campos.
 
+**Implantação e continuidade**
+
+- **FR-028**: O sistema MUST funcionar num computador comum da rede da empresa, ligado e desligado
+  manualmente, e MUST poder ser levado depois para a nuvem mudando apenas a configuração e a
+  implantação, sem mudar o comportamento descrito nesta spec.
+- **FR-029**: As rotinas automáticas (remoção de evidências vencidas, anonimização e cópia de
+  segurança) que deixaram de acontecer enquanto o servidor estava desligado MUST ser feitas assim
+  que ele voltar a funcionar, sem ação do operador.
+- **FR-030**: Os dados do sistema (reservas, histórico de verificações, execuções e clientes da API)
+  MUST ter uma cópia de segurança ao menos uma vez por dia, guardada fora do computador do servidor.
+  As cópias MUST ser cifradas, porque contêm dados pessoais e financeiros, MUST NOT conter
+  credenciais nem token do Hunit e MUST ser apagadas automaticamente depois de 30 dias (prazo
+  ajustável). Evidências ficam fora das cópias, por serem temporárias (FR-025).
+- **FR-031**: MUST existir um procedimento documentado para restaurar os dados a partir de uma cópia
+  escolhida, num computador novo ou no mesmo.
+- **FR-032**: O acesso à API a partir de outras máquinas da rede MUST usar conexão cifrada.
+  Conexões sem cifra MUST ser aceitas somente a partir do próprio computador do servidor.
+
 ### Key Entities
 
 - **Execução**: uma solicitação de consulta. Tem conta do Hunit (identificada sem credenciais),
   hotéis solicitados, período de check-in, estado (na fila, em andamento, aguardando token,
   concluída, falhou, cancelada), motivo de encerramento, cliente solicitante, datas de início e fim,
   e o andamento por hotel. Pode originar uma retomada.
-- **Hotel**: um hotel do catálogo da conta do Hunit, com código e nome; o catálogo é atualizado a
-  cada execução.
+- **Hotel**: um hotel do Hunit, com código e nome. Cada conta do Hunit tem o seu catálogo (os
+  hotéis que ela acessa), atualizado a cada execução com essa conta; o hotel está disponível
+  enquanto alguma conta o acessar.
 - **Processamento de hotel**: a situação de um hotel dentro de uma execução (pendente, em
-  andamento, concluído, falhou), com páginas e reservas processadas e contagens por classificação.
+  andamento, concluído, falhou, cancelado), com páginas e reservas processadas e contagens por
+  classificação. Um hotel pendente pode trazer o motivo, quando a conta usada não o acessa
+  (FR-009a).
 - **Reserva**: identificada por hotel + número; contém os dados da reserva, a situação da reserva
   (ativa/cancelada/não identificada), os dados do pré-pagamento e da cobrança, a classificação de
   cobrança atual, a marcação "não encontrada na última verificação" e o histórico de verificação (primeira/última verificação,
@@ -395,6 +447,11 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   reavaliada com o tempo médio por reserva medido nas primeiras execuções de homologação (FR-021a).
 - **SC-010**: Após metade dos hotéis de uma execução, a estimativa de tempo restante erra em no
   máximo 20% em relação à duração real.
+- **SC-011**: Uma restauração feita a partir da cópia de segurança mais recente, seguindo o
+  procedimento documentado, recupera 100% das reservas e execuções existentes no momento da cópia.
+- **SC-012**: Depois de o servidor ficar desligado por mais de um dia, uma nova cópia de segurança
+  existe em até 1 hora após ele voltar a funcionar.
+- **SC-013**: Zero conexões sem cifra aceitas pela API a partir de outra máquina da rede.
 
 ## Assumptions
 
@@ -403,12 +460,13 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - Toda execução exige um novo acesso com token 2FA, gerado por um aplicativo autenticador e
   informado por um humano; reaproveitar a sessão do Hunit entre execuções está fora do escopo desta
   feature.
-- Uma única conta do Hunit dá acesso a todos os hotéis do catálogo da rede.
+- Contas do Hunit podem ter acesso a hotéis diferentes; o sistema guarda o catálogo de cada conta
+  (FR-008) e deixa pendentes, para outra conta, os hotéis que a conta usada não acessa (FR-009a).
 - O período de check-in é obrigatório e informado como data inicial e final (exibido como
   DD/MM/AAAA; o formato técnico de troca de dados é definido no plano).
-- Se o Hunit permite processar vários hotéis simultaneamente com a mesma conta ainda é
-  desconhecido; será verificado no primeiro acesso real autorizado e define qual meta da SC-009
-  vale.
+- O Hunit permite processar vários hotéis simultaneamente com a mesma conta (verificado no Hunit
+  real em 2026-11-11, research R-08); por isso vale a meta de 30 minutos da SC-009, a confirmar na
+  homologação, onde também se mede quantos hotéis ao mesmo tempo o Hunit aguenta.
 - Os filtros da FR-010 são fixos nesta feature; permitir que o operador escolha filtros por
   execução fica para uma spec futura, se houver necessidade.
 - Os nomes de filtros, telas e textos do Hunit citados nesta spec refletem a interface atual
@@ -422,3 +480,13 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   desktop, Sura); nesta feature, a validação é feita diretamente pelos clientes autorizados.
 - Para mapear a interface atual do Hunit, o time terá acesso a uma conta do Hunit e a um operador
   capaz de fornecer o token 2FA durante o desenvolvimento e a homologação.
+- Nesta fase, o servidor roda num computador da empresa com endereço fixo (ou nome) na rede local;
+  as 2 pessoas que usam o sistema acessam a partir das próprias máquinas, na mesma rede. Acesso de
+  fora da rede da empresa está fora do escopo.
+- Existe um local fora do computador do servidor para guardar as cópias de segurança (unidade de
+  rede, disco externo ou pasta sincronizada com a nuvem). A senha das cópias fica com o responsável
+  pelo servidor, guardada fora desse computador; sem ela, as cópias não podem ser restauradas.
+- Reservas anonimizadas (FR-026) continuam com o nome do hóspede nas cópias de segurança antigas até
+  essas cópias serem apagadas (no máximo 30 dias).
+- A ida para a nuvem (AWS), junto da integração com o Sura, será tratada em spec própria; lá, a cópia
+  de segurança e a conexão cifrada podem passar a ser serviços do provedor.

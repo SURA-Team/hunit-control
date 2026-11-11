@@ -181,7 +181,15 @@ novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403
   - **Concluída (2026-11-11)** com `stopReason = cancelled_by_client` no `ActiveRun` (em vez de `AbortController`: os pontos de checagem da T063 já existiam) e `ExecutionRunner.cancel`. Acrescentado um ponto de checagem antes da gravação do hotel. Decisões (corrida com o fim da execução, execução fora do processo) em research R-19
 - [X] T056 [US3] Implementar a retomada em `apps/server/src/executions/resume.ts` (valida execução encerrada com hotéis pendentes e ausência de execução ativa na conta; cria a nova execução e inicia o runner com as novas credenciais)
   - **Concluída (2026-11-11)**: execução `completed` com hotéis falhos também pode ser retomada (spec FR-023 e research R-19 atualizados)
+  - **Revisão de código (2026-11-11)**: cada execução é retomada no máximo uma vez (`409 execution_already_resumed`, índice único, migration `0002`); corrigidos o cancelamento depois de todos os hotéis terminarem (agora `completed`), o pedido de cancelamento repetido (sempre 202), o cancelamento durante o desligamento (409) e a estimativa "0 s" sem medição (agora `null`). Limitações aceitas da estimativa em research R-19. Em aberto: catálogo de hotéis por conta do Hunit
 - [X] T057 [US3] Implementar os handlers `cancelExecution` e `resumeExecution` em `apps/server/src/http/handlers/executions.ts` e completar `getExecution` com `current`, `hotels[]` (duração, contagens, `failureReason`), `timing` e os 50 eventos mais recentes (FR-021)
+
+### Catálogo por conta do Hunit (revisão de código, 2026-11-11 — FR-008, FR-009a, research R-19)
+
+- [X] T068 [US3] Testes antes da implementação: `apps/server/test/integration/hotels-repo.test.ts` (catálogo por conta: a leitura de uma conta não tira a disponibilidade dos hotéis de outra; hotel sem nenhuma conta fica indisponível; catálogo conhecido de uma conta); `apps/server/test/integration/execution-control.test.ts` (hotel pedido que a conta não acessa, mas outra conta acessa, fica `pending` com motivo e evento `warning`, e a execução termina `completed`; aviso antecipado antes do token quando a conta já é conhecida; retomada com a conta que tem acesso processa os pendentes; hotel que nenhuma conta acessa continua `failed`); `apps/server/test/unit/timing.test.ts` (hotel pendente com motivo não entra na estimativa)
+- [X] T069 [US3] Catálogo por conta: tabela `account_hotels` no `schema.ts` + migration; `saveCatalog(db, accountKey, catalog)` atualizando o catálogo da conta e `hotels.available` na mesma transação; `knownCatalogOf(db, accountKey)`. Depende de T068
+- [X] T070 [US3] Executor: hotel fora do catálogo da conta e acessado por outra conta → `pending` com motivo e evento `warning` (`hotel-collection.ts`); aviso antecipado no início da execução (`runner.ts`); estimativa ignora pendentes com motivo (`timing.ts`); evento `warning` no contrato. Depende de T069
+  - **Concluídas T068–T070 (2026-11-11)**: migration `0003_account_hotels`; `FakeHunit` ganhou `accessByUsername` (catálogo por usuário). Conta cujo último catálogo veio vazio conta como desconhecida (sem aviso antecipado), para não precisar de outra tabela
 
 **Checkpoint**: todas as histórias funcionam de forma independente.
 
@@ -189,11 +197,18 @@ novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T058 [P] Implementar a rotina diária de manutenção em `apps/server/src/maintenance/retention.ts` (remove arquivos e registros de evidência com `expires_at` vencido — FR-025; anonimiza `guest_name` de reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos, preenchendo `anonymized_at` — FR-026/FR-027), agendada no `main.ts`, com teste em `apps/server/test/integration/retention.test.ts`
+- [ ] T058 [P] Implementar a rotina diária de manutenção em `apps/server/src/maintenance/retention.ts` (remove arquivos e registros de evidência com `expires_at` vencido — FR-025; anonimiza `guest_name` de reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos, preenchendo `anonymized_at` — FR-026/FR-027), agendada no `main.ts` para rodar **ao iniciar** e depois a cada 24 h, recuperando o que atrasou com o servidor desligado (FR-029), com teste em `apps/server/test/integration/retention.test.ts`
 - [ ] T059 [P] Escrever o teste de segurança SC-004 em `apps/server/test/security/no-secrets.test.ts`: executa US1+US2 com `FakeHunitGateway` (e com fixtures, se disponíveis) usando senha e token marcadores e procura esses valores em todos os logs capturados, linhas do banco e arquivos de evidência
-- [ ] T060 [P] Atualizar `AGENTS.md` (estrutura do repositório e seção "Comandos": instalar, testar, gerar tipos, subir containers, criar cliente) e criar `README.md` na raiz
+- [ ] T060 [P] Atualizar `AGENTS.md` (estrutura do repositório e seção "Comandos": instalar, testar, gerar tipos, subir containers, criar cliente) e criar `README.md` na raiz, com a seção de implantação no PC de produção (R-20/R-21): IP fixo ou nome na rede, porta HTTPS no Firewall do Windows, Docker Desktop iniciando com o Windows e sem suspensão, exportar e instalar o certificado raiz do Caddy, escolher o `BACKUP_DIR`, guardar `ACCOUNT_KEY_SECRET` e `BACKUP_PASSPHRASE` fora do PC e o passo a passo da restauração
 - [ ] T061 Rodar `pnpm --filter @hunit/contracts lint` e corrigir avisos do contrato; confirmar que `packages/contracts/openapi.yaml` e `specs/001-consulta-reservas-hunit/contracts/openapi.yaml` estão iguais
-- [ ] T062 ⛔ HUNIT Executar a validação de homologação do [quickstart.md](./quickstart.md) (US1, US2, US3, SC-002 com 50 reservas, SC-003, SC-004) e registrar em `specs/001-consulta-reservas-hunit/research.md` a duração da rotina, o tempo médio por hotel e por reserva e a meta resultante da SC-009 (R-08, R-08a)
+- [ ] T062 ⛔ HUNIT Executar a validação de homologação do [quickstart.md](./quickstart.md) (US1, US2, US3, SC-002 com 50 reservas, SC-003, SC-004, e a seção 5: SC-011 a SC-013) e registrar em `specs/001-consulta-reservas-hunit/research.md` a duração da rotina, o tempo médio por hotel e por reserva, a meta resultante da SC-009 e o erro da estimativa de tempo restante medido na metade dos hotéis (SC-010) (R-08, R-08a)
+
+### Implantação e continuidade (FR-028 a FR-032)
+
+- [ ] T064 [P] Escrever o teste `apps/server/test/unit/compose-config.test.ts` (projeto `server`), no padrão de `docker-image-version.test.ts`: lê o `docker-compose.yml` e confere que a porta do `server` é publicada só em `127.0.0.1`, que só o `proxy` publica porta em todas as interfaces e que o `backup` usa a mesma imagem do `db` (SC-013, R-20, R-21)
+- [ ] T065 Criar o proxy HTTPS (R-20, FR-032): `deploy/caddy/Caddyfile` com `tls internal` para `{$SERVER_HOSTNAME}` (e `localhost`), sem tentar instalar a CA no sistema, repassando ao `server:3000` sem acumular respostas (SSE); serviço `proxy` no `docker-compose.yml` (imagem oficial do Caddy com versão fixada, volume `caddy-data`, porta `HTTPS_PORT`); porta do `server` presa a `127.0.0.1`; `SERVER_HOSTNAME` e `HTTPS_PORT` no `.env.example`. Depende de T064
+- [ ] T066 [P] Escrever o teste `apps/server/test/integration/backup-restore.test.ts` (projeto `server-db`, Testcontainers com `postgres:17` e os scripts de `deploy/backup/`): grava reservas fictícias, roda uma cópia (`backup.sh once`), confere que o arquivo está cifrado (o nome fictício do hóspede não aparece no conteúdo) e que a restauração num banco vazio recupera as mesmas linhas (SC-011); confere que não refaz a cópia se a mais nova for recente, que refaz se estiver atrasada (SC-012/FR-029) e que apaga as cópias com mais de `BACKUP_RETENTION_DAYS` dias (FR-030)
+- [ ] T067 Criar a cópia de segurança (R-21, FR-029 a FR-031): `deploy/backup/backup.sh` (laço de 15 min; `pg_dump --format=custom` → `gpg --symmetric --cipher-algo AES256`; arquivo temporário renomeado no fim; apaga as antigas; modo `once` para o teste) e `deploy/backup/restore.sh <arquivo>` (decifra → `pg_restore --clean --if-exists`); serviço `backup` no `docker-compose.yml` (imagem `postgres:17`, scripts somente leitura, `BACKUP_DIR` montado em `/backups`); `BACKUP_DIR`, `BACKUP_PASSPHRASE` (obrigatória), `BACKUP_INTERVAL_HOURS` e `BACKUP_RETENTION_DAYS` no `.env.example`; nenhuma senha em log do script. Depende de T066
 
 ---
 
@@ -210,7 +225,9 @@ novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403
   (T042–T044) podem começar já na Phase 2.
 - **US3 (Phase 5)**: depende de US1 (runner) e usa o processamento de hotéis de US2 para
   cancelamento/retomada significativos.
-- **Polish (Phase 6)**: após as histórias desejadas; T062 exige o Hunit real.
+- **Polish (Phase 6)**: após as histórias desejadas; T062 exige o Hunit real. Implantação:
+  T064 → T065 e T066 → T067 (testes antes); as duas trilhas são independentes entre si e das
+  demais tarefas da fase. T060 documenta o que T065 e T067 criarem.
 
 ### Within Each User Story
 

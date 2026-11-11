@@ -621,10 +621,19 @@ Decisões da implementação da Fase 5 (2026-11-11, T055–T057).
     (concluída ou falha), o cancelamento não muda mais o resultado — o pedido espera o fim e
     responde `409 execution_already_finished`. O cancelamento de uma execução já encerrada também
     é 409.
+  - **Cancelamento que chega depois de todos os hotéis terminarem** (ex.: logo após a gravação do
+    último): não havia mais nada a interromper, então a execução termina `completed`, com um aviso
+    na mensagem final. Antes da revisão de código ela ficava `cancelled` com todos os hotéis
+    gravados e uma mensagem dizendo que algo não fora gravado. A parada só interrompe a execução
+    se sobrar hotel na fila ou em andamento.
+  - **Pedido repetido**: enquanto a execução está sendo cancelada, um novo pedido de cancelamento
+    responde 202 como o primeiro (antes podia responder 409, conforme os milissegundos).
   - Execução ativa no banco que não está em andamento no processo (não deveria acontecer com um
     único servidor): cancelada direto no banco, com os hotéis em andamento marcados `cancelled`.
-  - Desligamento do servidor durante um cancelamento: vale o primeiro motivo (a execução termina
-    `cancelled`).
+  - Desligamento do servidor: cancelamento pedido antes vale (a execução termina `cancelled`);
+    cancelamento pedido depois de o desligamento começar responde `409 execution_already_finished`
+    e a execução termina `failed/server_restarted` (antes respondia 202, prometendo um
+    `cancelled` que não acontecia).
   - Ajuste: o evento `queued` passou a ser publicado pelo executor, depois que a execução já está
     registrada em memória — um cancelamento imediato após a criação sempre a encontra.
 - **Retomada**: cria uma nova execução com `parent_execution_id`, o mesmo período, o cliente que
@@ -637,9 +646,115 @@ Decisões da implementação da Fase 5 (2026-11-11, T055–T057).
     os hotéis falhos). Se todos foram concluídos: `409 nothing_to_resume`.
   - Execução ainda ativa: `409 execution_already_active` (cancele ou aguarde). Conta das novas
     credenciais com execução ativa: `409 execution_already_active` (FR-006).
+  - **Uma retomada por execução** (decisão de 2026-11-11, revisão de código): retomar de novo uma
+    execução já retomada reprocessaria hotéis que a retomada anterior concluiu (SC-007). Agora é
+    recusado com `409 execution_already_resumed` (código novo no contrato), citando a retomada em
+    `detail`; para continuar, retoma-se a **última execução da sequência**, que só conhece os
+    hotéis que ainda faltam. Garantido também pelo índice único `executions_one_resume_per_parent`
+    (migration `0002`), que vale para pedidos simultâneos. Alternativa descartada: calcular os
+    pendentes somando todas as retomadas anteriores (regra mais difícil de explicar ao operador).
   - A conta das novas credenciais não precisa ser a mesma da execução original (outro operador
-    pode retomar); os hotéis que ela não enxergar falham como "não está no catálogo".
+    pode retomar).
+- **Contas com acesso a hotéis diferentes** (decisão de 2026-11-11, revisão de código; spec
+  FR-008 e FR-009a). Problema encontrado: o catálogo era um só para todas as contas, e cada leitura
+  marcava como indisponível o hotel que a conta da vez não acessava — o catálogo refletia a
+  última conta que rodou, e a retomada com outra conta fazia falhar os hotéis que ela não acessa.
+  - **Catálogo por conta**: tabela `account_hotels` (conta pelo mesmo HMAC de R-11, sem guardar o
+    usuário). `hotels.available` = alguma conta acessa o hotel.
+  - **Hotel sem acesso na conta usada**, mas acessado por outra conta conhecida: fica `pending`,
+    com o motivo, sem contar como falha nem entrar na estimativa; evento `warning`. Uma retomada
+    com uma conta que tenha acesso o processa. Hotel que nenhuma conta conhecida acessa (ex.:
+    código digitado errado) continua `failed`.
+  - **Aviso antecipado**: ao iniciar ou retomar com hotéis definidos, se a conta já tem catálogo
+    conhecido e ele não inclui algum hotel pedido, sai um evento `warning` logo no início (antes
+    do token) e a execução segue — a conta pode ter ganhado acesso desde a última leitura, e quem
+    decide é o catálogo lido nesta execução. Conta nunca vista: sem aviso antecipado.
+  - Evento novo no contrato: `warning` (aviso ao operador que não muda o estado da execução).
+  - **Versão do contrato 1.0.0 → 1.1.0** (constitution III): as mudanças desta revisão só
+    acrescentam (evento `warning`, código `execution_already_resumed`) ou mudam o significado de
+    um campo sem mudar o formato (`Hotel.available`). Nenhum cliente existia ainda; clientes
+    futuros devem tolerar valores novos nos campos de lista fechada (tipo de evento, código de
+    erro).
+  - Transição: as leituras anteriores a esta mudança não têm conta; o catálogo de cada conta se
+    forma na primeira execução dela depois da migration.
+  - Alternatives considered: recusar o início quando a conta não acessa algum hotel pedido
+    (descartado pelo usuário: só avisar); marcar o hotel sem acesso como `failed` (descartado: a
+    retomada já o incluiria, mas o resultado apontaria uma falha que não é falha).
+- **Limitações aceitas da estimativa** (revisão de código; medir o erro real na homologação,
+  SC-010/T062): com `MAX_PERIOD_DAYS` preenchido, `reservations_total` só soma os blocos já
+  consultados (subestima no início); reservas repetidas entre páginas e as "258-" fazem a
+  estimativa do hotel em andamento sobrar um pouco. A média histórica é lida a cada consulta de uma
+  execução ativa, sem índice próprio: o volume de `execution_hotels` é pequeno (dezenas de linhas
+  por dia); criar um índice em `(status, finished_at)` se a consulta ficar lenta.
 - **Alternatives considered**: o handler de cancelamento gravar `cancelled` direto no banco
   (atômico, mas o navegador seguiria aberto por até 10 s e a conta ficaria livre para outra
   execução com a sessão antiga ainda ativa); recusar a retomada de execução `completed` (obrigaria
   uma execução nova, que reprocessaria os hotéis já concluídos).
+
+## R-20 — Implantação num PC da rede local e conexão cifrada (FR-028, FR-032, SC-013)
+
+Contexto (clarificação de 2026-11-11, implantação): produção num PC comum da empresa, ligado
+manualmente, usado por 2 pessoas em máquinas diferentes da mesma rede; nuvem (AWS) só com a
+integração com o Sura. Dois ambientes: desenvolvimento (máquina do dev, Hunit simulado) e produção
+(o PC). Sem servidor de homologação separado: o sistema só lê o Hunit (`read-only-guard`).
+
+- **Decision**: um proxy reverso **Caddy** (container `proxy`, imagem oficial com versão fixada)
+  recebe o HTTPS na porta `HTTPS_PORT` (padrão 443) de todas as interfaces e repassa para o
+  `server` pela rede interna do Compose. O certificado vem da **autoridade certificadora interna do
+  Caddy** (`tls internal`), emitido para o nome ou IP do PC (`SERVER_HOSTNAME`). A porta HTTP do
+  `server` passa a ser publicada **só em `127.0.0.1`** (uso local: `curl`, testes do operador no
+  próprio PC). Os clientes (app desktop, spec 002) confiam no certificado raiz do Caddy, exportado
+  uma vez do volume `caddy-data` e configurado em cada máquina.
+- **Rationale**: o app manda usuário, senha e token do Hunit e a chave da API ao servidor; em HTTP
+  puro, qualquer máquina da rede poderia lê-los. O Caddy emite e renova o certificado sozinho, sem
+  domínio público nem acesso à internet, e repassa fluxos SSE sem acumular (necessário para a
+  SC-005). O `server` não muda: a cifra fica fora dele, como ficará na AWS (balanceador com
+  certificado do provedor), o que atende a FR-028.
+- **Alternatives considered**: HTTPS dentro do Fastify com certificado autoassinado (exigiria
+  gerar, renovar e distribuir o certificado à mão, e código de TLS no servidor que some na AWS);
+  HTTP na rede local (descartado: credenciais do Hunit em texto puro); VPN/túnel (infraestrutura
+  maior que o problema para 2 usuários na mesma rede).
+- **Consequências operacionais** (README): o PC precisa de IP fixo (reserva no roteador) ou nome
+  resolvível na rede; liberar a porta HTTPS no Firewall do Windows; Docker Desktop configurado para
+  iniciar com o Windows e o PC sem suspensão enquanto a ferramenta estiver em uso. Trocar
+  `SERVER_HOSTNAME` gera um certificado novo, mas o certificado raiz continua o mesmo enquanto o
+  volume `caddy-data` existir.
+- **Verificação**: teste unitário lê o `docker-compose.yml` e confere que a porta do `server` está
+  presa a `127.0.0.1` e que só o `proxy` publica porta em todas as interfaces (mesmo padrão de
+  `docker-image-version.test.ts`); no quickstart, `curl` de outra máquina: HTTPS responde, HTTP
+  na porta do `server` recusa a conexão.
+
+## R-21 — Cópia de segurança e restauração (FR-029, FR-030, FR-031, SC-011, SC-012)
+
+- **Decision**: container `backup` com a **mesma imagem do banco** (`postgres:17`, que já traz
+  `pg_dump`, `pg_restore` e `gpg` — verificado em 2026-11-11) rodando um script versionado
+  (`deploy/backup/backup.sh`, montado somente leitura). A cada 15 minutos o script olha a cópia
+  mais nova na pasta de destino; se ela tiver mais de `BACKUP_INTERVAL_HOURS` (padrão 24) horas, ou
+  se não houver nenhuma, faz `pg_dump --format=custom` → `gpg --symmetric --cipher-algo AES256`
+  com a senha `BACKUP_PASSPHRASE` → grava num arquivo temporário e renomeia para
+  `hunit-AAAAMMDD-HHMMSS.dump.gpg` (nunca deixa cópia pela metade com nome final). Depois apaga as
+  cópias com mais de `BACKUP_RETENTION_DAYS` (padrão 30) dias. A pasta de destino é
+  `BACKUP_DIR`, montada no container como `/backups`: uma pasta do PC sincronizada com a nuvem
+  (ex.: Google Drive para computador) ou um disco externo.
+- **Restauração**: `deploy/backup/restore.sh <arquivo>`, rodado com `docker compose run --rm
+  backup ...` com o `server` parado: decifra e aplica com `pg_restore --clean --if-exists`. Passo a
+  passo no README e validação no quickstart (SC-011).
+- **Rationale**: "olhar a idade da cópia mais nova" em vez de horário fixo resolve o PC desligado
+  sem lógica extra: ao ligar, a primeira verificação (≤ 15 min) já faz a cópia atrasada (FR-029,
+  SC-012). Mesma imagem do banco garante `pg_dump` da mesma versão do servidor. `gpg` simétrico
+  com AES-256 cifra e detecta arquivo corrompido ou adulterado (o `openssl enc` cifra, mas não
+  detecta). Nada disso entra no `server`, que continua igual na AWS (lá, o backup do RDS substitui
+  este container).
+- **Alternatives considered**: rotina dentro do `server` (a imagem do Playwright não tem o
+  `pg_dump` 17; instalar o cliente do Postgres nela aumenta a imagem e mistura funções); Agendador
+  de Tarefas do Windows chamando `docker compose exec` (fica fora do repositório e do Compose, e
+  não roda se o horário passar com o PC desligado, sem configuração extra); copiar o volume
+  `pgdata` (cópia inconsistente com o banco ligado).
+- **O que fica fora das cópias**: evidências (temporárias, FR-025) e o `.env`. Para restaurar num
+  PC novo é preciso também o `ACCOUNT_KEY_SECRET` original (sem ele, o controle de "uma execução
+  por conta" e o histórico de execuções por conta deixam de bater) e a `BACKUP_PASSPHRASE`: os
+  dois ficam guardados pelo responsável fora do PC (ex.: gerenciador de senhas). As chaves dos
+  clientes da API estão no banco só como hash, então continuam valendo depois da restauração.
+- **A verificar na implementação**: se o Docker Desktop no Windows monta corretamente a pasta
+  sincronizada escolhida como `BACKUP_DIR` (unidades de rede mapeadas por letra costumam não
+  funcionar; pasta local sincronizada funciona).

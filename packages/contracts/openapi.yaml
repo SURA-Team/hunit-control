@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     API de consulta de reservas de cartão virtual no Hunit (feature 001).
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,

@@ -19,8 +19,9 @@ para que mudanças de tela do Hunit não toquem regras de negócio (R-06); a col
 interface `HunitGateway` e, conforme o spike R-13a, é feita **pela API JSON do próprio Hunit**:
 Playwright faz só login e 2FA na tela; listagem (`GetBookings`) e detalhe (`BookingDetail`) são
 lidos com a sessão do navegador, somente GET e somente rotas da lista de permissão. O hotel vai em
-cada requisição (`X-Company-Id`); processamento **sequencial** por padrão até o paralelismo ser
-verificado no primeiro acesso real (R-08).
+cada requisição (`X-Company-Id`); o paralelismo entre hotéis com a mesma sessão foi verificado no
+Hunit real e é controlado por `HOTEL_CONCURRENCY` (padrão 1, subir aos poucos na homologação —
+R-08).
 
 ## Technical Context
 
@@ -36,12 +37,14 @@ ver research R-18)
 **Testing**: Vitest; Playwright (Chromium) contra fixtures HTML (login/2FA); leitores da API contra fixtures JSON anonimizadas; `fastify.inject` + validação
 contra OpenAPI; Testcontainers (PostgreSQL)
 
-**Target Platform**: servidor Linux com Docker Compose (imagem base oficial do Playwright)
+**Target Platform**: containers Linux com Docker Compose (imagem base oficial do Playwright).
+Produção, por enquanto, num PC Windows da rede da empresa com Docker Desktop, ligado manualmente,
+acessado por 2 máquinas da mesma rede via HTTPS (R-20); nuvem (AWS) em spec futura, com o Sura
 
 **Project Type**: web-service (API) com automação de navegador; monorepo pnpm
 
-**Performance Goals**: rotina (todos os hotéis × 1 semana) ≤ 1 h sequencial, ≤ 30 min se o
-paralelismo for validado (SC-009); aviso de token ≤ 5 s (SC-005); cancelamento ≤ 15 s (SC-008)
+**Performance Goals**: rotina (todos os hotéis × 1 semana) ≤ 30 min, com o paralelismo
+verificado no R-08 (≤ 1 h se for preciso voltar a um hotel por vez) (SC-009); aviso de token ≤ 5 s (SC-005); cancelamento ≤ 15 s (SC-008)
 
 **Constraints**: credenciais/token só em memória (FR-005); nenhuma ação de escrita no Hunit
 (FR-012); uma execução ativa por conta (FR-006); janela do token ~1–2 min (FR-004)
@@ -59,10 +62,10 @@ retroativas de meses; poucos clientes (desktop, Sura)
 | II | Isolamento do Hunit (v1.1.0) | Seletores, rotas e formatos de resposta do Hunit só na camada `apps/server/src/hunit/` (Page Objects de login/2FA + leitores da API em `network/`); domínio recebe `ReservationSnapshot` neutro (R-06); leitores só fazem GET em rotas permitidas, com bloqueio explícito de cobrança/cartão/alteração (T045); tela ou resposta não reconhecida → `hunit_screen_not_recognized` + evidência (screenshot/HTML ou resposta JSON) | ✅ |
 | III | API-First com Contrato | `openapi.yaml` contract-first; tipos gerados para servidor e futuro Electron (R-03) | ✅ |
 | IV | Jobs Assíncronos com Intervenção Humana | Estados `queued…cancelled` + `awaiting_2fa`; retomada por hotel; índice único parcial por conta (data-model) | ✅ |
-| V | Servidor Central e Containers | `server` + `db` em Docker Compose; config só por env; estado só em volumes declarados (R-18) | ✅ |
-| VI | Dados e Segurança | Postgres fonte da verdade; sem credenciais/token/sessão persistidos; chaves de API com hash; redação de logs e máscara em evidências (R-10–R-12); retenção e anonimização (R-16) | ✅ |
+| V | Servidor Central e Containers | `server` + `db` + `proxy` + `backup` em Docker Compose; config só por env; estado só em volumes declarados (R-18); o "servidor central" é, por enquanto, um PC da rede local (R-20) | ✅ |
+| VI | Dados e Segurança | Postgres fonte da verdade; sem credenciais/token/sessão persistidos; chaves de API com hash; redação de logs e máscara em evidências (R-10–R-12); retenção e anonimização (R-16); HTTPS para acesso pela rede (R-20); cópias diárias cifradas fora do PC (R-21) | ✅ |
 | VII | Testes em Camadas (v1.1.0) | Unitários de domínio, Page Objects (HTML) e leitores da API (JSON) contra fixtures anonimizadas, teste da lista de rotas permitidas/bloqueadas (T045), contrato contra OpenAPI, teste automatizado de SC-004 (R-14) | ✅ |
-| VIII | Simplicidade | 2 containers, sem fila/Redis/object storage; paralelismo desligado até ser validado | ✅ |
+| VIII | Simplicidade | Sem fila/Redis/object storage; paralelismo entre hotéis com a mesma sessão, sem fila (`HOTEL_CONCURRENCY`, padrão 1); `proxy` e `backup` exigidos pela spec (FR-030, FR-032) e usam imagens prontas, sem código novo no `server` (ver Complexity Tracking) | ✅ |
 
 **Nota sobre o princípio V**: a constitution lista "API, worker e PostgreSQL" em containers. Aqui
 API e worker são módulos do **mesmo** container `server`. Isso cumpre o princípio (tudo em
@@ -81,14 +84,14 @@ aprovado — nenhuma entidade ou endpoint armazena ou devolve credenciais; `Huni
 specs/001-consulta-reservas-hunit/
 ├── spec.md              # O quê e por quê (+ Clarifications)
 ├── plan.md              # Este arquivo
-├── research.md          # Fase 0: decisões técnicas (R-01…R-18)
+├── research.md          # Fase 0: decisões técnicas (R-01…R-21)
 ├── data-model.md        # Fase 1: tabelas, enums, transições
 ├── quickstart.md        # Fase 1: guia de validação ponta a ponta
 ├── contracts/
 │   └── openapi.yaml     # Fase 1: contrato da API v1
 ├── checklists/
 │   └── requirements.md  # Qualidade da spec
-└── tasks.md             # Fase 2 (/speckit-tasks — ainda não criado)
+└── tasks.md             # Fase 2 (/speckit-tasks)
 ```
 
 ### Source Code (repository root)
@@ -99,7 +102,7 @@ pnpm-workspace.yaml          # pacotes + política de dependências (idade míni
 tsconfig.base.json           # opções comuns do TypeScript
 eslint.config.js             # lint + regra de pureza do domínio (princípio II)
 vitest.config.ts             # projetos de teste: domain, contracts, server, server-browser, server-db
-docker-compose.yml           # server + db, volumes pgdata e evidence
+docker-compose.yml           # server + db + proxy (HTTPS, R-20) + backup (R-21); volumes pgdata, evidence, caddy-data
 .env.example                 # variáveis (sem segredos reais)
 
 packages/
@@ -130,8 +133,7 @@ apps/
     │   ├── hunit/               # CAMADA DO HUNIT — único lugar com seletores/URLs/textos/requisições do Hunit
     │   │   ├── gateway.ts                    # interface HunitGateway → ReservationSnapshot (R-13a)
     │   │   ├── browser.ts                    # Chromium headless, contexto por execução
-    │   │   ├── login-page.ts                 # Page Object (tela)
-    │   │   ├── two-factor-page.ts            # Page Object (tela)
+    │   │   ├── login-pages.ts                # Page Objects das telas de login e do token 2FA
     │   │   ├── read-only-guard.ts            # lista de permissão por rota + bloqueio explícito (FR-012)
     │   │   ├── network/
     │   │   │   ├── api-client.ts             # GET via page.request com a sessão; só rotas permitidas
@@ -153,6 +155,12 @@ apps/
         ├── integration/         # executor + banco (Testcontainers) com o Hunit simulado (projeto "server-db")
         └── security/            # SC-004: credenciais nunca em logs/evidências (projeto "server-db")
 
+deploy/
+├── caddy/Caddyfile          # proxy HTTPS com certificado da CA interna do Caddy (R-20)
+└── backup/
+    ├── backup.sh            # laço: cópia cifrada quando a mais nova tiver > BACKUP_INTERVAL_HOURS; apaga as antigas (R-21)
+    └── restore.sh           # decifra e restaura uma cópia escolhida (FR-031)
+
 # Futuro (fora desta feature): apps/desktop (Electron), consumindo packages/contracts
 ```
 
@@ -169,8 +177,10 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
           └─► TwoFactorPage detectada ─► status awaiting_2fa + evento SSE (≤5 s) + prazo
                  POST /two-factor ─► token entregue em memória ─► (inválido/expirado → failed)
           └─► descarta credenciais e token da memória
-          └─► GetCurrentUser ─► catálogo de hotéis ─► grava hotels
-          └─► para cada hotel pendente (sequencial; HOTEL_CONCURRENCY após verificação do R-08):
+          └─► GetCurrentUser ─► catálogo de hotéis DA CONTA ─► grava hotels + account_hotels
+          └─► hotel pedido fora do catálogo da conta: pendente com aviso se outra conta o acessa
+                 (FR-009a); falha se nenhuma conta o acessa
+          └─► para cada hotel (até HOTEL_CONCURRENCY ao mesmo tempo, mesma sessão — R-08):
                  X-Company-Id = hotel ─► para cada bloco do período (R-09):
                     GetBookings (filtros FR-010) página a página ─► "258-"? ignora
                        : BookingDetail(id) ─► snapshot
@@ -178,6 +188,11 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
                  hotel ok ─► transação única: reservas + observações + "não encontradas"
                  hotel falhou ─► evidência + failed, segue para o próximo
           └─► completed (ou cancelled/failed) ─► fecha o navegador
+
+POST /cancel ─► parada antes da próxima página, reserva ou gravação; navegador fechado à força
+   após 10 s; hotéis em andamento → cancelled, não iniciados → pending (R-19)
+POST /resume ─► nova execução (parent_execution_id) só com os hotéis não concluídos, novo login e
+   token; cada execução é retomada no máximo uma vez (R-19)
 ```
 
 ## Riscos e dependências
@@ -187,12 +202,21 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
 | Telas de login/2FA ainda não mapeadas (R-13) | Login não pode ser implementado | Tasks ⛔ HUNIT dependem das fixtures; domínio, banco, API, runner e leitores da API avançam com o Hunit simulado |
 | Hunit muda a API interna (não é pública) | Coleta para | Validação de formato em cada resposta → `hunit_screen_not_recognized` + evidência JSON; correção restrita a `hunit/network/` |
 | Requisição perigosa por engano (cobrança, cartão) | Ação financeira indevida | `read-only-guard`: lista de permissão por rota + bloqueio explícito (R-13a); teste automatizado |
-| Paralelismo entre hotéis não verificado (R-08) | Meta de 30 min | Começa sequencial; `X-Company-Id` por requisição sugere que é viável — verificar no primeiro acesso real |
+| Limite de requisições simultâneas do Hunit (R-08) | Erros 429/5xx com muitos hotéis ao mesmo tempo | Paralelismo verificado com 2 hotéis; `HOTEL_CONCURRENCY` começa em 1 e sobe aos poucos na homologação (T062), observando os erros |
 | Janela curta do token (~1–2 min) | Execuções falham por tempo | SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
 | Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita à camada do Hunit + fixtures |
 | Limite desconhecido de período no Hunit (R-09) | Consultas retroativas falham | Divisão automática configurável |
 | Estimativa de tempo imprecisa no início | Operador planeja mal | Média histórica por reserva; SC-010 mede o erro (R-08a) |
+| Disco do PC de produção falha ou o PC é perdido | Perda do histórico de reservas | Cópia diária cifrada fora do PC + restauração testada (R-21, SC-011); `.env` guardado à parte |
+| PC desligado na hora das rotinas | Evidências vencidas e anonimização atrasadas; dia sem cópia | Rotinas verificam o atraso ao subir (FR-029): manutenção roda ao iniciar, backup olha a idade da cópia mais nova |
+| Credenciais do Hunit trafegando na rede local | Vazamento de senha e token | HTTPS obrigatório entre máquinas; porta HTTP só em `127.0.0.1` (R-20, SC-013) |
 
 ## Complexity Tracking
 
-Nenhuma violação da constitution a justificar.
+| Acréscimo | Por que é necessário | Alternativa mais simples descartada |
+|---|---|---|
+| Container `proxy` (Caddy) | FR-032: credenciais do Hunit vão das máquinas dos operadores ao servidor pela rede | HTTP puro (credenciais legíveis na rede); TLS dentro do `server` (certificado manual e código que some na AWS) — R-20 |
+| Container `backup` | FR-030/FR-031: o banco fica num PC comum, sem backup gerenciado | Rotina no `server` (sem `pg_dump` 17 na imagem); Agendador do Windows (fora do repositório, não recupera atraso) — R-21 |
+
+Os dois usam imagens prontas e um arquivo de configuração/script cada; nenhum código de produção
+novo no `server`. Na AWS, ambos podem ser trocados por serviços do provedor sem mudar o `server`.
