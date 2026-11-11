@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import type { Database } from './db.js';
 import {
   executionHotels,
@@ -11,6 +11,8 @@ import {
 export interface HotelProgress {
   pagesTotal: number;
   pagesDone: number;
+  /** Reservas que o Hunit informou na listagem (base da estimativa, research R-08a). */
+  reservationsTotal: number;
   reservationsSeen: number;
   /** Reservas efetivamente abertas (exclui as "258-"); base do tempo médio (research R-08a). */
   reservationsOpened: number;
@@ -18,7 +20,14 @@ export interface HotelProgress {
 }
 
 export function emptyHotelProgress(): HotelProgress {
-  return { pagesTotal: 0, pagesDone: 0, reservationsSeen: 0, reservationsOpened: 0, counts: {} };
+  return {
+    pagesTotal: 0,
+    pagesDone: 0,
+    reservationsTotal: 0,
+    reservationsSeen: 0,
+    reservationsOpened: 0,
+    counts: {},
+  };
 }
 
 /**
@@ -111,20 +120,77 @@ export async function finishExecutionHotelWithoutResults(
     .where(where(executionId, hotelCode));
 }
 
+/** Médias de tempo das execuções anteriores (research R-08a). */
+export interface TimingHistoryRow {
+  secondsPerReservation: number | null;
+  secondsPerHotel: number | null;
+}
+
+function toSeconds(value: string | number | null): number | null {
+  if (value === null) return null;
+  return Math.round(Number(value) * 100) / 100;
+}
+
 /**
- * Marca como falhos os hotéis que estavam em processamento nas execuções informadas (ex.: o
- * servidor caiu no meio deles). Os pendentes continuam pendentes, para a retomada (FR-023).
+ * Médias por reserva aberta e por hotel dos últimos hotéis concluídos em outras execuções. É a
+ * base da estimativa no início de uma execução, antes de ela medir o próprio tempo (FR-021a).
+ */
+export async function loadTimingHistory(
+  db: Database,
+  options: { excludeExecutionId: string; limit?: number },
+): Promise<TimingHistoryRow> {
+  const recent = db
+    .select({
+      seconds:
+        sql<string>`extract(epoch from ${executionHotels.finishedAt} - ${executionHotels.startedAt})`.as(
+          'seconds',
+        ),
+      opened: executionHotels.reservationsOpened,
+    })
+    .from(executionHotels)
+    .where(
+      and(
+        eq(executionHotels.status, 'completed'),
+        isNotNull(executionHotels.startedAt),
+        isNotNull(executionHotels.finishedAt),
+        ne(executionHotels.executionId, options.excludeExecutionId),
+      ),
+    )
+    .orderBy(desc(executionHotels.finishedAt))
+    .limit(options.limit ?? 50)
+    .as('recent');
+
+  const [row] = await db
+    .select({
+      // Só hotéis que abriram reservas entram na média por reserva.
+      perReservation: sql<
+        string | null
+      >`sum(${recent.seconds}) filter (where ${recent.opened} > 0) / nullif(sum(${recent.opened}), 0)`,
+      perHotel: sql<string | null>`avg(${recent.seconds})`,
+    })
+    .from(recent);
+  return {
+    secondsPerReservation: toSeconds(row?.perReservation ?? null),
+    secondsPerHotel: toSeconds(row?.perHotel ?? null),
+  };
+}
+
+/**
+ * Encerra sem resultados os hotéis que estavam em processamento nas execuções informadas: `failed`
+ * quando o servidor caiu no meio deles, `cancelled` quando a execução foi cancelada sem estar
+ * neste processo. Os pendentes continuam pendentes, para a retomada (FR-023).
  */
 export async function failRunningExecutionHotels(
   db: Database,
   executionIds: readonly string[],
   reason: string,
   now: Date = new Date(),
+  status: Extract<HotelRunStatus, 'failed' | 'cancelled'> = 'failed',
 ): Promise<void> {
   if (executionIds.length === 0) return;
   await db
     .update(executionHotels)
-    .set({ status: 'failed', failureReason: reason, finishedAt: now })
+    .set({ status, failureReason: reason, finishedAt: now })
     .where(
       and(
         inArray(executionHotels.executionId, [...executionIds]),

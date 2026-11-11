@@ -4,6 +4,7 @@
  */
 import type { components } from '@hunit/contracts';
 import type { ExecutionEvent } from '../executions/events.js';
+import type { ExecutionTiming } from '../executions/timing.js';
 import type {
   ExecutionHotelRow,
   ExecutionRow,
@@ -71,23 +72,59 @@ export interface ExecutionViewParts {
   found: ExecutionWithClient;
   hotels: readonly ExecutionHotelRow[];
   recentEvents: readonly ExecutionEvent[];
+  /** Médias e estimativa (FR-021a), calculadas por `executionTiming`. */
+  timing: ExecutionTiming;
 }
 
 /**
- * Estado completo da execução (FR-021). O andamento detalhado (`current`) e as estimativas de
- * tempo (`timing`) chegam com a US3 (tasks T054, T057).
+ * Posição atual da execução (FR-021): o hotel em andamento com a atividade mais recente, a página
+ * em leitura e a última reserva analisada nele. Com hotéis em paralelo (HOTEL_CONCURRENCY), os
+ * demais em andamento aparecem em `hotels`.
  */
+export function currentPosition(
+  execution: ExecutionRow,
+  hotels: readonly ExecutionHotelRow[],
+  recentEvents: readonly ExecutionEvent[],
+): ExecutionView['current'] {
+  if (execution.status !== 'running') return null;
+  const running = hotels.filter((hotel) => hotel.status === 'running');
+  if (running.length === 0) return null;
+
+  const latest = [...recentEvents].reverse();
+  const busiest = latest.find((event) =>
+    running.some((hotel) => hotel.hotelCode === event.hotelCode),
+  );
+  const hotel =
+    running.find((candidate) => candidate.hotelCode === busiest?.hotelCode) ?? running[0];
+  if (!hotel) return null;
+
+  const pagesDone = hotel.pagesDone ?? 0;
+  // `pages_total` só é conhecido depois que a primeira página responde.
+  const pagesTotal = hotel.pagesTotal && hotel.pagesTotal > 0 ? hotel.pagesTotal : null;
+  const lastReservation = latest.find(
+    (event) => event.hotelCode === hotel.hotelCode && event.reservationNumber !== null,
+  );
+  return {
+    hotelCode: hotel.hotelCode,
+    page: pagesTotal === null ? pagesDone + 1 : Math.min(pagesDone + 1, pagesTotal),
+    pagesTotal,
+    reservationNumber: lastReservation?.reservationNumber ?? null,
+  };
+}
+
+/** Estado completo da execução, com andamento e tempos (FR-021, FR-021a). */
 export function toExecutionView({
   found,
   hotels,
   recentEvents,
+  timing,
 }: ExecutionViewParts): ExecutionView {
   const { execution, clientName } = found;
   return {
     ...toExecutionSummary(execution),
     requestedClient: clientName,
     twoFactorDeadline: iso(execution.twoFactorDeadline),
-    current: null,
+    current: currentPosition(execution, hotels, recentEvents),
     hotels: hotels.map((run) => ({
       hotelCode: run.hotelCode,
       hotelName: run.hotelName,
@@ -100,11 +137,7 @@ export function toExecutionView({
       failureReason: run.failureReason,
     })),
     counts: sumCounts(hotels.map((run) => run.counts)),
-    timing: {
-      avgSecondsPerReservation: null,
-      avgSecondsPerHotel: null,
-      estimatedRemainingSeconds: null,
-    },
+    timing,
     recentEvents: recentEvents.map(toEventView),
   };
 }

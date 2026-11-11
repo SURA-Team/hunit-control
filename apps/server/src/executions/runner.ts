@@ -56,6 +56,11 @@ export interface ExecutionRunnerOptions {
   maxPeriodDays?: number | null;
   /** Hotéis processados ao mesmo tempo (HOTEL_CONCURRENCY, research R-08). Padrão: 1. */
   hotelConcurrency?: number;
+  /**
+   * Quanto esperar a parada cooperativa depois de um cancelamento antes de fechar o navegador à
+   * força (FR-022, SC-008). Padrão: 10 s.
+   */
+  cancelGraceMs?: number;
   logger: Logger;
   /** Relógio; os testes podem informar um fixo. */
   now?: () => Date;
@@ -77,6 +82,20 @@ const END_REASON_MESSAGES: Readonly<Partial<Record<ExecutionEndReason, string>>>
   internal_error: 'Erro interno do servidor; a execução foi interrompida.',
 };
 
+/** Prazo padrão da parada cooperativa antes de fechar o navegador à força (SC-008: 15 s). */
+export const DEFAULT_CANCEL_GRACE_MS = 10_000;
+
+const CANCELLED_MESSAGE =
+  'Execução cancelada a pedido de um cliente. Os hotéis concluídos continuam gravados; os que ' +
+  'estavam em andamento não foram gravados e, com os pendentes, podem ser retomados.';
+const CANCELLED_HOTEL_REASON = 'A execução foi cancelada no meio do hotel; nada foi gravado.';
+
+/**
+ * Resultado de um pedido de cancelamento: `requested` = a execução vai terminar como
+ * `cancelled`; `already_finished` = ela já tinha terminado (ou estava terminando) ou não existe.
+ */
+export type CancelOutcome = 'requested' | 'already_finished';
+
 interface TokenWaiter {
   resolve(token: string): void;
   reject(error: Error): void;
@@ -94,6 +113,15 @@ interface ActiveRun {
   tokenWaiter: TokenWaiter | null;
   /** Preenchido quando alguém pede a parada; vira o motivo de encerramento. */
   stopReason: ExecutionEndReason | null;
+  /** Cliente que pediu o cancelamento (auditoria, FR-007). */
+  cancelledByClientId: string | null;
+  /** Fechamento forçado do navegador, agendado pelo cancelamento. */
+  forceCloseTimer: NodeJS.Timeout | null;
+  /**
+   * A execução já está gravando o estado final (concluída ou com falha): um cancelamento que
+   * chegue agora não muda mais o resultado.
+   */
+  finishing: boolean;
   /** Termina quando a execução termina (nunca falha). */
   done: Promise<void>;
 }
@@ -124,7 +152,8 @@ function formatTime(date: Date): string {
  * Ciclo de uma execução: `queued` → `running` (login) → `awaiting_2fa` (espera o token do
  * operador) → `running` (token enviado, catálogo lido, hotéis consultados e gravados um a um —
  * `hotel-collection.ts`) → `completed`; qualquer falha da execução leva a `failed` com o motivo
- * correspondente (FR-003). Hotel com falha não encerra a execução: fica marcado e ela segue.
+ * correspondente (FR-003). Hotel com falha não encerra a execução: fica marcado e ela segue. Em
+ * qualquer ponto, um cliente pode cancelá-la (`cancel`), e ela termina como `cancelled` (FR-022).
  *
  * Proteção dos segredos (FR-005, research R-12): senha e token ficam registrados no
  * `SecretRegistry` apenas até o acesso ser concluído, e as referências a eles são descartadas
@@ -161,17 +190,12 @@ export class ExecutionRunner {
         requestedHotelCodes: input.hotelCodes,
         parentExecutionId: input.parentExecutionId ?? null,
       });
-      await this.options.events.publish({
-        executionId: execution.id,
-        type: 'status_changed',
-        status: 'queued',
-        message: 'Execução criada.',
-      });
     } catch (error) {
       releaseAll(secrets);
       throw error;
     }
 
+    // Registrada logo após a criação: um cancelamento a partir daqui já encontra a execução.
     const run: ActiveRun = {
       executionId: execution.id,
       period: input.period,
@@ -180,12 +204,51 @@ export class ExecutionRunner {
       gateway: null,
       tokenWaiter: null,
       stopReason: null,
+      cancelledByClientId: null,
+      forceCloseTimer: null,
+      finishing: false,
       done: Promise.resolve(),
     };
     this.active.set(execution.id, run);
     run.done = this.execute(run, credentials, secrets);
 
     return execution;
+  }
+
+  /** Hotéis processados ao mesmo tempo por execução (HOTEL_CONCURRENCY). */
+  get hotelConcurrency(): number {
+    return this.options.hotelConcurrency ?? 1;
+  }
+
+  /**
+   * Cancela a execução (FR-022) sem esperar o fim do hotel atual.
+   *
+   * A parada é cooperativa: os hotéis em andamento param antes da próxima página ou reserva, ficam
+   * `cancelled` sem gravar nada, e os não iniciados continuam pendentes para a retomada. Se a
+   * chamada ao Hunit em andamento não terminar em `cancelGraceMs` (10 s), o navegador é fechado à
+   * força, o que a interrompe (SC-008: parada em até 15 s). A espera do token é interrompida na
+   * hora.
+   *
+   * Uma execução ativa no banco mas que não está em andamento neste processo é cancelada direto
+   * no banco.
+   */
+  async cancel(executionId: string, clientId: string): Promise<CancelOutcome> {
+    const run = this.active.get(executionId);
+    if (!run) return this.cancelUntracked(executionId, clientId);
+
+    if (run.finishing) {
+      await run.done;
+      return 'already_finished';
+    }
+
+    this.requestStop(run, 'cancelled_by_client', clientId);
+    run.forceCloseTimer ??= setTimeout(() => {
+      run.logger.warn('a execução não parou no prazo do cancelamento; fechando o navegador');
+      void this.closeGateway(run);
+    }, this.options.cancelGraceMs ?? DEFAULT_CANCEL_GRACE_MS);
+    run.forceCloseTimer.unref();
+    run.logger.info({ cancelledByClientId: clientId }, 'cancelamento solicitado');
+    return 'requested';
   }
 
   /**
@@ -217,17 +280,58 @@ export class ExecutionRunner {
 
   /**
    * Interrompe todas as execuções em andamento (servidor desligando). Cada uma termina como
-   * `failed/server_restarted`, como aconteceria se o processo caísse.
+   * `failed/server_restarted`, como aconteceria se o processo caísse — ou `cancelled`, se o
+   * cancelamento já tinha sido pedido.
    */
   async shutdown(): Promise<void> {
     const runs = [...this.active.values()];
     for (const run of runs) {
-      run.stopReason = 'server_restarted';
-      run.tokenWaiter?.reject(new StopRequestedError());
-      run.tokenWaiter = null;
+      // Uma execução que já estava sendo cancelada termina como cancelada.
+      this.requestStop(run, 'server_restarted');
       await this.closeGateway(run);
     }
     await Promise.all(runs.map((run) => run.done));
+  }
+
+  /** Pede a parada da execução; o primeiro motivo informado é o que vale. */
+  private requestStop(run: ActiveRun, reason: ExecutionEndReason, clientId?: string): void {
+    if (!run.stopReason) {
+      run.stopReason = reason;
+      run.cancelledByClientId = clientId ?? null;
+    }
+    run.tokenWaiter?.reject(new StopRequestedError());
+    run.tokenWaiter = null;
+  }
+
+  private throwIfStopping(run: ActiveRun): void {
+    if (run.stopReason) throw new StopRequestedError();
+  }
+
+  /** Cancela no banco uma execução ativa que não está em andamento neste processo. */
+  private async cancelUntracked(executionId: string, clientId: string): Promise<CancelOutcome> {
+    const now = this.now();
+    const updated = await transitionExecution(
+      this.options.db,
+      executionId,
+      { to: 'cancelled', endReason: 'cancelled_by_client', cancelledByClientId: clientId },
+      now,
+    );
+    if (!updated) return 'already_finished';
+
+    await failRunningExecutionHotels(
+      this.options.db,
+      [executionId],
+      CANCELLED_HOTEL_REASON,
+      now,
+      'cancelled',
+    );
+    await this.options.events.publish({
+      executionId,
+      type: 'status_changed',
+      status: 'cancelled',
+      message: CANCELLED_MESSAGE,
+    });
+    return 'requested';
   }
 
   private async execute(
@@ -241,10 +345,17 @@ export class ExecutionRunner {
 
     try {
       try {
+        await this.options.events.publish({
+          executionId: run.executionId,
+          type: 'status_changed',
+          status: 'queued',
+          message: 'Execução criada.',
+        });
         await this.changeStatus(run, { to: 'running' }, 'Acessando o Hunit.');
         const gateway = await this.openGateway(run);
 
         const outcome = await gateway.login(credentials);
+        this.throwIfStopping(run);
         if (outcome === 'two_factor_required') {
           const token = await this.waitForToken(run);
           secrets.releaseAccess.push(this.options.secrets.register(token));
@@ -253,6 +364,7 @@ export class ExecutionRunner {
         }
         // Acesso concluído: senha e token não são mais necessários (FR-005).
         releaseAccess();
+        this.throwIfStopping(run);
 
         const catalog = await this.updateCatalog(run, gateway);
         const summary = await collectHotels({
@@ -269,7 +381,11 @@ export class ExecutionRunner {
           maxPeriodDays: this.options.maxPeriodDays ?? null,
           hotelConcurrency: this.options.hotelConcurrency ?? 1,
           isStopping: () => run.stopReason !== null,
+          isCancelled: () => run.stopReason === 'cancelled_by_client',
         });
+        this.throwIfStopping(run);
+        // Daqui em diante, um cancelamento não muda mais o resultado.
+        run.finishing = true;
         const failed = summary.failed > 0 ? `, ${summary.failed} com falha` : '';
         await this.changeStatus(
           run,
@@ -279,6 +395,7 @@ export class ExecutionRunner {
       } catch (error) {
         await this.fail(run, error);
       } finally {
+        if (run.forceCloseTimer) clearTimeout(run.forceCloseTimer);
         await this.closeGateway(run);
         releaseAll(secrets);
         this.active.delete(run.executionId);
@@ -290,10 +407,11 @@ export class ExecutionRunner {
   }
 
   private async openGateway(run: ActiveRun): Promise<HunitGateway> {
+    this.throwIfStopping(run);
     const gateway = await this.options.createGateway({ executionId: run.executionId });
     run.gateway = gateway;
-    // O servidor pode ter pedido a parada enquanto o navegador abria.
-    if (run.stopReason) throw new StopRequestedError();
+    // A parada pode ter sido pedida enquanto o navegador abria.
+    this.throwIfStopping(run);
     return gateway;
   }
 
@@ -365,15 +483,26 @@ export class ExecutionRunner {
     });
   }
 
-  /** Encerra a execução como `failed`, com o motivo e a evidência da falha (FR-003, FR-024). */
+  /**
+   * Encerra a execução interrompida: `cancelled` quando um cliente a cancelou (FR-022); senão
+   * `failed`, com o motivo e a evidência da falha (FR-003, FR-024).
+   */
   private async fail(run: ActiveRun, error: unknown): Promise<void> {
+    run.finishing = true;
+    if (run.stopReason === 'cancelled_by_client') {
+      await this.finishCancelled(run);
+      return;
+    }
+
     const hunitError = error instanceof HunitError ? error : null;
     const endReason =
       run.stopReason ??
       (hunitError ? END_REASON_BY_HUNIT_ERROR[hunitError.code] : 'internal_error');
 
     if (error instanceof StopRequestedError && !run.stopReason) {
-      // A execução foi encerrada por outro caminho enquanto rodava; nada mais a registrar.
+      // O estado da execução no banco já não permitia continuar: ela foi encerrada fora deste
+      // executor (ex.: cancelada direto no banco). Os hotéis em andamento já ficaram
+      // `cancelled`; nada mais a registrar.
       run.logger.info('execução encerrada por outro caminho');
       return;
     }
@@ -403,6 +532,29 @@ export class ExecutionRunner {
         type: 'status_changed',
         status: 'failed',
         message,
+      });
+    }
+  }
+
+  private async finishCancelled(run: ActiveRun): Promise<void> {
+    const updated = await transitionExecution(
+      this.options.db,
+      run.executionId,
+      {
+        to: 'cancelled',
+        endReason: 'cancelled_by_client',
+        cancelledByClientId: run.cancelledByClientId,
+      },
+      this.now(),
+    );
+    run.logger.info('execução cancelada');
+    // `null`: a execução já tinha sido encerrada por outro caminho; nada a avisar.
+    if (updated) {
+      await this.options.events.publish({
+        executionId: run.executionId,
+        type: 'status_changed',
+        status: 'cancelled',
+        message: CANCELLED_MESSAGE,
       });
     }
   }

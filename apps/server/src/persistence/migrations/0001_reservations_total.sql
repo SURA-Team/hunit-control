@@ -1,0 +1,1 @@
+ALTER TABLE "execution_hotels" ADD COLUMN "reservations_total" integer DEFAULT 0 NOT NULL;

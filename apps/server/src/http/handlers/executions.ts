@@ -1,8 +1,16 @@
 import type { components, operations } from '@hunit/contracts';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ExecutionEventBus } from '../../executions/events.js';
+import {
+  ExecutionNotFoundError,
+  ExecutionStillActiveError,
+  NothingToResumeError,
+  resumeExecution,
+} from '../../executions/resume.js';
 import type { ExecutionRunner } from '../../executions/runner.js';
+import { executionTiming } from '../../executions/timing.js';
 import type { Database } from '../../persistence/db.js';
+import { loadTimingHistory } from '../../persistence/execution-hotels-repo.js';
 import {
   ExecutionAlreadyActiveError,
   findExecution,
@@ -11,6 +19,7 @@ import {
   listExecutions,
   type ExecutionWithClient,
 } from '../../persistence/executions-repo.js';
+import { ACTIVE_EXECUTION_STATUSES, type ExecutionStatus } from '../../persistence/schema.js';
 import { ProblemError } from '../problem.js';
 import { toExecutionSummary, toExecutionView, type ExecutionView } from '../views.js';
 
@@ -18,6 +27,11 @@ type StartExecutionRequest = components['schemas']['StartExecutionRequest'];
 type ExecutionParams = operations['getExecution']['parameters']['path'];
 type ListExecutionsQuery = NonNullable<operations['listExecutions']['parameters']['query']>;
 type TwoFactorBody = operations['sendTwoFactor']['requestBody']['content']['application/json'];
+type ResumeBody = operations['resumeExecution']['requestBody']['content']['application/json'];
+
+function isActive(status: ExecutionStatus): boolean {
+  return (ACTIVE_EXECUTION_STATUSES as readonly ExecutionStatus[]).includes(status);
+}
 
 export interface ExecutionHandlerDependencies {
   db: Database;
@@ -45,11 +59,24 @@ export function createExecutionHandlers(dependencies: ExecutionHandlerDependenci
   }
 
   async function viewOf(found: ExecutionWithClient): Promise<ExecutionView> {
-    const [hotels, recentEvents] = await Promise.all([
-      listExecutionHotels(db, found.execution.id),
-      events.listRecent(found.execution.id, RECENT_EVENTS),
+    const { execution } = found;
+    const active = isActive(execution.status);
+    const [hotels, recentEvents, history] = await Promise.all([
+      listExecutionHotels(db, execution.id),
+      events.listRecent(execution.id, RECENT_EVENTS),
+      // A média histórica só serve para estimar o tempo restante de uma execução ativa.
+      active
+        ? loadTimingHistory(db, { excludeExecutionId: execution.id })
+        : { secondsPerReservation: null, secondsPerHotel: null },
     ]);
-    return toExecutionView({ found, hotels, recentEvents });
+    const timing = executionTiming({
+      hotels,
+      active,
+      history,
+      concurrency: runner.hotelConcurrency,
+      now: new Date(),
+    });
+    return toExecutionView({ found, hotels, recentEvents, timing });
   }
 
   return {
@@ -131,6 +158,71 @@ export function createExecutionHandlers(dependencies: ExecutionHandlerDependenci
 
       request.log.info({ executionId }, 'token entregue à execução');
       return reply.code(202).send();
+    },
+
+    /** POST /v1/executions/{executionId}/cancel — cancela a execução (FR-022). Somente operador. */
+    async cancelExecution(request: FastifyRequest, reply: FastifyReply) {
+      const client = clientOf(request);
+      const { executionId } = request.params as ExecutionParams;
+      const { execution } = await loadExecution(executionId);
+
+      const outcome = isActive(execution.status)
+        ? await runner.cancel(executionId, client.id)
+        : 'already_finished';
+      if (outcome === 'already_finished') {
+        const { execution: current } = await loadExecution(executionId);
+        throw new ProblemError(
+          'execution_already_finished',
+          `A execução já terminou no estado "${current.status}".`,
+        );
+      }
+
+      request.log.info({ executionId }, 'cancelamento solicitado');
+      void reply.code(202);
+      return viewOf(await loadExecution(executionId));
+    },
+
+    /**
+     * POST /v1/executions/{executionId}/resume — retoma a execução a partir dos hotéis não
+     * concluídos, com novo acesso ao Hunit (FR-023). Somente operador.
+     */
+    async resumeExecution(request: FastifyRequest, reply: FastifyReply) {
+      const client = clientOf(request);
+      const { executionId } = request.params as ExecutionParams;
+      const { credentials } = request.body as ResumeBody;
+
+      let resumedId: string;
+      try {
+        const resumed = await resumeExecution(
+          { db, runner },
+          { executionId, clientId: client.id, credentials },
+        );
+        resumedId = resumed.id;
+      } catch (error) {
+        if (error instanceof ExecutionNotFoundError) {
+          throw new ProblemError('not_found', 'Execução não encontrada.');
+        }
+        if (error instanceof ExecutionStillActiveError) {
+          throw new ProblemError('execution_already_active', error.message);
+        }
+        if (error instanceof NothingToResumeError) {
+          throw new ProblemError('nothing_to_resume', error.message);
+        }
+        if (error instanceof ExecutionAlreadyActiveError) {
+          throw new ProblemError(
+            'execution_already_active',
+            'Já existe uma execução ativa para esta conta do Hunit; aguarde o fim dela ou cancele-a.',
+          );
+        }
+        throw error;
+      }
+
+      request.log.info(
+        { executionId: resumedId, parentExecutionId: executionId },
+        'execução retomada',
+      );
+      void reply.code(202);
+      return viewOf(await loadExecution(resumedId));
     },
   };
 }

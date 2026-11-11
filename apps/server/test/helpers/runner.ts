@@ -33,6 +33,8 @@ export interface RunnerHarnessOptions {
   maxPeriodDays?: number | null;
   /** Hotéis processados ao mesmo tempo (HOTEL_CONCURRENCY). Padrão: 1. */
   hotelConcurrency?: number;
+  /** Prazo da parada cooperativa antes de fechar o navegador à força. Padrão: 10 s. */
+  cancelGraceMs?: number;
   /** Usa estes componentes em vez de criar novos (ex.: os da aplicação HTTP de teste). */
   secrets?: SecretRegistry;
   logs?: CapturedLogs;
@@ -64,6 +66,7 @@ export async function createRunnerHarness(
     twoFactorTimeoutMs: options.twoFactorTimeoutMs ?? 60_000,
     maxPeriodDays: options.maxPeriodDays ?? null,
     hotelConcurrency: options.hotelConcurrency ?? 1,
+    ...(options.cancelGraceMs !== undefined && { cancelGraceMs: options.cancelGraceMs }),
     logger: logs.logger,
   });
 

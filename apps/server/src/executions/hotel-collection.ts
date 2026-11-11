@@ -56,8 +56,10 @@ export interface HotelCollectionContext {
   maxPeriodDays: number | null;
   /** Hotéis processados ao mesmo tempo, com a mesma sessão (HOTEL_CONCURRENCY, research R-08). */
   hotelConcurrency: number;
-  /** Indica que a execução deve parar (ex.: servidor desligando). */
+  /** Indica que a execução deve parar (ex.: cancelada, servidor desligando). */
   isStopping: () => boolean;
+  /** Indica que a parada é um cancelamento pedido por um cliente (FR-022). */
+  isCancelled: () => boolean;
 }
 
 export interface HotelCollectionSummary {
@@ -82,9 +84,11 @@ function endsExecution(error: unknown, context: HotelCollectionContext): boolean
  *
  * - Hotel com falha: evidência, hotel `failed` sem gravar reservas, e segue para o próximo (edge
  *   case "falha repetida em um hotel").
- * - Sessão expirada ou parada da execução: os hotéis em andamento param no próximo ponto de
- *   checagem (antes de cada página e de cada reserva) sem gravar nada, e o erro sobe; os hotéis
- *   não iniciados ficam pendentes, para a retomada (FR-023).
+ * - Sessão expirada ou parada da execução (cancelamento, servidor desligando): os hotéis em
+ *   andamento param no próximo ponto de checagem (antes de cada página, de cada reserva e da
+ *   gravação) sem
+ *   gravar nada, e o erro sobe; no cancelamento, todos eles ficam `cancelled`. Os hotéis não
+ *   iniciados ficam pendentes, para a retomada (FR-022, FR-023).
  */
 export async function collectHotels(
   context: HotelCollectionContext,
@@ -180,6 +184,8 @@ class HotelRun {
       for (const block of splitPeriod(context.period, context.maxPeriodDays)) {
         await this.collectBlock(block);
       }
+      // Último ponto de checagem: a parada pode ter chegado durante a última reserva.
+      if (context.isStopping()) throw new StopRequestedError();
       const committed = await commitHotel(context.db, {
         executionId: context.executionId,
         hotelCode,
@@ -206,28 +212,37 @@ class HotelRun {
   /** Todas as páginas de um bloco do período (FR-011). */
   private async collectBlock(block: Period): Promise<void> {
     const { context, hotelCode } = this;
-    // Desconhecido até a primeira página; depois, vem do próprio resultado.
+    // Desconhecidos até a primeira página; depois, vêm do próprio resultado.
     let totalPages: number | null = null;
+    let totalItems = 0;
 
     for (let page = 1; totalPages === null || page <= totalPages; page += 1) {
       if (context.isStopping()) throw new StopRequestedError();
       const result = await context.gateway.searchReservations(hotelCode, block, page);
 
-      // Se a listagem crescer durante a leitura (reservas novas no Hunit), o total acompanha.
+      // Se a listagem crescer durante a leitura (reservas novas no Hunit), os totais acompanham.
       if (totalPages === null || result.totalPages > totalPages) {
         this.progress.pagesTotal += result.totalPages - (totalPages ?? 0);
         totalPages = result.totalPages;
       }
+      if (result.totalItems > totalItems) {
+        this.progress.reservationsTotal += result.totalItems - totalItems;
+        totalItems = result.totalItems;
+      }
+      // Totais conhecidos já durante a página: entram no andamento e na estimativa (FR-021a).
+      await this.saveProgress();
 
       for (const item of result.items) {
-        // Também entre reservas: outro hotel pode ter encerrado a execução (sessão expirada).
+        // Também entre reservas: outro hotel pode ter encerrado a execução (sessão expirada) ou
+        // ela pode ter sido cancelada (FR-022).
         if (context.isStopping()) throw new StopRequestedError();
         if (this.records.has(item.reservationNumber)) continue;
         this.records.set(item.reservationNumber, await this.analyze(item));
+        await this.saveProgress();
       }
 
       if (page <= totalPages) this.progress.pagesDone += 1;
-      await updateExecutionHotelProgress(context.db, context.executionId, hotelCode, this.progress);
+      await this.saveProgress();
       await this.publish(
         'page_done',
         totalPages === 0
@@ -235,6 +250,12 @@ class HotelRun {
           : `${this.label}: página ${page} de ${totalPages} lida (${this.records.size} reservas até agora).`,
       );
     }
+  }
+
+  /** Grava o andamento do hotel, para o acompanhamento (FR-021) e a estimativa (FR-021a). */
+  private async saveProgress(): Promise<void> {
+    const { context, hotelCode } = this;
+    await updateExecutionHotelProgress(context.db, context.executionId, hotelCode, this.progress);
   }
 
   /** Abre (se preciso) e classifica uma reserva da listagem (FR-013 a FR-016). */
@@ -303,8 +324,14 @@ class HotelRun {
     const now = context.now();
 
     if (endsExecution(error, context)) {
-      const outcome =
-        error instanceof SessionExpiredError
+      // Cancelamento vale mais que qualquer outro motivo: com o cancelamento, o navegador pode ser
+      // fechado à força e a chamada em andamento falhar por isso (FR-022).
+      const outcome = context.isCancelled()
+        ? {
+            status: 'cancelled' as const,
+            reason: 'A execução foi cancelada no meio do hotel; nada foi gravado.',
+          }
+        : error instanceof SessionExpiredError
           ? { status: 'failed' as const, reason: error.message }
           : context.isStopping()
             ? { status: 'failed' as const, reason: 'A execução foi interrompida no meio do hotel.' }

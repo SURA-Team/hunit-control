@@ -200,6 +200,11 @@ export const executionHotels = pgTable(
     /** Descoberto a partir do próprio resultado da consulta (FR-011). */
     pagesTotal: integer('pages_total'),
     pagesDone: integer('pages_done'),
+    /**
+     * Reservas que o Hunit informou na listagem (soma dos blocos do período já consultados);
+     * base das "reservas ainda não processadas" da estimativa (research R-08a).
+     */
+    reservationsTotal: integer('reservations_total').notNull().default(0),
     reservationsSeen: integer('reservations_seen').notNull().default(0),
     /** Reservas efetivamente lidas (exclui as "258-"); base do tempo médio (research R-08a). */
     reservationsOpened: integer('reservations_opened').notNull().default(0),

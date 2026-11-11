@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp } from '../../src/http/app.js';
+import { buildApp, createOperationHandlers, notImplemented } from '../../src/http/app.js';
+import { loadContract } from '../../src/http/contract.js';
 import { PROBLEM_CONTENT_TYPE } from '../../src/http/problem.js';
 import {
   createTestApp,
@@ -106,16 +107,25 @@ describe('erros no formato RFC 9457 (T015)', () => {
     expect(problem(response).code).toBe('not_found');
   });
 
-  it('responde 501 para operação do contrato ainda sem implementação', async () => {
-    // Cancelamento: entra com a US3 (tasks.md, T057).
-    const response = await test.app.inject({
-      method: 'POST',
-      url: '/v1/executions/00000000-0000-4000-8000-000000000000/cancel',
-      headers: operator.headers,
+  it('toda operação do contrato tem implementação (nenhuma responde 501)', () => {
+    const handlers = createOperationHandlers({
+      db: test.database.db,
+      logger: test.logs.logger,
+      events: test.harness.events,
+      runner: test.harness.runner,
+      evidence: test.harness.evidence,
     });
 
-    expect(response.statusCode).toBe(501);
-    expect(problem(response)).toMatchObject({
+    expect(Object.keys(handlers.handlers).sort()).toEqual(
+      [...loadContract().operations.keys()].sort(),
+    );
+  });
+
+  it('operação do contrato sem implementação responde 501', async () => {
+    const handler = notImplemented('operacaoFutura');
+
+    await expect(handler({} as never, {} as never)).rejects.toMatchObject({
+      status: 501,
       code: 'internal_error',
       title: 'Operação não implementada',
     });

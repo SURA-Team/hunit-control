@@ -1,6 +1,6 @@
 /**
- * A execução precisa parar: o servidor está desligando, ou ela foi encerrada por outro caminho
- * (ex.: cancelada) enquanto rodava.
+ * A execução precisa parar: um cliente a cancelou, o servidor está desligando, ou ela foi
+ * encerrada fora do executor (ex.: cancelada direto no banco) enquanto rodava.
  */
 export class StopRequestedError extends Error {
   constructor() {

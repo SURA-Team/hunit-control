@@ -67,7 +67,8 @@ function toProblemError(error: unknown): ProblemError {
   return new ProblemError('internal_error', undefined, { cause: error });
 }
 
-function notImplemented(operationId: string): OperationHandler {
+/** Handler das operações do contrato ainda sem implementação: responde 501. */
+export function notImplemented(operationId: string): OperationHandler {
   return () =>
     Promise.reject(
       new ProblemError(
@@ -105,6 +106,26 @@ function acceptOnlyJsonBodies(app: FastifyInstance, contract: Contract): void {
   }
 }
 
+/** Handlers de todas as operações implementadas, por `operationId`. */
+export function createOperationHandlers(dependencies: AppDependencies): {
+  handlers: OperationHandlers;
+  /** Encerra os streams de eventos abertos (o servidor está desligando). */
+  closeStreams: () => void;
+} {
+  const executionEvents = createExecutionEventsHandlers(dependencies);
+  return {
+    handlers: {
+      ...createHealthHandlers(dependencies),
+      ...createHotelHandlers(dependencies),
+      ...createExecutionHandlers(dependencies),
+      ...createReservationHandlers(dependencies),
+      ...createEvidenceHandlers(dependencies),
+      ...executionEvents.handlers,
+    },
+    closeStreams: () => executionEvents.closeAll(),
+  };
+}
+
 /**
  * Cria a aplicação HTTP a partir do contrato OpenAPI (constitution, princípio III).
  *
@@ -117,16 +138,7 @@ function acceptOnlyJsonBodies(app: FastifyInstance, contract: Contract): void {
  */
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
   const contract = loadContract();
-
-  const executionEvents = createExecutionEventsHandlers(dependencies);
-  const handlers: OperationHandlers = {
-    ...createHealthHandlers(dependencies),
-    ...createHotelHandlers(dependencies),
-    ...createExecutionHandlers(dependencies),
-    ...createReservationHandlers(dependencies),
-    ...createEvidenceHandlers(dependencies),
-    ...executionEvents.handlers,
-  };
+  const { handlers, closeStreams } = createOperationHandlers(dependencies);
 
   // Declarado com o tipo de logger do Fastify para a aplicação ter o tipo padrão.
   const loggerInstance: FastifyBaseLogger = dependencies.logger;
@@ -149,7 +161,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
 
   // Streams de eventos ficam abertos indefinidamente; sem isto o servidor não conseguiria desligar.
   app.addHook('preClose', (done) => {
-    executionEvents.closeAll();
+    closeStreams();
     done();
   });
 
