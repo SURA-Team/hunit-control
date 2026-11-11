@@ -675,6 +675,10 @@ Decisões da implementação da Fase 5 (2026-11-11, T055–T057).
     um campo sem mudar o formato (`Hotel.available`). Nenhum cliente existia ainda; clientes
     futuros devem tolerar valores novos nos campos de lista fechada (tipo de evento, código de
     erro).
+  - **1.1.0 → 1.1.1** (T061, 2026-11-11): só metadados para zerar os avisos do lint — licença
+    (uso interno) e descrição das tags. Os tipos gerados não mudam. O `GET /health` fica sem
+    resposta 4XX (não exige chave nem recusa nada); a exceção está em
+    `packages/contracts/.redocly.lint-ignore.yaml`.
   - Transição: as leituras anteriores a esta mudança não têm conta; o catálogo de cada conta se
     forma na primeira execução dela depois da migration.
   - Alternatives considered: recusar o início quando a conta não acessa algum hotel pedido

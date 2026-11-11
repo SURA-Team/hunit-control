@@ -1,7 +1,10 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.1.0
+  version: 1.1.1
+  license:
+    name: Uso interno — proprietário
+    identifier: LicenseRef-Proprietary
   description: |
     API de consulta de reservas de cartão virtual no Hunit (feature 001).
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
@@ -16,10 +19,15 @@ security:
 
 tags:
   - name: executions
+    description: Execuções da consulta no Hunit — início, token 2FA, acompanhamento, cancelamento e retomada
   - name: reservations
+    description: Reservas consultadas, com a classificação e o histórico de verificações
   - name: hotels
+    description: Catálogo de hotéis lido do Hunit
   - name: evidence
+    description: Arquivos de evidência das falhas (captura, HTML e resposta), guardados por tempo limitado
   - name: health
+    description: Disponibilidade do serviço
 
 paths:
   /health:
