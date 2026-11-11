@@ -178,7 +178,7 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
 | Requisição perigosa por engano (cobrança, cartão) | Ação financeira indevida | `read-only-guard`: lista de permissão por rota + bloqueio explícito (R-13a); teste automatizado |
 | Paralelismo entre hotéis não verificado (R-08) | Meta de 30 min | Começa sequencial; `X-Company-Id` por requisição sugere que é viável — verificar no primeiro acesso real |
 | Janela curta do token (~1–2 min) | Execuções falham por tempo | SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
-| Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita aos Page Objects + fixtures |
+| Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita à camada do Hunit + fixtures |
 | Limite desconhecido de período no Hunit (R-09) | Consultas retroativas falham | Divisão automática configurável |
 | Estimativa de tempo imprecisa no início | Operador planeja mal | Média histórica por reserva; SC-010 mede o erro (R-08a) |
 

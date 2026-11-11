@@ -15,8 +15,8 @@ negócio e do resultado esperado."
 
 O Financeiro da rede precisa saber quais reservas com pré-pagamento por cartão virtual no Hunit já
 foram cobradas e quais continuam pendentes, para apoiar a cobrança manual e a conferência
-operacional. O Hunit não oferece integração oficial; as informações são obtidas navegando a extranet
-do Hunit como um usuário faria.
+operacional. O Hunit não oferece integração oficial; as informações são obtidas consultando a
+extranet do Hunit como um usuário faria.
 
 O sistema anterior (`legacy/`) realizava essa coleta, mas **deixou de funcionar porque o Hunit
 atualizou suas telas**. Por isso:
@@ -101,8 +101,8 @@ e sem informar o token para verificar cada motivo de falha.
 ### User Story 2 - Consulta e classificação das reservas (Priority: P2)
 
 Com o acesso concluído, a execução percorre os hotéis escolhidos para o período de check-in
-informado, passa por todas as páginas de resultados de cada hotel, abre cada reserva **somente para
-leitura**, classifica a situação do pré-pagamento e grava o resultado. O Financeiro consulta as
+informado, passa por todas as páginas de resultados de cada hotel, lê o detalhe de cada reserva
+**somente para leitura**, classifica a situação do pré-pagamento e grava o resultado. O Financeiro consulta as
 reservas resultantes por execução, por hotel e por classificação.
 
 **Why this priority**: é o valor de negócio principal — saber o que está cobrado e o que está
