@@ -11,7 +11,8 @@
     "build": "tsc -p tsconfig.build.json && node scripts/copy-migrations.mjs",
     "typecheck": "tsc --noEmit",
     "start": "node --enable-source-maps dist/main.js",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "hunit:login-check": "node dist/hunit-login-check.js"
   },
   "dependencies": {
     "@hunit/contracts": "workspace:*",
