@@ -17,11 +17,13 @@ import type { Database } from '../persistence/db.js';
 import {
   emptyHotelProgress,
   finishExecutionHotelWithoutResults,
+  leaveExecutionHotelPending,
   registerExecutionHotels,
   startExecutionHotel,
   updateExecutionHotelProgress,
   type HotelProgress,
 } from '../persistence/execution-hotels-repo.js';
+import { hotelsAccessibleByOtherAccounts } from '../persistence/hotels-repo.js';
 import { commitHotel } from '../persistence/reservations-repo.js';
 import type { EvidenceKind } from '../persistence/schema.js';
 import type { ExecutionEventBus } from './events.js';
@@ -42,8 +44,14 @@ export const CLASSIFICATION_LABELS: Readonly<Record<Classification, string>> = {
 export const CANCELLED_HOTEL_REASON =
   'A execução foi cancelada no meio do hotel; nada foi gravado.';
 
+/** Motivo do hotel que a conta usada não acessa, mas outra conta acessa (FR-009a). */
+export const NO_ACCESS_REASON =
+  'A conta do Hunit usada não tem acesso a este hotel; ele ficou pendente para uma retomada com uma conta que tenha acesso.';
+
 export interface HotelCollectionContext {
   executionId: string;
+  /** Conta do Hunit da execução (HMAC do usuário, research R-11). */
+  accountKey: string;
   /** Período de check-in da execução. */
   period: Period;
   /** Hotéis pedidos; `null` = todos os do catálogo (FR-009). */
@@ -69,6 +77,8 @@ export interface HotelCollectionContext {
 export interface HotelCollectionSummary {
   completed: number;
   failed: number;
+  /** Hotéis que a conta usada não acessa e ficaram pendentes para outra conta (FR-009a). */
+  withoutAccess: number;
   reservations: number;
 }
 
@@ -88,11 +98,12 @@ function endsExecution(error: unknown, context: HotelCollectionContext): boolean
  *
  * - Hotel com falha: evidência, hotel `failed` sem gravar reservas, e segue para o próximo (edge
  *   case "falha repetida em um hotel").
+ * - Hotel pedido fora do catálogo da conta: `pending` com aviso, se outra conta o acessa
+ *   (FR-009a); `failed`, se nenhuma conta conhecida o acessa.
  * - Sessão expirada ou parada da execução (cancelamento, servidor desligando): os hotéis em
  *   andamento param no próximo ponto de checagem (antes de cada página, de cada reserva e da
- *   gravação) sem
- *   gravar nada, e o erro sobe; no cancelamento, todos eles ficam `cancelled`. Os hotéis não
- *   iniciados ficam pendentes, para a retomada (FR-022, FR-023).
+ *   gravação) sem gravar nada, e o erro sobe; no cancelamento, todos eles ficam `cancelled`. Os
+ *   hotéis não iniciados ficam pendentes, para a retomada (FR-022, FR-023).
  */
 export async function collectHotels(
   context: HotelCollectionContext,
@@ -102,8 +113,28 @@ export async function collectHotels(
   const requested = [...new Set(context.requestedHotelCodes ?? catalog.map((hotel) => hotel.code))];
   const registered = new Set(await registerExecutionHotels(db, executionId, requested));
 
-  const summary: HotelCollectionSummary = { completed: 0, failed: 0, reservations: 0 };
-  for (const hotelCode of requested.filter((code) => !names.has(code))) {
+  const summary: HotelCollectionSummary = {
+    completed: 0,
+    failed: 0,
+    withoutAccess: 0,
+    reservations: 0,
+  };
+  const outsideCatalog = requested.filter((code) => !names.has(code));
+  // Fora do catálogo desta conta, mas acessado por outra: fica pendente para uma retomada com
+  // essa outra conta (FR-009a). Só falha o hotel que nenhuma conta conhecida acessa.
+  const elsewhere = await hotelsAccessibleByOtherAccounts(db, context.accountKey, outsideCatalog);
+  for (const hotelCode of outsideCatalog.filter((code) => elsewhere.has(code))) {
+    summary.withoutAccess += 1;
+    await leaveExecutionHotelPending(db, executionId, hotelCode, NO_ACCESS_REASON);
+    await context.events.publish({
+      executionId,
+      type: 'warning',
+      hotelCode,
+      message: `Hotel ${hotelCode}: ${NO_ACCESS_REASON}`,
+    });
+  }
+
+  for (const hotelCode of outsideCatalog.filter((code) => !elsewhere.has(code))) {
     summary.failed += 1;
     const reason = 'O hotel não está no catálogo atual da conta do Hunit; não foi consultado.';
     if (registered.has(hotelCode)) {

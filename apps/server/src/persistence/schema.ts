@@ -146,9 +146,26 @@ export const hotels = pgTable('hotels', {
   name: text('name').notNull(),
   firstSeenAt: timestamptz('first_seen_at').notNull().defaultNow(),
   lastSeenAt: timestamptz('last_seen_at').notNull().defaultNow(),
-  /** `false` quando o hotel não apareceu no último catálogo lido. */
+  /** `true` enquanto alguma conta do Hunit acessar o hotel (linha em `account_hotels`). */
   available: boolean('available').notNull().default(true),
 });
+
+/**
+ * Catálogo de cada conta do Hunit: contas diferentes podem acessar hotéis diferentes (FR-008,
+ * FR-009a). A conta é o mesmo HMAC de `executions.account_key` (research R-11).
+ */
+export const accountHotels = pgTable(
+  'account_hotels',
+  {
+    accountKey: text('account_key').notNull(),
+    hotelCode: text('hotel_code')
+      .notNull()
+      .references(() => hotels.code),
+    /** Última leitura do catálogo da conta que trouxe o hotel. */
+    lastSeenAt: timestamptz('last_seen_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.accountKey, table.hotelCode] })],
+);
 
 /** Execução: uma solicitação de consulta (FR-001 a FR-006, FR-021 a FR-023). */
 export const executions = pgTable(

@@ -22,6 +22,13 @@
       "when": 1794436294945,
       "tag": "0002_one_resume_per_parent",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794437154921,
+      "tag": "0003_account_hotels",
+      "breakpoints": true
     }
   ]
 }

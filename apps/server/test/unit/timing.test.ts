@@ -26,6 +26,7 @@ function hotel(overrides: Partial<HotelTiming> = {}): HotelTiming {
     reservationsTotal: 0,
     reservationsSeen: 0,
     reservationsOpened: 0,
+    failureReason: null,
     ...overrides,
   };
 }
@@ -157,6 +158,16 @@ describe('estimativa do tempo restante (R-08a)', () => {
     expect(estimateRemainingSeconds(input({ hotels, concurrency: 2 }))).toBe(200);
     // Mais trabalhadores que hotéis restantes não acelera além de um hotel por trabalhador.
     expect(estimateRemainingSeconds(input({ hotels, concurrency: 10 }))).toBe(100);
+  });
+
+  it('desconsidera hotéis pendentes deixados para outra conta (com motivo, FR-009a)', () => {
+    const hotels = [
+      completed(100, 10),
+      hotel(),
+      hotel({ failureReason: 'A conta usada não tem acesso a este hotel no Hunit.' }),
+    ];
+
+    expect(estimateRemainingSeconds(input({ hotels }))).toBe(100);
   });
 
   it('desconsidera hotéis concluídos, com falha ou cancelados', () => {

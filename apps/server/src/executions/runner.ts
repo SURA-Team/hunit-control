@@ -22,7 +22,7 @@ import {
   type ExecutionTransition,
 } from '../persistence/executions-repo.js';
 import { failRunningExecutionHotels } from '../persistence/execution-hotels-repo.js';
-import { saveCatalog } from '../persistence/hotels-repo.js';
+import { knownCatalogOf, saveCatalog } from '../persistence/hotels-repo.js';
 import type { ExecutionEndReason } from '../persistence/schema.js';
 import type { SecretRegistry } from '../secrets.js';
 import { accountKeyFor } from './account-key.js';
@@ -105,6 +105,8 @@ interface TokenWaiter {
 /** Uma execução em andamento neste processo. */
 interface ActiveRun {
   executionId: string;
+  /** Conta do Hunit (HMAC do usuário, research R-11): o catálogo é guardado por conta. */
+  accountKey: string;
   period: Period;
   /** `null` = todos os hotéis do catálogo (FR-009). */
   hotelCodes: string[] | null;
@@ -182,10 +184,11 @@ export class ExecutionRunner {
       releaseAccess: [this.options.secrets.register(credentials.password)],
     };
 
+    const accountKey = accountKeyFor(credentials.username, this.options.accountKeySecret);
     let execution: ExecutionRow;
     try {
       execution = await createExecution(this.options.db, {
-        accountKey: accountKeyFor(credentials.username, this.options.accountKeySecret),
+        accountKey,
         clientId: input.clientId,
         period: input.period,
         requestedHotelCodes: input.hotelCodes,
@@ -199,6 +202,7 @@ export class ExecutionRunner {
     // Registrada logo após a criação: um cancelamento a partir daqui já encontra a execução.
     const run: ActiveRun = {
       executionId: execution.id,
+      accountKey,
       period: input.period,
       hotelCodes: input.hotelCodes,
       logger: this.options.logger.child({ executionId: execution.id }),
@@ -356,6 +360,7 @@ export class ExecutionRunner {
           status: 'queued',
           message: 'Execução criada.',
         });
+        await this.warnAboutKnownMissingAccess(run);
         await this.changeStatus(run, { to: 'running' }, 'Acessando o Hunit.');
         const gateway = await this.openGateway(run);
 
@@ -374,6 +379,7 @@ export class ExecutionRunner {
         const catalog = await this.updateCatalog(run, gateway);
         const summary = await collectHotels({
           executionId: run.executionId,
+          accountKey: run.accountKey,
           period: run.period,
           requestedHotelCodes: run.hotelCodes,
           catalog,
@@ -393,6 +399,10 @@ export class ExecutionRunner {
         // Daqui em diante, um cancelamento não muda mais o resultado.
         run.finishing = true;
         const failed = summary.failed > 0 ? `, ${summary.failed} com falha` : '';
+        const withoutAccess =
+          summary.withoutAccess > 0
+            ? `, ${summary.withoutAccess} pendentes por falta de acesso desta conta`
+            : '';
         const lateCancel =
           run.stopReason === 'cancelled_by_client'
             ? ' O cancelamento chegou depois de todos os hotéis terminarem.'
@@ -400,7 +410,7 @@ export class ExecutionRunner {
         await this.changeStatus(
           run,
           { to: 'completed' },
-          `Execução concluída: ${summary.completed} hotéis concluídos${failed}; ${summary.reservations} reservas gravadas.${lateCancel}`,
+          `Execução concluída: ${summary.completed} hotéis concluídos${failed}${withoutAccess}; ${summary.reservations} reservas gravadas.${lateCancel}`,
         );
       } catch (error) {
         await this.fail(run, error);
@@ -455,9 +465,30 @@ export class ExecutionRunner {
     }
   }
 
+  /**
+   * Aviso antecipado (FR-009a): se o último catálogo conhecido da conta não inclui algum hotel
+   * pedido, o operador é avisado antes do token. A execução segue: a conta pode ter ganhado acesso
+   * desde a última leitura, e quem decide é o catálogo lido nesta execução.
+   */
+  private async warnAboutKnownMissingAccess(run: ActiveRun): Promise<void> {
+    if (run.hotelCodes === null) return;
+    const known = await knownCatalogOf(this.options.db, run.accountKey);
+    if (!known) return;
+    const missing = run.hotelCodes.filter((code) => !known.has(code));
+    if (missing.length === 0) return;
+    await this.options.events.publish({
+      executionId: run.executionId,
+      type: 'warning',
+      message:
+        `Atenção: pela última leitura do catálogo, a conta do Hunit usada não tem acesso aos ` +
+        `hotéis ${missing.join(', ')}. A execução segue; se a falta de acesso se confirmar, ` +
+        `esses hotéis ficam pendentes para uma retomada com uma conta que tenha acesso.`,
+    });
+  }
+
   private async updateCatalog(run: ActiveRun, gateway: HunitGateway): Promise<HunitHotel[]> {
     const catalog = await gateway.listHotels();
-    await saveCatalog(this.options.db, catalog, this.now());
+    await saveCatalog(this.options.db, run.accountKey, catalog, this.now());
     await this.options.events.publish({
       executionId: run.executionId,
       type: 'catalog_updated',

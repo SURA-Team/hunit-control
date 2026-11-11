@@ -271,6 +271,7 @@ export interface components {
         Hotel: {
             code: string;
             name: string;
+            /** @description true enquanto alguma conta do Hunit acessar o hotel (FR-008) */
             available: boolean;
             /** Format: date-time */
             lastSeenAt: string;
@@ -327,7 +328,7 @@ export interface components {
             /** Format: date-time */
             at: string;
             /** @enum {string} */
-            type: "status_changed" | "catalog_updated" | "hotel_started" | "page_done" | "reservation_classified" | "hotel_completed" | "hotel_failed" | "evidence_recorded";
+            type: "status_changed" | "catalog_updated" | "hotel_started" | "page_done" | "reservation_classified" | "hotel_completed" | "hotel_failed" | "evidence_recorded" | "warning";
             status?: components["schemas"]["ExecutionStatus"];
             hotelCode?: string | null;
             reservationNumber?: string | null;

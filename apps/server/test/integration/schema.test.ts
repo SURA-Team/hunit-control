@@ -76,6 +76,7 @@ describe('migrations (T012)', () => {
     `);
 
     expect(result.rows.map((row) => row.table_name)).toEqual([
+      'account_hotels',
       'api_clients',
       'evidence',
       'execution_events',

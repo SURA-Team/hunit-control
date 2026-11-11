@@ -578,3 +578,140 @@ describe('retomada (FR-023, SC-007)', () => {
     ).rejects.toBeInstanceOf(ExecutionNotFoundError);
   });
 });
+
+describe('contas do Hunit com acesso a hotéis diferentes (FR-008, FR-009a)', () => {
+  /** Duas contas: X acessa A e B; Y só acessa A. */
+  async function twoAccounts() {
+    const [a, b] = codes('A', 'B') as [string, string];
+    const x = credentials();
+    const y = credentials();
+    const h = await harness({
+      scenario: {
+        hotels: [hotelWithReservations(a), hotelWithReservations(b)],
+        accessByUsername: { [x.username]: [a, b], [y.username]: [a] },
+      },
+    });
+    return { h, a, b, x, y };
+  }
+
+  async function runToEnd(
+    h: RunnerHarness,
+    input: Parameters<RunnerHarness['runner']['start']>[0],
+  ): Promise<string> {
+    const execution = await h.runner.start(input);
+    await sendTokenWhenAsked(h, execution.id);
+    await h.runner.whenFinished(execution.id);
+    return execution.id;
+  }
+
+  async function warnings(executionId: string) {
+    const rows = await database.db
+      .select()
+      .from(executionEvents)
+      .where(and(eq(executionEvents.executionId, executionId), eq(executionEvents.type, 'warning')))
+      .orderBy(executionEvents.id);
+    return rows;
+  }
+
+  it('hotel que a conta não acessa, mas outra acessa, fica pendente com aviso; a execução conclui', async () => {
+    const { h, a, b, x, y } = await twoAccounts();
+    // A conta X roda antes: o sistema passa a saber que o hotel B existe e é acessível.
+    await runToEnd(h, startInput(clientId, { credentials: x, hotelCodes: null }));
+
+    const executionId = await runToEnd(
+      h,
+      startInput(clientId, { credentials: y, hotelCodes: [a, b] }),
+    );
+
+    expect(await executionRow(executionId)).toMatchObject({ status: 'completed', endReason: null });
+    const runs = await listExecutionHotels(database.db, executionId);
+    expect(runs.find((run) => run.hotelCode === a)).toMatchObject({ status: 'completed' });
+    expect(runs.find((run) => run.hotelCode === b)).toMatchObject({
+      status: 'pending',
+      startedAt: null,
+      failureReason: expect.stringContaining('não tem acesso') as unknown,
+    });
+    expect((await warnings(executionId)).map((event) => event.hotelCode)).toEqual([b]);
+    // O hotel B nem foi consultado com a conta Y.
+    const sessionOfY = h.hunit.sessions.length;
+    expect(
+      h.hunit
+        .callsTo('searchReservations')
+        .filter((call) => call.session === sessionOfY)
+        .map((call) => call.hotelCode),
+    ).toEqual([a]);
+  });
+
+  it('a retomada com a conta que tem acesso processa o hotel pendente', async () => {
+    const { h, a, b, x, y } = await twoAccounts();
+    await runToEnd(h, startInput(clientId, { credentials: x, hotelCodes: null }));
+    const withY = await runToEnd(h, startInput(clientId, { credentials: y, hotelCodes: [a, b] }));
+
+    const resumed = await resumeExecution(
+      { db: database.db, runner: h.runner },
+      { executionId: withY, clientId, credentials: x },
+    );
+    expect(resumed.requestedHotelCodes).toEqual([b]);
+    await sendTokenWhenAsked(h, resumed.id);
+    await h.runner.whenFinished(resumed.id);
+
+    expect(await hotelStatuses(resumed.id)).toEqual({ [b]: 'completed' });
+    expect(await reservationNumbers(b)).toEqual([`${b}-1`, `${b}-2`]);
+  });
+
+  it('avisa antes do token quando a última leitura da conta já mostra que ela não acessa o hotel', async () => {
+    const { h, a, b, x, y } = await twoAccounts();
+    await runToEnd(h, startInput(clientId, { credentials: x, hotelCodes: null }));
+    // A conta Y já rodou uma vez: o catálogo dela é conhecido (só A).
+    await runToEnd(h, startInput(clientId, { credentials: y, hotelCodes: [a] }));
+
+    const execution = await h.runner.start(
+      startInput(clientId, { credentials: y, hotelCodes: [a, b] }),
+    );
+    await vi.waitFor(async () =>
+      expect((await executionRow(execution.id)).status).toBe('awaiting_2fa'),
+    );
+
+    // O aviso sai antes do token e cita o hotel; a execução segue normalmente.
+    const early = await warnings(execution.id);
+    expect(early).toHaveLength(1);
+    expect(early[0]?.message).toContain(b);
+    expect(early[0]?.hotelCode).toBeNull();
+
+    await sendTokenWhenAsked(h, execution.id);
+    await h.runner.whenFinished(execution.id);
+    expect(await hotelStatuses(execution.id)).toEqual({ [a]: 'completed', [b]: 'pending' });
+  });
+
+  it('conta nunca vista: sem aviso antecipado', async () => {
+    const { h, a, b, x, y } = await twoAccounts();
+    await runToEnd(h, startInput(clientId, { credentials: x, hotelCodes: null }));
+
+    const execution = await h.runner.start(
+      startInput(clientId, { credentials: y, hotelCodes: [a, b] }),
+    );
+    await vi.waitFor(async () =>
+      expect((await executionRow(execution.id)).status).toBe('awaiting_2fa'),
+    );
+
+    expect(await warnings(execution.id)).toEqual([]);
+    await h.runner.cancel(execution.id, clientId);
+    await h.runner.whenFinished(execution.id);
+  });
+
+  it('hotel que nenhuma conta conhecida acessa continua com falha', async () => {
+    const { h, a, x } = await twoAccounts();
+    const orphan = await insertHotel(database.db);
+
+    const executionId = await runToEnd(
+      h,
+      startInput(clientId, { credentials: x, hotelCodes: [a, orphan.code] }),
+    );
+
+    expect(await hotelStatuses(executionId)).toEqual({
+      [a]: 'completed',
+      [orphan.code]: 'failed',
+    });
+    expect(await warnings(executionId)).toEqual([]);
+  });
+});

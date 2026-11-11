@@ -514,7 +514,9 @@ components:
       properties:
         code: { type: string }
         name: { type: string }
-        available: { type: boolean }
+        available:
+          type: boolean
+          description: true enquanto alguma conta do Hunit acessar o hotel (FR-008)
         lastSeenAt: { type: string, format: date-time }
 
     ExecutionSummary:
@@ -595,6 +597,7 @@ components:
             - hotel_completed
             - hotel_failed
             - evidence_recorded
+            - warning
         status: { $ref: '#/components/schemas/ExecutionStatus' }
         hotelCode: { type: [string, 'null'] }
         reservationNumber: { type: [string, 'null'] }

@@ -71,6 +71,11 @@ export interface FakeScenario {
   /** Erro lançado por `submitToken`, qualquer que seja o token. */
   tokenError?: Error;
   hotels?: FakeHotel[];
+  /**
+   * Hotéis que cada usuário acessa (contas com acessos diferentes, FR-009a). Usuário fora da
+   * lista acessa todos os hotéis do roteiro.
+   */
+  accessByUsername?: Record<string, readonly string[]>;
   listHotelsError?: Error;
 }
 
@@ -276,6 +281,8 @@ type SessionState = 'new' | 'awaiting_token' | 'authenticated';
 
 export class FakeHunitGateway implements HunitGateway {
   private state: SessionState = 'new';
+  /** Usuário que fez login nesta sessão (decide o catálogo, `accessByUsername`). */
+  private username: string | null = null;
   private isClosed = false;
   private rejectPending: (error: Error) => void = () => undefined;
   private readonly closedSignal: Promise<never>;
@@ -303,6 +310,7 @@ export class FakeHunitGateway implements HunitGateway {
       const outcome = this.hunit.scenario.login ?? 'two_factor_required';
       if (outcome instanceof Error) throw outcome;
 
+      this.username = credentials.username;
       this.state = outcome === 'authenticated' ? 'authenticated' : 'awaiting_token';
       return outcome;
     });
@@ -326,10 +334,12 @@ export class FakeHunitGateway implements HunitGateway {
     return this.run({ method: 'listHotels' }, () => {
       this.requireAccess('listHotels');
 
-      const { listHotelsError, hotels = [] } = this.hunit.scenario;
+      const { listHotelsError, hotels = [], accessByUsername } = this.hunit.scenario;
       if (listHotelsError) throw listHotelsError;
 
-      return hotels.map((hotel) => ({
+      const access = this.username === null ? undefined : accessByUsername?.[this.username];
+      const visible = access ? hotels.filter((hotel) => access.includes(hotel.code)) : hotels;
+      return visible.map((hotel) => ({
         code: hotel.code,
         name: hotel.name ?? `Hotel ${hotel.code}`,
       }));

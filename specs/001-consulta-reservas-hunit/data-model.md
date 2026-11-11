@@ -10,7 +10,7 @@ Nenhuma tabela armazena senha, token 2FA, usuário do Hunit ou sessão do Hunit 
 ```text
 api_clients 1───* executions *───1 (account_key)
                      │ 1
-                     ├───* execution_hotels *───1 hotels
+                     ├───* execution_hotels *───1 hotels *───* (account_key)  via account_hotels
                      ├───* execution_events
                      ├───* reservation_observations *───1 reservations
                      └───* evidence
@@ -49,7 +49,20 @@ executions 0..1───* executions   (retomada: parent_execution_id)
 | `code` | text PK | identificador do hotel no Hunit |
 | `name` | text | |
 | `first_seen_at` / `last_seen_at` | timestamptz | atualizados a cada leitura do catálogo |
-| `available` | boolean | `false` se não apareceu no último catálogo lido |
+| `available` | boolean | `true` enquanto alguma conta o acessar (existe linha em `account_hotels`) |
+
+### account_hotels — Catálogo de cada conta do Hunit (FR-008, FR-009a)
+
+Contas diferentes podem acessar hotéis diferentes (research R-19).
+
+| Campo | Tipo | Regras |
+|---|---|---|
+| `account_key` + `hotel_code` | PK composta | `account_key` = mesmo HMAC de `executions` (R-11); `hotel_code` FK `hotels` |
+| `last_seen_at` | timestamptz | última leitura do catálogo da conta que trouxe o hotel |
+
+- A cada leitura do catálogo de uma conta: inclui ou atualiza os hotéis lidos, remove os da conta
+  que não vieram, e recalcula `hotels.available` — tudo na mesma transação.
+- Conta sem linhas = catálogo ainda desconhecido (nunca rodou): não há aviso antecipado.
 
 ### executions — Execução (FR-001 a FR-006, FR-021 a FR-023)
 
@@ -92,6 +105,9 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
   `parent_execution_id`, research R-19).
 - Cancelamento (FR-022): os hotéis em andamento ficam `cancelled` sem gravar; os pendentes
   continuam `pending`, para a retomada.
+- Hotel pedido fora do catálogo da conta usada, mas acessado por outra conta conhecida (FR-009a):
+  fica `pending` com `failure_reason` preenchido e não entra na estimativa de tempo; a execução
+  pode terminar `completed` com ele pendente. Hotel que nenhuma conta conhecida acessa: `failed`.
 
 ### execution_hotels — Processamento de hotel (FR-019, FR-021)
 

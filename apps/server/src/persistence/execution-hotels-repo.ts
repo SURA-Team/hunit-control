@@ -120,6 +120,22 @@ export async function finishExecutionHotelWithoutResults(
     .where(where(executionId, hotelCode));
 }
 
+/**
+ * Deixa o hotel pendente, com o motivo, sem consultá-lo: a conta usada não o acessa, mas outra
+ * conta acessa; uma retomada com essa conta o processa (FR-009a).
+ */
+export async function leaveExecutionHotelPending(
+  db: Database,
+  executionId: string,
+  hotelCode: string,
+  reason: string,
+): Promise<void> {
+  await db
+    .update(executionHotels)
+    .set({ status: 'pending', failureReason: reason })
+    .where(where(executionId, hotelCode));
+}
+
 /** Médias de tempo das execuções anteriores (research R-08a). */
 export interface TimingHistoryRow {
   secondsPerReservation: number | null;

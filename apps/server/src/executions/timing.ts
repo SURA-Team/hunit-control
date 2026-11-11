@@ -18,6 +18,11 @@ export interface HotelTiming {
   reservationsSeen: number;
   /** Reservas efetivamente abertas: as "258-" não são abertas e não entram na média. */
   reservationsOpened: number;
+  /**
+   * Hotel pendente com motivo = deixado para outra conta (FR-009a): não será processado nesta
+   * execução e não entra na estimativa.
+   */
+  failureReason: string | null;
 }
 
 /** Médias das execuções anteriores, usadas enquanto a execução ainda não mediu nada. */
@@ -102,7 +107,9 @@ export function estimateRemainingSeconds(input: TimingInput): number | null {
   const perHotel = averageSecondsPerHotel(hotels) ?? input.history.secondsPerHotel;
 
   const running = hotels.filter((hotel) => hotel.status === 'running');
-  const pending = hotels.filter((hotel) => hotel.status === 'pending').length;
+  const pending = hotels.filter(
+    (hotel) => hotel.status === 'pending' && hotel.failureReason === null,
+  ).length;
 
   let work = 0;
   for (const hotel of running) {
