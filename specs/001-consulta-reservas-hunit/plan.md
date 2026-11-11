@@ -98,7 +98,7 @@ package.json                 # scripts raiz (build, typecheck, lint, test)
 pnpm-workspace.yaml          # pacotes + política de dependências (idade mínima, scripts de instalação)
 tsconfig.base.json           # opções comuns do TypeScript
 eslint.config.js             # lint + regra de pureza do domínio (princípio II)
-vitest.config.ts             # um projeto de teste por pacote
+vitest.config.ts             # projetos de teste: domain, contracts, server, server-browser, server-db
 docker-compose.yml           # server + db, volumes pgdata e evidence
 .env.example                 # variáveis (sem segredos reais)
 
@@ -117,10 +117,14 @@ packages/
 apps/
 └── server/
     ├── Dockerfile               # FROM mcr.microsoft.com/playwright:<mesma versão do pacote>
+    ├── drizzle.config.ts        # geração de migrations (pnpm --filter @hunit/server db:generate)
+    ├── scripts/                 # apoio ao build (copia as migrations para dist/)
     ├── src/
     │   ├── main.ts              # bootstrap: config, banco, rotinas, HTTP
     │   ├── cli.ts               # create-client / revoke-client (chaves de API)
     │   ├── config.ts            # leitura e validação das variáveis de ambiente
+    │   ├── logging.ts           # logger JSON sem dados sensíveis (R-12)
+    │   ├── secrets.ts           # registro em memória dos segredos em uso (R-12)
     │   ├── http/                # rotas (handlers do openapi-glue), auth por chave/nível, SSE, erros RFC 9457
     │   ├── executions/          # runner: máquina de estados, 2FA, cancelamento, retomada, eventos
     │   ├── hunit/               # CAMADA DO HUNIT — único lugar com seletores/URLs/textos/requisições do Hunit
@@ -140,11 +144,14 @@ apps/
     │   ├── evidence/            # captura com máscara, sanitização do HTML, armazenamento
     │   └── maintenance/         # rotina diária: expirar evidências, anonimizar reservas (FR-025–027)
     └── test/
+        ├── helpers/             # banco de testes, Hunit simulado, verificador de contrato, logs em memória
         ├── fixtures/hunit/      # HTML (login/2FA) e JSON (API) anonimizados (R-13/R-13a)
-        ├── hunit/               # testes de Page Objects e leitores da API contra fixtures
-        ├── contract/            # respostas validadas contra openapi.yaml
-        ├── integration/         # runner + banco (Testcontainers) com Hunit simulado por fixtures
-        └── security/            # SC-004: credenciais nunca em logs/evidências
+        ├── unit/                # sem dependências externas (projeto "server")
+        ├── browser/             # abrem o Chromium (projeto "server-browser")
+        ├── hunit/               # Page Objects e leitores da API contra fixtures (projeto "server-browser")
+        ├── contract/            # respostas validadas contra openapi.yaml (projeto "server-db")
+        ├── integration/         # executor + banco (Testcontainers) com o Hunit simulado (projeto "server-db")
+        └── security/            # SC-004: credenciais nunca em logs/evidências (projeto "server-db")
 
 # Futuro (fora desta feature): apps/desktop (Electron), consumindo packages/contracts
 ```

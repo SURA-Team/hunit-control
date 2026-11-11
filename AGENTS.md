@@ -77,6 +77,13 @@ Não altere nada dentro de `legacy/`. O histórico completo está em
   de erro.
 - Fixtures HTML do Hunit usadas em testes devem ser **anonimizadas** antes do commit.
 - Antes de cada commit, confira `git diff --cached --name-only` em busca de arquivos sensíveis.
+- No servidor há duas proteções que não podem ser contornadas:
+  - `apps/server/src/secrets.ts` (`SecretRegistry`): todo código que recebe usuário, senha ou
+    token do Hunit registra esses valores enquanto os usa; logs, evidências e eventos apagam
+    qualquer ocorrência deles antes de gravar.
+  - `apps/server/src/hunit/read-only-guard.ts`: toda requisição ao Hunit passa por ela. Só as
+    rotas de leitura da lista de permissão são aceitas; rotas de cobrança, cartão e alteração
+    são bloqueadas. Uma rota nova só entra na lista com teste e registro em `research.md`.
 
 ## Hunit (sistema externo)
 
@@ -96,16 +103,24 @@ Pré-requisitos: Node.js 24 LTS ou mais novo, pnpm na versão do campo `packageM
 `npm install -g pnpm@<versão do packageManager>` (hoje `pnpm@12.18.0`). Com permissão de
 administrador, `corepack enable` também funciona.
 
+Os testes precisam de mais duas coisas: o **Docker em execução** (os testes de banco sobem um
+PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tabela).
+
 | Comando | O que faz |
 |---|---|
 | `pnpm install` | Instala as dependências do monorepo |
+| `pnpm --filter @hunit/server exec playwright install chromium` | Instala o Chromium usado nos testes (uma vez, e de novo quando a versão do Playwright mudar) |
 | `pnpm typecheck` | Checa os tipos de todos os pacotes |
 | `pnpm lint` | ESLint + Prettier + lint do contrato OpenAPI (falha se os tipos gerados estiverem desatualizados) |
 | `pnpm format` | Formata o código com o Prettier |
-| `pnpm test` | Roda os testes (Vitest). Um pacote só: `pnpm test --project domain` (ou `contracts`, `server`) |
+| `pnpm test` | Roda todos os testes (Vitest) |
+| `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker) |
 | `pnpm build` | Compila os pacotes para `dist/` |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
+| `pnpm --filter @hunit/server db:generate --name=<descrição>` | Gera uma migration depois de mudar `apps/server/src/persistence/schema.ts` (não precisa de banco) |
 | `docker compose up -d --build` | Sobe `server` e `db` (antes, copie `.env.example` para `.env` e preencha) |
+| `docker compose exec server node dist/cli.js create-client --name <nome> --role <operator\|reader>` | Cadastra um cliente da API e mostra a chave dele, uma única vez |
+| `docker compose exec server node dist/cli.js revoke-client --name <nome>` | Revoga um cliente: a chave deixa de ser aceita |
 
 Regras ao mexer em dependências e no contrato:
 
@@ -117,6 +132,10 @@ Regras ao mexer em dependências e no contrato:
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para `specs/001-consulta-reservas-hunit/contracts/openapi.yaml`
   — as duas cópias devem ficar idênticas.
+- Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
+  `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 
-Ainda não existem: comando para rodar o servidor em desenvolvimento, criação de clientes da API
-(`create-client`) e o Electron. Documente aqui quando forem criados.
+O servidor ainda não responde requisições de verdade (o `main.ts` é montado na Fase 3 da
+feature 001), então por enquanto o `docker compose up` só serve para o banco e para o CLI de
+clientes. Ainda não existem: comando para rodar o servidor em desenvolvimento e o Electron.
+Documente aqui quando forem criados.

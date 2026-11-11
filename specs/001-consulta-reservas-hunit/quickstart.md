@@ -8,7 +8,10 @@ durante a implementação; mantenha este arquivo atualizado.
 
 ## Pré-requisitos
 
-- Docker Desktop (com Docker Compose) e Node.js 24 LTS + pnpm (`corepack enable`).
+- Docker Desktop (com Docker Compose) e Node.js 24 LTS + pnpm (`npm install -g pnpm@<versão do
+  campo packageManager>`).
+- Para os testes: o Docker em execução (banco de testes) e o Chromium do Playwright
+  (`pnpm --filter @hunit/server exec playwright install chromium`, uma vez).
 - Fixtures anonimizadas do Hunit em `apps/server/test/fixtures/hunit/`: HTML das telas de login/token e JSON das respostas da API (research R-13/R-13a).
 - Para os cenários reais: uma conta do Hunit e o aplicativo autenticador do 2FA.
 

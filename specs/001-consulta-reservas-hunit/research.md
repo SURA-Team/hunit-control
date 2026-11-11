@@ -49,6 +49,13 @@ até serem confirmados (ver R-13).
   partir do contrato garante que servidor, Electron e Sura vejam o mesmo formato.
 - **Alternatives considered**: code-first com TypeBox/zod gerando o OpenAPI (o contrato vira
   subproduto do código, invertendo a fonte da verdade); NestJS (estrutura pesada para o escopo).
+- **Atualização 2026-11-11 (implementação da Fase 2)**: ajustes no contrato exigidos pela
+  implementação — código de erro `internal_error` (falha inesperada, 500; operação ainda não
+  implementada, 501; banco indisponível em `/health`, 503); resposta 400 declarada em todas as
+  operações com parâmetros; corpo `problem+json` no 410. O servidor só aceita corpo em
+  `application/json` e recusa campos desconhecidos em vez de descartá-los em silêncio: qualquer
+  requisição fora do contrato vira `400 validation_error`, com uma mensagem que cita o campo e a
+  regra, nunca o valor enviado. A autenticação acontece antes de o corpo ser lido.
 
 ## R-04 — Acompanhamento em tempo real (SC-005: aviso de token em até 5 s)
 
@@ -68,6 +75,12 @@ até serem confirmados (ver R-13).
   as consultas e gera migrations revisáveis.
 - **Alternatives considered**: Prisma (engine própria, menos controle do SQL, imagem maior);
   Kysely (ótimo, mas sem ferramenta de migration integrada); SQL puro (sem tipos).
+- **Atualização 2026-11-11 (implementação da Fase 2)**: as migrations ficam em
+  `apps/server/src/persistence/migrations/` e são aplicadas pelo próprio servidor (e pelo CLI) ao
+  iniciar, sob um bloqueio no banco (`pg_advisory_lock`), para que dois processos não as apliquem
+  ao mesmo tempo. O build copia os arquivos SQL para `dist/`. Para gerar uma migration depois de
+  mudar o schema: `pnpm --filter @hunit/server db:generate --name=<descrição>` (não precisa de
+  banco).
 
 ## R-06 — Isolamento do Hunit e regras de classificação
 
@@ -144,6 +157,10 @@ até serem confirmados (ver R-13).
   cliente; nenhuma chave em texto puro no banco.
 - **Alternatives considered**: OAuth2 client credentials (exige provedor de identidade — fora do
   escopo); JWT próprio (complexidade de emissão/rotação sem benefício agora).
+- **Atualização 2026-11-11 (implementação da Fase 2)**: a chave tem o formato
+  `hunit_<43 caracteres>` (256 bits aleatórios). O nome do cliente aceita de 2 a 50 caracteres
+  entre letras minúsculas, números, "-" e "_", porque aparece em logs e respostas. Toda linha de
+  log de uma requisição autenticada leva o nome do cliente (auditoria da FR-007).
 
 ## R-11 — Identificação da conta do Hunit sem guardar credenciais (FR-006)
 
@@ -165,6 +182,22 @@ até serem confirmados (ver R-13).
   - teste automatizado de SC-004: roda o fluxo contra fixtures com senha/token conhecidos e procura
     essas strings em todos os logs e evidências gerados.
 - **Rationale**: defesa em camadas; o teste transforma SC-004 em verificação contínua.
+- **Atualização 2026-11-11 (implementação da Fase 2)** — as camadas ficaram assim:
+  1. `redact` do Pino para campos com nome sensível (senha, token, autorização, credenciais e o
+     corpo das requisições);
+  2. **registro de segredos em uso** (`apps/server/src/secrets.ts`): usuário, senha e token ficam
+     registrados em memória enquanto a execução precisa deles, e todo texto que o servidor grava
+     (linhas de log, HTML e respostas das evidências, mensagens de eventos, motivo das evidências)
+     tem essas ocorrências trocadas por `[REDACTED]`, inclusive quando escritas como JSON, HTML ou
+     URL. Cobre o caso que o `redact` não alcança: uma biblioteca citar a senha numa mensagem de
+     erro;
+  3. erros de banco são registrados sem os valores das linhas (o PostgreSQL e o Drizzle repetem
+     os dados da linha na mensagem, o que levaria nomes de hóspedes para o log);
+  4. as capturas de tela cobrem os campos de entrada **e** os textos sensíveis informados pela
+     camada do Hunit (a tela do token mostra o usuário por extenso). O HTML passa pelo sanitizador
+     na captura e de novo na gravação.
+
+  Testes no Chromium conferem, pixel a pixel, que as áreas cobertas saem pretas na captura.
 
 ## R-13 — Mapeamento da interface atual do Hunit — **Login e 2FA mapeados (faltam telas de erro)**
 
@@ -356,7 +389,17 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
 - **A verificar no primeiro acesso real autorizado (T022)**: código de `DateTypeId` para Check-in
   (o padrão da tela foi 1; o legado usava 2); código de `CollectTypeId` para Canal Collect; se
   `X-Company-Id` basta para trocar de hotel sem `SelectCompany` e se dois hotéis podem ser lidos em
-  paralelo (R-08); `PageSize` máximo aceito e limite de período (R-09).
+  paralelo (R-08); `PageSize` máximo aceito e limite de período (R-09); rota de retorno do login
+  no `hunit-api` (ver o item seguinte).
+- **Proteção de somente leitura (implementada na Fase 2, T045)**:
+  `apps/server/src/hunit/read-only-guard.ts`. O cliente da API do sistema só faz GET nas 4 rotas
+  permitidas, no endereço exato da API. A página do navegador só alcança o `hunit-api` nas rotas
+  do login; o resto é abortado antes de sair da máquina, inclusive as chamadas que a tela do
+  Hunit dispara sozinha depois do login e as conexões em tempo real. A lista de bloqueio
+  reconhece as ações perigosas pelo nome, com qualquer método e em qualquer grafia (maiúsculas,
+  `%xx`, barras repetidas), e é conferida antes de qualquer permissão. A rota de retorno do login
+  ainda não foi observada: está liberada provisoriamente como `/signin-oidc` (o padrão desse tipo
+  de login). Se estiver errada, o login falha e o bloqueio informa a rota pedida.
 
 ## R-14 — Testes
 
@@ -374,6 +417,13 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
   checagem de tipos, `@hunit/domain` e `@hunit/contracts` são lidos direto do código-fonte (alias
   no Vitest, `paths` no `tsconfig.json` do servidor), sem depender de build; só o build de
   produção usa os `dist`.
+- **Atualização 2026-11-11 (implementação da Fase 2)**: os testes do servidor ficam em três
+  projetos do Vitest — `server` (unidade, sem dependências externas), `server-browser` (abre o
+  Chromium; exige `playwright install chromium`) e `server-db` (PostgreSQL real via
+  Testcontainers; exige o Docker em execução). Um container PostgreSQL atende a rodada inteira e
+  cada arquivo de teste usa um banco próprio, então os arquivos rodam em paralelo sem
+  interferência. O verificador de contrato usado nos testes tem os seus próprios testes, para
+  garantir que ele acusa respostas fora do contrato.
 
 ## R-15 — Gravação por hotel e histórico (FR-017 a FR-019)
 
@@ -392,6 +442,10 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
   evita infraestrutura de agendamento extra.
 - **Alternatives considered**: armazenar binários no Postgres (banco cresce rápido); object storage
   S3/MinIO (container extra sem necessidade agora).
+- **Atualização 2026-11-11 (implementação da Fase 2)**: arquivos em
+  `<EVIDENCE_DIR>/<execução>/<evidência>.png|.html|.json`. Se o registro no banco falhar, os
+  arquivos já gravados são removidos (sem o registro, a rotina de limpeza nunca os acharia).
+  Quando a captura não obtém nada (página já fechada), nenhuma evidência é gravada.
 
 ## R-17 — Datas e valores
 
