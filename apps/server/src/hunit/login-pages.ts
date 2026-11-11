@@ -75,15 +75,21 @@ export class LoginPage {
 }
 
 /**
- * Tela do token de verificação em duas etapas (research R-13): rótulo "Código de uso único". A
- * tela mostra o usuário por extenso; quem capturar evidência dela deve informá-lo como texto
- * sensível.
+ * Rótulo do campo do token. No primeiro login real (2026-11-11) a tela mostrou "Código do
+ * Autenticador"; o HAR anterior tinha "Código de uso único" (o Keycloak muda o texto conforme a
+ * configuração). Os dois são aceitos.
+ */
+const TOKEN_FIELD_LABEL = /^\s*(código do autenticador|código de uso único)\s*$/i;
+
+/**
+ * Tela do token de verificação em duas etapas (research R-13). A tela mostra o usuário por
+ * extenso; quem capturar evidência dela deve informá-lo como texto sensível.
  */
 export class TwoFactorPage {
   constructor(private readonly page: Page) {}
 
   get tokenField(): Locator {
-    return this.page.getByLabel('Código de uso único', { exact: true });
+    return this.page.getByLabel(TOKEN_FIELD_LABEL);
   }
 
   async isShown(): Promise<boolean> {

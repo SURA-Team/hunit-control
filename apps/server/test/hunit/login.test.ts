@@ -93,6 +93,17 @@ describe('Page Objects de login e token contra as fixtures', () => {
     expect(await failed.twoFactor.isShowingError()).toBe(true);
   });
 
+  it('aceita também o rótulo "Código de uso único" na tela do token', async () => {
+    await page.setContent(
+      readHtmlFixture('two-factor.html', { action: '#', username: USERNAME }).replace(
+        'Código do Autenticador',
+        'Código de uso único',
+      ),
+    );
+
+    expect(await new TwoFactorPage(page).isShown()).toBe(true);
+  });
+
   it('reconhece a página de login expirado', async () => {
     await show('page-expired.html');
     expect(await isLoginExpiredPage(page)).toBe(true);

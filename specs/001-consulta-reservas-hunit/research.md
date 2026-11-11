@@ -226,7 +226,7 @@ SSO **Keycloak** (OpenID Connect com PKCE) em `login.hsystem.com.br`, realm `hsy
    conta"): `form#kc-form-login`; label **"Endereço de e-mail"** → `input#username`; label
    **"Senha"** → `input#password`; botão de envio `input#kc-login`.
 3. `POST …/login-actions/authenticate` (form urlencoded) → **tela do token**:
-   `form#kc-otp-login-form`; label **"Código de uso único"** → `input#otp`; envio `input#kc-login`;
+   `form#kc-otp-login-form`; label **"Código do Autenticador"** no login real de 2026-11-11 (o HAR mostrava "Código de uso único"; os dois são aceitos) → `input#otp`; envio `input#kc-login`;
    `#kc-attempted-username` mostra o e-mail digitado (dado pessoal — anonimizar em fixtures).
 4. Após o token, o Keycloak devolve o código ao `hunit-api` (callback OIDC), que cria os cookies de
    sessão e redireciona para o SPA. **Não capturado** (o DevTools limpa o HAR na navegação).
