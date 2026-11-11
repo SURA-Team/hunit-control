@@ -587,3 +587,96 @@ describe('somente leitura (FR-012)', () => {
     );
   });
 });
+
+describe('hotéis em paralelo (T063, research R-08)', () => {
+  it.each([
+    [1, 1],
+    [2, 2],
+    [5, 4], // nunca mais hotéis ao mesmo tempo do que hotéis na execução
+  ])('HOTEL_CONCURRENCY=%i → no máximo %i hotéis ao mesmo tempo', async (concurrency, expected) => {
+    const codes = ['a', 'b', 'c', 'd'].map((suffix) => `N${concurrency}${suffix}`);
+    const h = await harness({
+      hotelConcurrency: concurrency,
+      scenario: {
+        hotels: codes.map((code) => ({
+          code,
+          reservations: [reservation(`${code}-1`), reservation(`${code}-2`)],
+        })),
+      },
+    });
+    const inFlight = new Set<string>();
+    let maxInFlight = 0;
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    h.hunit.before('readReservation', async (call) => {
+      inFlight.add(call.hotelCode);
+      // Barreira: espera os outros hotéis permitidos chegarem (com prazo, para os últimos da
+      // fila, que ficam sozinhos). Se o limite fosse desrespeitado, mais hotéis chegariam aqui.
+      const deadline = Date.now() + 1_000;
+      while (inFlight.size < expected && Date.now() < deadline) await sleep(5);
+      maxInFlight = Math.max(maxInFlight, inFlight.size);
+      await sleep(10);
+      inFlight.delete(call.hotelCode);
+    });
+
+    const execution = await run(h);
+
+    expect(execution.status).toBe('completed');
+    expect(maxInFlight).toBe(expected);
+    for (const code of codes) {
+      expect(await reservationsOf(code)).toHaveLength(2);
+      expect(await hotelRun(execution.id, code)).toMatchObject({ status: 'completed' });
+    }
+  });
+
+  it('sessão expirada num hotel interrompe o outro em andamento; o não iniciado fica pendente', async () => {
+    const h = await harness({
+      hotelConcurrency: 2,
+      scenario: {
+        hotels: [
+          { code: 'S1', reservations: [reservation('S1-a')] },
+          { code: 'S2', reservations: [reservation('S2-a'), reservation('S2-b')] },
+          { code: 'S3', reservations: [reservation('S3-a')] },
+        ],
+      },
+    });
+    let s2Started: () => void = () => undefined;
+    const s2Reading = new Promise<void>((resolve) => {
+      s2Started = resolve;
+    });
+    h.hunit.before('readReservation', async (call) => {
+      if (call.bookingId === 'booking-S1-a') {
+        await s2Reading; // garante que os dois hotéis estão em andamento
+        throw new SessionExpiredError();
+      }
+      if (call.bookingId === 'booking-S2-a') {
+        s2Started();
+        // Só responde depois que o S1 foi encerrado pela sessão expirada.
+        await vi.waitFor(
+          async () => {
+            const [row] = await database.db
+              .select({ status: executionHotels.status })
+              .from(executionHotels)
+              .where(eq(executionHotels.hotelCode, 'S1'));
+            expect(row?.status).toBe('failed');
+          },
+          { timeout: 5_000, interval: 10 },
+        );
+      }
+    });
+
+    const execution = await run(h);
+
+    expect(execution).toMatchObject({ status: 'failed', endReason: 'session_expired' });
+    // O S2 parou antes da próxima reserva e não gravou nada.
+    expect(h.hunit.callsTo('readReservation').map((call) => call.bookingId)).not.toContain(
+      'booking-S2-b',
+    );
+    for (const code of ['S1', 'S2', 'S3']) expect(await reservationsOf(code)).toEqual([]);
+    const runs = await listExecutionHotels(database.db, execution.id);
+    expect(runs.map((row) => [row.hotelCode, row.status])).toEqual([
+      ['S1', 'failed'],
+      ['S2', 'failed'],
+      ['S3', 'pending'],
+    ]);
+  });
+});

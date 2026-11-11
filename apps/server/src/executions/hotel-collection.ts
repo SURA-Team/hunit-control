@@ -54,6 +54,8 @@ export interface HotelCollectionContext {
   now: () => Date;
   /** Tamanho máximo de cada consulta ao Hunit, em dias (research R-09). */
   maxPeriodDays: number | null;
+  /** Hotéis processados ao mesmo tempo, com a mesma sessão (HOTEL_CONCURRENCY, research R-08). */
+  hotelConcurrency: number;
   /** Indica que a execução deve parar (ex.: servidor desligando). */
   isStopping: () => boolean;
 }
@@ -74,13 +76,15 @@ function endsExecution(error: unknown, context: HotelCollectionContext): boolean
 }
 
 /**
- * Percorre os hotéis da execução, um por vez (research R-08: o paralelismo só será ligado depois
- * de verificado no Hunit real), e grava cada hotel concluído (FR-009 a FR-019).
+ * Percorre os hotéis da execução, até `hotelConcurrency` ao mesmo tempo (research R-08,
+ * verificado no Hunit real), e grava cada hotel concluído na sua própria transação (FR-009 a
+ * FR-019).
  *
  * - Hotel com falha: evidência, hotel `failed` sem gravar reservas, e segue para o próximo (edge
  *   case "falha repetida em um hotel").
- * - Sessão expirada ou parada da execução: o hotel em andamento não grava nada e o erro sobe;
- *   os hotéis restantes ficam pendentes, para a retomada (FR-023).
+ * - Sessão expirada ou parada da execução: os hotéis em andamento param no próximo ponto de
+ *   checagem (antes de cada página e de cada reserva) sem gravar nada, e o erro sobe; os hotéis
+ *   não iniciados ficam pendentes, para a retomada (FR-023).
  */
 export async function collectHotels(
   context: HotelCollectionContext,
@@ -111,20 +115,43 @@ export async function collectHotels(
     });
   }
 
-  for (const hotelCode of requested.filter((code) => names.has(code))) {
-    if (context.isStopping()) throw new StopRequestedError();
-    const collected = await new HotelRun(
-      context,
-      hotelCode,
-      names.get(hotelCode) ?? hotelCode,
-    ).run();
-    if (collected === null) {
-      summary.failed += 1;
-    } else {
-      summary.completed += 1;
-      summary.reservations += collected;
+  // Fila de hotéis atendida por até `hotelConcurrency` hotéis ao mesmo tempo. O hotel vai em
+  // cada requisição ao Hunit, então todos compartilham a mesma sessão (research R-08).
+  const queue = requested.filter((code) => names.has(code));
+  /** Primeira falha que encerra a execução; faz os outros hotéis pararem no próximo ponto. */
+  let fatal: { error: unknown } | null = null;
+  const hotelContext: HotelCollectionContext = {
+    ...context,
+    isStopping: () => fatal !== null || context.isStopping(),
+  };
+
+  const worker = async (): Promise<void> => {
+    for (let hotelCode = queue.shift(); hotelCode !== undefined; hotelCode = queue.shift()) {
+      if (hotelContext.isStopping()) return;
+      try {
+        const collected = await new HotelRun(
+          hotelContext,
+          hotelCode,
+          names.get(hotelCode) ?? hotelCode,
+        ).run();
+        if (collected === null) {
+          summary.failed += 1;
+        } else {
+          summary.completed += 1;
+          summary.reservations += collected;
+        }
+      } catch (error) {
+        fatal ??= { error };
+        return;
+      }
     }
-  }
+  };
+  const workers = Math.max(1, Math.min(context.hotelConcurrency, queue.length));
+  await Promise.all(Array.from({ length: workers }, worker));
+
+  if (fatal) throw (fatal as { error: unknown }).error;
+  // Hotéis que nem começaram ficam `pending`, para a retomada (FR-023).
+  if (context.isStopping()) throw new StopRequestedError();
   return summary;
 }
 
@@ -193,6 +220,8 @@ class HotelRun {
       }
 
       for (const item of result.items) {
+        // Também entre reservas: outro hotel pode ter encerrado a execução (sessão expirada).
+        if (context.isStopping()) throw new StopRequestedError();
         if (this.records.has(item.reservationNumber)) continue;
         this.records.set(item.reservationNumber, await this.analyze(item));
       }

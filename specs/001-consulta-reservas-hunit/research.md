@@ -132,9 +132,13 @@ até serem confirmados (ver R-13).
 - **Resultado 2026-11-11 (Hunit real)**: a leitura simultânea da primeira página dos hotéis 3544
   e 4909 devolveu o mesmo que a leitura um por vez, sem `SelectCompany`. O hotel vai em cada
   requisição, não na sessão: **o paralelismo entre hotéis é viável** com um único login. Ainda
-  não medido: limite de requisições simultâneas do Hunit (erros 429/5xx com mais hotéis). Próximo
-  passo: o executor passar a usar `HOTEL_CONCURRENCY` (padrão 1), subindo aos poucos em
-  homologação.
+  não medido: limite de requisições simultâneas do Hunit (erros 429/5xx com mais hotéis).
+- **Implementado 2026-11-11 (T063)**: o executor usa `HOTEL_CONCURRENCY` (padrão 1). Os hotéis
+  saem de uma fila para até N trabalhadores com a mesma sessão; cada hotel continua gravado na
+  sua própria transação. Sessão expirada (ou parada) num hotel faz os outros em andamento
+  pararem antes da próxima página ou reserva, sem gravar; os não iniciados ficam pendentes para
+  a retomada. Na homologação, subir aos poucos (ex.: 1 → 3 → 5) medindo a duração da rotina
+  (SC-009) e observando erros 429/5xx, que hoje fazem só o hotel afetado falhar.
 - **Alternatives considered**: várias sessões com vários tokens (péssimo para o operador);
   paralelizar a abertura de reservas dentro do mesmo hotel (possível ganho, avaliar após medir o
   tempo do modo sequencial).

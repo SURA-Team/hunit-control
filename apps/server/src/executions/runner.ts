@@ -54,6 +54,8 @@ export interface ExecutionRunnerOptions {
   twoFactorTimeoutMs: number;
   /** Tamanho máximo de cada consulta ao Hunit, em dias; `null` = sem divisão (research R-09). */
   maxPeriodDays?: number | null;
+  /** Hotéis processados ao mesmo tempo (HOTEL_CONCURRENCY, research R-08). Padrão: 1. */
+  hotelConcurrency?: number;
   logger: Logger;
   /** Relógio; os testes podem informar um fixo. */
   now?: () => Date;
@@ -265,6 +267,7 @@ export class ExecutionRunner {
           logger: run.logger,
           now: this.now,
           maxPeriodDays: this.options.maxPeriodDays ?? null,
+          hotelConcurrency: this.options.hotelConcurrency ?? 1,
           isStopping: () => run.stopReason !== null,
         });
         const failed = summary.failed > 0 ? `, ${summary.failed} com falha` : '';

@@ -31,6 +31,8 @@ export interface RunnerHarnessOptions {
   twoFactorTimeoutMs?: number;
   /** Tamanho máximo de cada consulta ao Hunit, em dias (MAX_PERIOD_DAYS). */
   maxPeriodDays?: number | null;
+  /** Hotéis processados ao mesmo tempo (HOTEL_CONCURRENCY). Padrão: 1. */
+  hotelConcurrency?: number;
   /** Usa estes componentes em vez de criar novos (ex.: os da aplicação HTTP de teste). */
   secrets?: SecretRegistry;
   logs?: CapturedLogs;
@@ -61,6 +63,7 @@ export async function createRunnerHarness(
     accountKeySecret: TEST_ACCOUNT_KEY_SECRET,
     twoFactorTimeoutMs: options.twoFactorTimeoutMs ?? 60_000,
     maxPeriodDays: options.maxPeriodDays ?? null,
+    hotelConcurrency: options.hotelConcurrency ?? 1,
     logger: logs.logger,
   });
 
