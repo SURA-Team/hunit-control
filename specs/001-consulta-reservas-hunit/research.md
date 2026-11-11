@@ -312,10 +312,14 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
   de permissão (`GetCurrentUser`, `GetCurrentUserCompanies`, `GetBookings`, `BookingDetail`).
   Page Objects ficam restritos a login, 2FA e detecção de sessão. Fixtures de teste da coleta são
   **JSON anonimizado**.
-- **⚠️ Ponto em aberto (negócio)**: na amostra, as reservas com cartão e cobranças (`Success`/`Fail`)
-  eram todas **Hotel Collect** (`collectTypeId = 1`); a única "Canal Collect" aberta não tinha
-  cartão. O filtro da FR-010 ("Tipo coleta = Canal") precisa ser confirmado com o Financeiro antes
-  da implementação da busca.
+- **Tipo de coleta (resolvido 2026-11-11)**: a amostra do 3º HAR foi gravada sem o filtro de
+  coleta (por isso vieram reservas Hotel Collect com cobranças). O usuário confirmou: a automação
+  consulta **somente Canal Collect** (`collectTypeId = 2` na resposta; o código do filtro
+  `CollectTypeId` é confirmado no primeiro acesso real).
+- **A verificar no primeiro acesso real autorizado (T022)**: código de `DateTypeId` para Check-in
+  (o padrão da tela foi 1; o legado usava 2); código de `CollectTypeId` para Canal Collect; se
+  `X-Company-Id` basta para trocar de hotel sem `SelectCompany` e se dois hotéis podem ser lidos em
+  paralelo (R-08); `PageSize` máximo aceito e limite de período (R-09).
 
 ## R-14 — Testes
 

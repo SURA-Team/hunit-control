@@ -177,13 +177,13 @@ Não contém nome do hóspede (não precisa de anonimização).
 | `hotel_code`, `reservation_number` | text null | |
 | `kind` | `evidence_kind` | |
 | `reason` | text | |
-| `screenshot_path`, `html_path` | text | relativos ao volume `/data/evidence` |
+| `screenshot_path`, `html_path`, `response_path` | text null | relativos ao volume `/data/evidence`; pelo menos um preenchido. `response_path` = JSON da resposta do Hunit que não foi reconhecida (falhas da coleta pela rede) |
 | `created_at` | timestamptz | |
 | `expires_at` | timestamptz | `created_at + 30 dias`; removida pela rotina diária |
 
 ## Objeto de domínio (não persistido): `ReservationSnapshot`
 
-Produzido pelos Page Objects, consumido por `classifyReservation` em `packages/domain` (R-06):
+Produzido pela camada do Hunit (leitor do `BookingDetail`, research R-13a), consumido por `classifyReservation` em `packages/domain` (R-06):
 
 | Campo | Tipo | Significado |
 |---|---|---|

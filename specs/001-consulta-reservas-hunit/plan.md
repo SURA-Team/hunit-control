@@ -15,10 +15,12 @@ verificação, e expostos por uma API contract-first (OpenAPI) com acompanhament
 
 Decisões centrais (detalhes em [research.md](./research.md)): API e automação no **mesmo processo**,
 para que credenciais e token nunca saiam da memória (R-02); **Page Objects** separados do **domínio**
-para que mudanças de tela do Hunit não toquem regras de negócio (R-06); processamento **sequencial**
-por padrão, porque a seleção de hotel no Hunit parece ser estado de sessão (R-08); a coleta fica
-atrás de uma interface `HunitGateway`, permitindo ler as respostas HTTP do próprio Hunit em vez de
-abrir reserva por reserva, se o spike R-13a confirmar (R-13a).
+para que mudanças de tela do Hunit não toquem regras de negócio (R-06); a coleta fica atrás de uma
+interface `HunitGateway` e, conforme o spike R-13a, é feita **pela API JSON do próprio Hunit**:
+Playwright faz só login e 2FA na tela; listagem (`GetBookings`) e detalhe (`BookingDetail`) são
+lidos com a sessão do navegador, somente GET e somente rotas da lista de permissão. O hotel vai em
+cada requisição (`X-Company-Id`); processamento **sequencial** por padrão até o paralelismo ser
+verificado no primeiro acesso real (R-08).
 
 ## Technical Context
 
@@ -27,9 +29,9 @@ abrir reserva por reserva, se o spike R-13a confirmar (R-13a).
 **Primary Dependencies**: Fastify 5, fastify-openapi-glue, openapi-typescript, Playwright
 (Chromium), Drizzle ORM + drizzle-kit, Pino
 
-**Storage**: PostgreSQL 17 (dados); volume Docker `/data/evidence` (capturas e HTML sanitizado)
+**Storage**: PostgreSQL 17 (dados); volume Docker `/data/evidence` (capturas, HTML sanitizado e respostas JSON)
 
-**Testing**: Vitest; Playwright (Chromium) contra fixtures HTML; `fastify.inject` + validação
+**Testing**: Vitest; Playwright (Chromium) contra fixtures HTML (login/2FA); leitores da API contra fixtures JSON anonimizadas; `fastify.inject` + validação
 contra OpenAPI; Testcontainers (PostgreSQL)
 
 **Target Platform**: servidor Linux com Docker Compose (imagem base oficial do Playwright)
@@ -52,12 +54,12 @@ retroativas de meses; poucos clientes (desktop, Sura)
 | # | Princípio | Avaliação | Status |
 |---|---|---|---|
 | I | Spec-First | Spec 001 aprovada e clarificada (5 perguntas) antes deste plano | ✅ |
-| II | Isolamento da UI do Hunit | Seletores só em `apps/server/src/hunit/`; domínio recebe `ReservationSnapshot` neutro (R-06); falhas de tela geram `hunit_screen_not_recognized` + evidência (FR-024) | ✅ |
+| II | Isolamento da UI do Hunit | Seletores, URLs e formatos de resposta do Hunit só em `apps/server/src/hunit/`; domínio recebe `ReservationSnapshot` neutro (R-06); falhas de tela geram `hunit_screen_not_recognized` + evidência (FR-024) | ✅ |
 | III | API-First com Contrato | `openapi.yaml` contract-first; tipos gerados para servidor e futuro Electron (R-03) | ✅ |
 | IV | Jobs Assíncronos com Intervenção Humana | Estados `queued…cancelled` + `awaiting_2fa`; retomada por hotel; índice único parcial por conta (data-model) | ✅ |
 | V | Servidor Central e Containers | `server` + `db` em Docker Compose; config só por env; estado só em volumes declarados (R-18) | ✅ |
 | VI | Dados e Segurança | Postgres fonte da verdade; sem credenciais/token/sessão persistidos; chaves de API com hash; redação de logs e máscara em evidências (R-10–R-12); retenção e anonimização (R-16) | ✅ |
-| VII | Testes em Camadas | Unitários de domínio, Page Objects contra fixtures anonimizadas, contrato contra OpenAPI, teste automatizado de SC-004 (R-14) | ✅ |
+| VII | Testes em Camadas | Unitários de domínio, Page Objects e leitores da API contra fixtures anonimizadas (HTML/JSON), contrato contra OpenAPI, teste automatizado de SC-004 (R-14) | ✅ |
 | VIII | Simplicidade | 2 containers, sem fila/Redis/object storage; paralelismo desligado até ser validado | ✅ |
 
 **Nota sobre o princípio V**: a constitution lista "API, worker e PostgreSQL" em containers. Aqui
@@ -119,20 +121,23 @@ apps/
     │   ├── executions/          # runner: máquina de estados, 2FA, cancelamento, retomada, eventos
     │   ├── hunit/               # CAMADA DO HUNIT — único lugar com seletores/URLs/textos/requisições do Hunit
     │   │   ├── gateway.ts                    # interface HunitGateway → ReservationSnapshot (R-13a)
-    │   │   ├── network/                      # leitura das respostas HTTP (se o spike R-13a confirmar)
-    │   │   ├── login-page.ts
-    │   │   ├── two-factor-page.ts
-    │   │   ├── hotel-selection-page.ts
-    │   │   ├── reservations-search-page.ts   # filtros fixos da FR-010
-    │   │   ├── reservation-list-page.ts      # paginação dinâmica (FR-011)
-    │   │   ├── reservation-detail-page.ts    # → ReservationSnapshot (somente leitura)
+    │   │   ├── browser.ts                    # Chromium headless, contexto por execução
+    │   │   ├── login-page.ts                 # Page Object (tela)
+    │   │   ├── two-factor-page.ts            # Page Object (tela)
+    │   │   ├── read-only-guard.ts            # lista de permissão por rota + bloqueio explícito (FR-012)
+    │   │   ├── network/
+    │   │   │   ├── api-client.ts             # GET via page.request com a sessão; só rotas permitidas
+    │   │   │   ├── catalog.ts                # GetCurrentUser → hotéis (FR-008)
+    │   │   │   ├── bookings.ts               # GetBookings: filtros fixos FR-010, paginação FR-011
+    │   │   │   └── booking-detail.ts         # BookingDetail → ReservationSnapshot (tabela do R-13a)
+    │   │   ├── playwright-gateway.ts         # implementação do HunitGateway
     │   │   └── errors.ts                     # ScreenNotRecognizedError etc.
     │   ├── persistence/         # schema Drizzle, migrations, repositórios
     │   ├── evidence/            # captura com máscara, sanitização do HTML, armazenamento
     │   └── maintenance/         # rotina diária: expirar evidências, anonimizar reservas (FR-025–027)
     └── test/
-        ├── fixtures/hunit/      # HTML anonimizado das telas atuais (R-13)
-        ├── hunit/               # testes dos Page Objects contra fixtures
+        ├── fixtures/hunit/      # HTML (login/2FA) e JSON (API) anonimizados (R-13/R-13a)
+        ├── hunit/               # testes de Page Objects e leitores da API contra fixtures
         ├── contract/            # respostas validadas contra openapi.yaml
         ├── integration/         # runner + banco (Testcontainers) com Hunit simulado por fixtures
         └── security/            # SC-004: credenciais nunca em logs/evidências
@@ -153,10 +158,11 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
           └─► TwoFactorPage detectada ─► status awaiting_2fa + evento SSE (≤5 s) + prazo
                  POST /two-factor ─► token entregue em memória ─► (inválido/expirado → failed)
           └─► descarta credenciais e token da memória
-          └─► lê catálogo de hotéis ─► grava hotels
-          └─► para cada hotel pendente (sequencial; HOTEL_CONCURRENCY no futuro):
-                 seleciona hotel ─► aplica filtros FR-010 ─► para cada bloco do período (R-09):
-                    para cada página: lê listagem ─► "258-"? ignora : abre detalhe ─► snapshot
+          └─► GetCurrentUser ─► catálogo de hotéis ─► grava hotels
+          └─► para cada hotel pendente (sequencial; HOTEL_CONCURRENCY após verificação do R-08):
+                 X-Company-Id = hotel ─► para cada bloco do período (R-09):
+                    GetBookings (filtros FR-010) página a página ─► "258-"? ignora
+                       : BookingDetail(id) ─► snapshot
                        ─► classifyReservation ─► buffer em memória ─► eventos
                  hotel ok ─► transação única: reservas + observações + "não encontradas"
                  hotel falhou ─► evidência + failed, segue para o próximo
@@ -167,12 +173,13 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Telas atuais do Hunit ainda não mapeadas (R-13) | Page Objects não podem ser implementados | Tasks de Page Objects dependem das fixtures; domínio, banco, API e runner avançam em paralelo usando um Hunit simulado |
-| Seleção de hotel é estado de sessão (R-08) | Meta de 30 min inviável | Meta de 1 h sequencial; teste de duas abas antes de ligar paralelismo |
+| Telas de login/2FA ainda não mapeadas (R-13) | Login não pode ser implementado | Tasks ⛔ HUNIT dependem das fixtures; domínio, banco, API, runner e leitores da API avançam com o Hunit simulado |
+| Hunit muda a API interna (não é pública) | Coleta para | Validação de formato em cada resposta → `hunit_screen_not_recognized` + evidência JSON; correção restrita a `hunit/network/` |
+| Requisição perigosa por engano (cobrança, cartão) | Ação financeira indevida | `read-only-guard`: lista de permissão por rota + bloqueio explícito (R-13a); teste automatizado |
+| Paralelismo entre hotéis não verificado (R-08) | Meta de 30 min | Começa sequencial; `X-Company-Id` por requisição sugere que é viável — verificar no primeiro acesso real |
 | Janela curta do token (~1–2 min) | Execuções falham por tempo | SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
 | Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita aos Page Objects + fixtures |
 | Limite desconhecido de período no Hunit (R-09) | Consultas retroativas falham | Divisão automática configurável |
-| Coleta pela tela é lenta (abrir reserva por reserva) | Meta de tempo não atingida | Spike R-13a: ler respostas HTTP (somente GET) atrás da interface `HunitGateway` |
 | Estimativa de tempo imprecisa no início | Operador planeja mal | Média histórica por reserva; SC-010 mede o erro (R-08a) |
 
 ## Complexity Tracking

@@ -47,6 +47,8 @@ comercial, relatórios e painéis, e exportação de planilhas.
 - Q: Como classificar um pré-pagamento em que o cartão foi apenas validado ("Validado em"), sem
   cobrança? → A: Situação própria, "cartão validado (não cobrado)", separada de "já cobrada" e de
   "pendente", para o Financeiro analisar à parte.
+- Q: Qual tipo de coleta a consulta usa? → A: Somente "Canal Collect" (como no legado); reservas
+  "Hotel Collect" ficam fora desta automação.
 - Q: O que fazer quando uma reserva gravada não aparece numa consulta que cobriu seu hotel e período?
   → A: Marcar como "não encontrada na última verificação", mantendo o status anterior e o histórico.
 - Q: Todos os clientes autorizados têm as mesmas permissões? → A: Não; dois níveis por cliente:
@@ -245,7 +247,7 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   | Filtrar período por | Check-in |
   | De / Até | período informado na execução |
   | Status da reserva | Todas (ativas e canceladas) |
-  | Tipo coleta pagamento | Canal |
+  | Tipo coleta pagamento | Canal ("Canal Collect") |
   | Status da cobrança | Todos |
   | Status da integração (PMS) | Todas |
   | Demais campos (nº da reserva, canais, hóspede, tipo de quarto, nº integração PMS) | sem filtro |

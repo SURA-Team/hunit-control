@@ -9,22 +9,22 @@ durante a implementação; mantenha este arquivo atualizado.
 ## Pré-requisitos
 
 - Docker Desktop (com Docker Compose) e Node.js 24 LTS + pnpm (`corepack enable`).
-- Fixtures HTML anonimizadas do Hunit em `apps/server/test/fixtures/hunit/` (research R-13).
+- Fixtures anonimizadas do Hunit em `apps/server/test/fixtures/hunit/`: HTML das telas de login/token e JSON das respostas da API (research R-13/R-13a).
 - Para os cenários reais: uma conta do Hunit e o aplicativo autenticador do 2FA.
 
 ## 1. Testes automatizados (sem acessar o Hunit)
 
 ```powershell
 pnpm install
-pnpm test                 # domínio + page objects (fixtures) + contrato + integração com banco
+pnpm test                 # domínio + camada do Hunit (fixtures) + contrato + integração com banco
 ```
 
 Resultado esperado: todos os testes passam, incluindo:
 
 | Suíte | Prova |
 |---|---|
-| `packages/domain` | as 6 classificações na ordem da FR-013; ativa/cancelada independente (FR-014a); histórico e "não encontrada" (FR-018/018a) |
-| `apps/server` page objects | cada tela das fixtures é reconhecida; tela alterada gera `hunit_screen_not_recognized` com evidência |
+| `packages/domain` | as 7 classificações na ordem da FR-013; ativa/cancelada independente (FR-014a); histórico e "não encontrada" (FR-018/018a) |
+| `apps/server` camada do Hunit | telas de login/token reconhecidas; cada resposta JSON de fixture vira o `ReservationSnapshot` esperado; tela ou resposta alterada gera `hunit_screen_not_recognized` com evidência; o guard bloqueia rotas fora da lista de permissão |
 | `apps/server` contrato | todas as respostas validam contra `openapi.yaml`; `reader` recebe 403 nas ações de operador |
 | `apps/server` segurança (SC-004) | senha e token de teste não aparecem em nenhum log nem evidência gerados |
 

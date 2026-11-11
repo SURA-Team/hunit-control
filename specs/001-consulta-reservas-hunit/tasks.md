@@ -12,7 +12,7 @@ description: "Task list for feature 001 — Consulta de Reservas de Cartão Virt
 [quickstart.md](./quickstart.md)
 
 **Tests**: INCLUÍDOS — exigidos pela constitution (princípio VII: domínio unitário, contrato,
-Page Objects contra fixtures). Escreva os testes de cada história antes da implementação e
+Page Objects e leitores da API contra fixtures). Escreva os testes de cada história antes da implementação e
 confirme que falham.
 
 **Organization**: tarefas agrupadas por história de usuário (US1 = P1, US2 = P2, US3 = P3).
@@ -21,8 +21,8 @@ confirme que falham.
 
 - **[P]**: pode rodar em paralelo (arquivos diferentes, sem dependência de tarefa incompleta)
 - **[Story]**: história atendida (US1, US2, US3)
-- **⛔ HUNIT**: depende das fixtures/spike do Hunit (T020–T022); pode ser adiada sem bloquear o
-  restante, usando o `FakeHunitGateway` (T019)
+- **⛔ HUNIT**: depende de acesso/fixtures reais do Hunit (T020–T022); pode ser adiada sem bloquear
+  o restante, usando o `FakeHunitGateway` (T019)
 
 ## Path Conventions
 
@@ -41,7 +41,7 @@ Monorepo pnpm (ver plan.md): `apps/server/`, `packages/domain/`, `packages/contr
 - [ ] T005 [P] Criar o pacote `packages/contracts`: copiar `specs/001-consulta-reservas-hunit/contracts/openapi.yaml` para `packages/contracts/openapi.yaml` (passa a ser a fonte da verdade), script `generate` com `openapi-typescript` gerando `packages/contracts/src/generated.ts` e script `lint` com `@redocly/cli lint openapi.yaml`
 - [ ] T006 Criar o app `apps/server` (`package.json` com `fastify`, `fastify-openapi-glue`, `playwright`, `drizzle-orm`, `pg`, `pino`, `zod`; devDeps `drizzle-kit`, `@testcontainers/postgresql`, `ajv`, `ajv-formats`; `tsconfig.json`; `src/main.ts` vazio) dependendo de `@hunit/domain` e `@hunit/contracts`
 - [ ] T007 [P] Criar `apps/server/Dockerfile` multi-stage a partir de `mcr.microsoft.com/playwright:v<MESMA versão do pacote playwright>-noble`, executando como usuário não-root, e `docker-compose.yml` na raiz com serviços `server` (porta 3000, volume `evidence:/data/evidence`, `depends_on: db` com healthcheck) e `db` (`postgres:17`, volume `pgdata`)
-- [ ] T008 [P] Criar `.env.example` na raiz com: `PORT=3000`, `DATABASE_URL`, `ACCOUNT_KEY_SECRET=` (vazio), `HUNIT_BASE_URL=https://extranet.hunit.com.br/HUNIT/Account/Login`, `TWO_FACTOR_TIMEOUT_SECONDS=120`, `HOTEL_CONCURRENCY=1`, `MAX_PERIOD_DAYS=` (vazio = sem divisão), `EVIDENCE_DIR=/data/evidence`, `EVIDENCE_RETENTION_DAYS=30`, `RESERVATION_RETENTION_YEARS=5`, `LOG_LEVEL=info`; adicionar `*.har` e `apps/server/test/fixtures/hunit/raw/` ao `.gitignore`
+- [ ] T008 [P] Criar `.env.example` na raiz com: `PORT=3000`, `DATABASE_URL`, `ACCOUNT_KEY_SECRET=` (vazio), `HUNIT_WEB_URL=https://hunit.hsystem.com.br`, `HUNIT_API_URL=https://hunit-api.hsystem.com.br`, `TWO_FACTOR_TIMEOUT_SECONDS=120`, `HOTEL_CONCURRENCY=1`, `MAX_PERIOD_DAYS=` (vazio = sem divisão), `EVIDENCE_DIR=/data/evidence`, `EVIDENCE_RETENTION_DAYS=30`, `RESERVATION_RETENTION_YEARS=5`, `LOG_LEVEL=info`; adicionar `*.har` e `apps/server/test/fixtures/hunit/raw/` ao `.gitignore`
 
 ---
 
@@ -73,11 +73,11 @@ tarefas marcadas ⛔ HUNIT.
 
 ### Camada do Hunit (interface) e evidências
 
-- [ ] T019 Definir a interface `HunitGateway` (`login`, `submitToken`, `listHotels`, `selectHotel`, `searchReservations`, `readReservation` → `ReservationSnapshot`) em `apps/server/src/hunit/gateway.ts`, os erros tipados `InvalidCredentialsError`, `InvalidTokenError`, `TwoFactorTimeoutError`, `HunitUnavailableError`, `ScreenNotRecognizedError`, `SessionExpiredError` em `apps/server/src/hunit/errors.ts`, e um `FakeHunitGateway` programável por roteiro em `apps/server/test/helpers/fake-hunit-gateway.ts`
-- [ ] T020 ⛔ HUNIT Capturar as telas atuais do Hunit (R-13): `npx playwright codegen` do fluxo completo e HTML salvo de login, token, seleção de hotel, filtro/listagem e detalhe de reserva em cada situação (sem pré-pagamento, cobrada, pendente, falha na cobrança, cancelada), guardando os originais apenas em `apps/server/test/fixtures/hunit/raw/` (ignorado pelo Git)
-- [ ] T021 ⛔ HUNIT Criar o script de anonimização em `apps/server/scripts/anonymize-fixtures.ts` (substitui nomes de hóspedes, e-mails, telefones, documentos, números de cartão, códigos de autorização e transação por valores fictícios; remove `value` de inputs) e gerar as fixtures versionadas em `apps/server/test/fixtures/hunit/*.html`
-- [ ] T022 ⛔ HUNIT Executar o spike R-13a (HAR sanitizado, login feito antes da gravação) e o teste de duas abas do R-08; registrar as conclusões e a decisão final (coleta por rede, por tela ou mista; paralelismo sim/não) em `specs/001-consulta-reservas-hunit/research.md`
-- [ ] T023 [P] Implementar a captura de evidências em `apps/server/src/evidence/capture.ts`: screenshot com `mask` sobre todos os `input`, HTML sanitizado (remove atributo `value` de todo `<input>`), arquivos em `${EVIDENCE_DIR}/<executionId>/`, registro em `evidence` com "`expires_at` = `created_at + 30 dias`"; teste do sanitizador em `apps/server/test/unit/evidence-sanitize.test.ts`
+- [ ] T019 Definir a interface `HunitGateway` (`login`, `submitToken`, `listHotels`, `searchReservations(hotelCode, period, page)` → itens da listagem + total de páginas, `readReservation(hotelCode, bookingId)` → `ReservationSnapshot`) em `apps/server/src/hunit/gateway.ts`, os erros tipados `InvalidCredentialsError`, `InvalidTokenError`, `TwoFactorTimeoutError`, `HunitUnavailableError`, `ScreenNotRecognizedError`, `SessionExpiredError` em `apps/server/src/hunit/errors.ts`, e um `FakeHunitGateway` programável por roteiro em `apps/server/test/helpers/fake-hunit-gateway.ts`
+- [ ] T020 ⛔ HUNIT Capturar o material real do Hunit (R-13/R-13a), guardando os originais apenas em `apps/server/test/fixtures/hunit/raw/` (ignorado pelo Git): `npx playwright codegen` + HTML das telas de **login** e **token 2FA** (incluindo erro de senha e de token); respostas JSON de `GetCurrentUser`, `GetBookings` (filtro Canal Collect, com mais de uma página) e `BookingDetail` em cada situação (sem cartão, cobrada, validada sem cobrança, pendente, falha na cobrança, cancelada)
+- [ ] T021 ⛔ HUNIT Criar o script de anonimização em `apps/server/scripts/anonymize-fixtures.ts` — HTML: remove `value` de inputs e substitui nomes/e-mails; JSON: substitui por valores fictícios `guestFullName`, `guest.*`, `roomStays[].guestName`, `comments`, `lastPaymentEvent.user`, `authorizationCode`, `transactionId`, `processorReferenceNumber`, `description`, `displayName`, `email`, nomes de hotéis e `channelIdentifier`, preservando tipos, enums e booleanos — e gerar as fixtures versionadas em `apps/server/test/fixtures/hunit/{html,json}/`
+- [ ] T022 ⛔ HUNIT No primeiro acesso real autorizado, verificar e registrar em `specs/001-consulta-reservas-hunit/research.md` (R-13a, "A verificar"): código de `DateTypeId` para Check-in e de `CollectTypeId` para Canal Collect; se `X-Company-Id` basta sem `SelectCompany`; se dois hotéis podem ser lidos em paralelo (R-08); `PageSize` máximo e limite de período (R-09)
+- [ ] T023 [P] Implementar a captura de evidências em `apps/server/src/evidence/capture.ts`: screenshot com `mask` sobre todos os `input` e HTML sanitizado (remove atributo `value` de todo `<input>`) para falhas de tela; JSON da resposta não reconhecida (`response_path`) para falhas da coleta pela rede; arquivos em `${EVIDENCE_DIR}/<executionId>/`, registro em `evidence` com "`expires_at` = `created_at + 30 dias`"; teste do sanitizador em `apps/server/test/unit/evidence-sanitize.test.ts`
 - [ ] T024 Implementar o barramento de eventos em `apps/server/src/executions/events.ts`: publica em memória para assinantes SSE e persiste em `execution_events` (`message` "sem credenciais nem nome de hóspede")
 
 **Checkpoint**: base pronta — histórias podem começar.
@@ -97,7 +97,7 @@ execução já ativa.
 
 - [ ] T025 [P] [US1] Testes de contrato de `POST /v1/executions`, `GET /v1/executions/{id}`, `POST /v1/executions/{id}/two-factor` e `GET /v1/hotels` em `apps/server/test/contract/executions-us1.test.ts` (inclui 409 `execution_already_active` e 409 `not_awaiting_two_factor`)
 - [ ] T026 [P] [US1] Testes de integração do runner com `FakeHunitGateway` + banco em `apps/server/test/integration/execution-login.test.ts`: `awaiting_2fa` com `two_factor_deadline`; token correto → acesso concluído; `invalid_credentials` sem pedir token; `invalid_token`; `two_factor_timeout` (timers falsos, `TWO_FACTOR_TIMEOUT_SECONDS`); `hunit_screen_not_recognized` com evidência; segunda execução na mesma conta → recusada; reinício do servidor marca execuções ativas como `failed/server_restarted`
-- [ ] T027 [P] [US1] ⛔ HUNIT Testes dos Page Objects de acesso contra fixtures em `apps/server/test/hunit/login.test.ts` (login, tela de token, leitura do catálogo; tela alterada → `ScreenNotRecognizedError`)
+- [ ] T027 [P] [US1] ⛔ HUNIT Testes de acesso contra fixtures em `apps/server/test/hunit/login.test.ts` (Page Objects de login e token contra HTML; senha/token inválidos detectados; tela alterada → `ScreenNotRecognizedError`) e `apps/server/test/hunit/catalog.test.ts` (`GetCurrentUser` JSON → hotéis com código, nome e ativo)
 
 ### Implementation for User Story 1
 
@@ -105,7 +105,7 @@ execução já ativa.
 - [ ] T029 [P] [US1] Implementar o repositório de execuções em `apps/server/src/persistence/executions-repo.ts`: criar (violação do índice único parcial → erro `execution_already_active`), transições de estado do diagrama do data-model, `end_reason` obrigatório em `failed`/`cancelled`, e `failAllActive('server_restarted')`
 - [ ] T030 [P] [US1] Implementar o repositório de hotéis em `apps/server/src/persistence/hotels-repo.ts`: upsert do catálogo atualizando `last_seen_at` e marcando `available = false` para hotéis ausentes no último catálogo (FR-008)
 - [ ] T031 [US1] Implementar o runner em `apps/server/src/executions/runner.ts`: credenciais mantidas apenas na closure da execução; `awaiting_2fa` + evento `status_changed` publicado imediatamente (SC-005); espera do token com prazo `TWO_FACTOR_TIMEOUT_SECONDS`; credenciais e token descartados logo após o acesso; leitura do catálogo; mapeamento de cada erro tipado para o `end_reason` correspondente; evidência em falha de tela
-- [ ] T032 [US1] ⛔ HUNIT Implementar o navegador e os Page Objects de acesso em `apps/server/src/hunit/browser.ts` (Chromium headless, contexto por execução), `apps/server/src/hunit/login-page.ts`, `apps/server/src/hunit/two-factor-page.ts` e `apps/server/src/hunit/hotel-selection-page.ts` (`listHotels`), e a implementação `PlaywrightHunitGateway` em `apps/server/src/hunit/playwright-gateway.ts`; localizadores por role/label/texto (princípio II)
+- [ ] T032 [US1] ⛔ HUNIT Implementar o navegador e o acesso: `apps/server/src/hunit/browser.ts` (Chromium headless, contexto por execução), Page Objects `apps/server/src/hunit/login-page.ts` e `apps/server/src/hunit/two-factor-page.ts` (localizadores por role/label/texto — princípio II), `apps/server/src/hunit/network/api-client.ts` (GET via `page.request` com a sessão do contexto, header `X-Company-Id`, só rotas da lista de permissão, validação de formato → `ScreenNotRecognizedError` com a resposta como evidência), `apps/server/src/hunit/network/catalog.ts` (`listHotels` via `GetCurrentUser.companies`) e `PlaywrightHunitGateway` em `apps/server/src/hunit/playwright-gateway.ts`
 - [ ] T033 [P] [US1] Implementar os handlers `createExecution`, `getExecution`, `listExecutions` e `sendTwoFactor` em `apps/server/src/http/handlers/executions.ts` e `listHotels` em `apps/server/src/http/handlers/hotels.ts` (respostas conforme schemas `Execution`, `ExecutionSummary`, `Hotel`)
 - [ ] T034 [US1] Implementar o stream SSE `GET /v1/executions/{id}/events` com reenvio a partir de `Last-Event-ID` em `apps/server/src/http/handlers/execution-events.ts`
 - [ ] T035 [US1] Montar tudo em `apps/server/src/main.ts`: config, logger, migrations, `failAllActive('server_restarted')`, runner com `PlaywrightHunitGateway`, servidor HTTP
@@ -130,15 +130,15 @@ com o Hunit (SC-002); filtro "canceladas pendentes"; segunda execução incremen
 - [ ] T038 [P] [US2] Testes unitários de período em `packages/domain/test/period.test.ts`: `from <= to`; períodos retroativos e maiores que uma semana aceitos; divisão em blocos de `MAX_PERIOD_DAYS` sem lacunas nem sobreposição (FR-010a)
 - [ ] T039 [P] [US2] Testes de integração da coleta com `FakeHunitGateway` + banco em `apps/server/test/integration/execution-hotels.test.ts`: transação única por hotel; hotel com falha não grava nada e a execução segue (`completed` com hotel `failed`); reservas repetidas entre páginas gravadas uma vez; `reservation_observations` por execução; marcação "não encontrada" só em hotel concluído; nenhuma chamada de escrita no gateway
 - [ ] T040 [P] [US2] Testes de contrato de `GET /v1/reservations` (filtros combinados `classification` + `reservationStatus` + `notFound` + `executionId`, paginação por cursor), `GET /v1/reservations/{hotelCode}/{reservationNumber}` e `GET /v1/evidence/{id}/{file}` (410 após expirar) em `apps/server/test/contract/reservations.test.ts`
-- [ ] T041 [P] [US2] ⛔ HUNIT Testes dos componentes de consulta contra fixtures em `apps/server/test/hunit/reservations.test.ts`: filtros da FR-010 aplicados; total de páginas descoberto; snapshot correto para cada situação de detalhe; filtro restritivo ausente → `ScreenNotRecognizedError`
+- [ ] T041 [P] [US2] Testes dos leitores da API em `apps/server/test/hunit/reservations.test.ts` com fixtures JSON (sintéticas no formato do research R-13a até T021 trazer as reais): query de `GetBookings` com os filtros da FR-010 (`StatusId=0`, `CollectTypeId`=Canal Collect, `PrePaymentStatus=0`, `IntegrationStatusId=0`, `DateTypeId`=Check-in, datas AAAA-MM-DD); total de páginas = `ceil(total / pageSize)`; `BookingDetail` → snapshot correto para cada linha da tabela de mapeamento do R-13a (inclui `justValidate`); `statusId` 3 → `cancelled`; campo obrigatório ausente ou enum desconhecido → `ScreenNotRecognizedError`
 
 ### Implementation for User Story 2
 
 - [ ] T042 [P] [US2] Implementar `classifyReservation(reservationNumber, snapshot | null)` em `packages/domain/src/classification.ts` seguindo a ordem da FR-013 e retornando `{ classification, reason, reservationStatus }`
 - [ ] T043 [P] [US2] Implementar `mergeVerification(existing | null, observed, now)` e `markNotFound(...)` em `packages/domain/src/verification.ts` conforme "Regras de atualização (FR-018)" do data-model
 - [ ] T044 [P] [US2] Implementar validação e divisão de período em `packages/domain/src/period.ts`
-- [ ] T045 [US2] Implementar a proteção de somente-leitura em `apps/server/src/hunit/read-only-guard.ts`: `page.route` que aborta e registra evento para toda requisição ao domínio do Hunit com método diferente de GET, exceto a lista explícita de requisições de login/token/seleção de hotel/filtro identificadas em T022 (FR-012)
-- [ ] T046 [US2] ⛔ HUNIT Implementar a coleta conforme a decisão de T022: Page Objects `apps/server/src/hunit/reservations-search-page.ts` (filtros fixos: Filtrar período por = Check-in; Status da reserva = Todas; Tipo coleta pagamento = Canal; Status da cobrança = Todos; Status da integração (PMS) = Todas; demais campos sem filtro), `apps/server/src/hunit/reservation-list-page.ts` (paginação dinâmica) e `apps/server/src/hunit/reservation-detail-page.ts` (→ `ReservationSnapshot`, nunca aciona a ação de cobrar) e/ou leitores de resposta HTTP em `apps/server/src/hunit/network/`; completar `selectHotel`, `searchReservations` e `readReservation` em `apps/server/src/hunit/playwright-gateway.ts`
+- [ ] T045 [US2] Implementar a proteção de somente-leitura em `apps/server/src/hunit/read-only-guard.ts` (FR-012, research R-13a): (a) `api-client` só aceita GET para `GetCurrentUser`, `GetCurrentUserCompanies`, `GetBookings`, `BookingDetail`; (b) `page.route` no navegador aborta e registra evento para toda requisição a `hunit-api` fora das rotas usadas pela tela de login/2FA; (c) lista de bloqueio explícita que vence qualquer permissão: `Payment/CalculePrePayment`, `Payment/ChargePrePayment`, `Payment/UpdatePrePaymentInformation*`, `Company/BookingPaymentDetails`, `Company/CancelBooking`, `EditBooking`, `ReactivateIntegration`, `bookings/{id}/events/*`; teste em `apps/server/test/unit/read-only-guard.test.ts` provando que cada rota bloqueada é recusada
+- [ ] T046 [US2] Implementar a coleta pela rede (research R-13a): `apps/server/src/hunit/network/bookings.ts` (`GetBookings` com os filtros fixos da FR-010 — Check-in, Todas, Canal Collect, Todos, Todas —, paginação até `ceil(total / pageSize)`; número da reserva = `channelIdentifier`, `id` interno guardado para o detalhe) e `apps/server/src/hunit/network/booking-detail.ts` (`BookingDetail` → `ReservationSnapshot` pela tabela de mapeamento do R-13a; `lastPaymentEvent` → `payment`); completar `searchReservations` e `readReservation` em `apps/server/src/hunit/playwright-gateway.ts`. Códigos de `DateTypeId`/`CollectTypeId` vêm de constantes únicas confirmadas em T022
 - [ ] T047 [US2] Implementar o repositório de reservas em `apps/server/src/persistence/reservations-repo.ts`: `commitHotel(executionId, hotelCode, period, records)` em uma transação (upsert com `mergeVerification`, `reservation_observations`, `markNotFound`, atualização de `execution_hotels`), e consulta com filtros e cursor (FR-020)
 - [ ] T048 [US2] Estender o runner em `apps/server/src/executions/runner.ts`: hotéis solicitados ou todos (FR-009); para cada hotel → blocos de período → páginas → "258-" ignorada sem abrir → `readReservation` → `classifyReservation` → buffer; falha de reserva → `analysis_error` + evidência; falha de hotel → evidência + hotel `failed` e segue; contagens e eventos `hotel_started`, `page_done`, `reservation_classified`, `hotel_completed`, `hotel_failed`
 - [ ] T049 [P] [US2] Implementar os handlers `listReservations` e `getReservation` em `apps/server/src/http/handlers/reservations.ts` (valores monetários como string decimal; `guestName` `null` quando anonimizada)
@@ -189,7 +189,7 @@ novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403
 
 - **Setup (Phase 1)**: sem dependências.
 - **Foundational (Phase 2)**: depende do Setup; bloqueia as histórias. T020 → T021 → T022 formam
-  a trilha do Hunit e bloqueiam somente as tarefas ⛔ HUNIT.
+  a trilha do Hunit e bloqueiam somente as tarefas ⛔ HUNIT (T027, T032, T062).
 - **US1 (Phase 3)**: depende da Phase 2 (exceto T020–T022).
 - **US2 (Phase 4)**: depende da Phase 2; usa o runner e os repositórios de execução de US1
   (T029, T031) — implemente depois de US1, mas seus testes de domínio (T036–T038) e o domínio
@@ -251,7 +251,7 @@ Task: "T044 período em packages/domain/src/period.ts"
 ## Notes
 
 - [P] = arquivos diferentes, sem dependência pendente.
-- ⛔ HUNIT = depende das telas atuais do Hunit; nunca copie seletores do `legacy/`.
+- ⛔ HUNIT = depende de acesso real ou fixtures reais do Hunit; nunca copie seletores do `legacy/`.
 - Nenhuma tarefa pode adicionar ação de escrita no Hunit (FR-012); o `read-only-guard` (T045) é a
   rede de segurança.
 - Fixtures e HAR brutos nunca entram no Git; somente fixtures anonimizadas (T021).

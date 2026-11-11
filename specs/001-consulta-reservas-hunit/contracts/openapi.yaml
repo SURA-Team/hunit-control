@@ -305,16 +305,17 @@ paths:
       - name: file
         in: path
         required: true
-        schema: { type: string, enum: [screenshot, html] }
+        schema: { type: string, enum: [screenshot, html, response] }
     get:
       tags: [evidence]
-      summary: Baixa a captura de tela ou o HTML sanitizado de uma evidência (FR-024)
+      summary: Baixa a captura de tela, o HTML sanitizado ou a resposta JSON de uma evidência (FR-024)
       responses:
         '200':
           description: Arquivo
           content:
             image/png: {}
             text/html: {}
+            application/json: {}
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '410':
