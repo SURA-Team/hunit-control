@@ -1,8 +1,8 @@
 /**
  * "Hunit" falso em HTTP, para testar o gateway real (Playwright) sem acessar o Hunit.
  *
- * Imita o fluxo observado nos HARs (research R-13): a tela do Hunit redireciona para o
- * `SSOLogin` da API, que manda para o login (Keycloak); usuário e senha levam à tela do token; o
+ * Imita o fluxo observado (research R-13): a tela de entrada do Hunit tem o botão "Login único",
+ * que leva ao `SSOLogin` da API, que manda para o login (Keycloak); usuário e senha levam à tela do token; o
  * token leva ao retorno do login na API, que cria o cookie de sessão e volta para a tela do
  * Hunit. As telas são as fixtures em `test/fixtures/hunit/html/`.
  *
@@ -31,6 +31,8 @@ export interface FakeHunitServerOptions {
   username: string;
   password: string;
   token: string;
+  /** A tela de entrada redireciona direto para o login, sem o botão "Login único". */
+  directRedirect?: boolean;
   /** O Hunit não pede token (conclui direto depois da senha). */
   skipTwoFactor?: boolean;
   /** Resposta ao token: a tentativa de login expirou (tela de login ou página de expiração). */
@@ -89,7 +91,9 @@ export async function startFakeHunitServer(
   const web = createServer((request, response) => {
     const { pathname } = new URL(request.url ?? '/', urls.web);
     if (pathname === '/login') {
-      redirect(response, `${urls.api}/api/Account/SSOLogin?returnUrl=%2F`);
+      const ssoUrl = `${urls.api}/api/Account/SSOLogin?returnUrl=%2F`;
+      if (options.directRedirect) redirect(response, ssoUrl);
+      else html(response, readHtmlFixture('hunit-entry.html', { ssoUrl }));
       return;
     }
     // A tela do Hunit, que chama a API sozinha ao abrir (a proteção deve bloquear).

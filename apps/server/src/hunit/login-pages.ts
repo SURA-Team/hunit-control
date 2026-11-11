@@ -22,6 +22,26 @@ function visible(locator: Locator): Promise<boolean> {
 }
 
 /**
+ * Tela de entrada do Hunit (`/login`): mostra só o botão "Login único", que leva ao login
+ * (Keycloak). Observada no primeiro acesso real (2026-11-11).
+ */
+export class HunitEntryPage {
+  constructor(private readonly page: Page) {}
+
+  get singleSignOnButton(): Locator {
+    return this.page.getByRole('button', { name: /login único/i });
+  }
+
+  async isShown(): Promise<boolean> {
+    return visible(this.singleSignOnButton);
+  }
+
+  async continueToLogin(): Promise<void> {
+    await this.singleSignOnButton.click();
+  }
+}
+
+/**
  * Tela de usuário e senha (Keycloak do Hunit, research R-13): rótulos "Endereço de e-mail" e
  * "Senha".
  */

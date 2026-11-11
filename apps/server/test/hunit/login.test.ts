@@ -16,7 +16,12 @@ import {
   TwoFactorTimeoutError,
   type HunitError,
 } from '../../src/hunit/errors.js';
-import { isLoginExpiredPage, LoginPage, TwoFactorPage } from '../../src/hunit/login-pages.js';
+import {
+  HunitEntryPage,
+  isLoginExpiredPage,
+  LoginPage,
+  TwoFactorPage,
+} from '../../src/hunit/login-pages.js';
 import { PlaywrightHunitGateway } from '../../src/hunit/playwright-gateway.js';
 import { launchTestBrowser } from '../helpers/browser.js';
 import {
@@ -56,6 +61,13 @@ describe('Page Objects de login e token contra as fixtures', () => {
     await page.setContent(readHtmlFixture(fixture, { action: '#', username: USERNAME }));
     return { login: new LoginPage(page), twoFactor: new TwoFactorPage(page) };
   }
+
+  it('reconhece a tela de entrada do Hunit pelo botão "Login único"', async () => {
+    const { login } = await show('hunit-entry.html');
+
+    expect(await new HunitEntryPage(page).isShown()).toBe(true);
+    expect(await login.isShown()).toBe(false);
+  });
 
   it('reconhece a tela de usuário e senha, sem erro', async () => {
     const { login, twoFactor } = await show('login.html');
@@ -170,6 +182,14 @@ describe('PlaywrightHunitGateway contra o Hunit falso', () => {
     // O que a tela do Hunit pede sozinha nunca chega à API (bloqueado, ou a tela já foi deixada).
     expect(server.apiRequests).not.toContain('GET /api/Account/MenuCapabilities');
     expect(gateway.blockedRequests.filter((request) => request.sent)).toEqual([]);
+  });
+
+  it('tela de entrada que redireciona direto (sem o botão): também chega ao login', async () => {
+    const { gateway } = await open({ directRedirect: true });
+
+    expect(await gateway.login({ username: USERNAME, password: PASSWORD })).toBe(
+      'two_factor_required',
+    );
   });
 
   it('login sem token: conclui o acesso direto', async () => {

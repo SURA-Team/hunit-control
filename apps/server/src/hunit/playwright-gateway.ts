@@ -19,7 +19,7 @@ import type {
   LoginOutcome,
   ReservationPage,
 } from './gateway.js';
-import { isLoginExpiredPage, LoginPage, TwoFactorPage } from './login-pages.js';
+import { HunitEntryPage, isLoginExpiredPage, LoginPage, TwoFactorPage } from './login-pages.js';
 import { HunitApiClient } from './network/api-client.js';
 import { readCatalog } from './network/catalog.js';
 import { installBrowserGuard, type BlockedRequest } from './read-only-guard.js';
@@ -43,7 +43,7 @@ export interface PlaywrightGatewayOptions {
    * Chamado quando uma tela do login é reconhecida. Usado pela verificação manual do login
    * (`hunit-login-check`) para guardar as telas reais como material de fixtures (T020).
    */
-  onScreen?: (screen: 'login' | 'two_factor', page: Page) => Promise<void>;
+  onScreen?: (screen: 'hunit_entry' | 'login' | 'two_factor', page: Page) => Promise<void>;
 }
 
 const DEFAULT_STEP_TIMEOUT_MS = 30_000;
@@ -63,6 +63,7 @@ export function createPlaywrightGatewayFactory(
 }
 
 export class PlaywrightHunitGateway implements HunitGateway {
+  private readonly entryPage: HunitEntryPage;
   private readonly loginPage: LoginPage;
   private readonly twoFactorPage: TwoFactorPage;
   private readonly api: HunitApiClient;
@@ -81,6 +82,7 @@ export class PlaywrightHunitGateway implements HunitGateway {
     readonly blockedRequests: readonly BlockedRequest[],
   ) {
     this.stepTimeoutMs = options.stepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
+    this.entryPage = new HunitEntryPage(page);
     this.loginPage = new LoginPage(page);
     this.twoFactorPage = new TwoFactorPage(page);
     this.api = new HunitApiClient(context.request, {
@@ -201,7 +203,10 @@ export class PlaywrightHunitGateway implements HunitGateway {
     }
   }
 
-  /** Abre o Hunit e espera a tela de usuário e senha (o Hunit redireciona para o login). */
+  /**
+   * Abre o Hunit e chega à tela de usuário e senha. A tela de entrada do Hunit mostra o botão
+   * "Login único", que leva ao login; se o Hunit redirecionar direto, o botão é dispensado.
+   */
   private async openLoginScreen(): Promise<void> {
     try {
       await this.page.goto(new URL('/login', this.options.webUrl).toString(), {
@@ -211,10 +216,21 @@ export class PlaywrightHunitGateway implements HunitGateway {
       throw new HunitUnavailableError('a tela do Hunit não abriu', { cause: error });
     }
 
-    await this.waitFor(
-      [['login', () => this.loginPage.isShown()]],
-      'a tela de login (campos "Endereço de e-mail" e "Senha") não apareceu',
+    const first = await this.waitFor(
+      [
+        ['login', () => this.loginPage.isShown()],
+        ['entry', () => this.entryPage.isShown()],
+      ],
+      'não apareceu a tela de entrada do Hunit (botão "Login único") nem a de login',
     );
+    if (first === 'entry') {
+      await this.options.onScreen?.('hunit_entry', this.page);
+      await this.entryPage.continueToLogin();
+      await this.waitFor(
+        [['login', () => this.loginPage.isShown()]],
+        'depois do botão "Login único", a tela de login (campos "Endereço de e-mail" e "Senha") não apareceu',
+      );
+    }
     await this.options.onScreen?.('login', this.page);
   }
 
