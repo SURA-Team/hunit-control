@@ -65,6 +65,22 @@ comercial, relatórios e painéis, e exportação de planilhas.
   leitura da conta já mostra que ela não acessa algum hotel pedido, o sistema só avisa o operador e
   segue com os demais.
 
+### Session 2026-11-11 (forma de pagamento)
+
+- Q: Reservas sem pré-pagamento precisam de atenção? → A: Depende da forma de pagamento que o
+  Hunit informa. "Faturado" → situação "faturada", sem ação (o canal paga por fatura). "Cartão de
+  crédito" → "cobrar na maquininha": o comercial cobra fora do Hunit e anexa o comprovante. A
+  situação "não é cartão virtual" deixa de existir.
+- Q: E se o Hunit não informar a forma de pagamento, ou informar outra? → A: Erro de análise
+  (FR-015). Só "faturado" e "cartão de crédito" são conhecidas; outra forma que aparecer entra por
+  decisão nova.
+- Q: Anexar o comprovante da cobrança na maquininha entra nesta feature? → A: Não; fica na spec das
+  tratativas manuais. Mas uma reserva de cartão virtual pode estar sem pré-pagamento só por um
+  tempo (não foi migrada, ou as credenciais da adquirente não estavam cadastradas) e voltar a ter
+  pré-pagamento depois de já cobrada na maquininha. Esta feature garante que a mudança de
+  classificação só entra no histórico e não apaga nada da reserva, para o comprovante anexado
+  depois continuar valendo e a reserva não ser cobrada duas vezes (FR-018b).
+
 ### Session 2026-11-11 (implantação)
 
 - Q: Onde o sistema roda nesta fase e quem o usa? → A: Num computador comum da empresa, ligado e
@@ -135,8 +151,8 @@ Hunit.
    páginas de resultado do hotel são percorridas, sem limite fixo de páginas.
 2. **Given** uma reserva cujo número começa com "258-", **When** ela aparece na listagem, **Then**
    é classificada como "ignorada (Hotelbeds 258)" sem ser aberta.
-3. **Given** uma reserva sem indicação de pré-pagamento, **When** é analisada, **Then** é
-   classificada como "não é cartão virtual".
+3. **Given** uma reserva sem indicação de pré-pagamento e com forma de pagamento "faturado",
+   **When** é analisada, **Then** é classificada como "faturada", sem exigir ação.
 4. **Given** uma reserva com pré-pagamento e registro de cobrança ("Cobrado em"), **When** é
    analisada, **Then** é classificada como "já cobrada", com data/hora da cobrança registrada.
 5. **Given** uma reserva com pré-pagamento, sem registro de cobrança e com a ação de cobrar
@@ -159,6 +175,16 @@ Hunit.
 11. **Given** uma reserva cancelada no Hunit com pré-pagamento e registro "Cobrado em", **When** é
     analisada, **Then** é registrada como cancelada e já cobrada, distinguível de uma reserva
     cancelada e pendente de cobrança e de uma reserva ativa e já cobrada.
+12. **Given** uma reserva sem indicação de pré-pagamento e com forma de pagamento "cartão de
+    crédito", **When** é analisada, **Then** é classificada como "cobrar na maquininha", para o
+    comercial cobrar fora do Hunit.
+13. **Given** uma reserva sem indicação de pré-pagamento e sem forma de pagamento informada (ou com
+    uma forma desconhecida), **When** é analisada, **Then** é classificada como "erro de análise",
+    com motivo e evidência.
+14. **Given** uma reserva classificada como "cobrar na maquininha", **When** uma verificação
+    seguinte encontra pré-pagamento nela, **Then** ela passa para a situação correspondente (ex.:
+    "pendente de cobrança"), a mudança fica no histórico com a classificação anterior e nenhum
+    outro dado da reserva é apagado.
 
 ---
 
@@ -220,6 +246,11 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   execução.
 - A listagem muda durante a paginação (reservas novas no Hunit): reservas repetidas na mesma
   execução são gravadas uma única vez.
+- Uma reserva de cartão virtual aparece sem pré-pagamento (não migrada, ou credenciais da
+  adquirente não cadastradas) e é classificada como "cobrar na maquininha"; numa verificação
+  seguinte o pré-pagamento aparece e ela muda de situação (ex.: "pendente de cobrança"). A mudança
+  fica no histórico (FR-018b); quem trata o comprovante (spec das tratativas) usa esse histórico
+  para não cobrar a reserva de novo.
 - Uma reserva gravada tem o check-in alterado para fora do período ou deixa de ser "Canal" no
   Hunit: na próxima consulta completa do hotel e período originais, ela é marcada como "não
   encontrada na última verificação" (FR-018a), sem perder a classificação anterior.
@@ -298,10 +329,13 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 **Classificação**
 
 - **FR-013**: O sistema MUST classificar cada reserva em exatamente uma das situações: ignorada
-  (Hotelbeds 258), não é cartão virtual, já cobrada, cartão validado (não cobrado), pendente de
-  cobrança, erro na cobrança ou erro de análise, aplicando as regras na seguinte ordem:
+  (Hotelbeds 258), faturada, cobrar na maquininha, já cobrada, cartão validado (não cobrado),
+  pendente de cobrança, erro na cobrança ou erro de análise, aplicando as regras na seguinte ordem:
   1. número iniciando com "258-" → ignorada, sem abrir a reserva;
-  2. sem indicação de pré-pagamento → não é cartão virtual;
+  2. sem indicação de pré-pagamento, conforme a forma de pagamento informada pelo Hunit:
+     a. "faturado" → faturada (não exige ação: o canal paga por fatura);
+     b. "cartão de crédito" → cobrar na maquininha (o comercial cobra fora do Hunit);
+     c. forma não informada ou desconhecida → erro de análise;
   3. pré-pagamento cujo estado atual indica falha de cobrança → erro na cobrança;
   4. pré-pagamento com registro de cobrança ("Cobrado em") → já cobrada;
   5. pré-pagamento com registro apenas de validação do cartão ("Validado em"), sem cobrança →
@@ -326,14 +360,19 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   não identificada), classificação e motivo; e, quando
   disponíveis no Hunit: data/hora da cobrança, responsável pela cobrança, valor cobrado, ID da
   transação, código de autorização, referência do processador, parcelamento (sim/não, número de
-  parcelas, valor da parcela), estado e mensagem do pré-pagamento e se a ação de cobrar estava
-  disponível.
+  parcelas, valor da parcela), estado e mensagem do pré-pagamento, se a ação de cobrar estava
+  disponível e a forma de pagamento.
 - **FR-017**: Uma reserva MUST ser identificada pela combinação hotel + número da reserva; reservas
   novas são incluídas e reservas conhecidas são atualizadas.
 - **FR-018**: Para cada reserva, o sistema MUST manter: primeira verificação, última verificação,
   quantidade de verificações, campos alterados na última verificação, indicação de mudança de
   status, status anterior e momento da última mudança de status. A passagem de ativa para cancelada
   MUST ser registrada como mudança, com o momento em que foi detectada.
+- **FR-018b**: Uma mudança de classificação (ex.: de "cobrar na maquininha" para "pendente de
+  cobrança", quando o pré-pagamento aparece depois) MUST ser registrada no histórico (FR-018), com a
+  classificação anterior, sem apagar nem substituir os demais dados da reserva, que continua
+  identificada por hotel + número (FR-017). Assim, registros feitos fora do Hunit e ligados à
+  reserva (ex.: comprovante de cobrança, spec das tratativas) continuam valendo.
 - **FR-018a**: Quando um hotel for concluído com sucesso e uma reserva já gravada desse hotel, com
   check-in dentro do período consultado, não aparecer no resultado, o sistema MUST marcá-la como
   "não encontrada na última verificação", com o momento da marcação, mantendo inalterados sua
@@ -411,7 +450,8 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   classificação. Um hotel pendente pode trazer o motivo, quando a conta usada não o acessa
   (FR-009a).
 - **Reserva**: identificada por hotel + número; contém os dados da reserva, a situação da reserva
-  (ativa/cancelada/não identificada), os dados do pré-pagamento e da cobrança, a classificação de
+  (ativa/cancelada/não identificada), a forma de pagamento, os dados do pré-pagamento e da
+  cobrança, a classificação de
   cobrança atual, a marcação "não encontrada na última verificação" e o histórico de verificação (primeira/última verificação,
   contagem, mudanças).
 - **Evidência**: o que foi recebido do Hunit numa falha (captura e conteúdo da tela, ou a resposta
@@ -427,8 +467,9 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **SC-001**: Em uma execução concluída, 100% das reservas listadas pelo Hunit para os hotéis e o
   período solicitados aparecem nos resultados com uma classificação.
 - **SC-002**: Em uma amostra de 50 reservas conferidas manualmente no Hunit, ao menos 98% têm a
-  mesma situação (cobrada, cartão validado, pendente, erro na cobrança, não é cartão virtual) que o sistema
-  registrou, e nenhuma reserva pendente aparece como cobrada.
+  mesma situação (cobrada, cartão validado, pendente, erro na cobrança, faturada, cobrar na
+  maquininha) que o sistema registrou, nenhuma reserva pendente aparece como cobrada e nenhuma
+  reserva a cobrar na maquininha aparece como faturada.
 - **SC-003**: Zero cobranças disparadas e zero alterações feitas no Hunit pelo sistema em qualquer
   execução.
 - **SC-004**: Zero ocorrências de senha ou token em registros e evidências, verificadas por busca
@@ -469,6 +510,9 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   homologação, onde também se mede quantos hotéis ao mesmo tempo o Hunit aguenta.
 - Os filtros da FR-010 são fixos nesta feature; permitir que o operador escolha filtros por
   execução fica para uma spec futura, se houver necessidade.
+- A forma de pagamento ("faturado", "cartão de crédito") é a que o Hunit informa na reserva; como
+  ela aparece nas respostas do Hunit é verificado na captura do material real. Outras formas não
+  são conhecidas hoje; se aparecerem, a reserva vai para erro de análise até haver decisão.
 - Os nomes de filtros, telas e textos do Hunit citados nesta spec refletem a interface atual
   (2026-11-11) e servem para identificar o significado de negócio; podem mudar sem que a regra mude.
 - A retenção de 30 dias para evidências é um padrão inicial, ajustável pela operação.
