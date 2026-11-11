@@ -18,7 +18,7 @@
  * pasta (material da T020). Elas têm dados de hóspedes: use `test/fixtures/hunit/raw/`, ignorada
  * pelo Git, e anonimize antes de virar fixture (T021).
  *
- *   pnpm --filter @hunit/server build
+ *   pnpm build                     # compila os pacotes do workspace e o servidor
  *   pnpm --filter @hunit/server hunit:reservations-check --hotel 101 --from 2026-11-01 --to 2026-11-03 --save-dir test/fixtures/hunit/raw
  */
 import { mkdir, writeFile } from 'node:fs/promises';

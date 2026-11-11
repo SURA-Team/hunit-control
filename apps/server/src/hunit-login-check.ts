@@ -17,7 +17,7 @@
  * token: serve para medir quanto tempo a tela aceita (T022, FR-004) e para capturar a tela de
  * token expirado (T020). O tempo entre a tela abrir e o token ser enviado é sempre mostrado.
  *
- *   pnpm --filter @hunit/server build
+ *   pnpm build                     # compila os pacotes do workspace e o servidor
  *   pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw
  *   pnpm --filter @hunit/server hunit:login-check --wait-token 240 --save-dir test/fixtures/hunit/raw
  */

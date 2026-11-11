@@ -123,7 +123,7 @@ PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tab
 | `pnpm format` | Formata o código com o Prettier |
 | `pnpm test` | Roda todos os testes (Vitest) |
 | `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker — inclui o teste de segurança SC-004 e o de cópia e restauração, que roda os scripts de `deploy/backup/` num container `postgres:17`) |
-| `pnpm build` | Compila os pacotes para `dist/` |
+| `pnpm build` | Compila os pacotes para `dist/`, na ordem das dependências. Use sempre este antes dos comandos `hunit:*`: `pnpm --filter @hunit/server build` compila só o servidor e usa o `dist` antigo do `@hunit/contracts` e do `@hunit/domain` (os testes leem o código-fonte e não acusam) |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
 | `pnpm --filter @hunit/server db:generate --name=<descrição>` | Gera uma migration depois de mudar `apps/server/src/persistence/schema.ts` (não precisa de banco) |
 | `docker compose up -d --build` | Sobe `server`, `db`, `proxy` e `backup` (antes, copie `.env.example` para `.env` e preencha as obrigatórias: `POSTGRES_PASSWORD`, `ACCOUNT_KEY_SECRET`, `SERVER_HOSTNAME`, `BACKUP_DIR`, `BACKUP_PASSPHRASE`) |

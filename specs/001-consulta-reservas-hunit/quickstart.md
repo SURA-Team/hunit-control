@@ -99,7 +99,7 @@ Antes da execução completa, confira a leitura num período curto, sem gravar n
 digita as credenciais e o token no próprio terminal):
 
 ```powershell
-pnpm --filter @hunit/server build
+pnpm build
 pnpm --filter @hunit/server hunit:reservations-check --hotel <código> --from <AAAA-MM-DD> --to <AAAA-MM-DD> --parallel-hotel <outro código> --save-dir test/fixtures/hunit/raw
 ```
 

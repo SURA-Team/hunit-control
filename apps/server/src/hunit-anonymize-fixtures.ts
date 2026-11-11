@@ -2,7 +2,7 @@
  * Gera as fixtures reais anonimizadas do Hunit (tasks.md, T021) a partir do material bruto dos
  * comandos `hunit:login-check` e `hunit:reservations-check`.
  *
- *   pnpm --filter @hunit/server build
+ *   pnpm build                     # compila os pacotes do workspace e o servidor
  *   pnpm --filter @hunit/server hunit:anonymize-fixtures
  *
  * Lê `test/fixtures/hunit/raw/` (ignorada pelo Git) e grava `test/fixtures/hunit/html/real/`,
