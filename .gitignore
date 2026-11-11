@@ -1,0 +1,89 @@
+# ============================================================
+# Segredos e credenciais
+# ============================================================
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+**/credentials*.json
+**/service_account*.json
+
+# ============================================================
+# Dados operacionais (reservas, cartões virtuais, planilhas)
+# ============================================================
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.db
+*.sqlite
+*.sqlite3
+~$*
+
+# ============================================================
+# Legado (sistema Python antigo — apenas referência)
+# Histórico completo em github.com/EduardoKipper/automacao-hunit
+# ============================================================
+legacy/data/
+legacy/config/hotel_mappings.json
+legacy/exports/
+legacy/outputs/
+legacy/executions/
+legacy/screenshots/
+legacy/build/
+legacy/dist/
+legacy/.qa/
+legacy/.agents/
+legacy/.codex/
+
+# ============================================================
+# Logs, execuções e evidências
+# ============================================================
+*.log
+executions/
+screenshots/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ============================================================
+# Node / TypeScript / Electron
+# ============================================================
+node_modules/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+.npm/
+.pnpm-store/
+
+# ============================================================
+# Python (legado)
+# ============================================================
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ============================================================
+# IDE e sistema operacional
+# ============================================================
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+*.swp
