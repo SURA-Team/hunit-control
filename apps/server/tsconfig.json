@@ -8,5 +8,5 @@
       "@hunit/contracts": ["../../packages/contracts/src/index.ts"]
     }
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "drizzle.config.ts"]
 }

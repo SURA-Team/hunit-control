@@ -5,6 +5,7 @@ coverage/
 .vitest/
 pnpm-lock.yaml
 packages/contracts/src/generated.ts
+apps/server/src/persistence/migrations/
 
 # Contrato da API: mantido idêntico à cópia em specs/ (tasks.md, T061)
 packages/contracts/openapi.yaml

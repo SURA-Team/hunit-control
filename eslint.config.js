@@ -36,7 +36,7 @@ export default defineConfig(
   },
   {
     // Arquivos JavaScript (como este) não fazem parte de nenhum tsconfig.
-    files: ['**/*.js'],
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     extends: [tseslint.configs.disableTypeChecked],
   },
 

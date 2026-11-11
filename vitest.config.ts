@@ -13,7 +13,7 @@ export default defineConfig({
     ],
   },
   test: {
-    // Um projeto por pacote. Para rodar só um: `pnpm test --project domain`.
+    // Um projeto por grupo de testes. Para rodar só um: `pnpm test --project domain`.
     projects: [
       {
         test: {
@@ -30,10 +30,38 @@ export default defineConfig({
         },
       },
       {
+        // Testes do servidor que não precisam de banco de dados nem de navegador.
         test: {
           name: 'server',
           root: fromRoot('./apps/server'),
-          include: ['test/**/*.test.ts'],
+          include: ['test/unit/**/*.test.ts'],
+        },
+      },
+      {
+        // Testes que abrem o Chromium do Playwright (camada do Hunit, captura de evidências).
+        // Exigem o navegador instalado: pnpm --filter @hunit/server exec playwright install chromium
+        test: {
+          name: 'server-browser',
+          root: fromRoot('./apps/server'),
+          include: ['test/browser/**/*.test.ts', 'test/hunit/**/*.test.ts'],
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
+        },
+      },
+      {
+        // Testes do servidor com PostgreSQL real: exigem o Docker em execução. Um container é
+        // criado para a rodada inteira (globalSetup) e cada arquivo de teste usa um banco próprio.
+        test: {
+          name: 'server-db',
+          root: fromRoot('./apps/server'),
+          include: [
+            'test/contract/**/*.test.ts',
+            'test/integration/**/*.test.ts',
+            'test/security/**/*.test.ts',
+          ],
+          globalSetup: [fromRoot('./apps/server/test/helpers/postgres-global-setup.ts')],
+          // Na primeira vez o Docker ainda precisa baixar a imagem do PostgreSQL.
+          hookTimeout: 120_000,
         },
       },
     ],
