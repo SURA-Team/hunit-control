@@ -87,3 +87,8 @@ desktop.ini
 *.tmp
 *.bak
 *.swp
+
+# ============================================================
+# Claude Code (configurações pessoais/locais)
+# ============================================================
+.claude/settings.local.json
