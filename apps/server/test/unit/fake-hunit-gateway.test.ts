@@ -5,10 +5,22 @@ import {
   InvalidTokenError,
   ScreenNotRecognizedError,
 } from '../../src/hunit/errors.js';
-import { FakeHunit, reservationDetails } from '../helpers/fake-hunit-gateway.js';
+import type { HunitGateway } from '../../src/hunit/gateway.js';
+import { FakeHunit, fakeListing, reservationDetails } from '../helpers/fake-hunit-gateway.js';
 
 const credentials = { username: 'operador@hotel.test', password: 'senha-de-teste' };
 const week = { from: '2026-11-01', to: '2026-11-07' };
+
+/** Lê o detalhe de uma reserva do hotel H1 a partir do id interno. */
+async function read(gateway: HunitGateway, bookingId: string) {
+  const item = {
+    bookingId,
+    reservationNumber: '',
+    reservationStatus: 'active' as const,
+    listing: fakeListing(),
+  };
+  return (await gateway.readReservation('H1', item)).snapshot;
+}
 
 async function authenticated(hunit: FakeHunit) {
   const gateway = await hunit.createGateway({ executionId: 'e-1' });
@@ -169,7 +181,7 @@ describe('FakeHunit — reservas (T019)', () => {
       }),
     );
 
-    expect(await gateway.readReservation('H1', 'booking-1001')).toMatchObject({
+    expect(await read(gateway, 'booking-1001')).toMatchObject({
       reservationNumber: '1001',
       structureRecognized: true,
       prePaymentPresent: true,
@@ -180,19 +192,17 @@ describe('FakeHunit — reservas (T019)', () => {
       reservationStatus: 'active',
       payment: { prePaymentState: 'Unprocessed', chargedAt: null },
     });
-    expect(await gateway.readReservation('H1', 'booking-1002')).toMatchObject({
+    expect(await read(gateway, 'booking-1002')).toMatchObject({
       chargeRecordPresent: true,
       reservationStatus: 'cancelled',
       payment: { chargedAmount: '750.00', chargedBy: 'Operador de Teste' },
     });
-    expect(await gateway.readReservation('H1', 'booking-1003')).toMatchObject({
+    expect(await read(gateway, 'booking-1003')).toMatchObject({
       structureRecognized: false,
       prePaymentPresent: null,
       reservationStatus: 'unknown',
     });
-    await expect(gateway.readReservation('H1', 'booking-1004')).rejects.toBeInstanceOf(
-      ScreenNotRecognizedError,
-    );
+    await expect(read(gateway, 'booking-1004')).rejects.toBeInstanceOf(ScreenNotRecognizedError);
   });
 
   it('falha ao consultar um hotel quando o roteiro define o erro', async () => {

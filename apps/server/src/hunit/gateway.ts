@@ -4,6 +4,7 @@ import type {
   ReservationSnapshot,
   ReservationStatus,
 } from '@hunit/domain';
+import type { EvidenceMaterial } from '../evidence/material.js';
 
 /**
  * Porta de entrada da camada do Hunit (constitution, princípio II; research R-13a).
@@ -44,8 +45,14 @@ export interface HunitGateway {
    */
   searchReservations(hotelCode: string, period: Period, page: number): Promise<ReservationPage>;
 
-  /** Detalhe de uma reserva, somente leitura. `bookingId` vem de `ReservationListItem`. */
-  readReservation(hotelCode: string, bookingId: string): Promise<ReservationSnapshot>;
+  /**
+   * Detalhe de uma reserva da listagem, somente leitura (FR-012).
+   *
+   * @throws ScreenNotRecognizedError se o detalhe não tiver o formato esperado (o executor
+   *   classifica a reserva como erro de análise, com a evidência, e segue — edge case "falha ao
+   *   abrir uma reserva"); SessionExpiredError, HunitUnavailableError.
+   */
+  readReservation(hotelCode: string, item: ReservationListItem): Promise<ReservationDetail>;
 
   /**
    * Encerra a sessão e libera o navegador. Pode ser chamado a qualquer momento (inclusive com
@@ -76,6 +83,17 @@ export interface ReservationListItem {
   reservationNumber: string;
   reservationStatus: ReservationStatus;
   listing: ReservationListing;
+}
+
+/** Detalhe lido de uma reserva. */
+export interface ReservationDetail {
+  snapshot: ReservationSnapshot;
+  /**
+   * O que o Hunit devolveu (ex.: a resposta JSON do detalhe). Vira evidência quando a reserva
+   * não pode ser classificada com segurança ou a situação dela não é identificada (FR-014a,
+   * FR-024).
+   */
+  evidence: EvidenceMaterial;
 }
 
 export interface ReservationPage {

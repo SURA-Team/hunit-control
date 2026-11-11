@@ -1,0 +1,28 @@
+{
+  "_fixture": "SINTÉTICA, no formato observado nos HARs (research R-13a). Substituir pela resposta real anonimizada (tasks.md, T020/T021).",
+  "id": 900001,
+  "channelIdentifier": "BK-1001",
+  "statusId": 1,
+  "cancellationDate": null,
+  "hasCreditCardInfo": true,
+  "prePaymentStatus": "Fail",
+  "canCharge": true,
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal",
+  "totals": { "total": 500.0 },
+  "guest": { "fullName": "Hóspede Exemplo Um" },
+  "lastPaymentEvent": {
+    "user": "Operador Exemplo",
+    "dateTime": "2026-11-02T11:30:00",
+    "valueCharged": 500.0,
+    "status": "Fail",
+    "justValidate": false,
+    "authorizationCode": "AUT-0001",
+    "transactionId": "TRX-0001",
+    "processorReferenceNumber": "REF-0001",
+    "isParceled": false,
+    "numberOfInstallments": 1,
+    "installmentValue": 500.0,
+    "description": "Cartão recusado (exemplo)"
+  }
+}

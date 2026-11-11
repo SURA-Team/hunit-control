@@ -1,4 +1,4 @@
-import type { ReservationSnapshot } from '@hunit/domain';
+import type { Period } from '@hunit/domain';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { capturePageEvidence } from '../evidence/capture.js';
 import type { Logger } from '../logging.js';
@@ -17,10 +17,14 @@ import type {
   HunitGateway,
   HunitHotel,
   LoginOutcome,
+  ReservationDetail,
+  ReservationListItem,
   ReservationPage,
 } from './gateway.js';
 import { HunitEntryPage, isLoginExpiredPage, LoginPage, TwoFactorPage } from './login-pages.js';
 import { HunitApiClient } from './network/api-client.js';
+import { readBookingDetail } from './network/booking-detail.js';
+import { searchBookings } from './network/bookings.js';
 import { readCatalog } from './network/catalog.js';
 import { installBrowserGuard, type BlockedRequest } from './read-only-guard.js';
 
@@ -181,15 +185,16 @@ export class PlaywrightHunitGateway implements HunitGateway {
     return readCatalog(this.api);
   }
 
-  // Os parâmetros (hotel, período, página; hotel, reserva) entram com a T046.
-  searchReservations(): Promise<ReservationPage> {
-    return Promise.reject(
-      new Error('Consulta de reservas ainda não implementada (tasks.md, T046).'),
-    );
+  async searchReservations(
+    hotelCode: string,
+    period: Period,
+    page: number,
+  ): Promise<ReservationPage> {
+    return searchBookings(this.api, hotelCode, period, page);
   }
 
-  readReservation(): Promise<ReservationSnapshot> {
-    return Promise.reject(new Error('Leitura de reserva ainda não implementada (tasks.md, T046).'));
+  async readReservation(hotelCode: string, item: ReservationListItem): Promise<ReservationDetail> {
+    return readBookingDetail(this.api, hotelCode, item);
   }
 
   async close(): Promise<void> {

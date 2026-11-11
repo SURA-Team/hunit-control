@@ -26,6 +26,7 @@ import type {
   HunitGateway,
   HunitHotel,
   LoginOutcome,
+  ReservationDetail,
   ReservationListItem,
   ReservationPage,
 } from '../../src/hunit/gateway.js';
@@ -370,7 +371,8 @@ export class FakeHunitGateway implements HunitGateway {
     });
   }
 
-  async readReservation(hotelCode: string, bookingId: string): Promise<ReservationSnapshot> {
+  async readReservation(hotelCode: string, item: ReservationListItem): Promise<ReservationDetail> {
+    const { bookingId } = item;
     return this.run({ method: 'readReservation', hotelCode, bookingId }, () => {
       this.requireAccess('readReservation');
 
@@ -384,7 +386,8 @@ export class FakeHunitGateway implements HunitGateway {
 
       const detail = reservation.detail ?? {};
       if (detail instanceof Error) throw detail;
-      return toSnapshot(reservation, detail);
+      const snapshot = toSnapshot(reservation, detail);
+      return { snapshot, evidence: { response: JSON.stringify({ fake: true, bookingId }) } };
     });
   }
 

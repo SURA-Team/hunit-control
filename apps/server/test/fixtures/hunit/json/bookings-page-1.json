@@ -1,0 +1,48 @@
+{
+  "_fixture": "SINTÉTICA, no formato observado nos HARs (research R-13a). Substituir pela resposta real anonimizada (tasks.md, T020/T021).",
+  "items": {
+    "items": [
+      {
+        "id": 900001,
+        "channelIdentifier": "BK-1001",
+        "guestFullName": "Hóspede Exemplo Um",
+        "channelName": "Canal Exemplo",
+        "roomStayDescription": "Quarto Standard",
+        "createDateTime": "2026-10-20T09:15:00",
+        "arrivalDate": "2026-11-03T00:00:00",
+        "departureDate": "2026-11-05T00:00:00",
+        "statusId": 1,
+        "collectTypeId": 2,
+        "prePaymentStatus": "Unprocessed",
+        "integrationStatusId": 1,
+        "pmsIdentifier": null,
+        "lastUpdateDateTime": "2026-10-21T10:00:00",
+        "comission": 75.0,
+        "total": 500.0
+      },
+      {
+        "id": 900002,
+        "channelIdentifier": "258-2002",
+        "guestFullName": "Hóspede Exemplo Dois",
+        "channelName": "Canal Exemplo",
+        "roomStayDescription": "Quarto Luxo",
+        "createDateTime": "2026-10-22T11:00:00",
+        "arrivalDate": "2026-11-07T00:00:00",
+        "departureDate": "2026-11-10T00:00:00",
+        "statusId": 3,
+        "collectTypeId": 2,
+        "prePaymentStatus": "Success",
+        "integrationStatusId": 1,
+        "pmsIdentifier": "PMS-1",
+        "lastUpdateDateTime": "2026-10-23T08:30:00",
+        "comission": 120.35,
+        "total": 1234.5
+      }
+    ],
+    "page": 1,
+    "pageSize": 2,
+    "total": 3
+  },
+  "totalActive": 2,
+  "totalCancelled": 1
+}

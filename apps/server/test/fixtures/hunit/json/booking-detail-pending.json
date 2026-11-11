@@ -1,0 +1,15 @@
+{
+  "_fixture": "SINTÉTICA, no formato observado nos HARs (research R-13a). Substituir pela resposta real anonimizada (tasks.md, T020/T021).",
+  "id": 900001,
+  "channelIdentifier": "BK-1001",
+  "statusId": 1,
+  "cancellationDate": null,
+  "hasCreditCardInfo": true,
+  "prePaymentStatus": "Unprocessed",
+  "canCharge": true,
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal",
+  "totals": { "total": 500.0 },
+  "guest": { "fullName": "Hóspede Exemplo Um" },
+  "lastPaymentEvent": null
+}
