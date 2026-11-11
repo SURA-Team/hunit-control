@@ -230,7 +230,7 @@ export interface components {
              * @description Código estável para tratamento pelos clientes
              * @enum {string}
              */
-            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "evidence_expired" | "internal_error";
+            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "execution_already_resumed" | "evidence_expired" | "internal_error";
         };
         HunitCredentials: {
             username: string;
@@ -660,7 +660,10 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cancelamento solicitado; estado final `cancelled` em até 15 s (SC-008) */
+            /**
+             * @description Cancelamento solicitado; a execução para em até 15 s (SC-008) e termina `cancelled` —
+             *     ou `completed`, se todos os hotéis já tinham terminado quando a parada foi notada
+             */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -714,7 +717,12 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            /** @description Execução não pode ser retomada (ativa, ou sem hotéis pendentes) ou já há execução ativa na conta */
+            /**
+             * @description Execução não pode ser retomada: ainda ativa ou já há execução ativa na conta
+             *     (`execution_already_active`), sem hotéis pendentes (`nothing_to_resume`) ou já
+             *     retomada antes (`execution_already_resumed`; retome a última execução da sequência,
+             *     citada em `detail`)
+             */
             409: {
                 headers: {
                     [name: string]: unknown;

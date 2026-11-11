@@ -1,11 +1,13 @@
 import type { HunitCredentials } from '../hunit/gateway.js';
 import type { Database } from '../persistence/db.js';
 import {
+  ExecutionAlreadyResumedError,
   findExecution,
+  findResumeOf,
   listExecutionHotels,
   type ExecutionRow,
 } from '../persistence/executions-repo.js';
-import { ACTIVE_EXECUTION_STATUSES, type ExecutionStatus } from '../persistence/schema.js';
+import { isActiveExecutionStatus, type ExecutionStatus } from '../persistence/schema.js';
 import type { ExecutionRunner } from './runner.js';
 
 export class ExecutionNotFoundError extends Error {
@@ -42,10 +44,6 @@ export interface ResumeInput {
   clientId: string;
   /** Novo acesso ao Hunit: a sessão da execução original não existe mais (FR-023). */
   credentials: HunitCredentials;
-}
-
-function isActive(status: ExecutionStatus): boolean {
-  return (ACTIVE_EXECUTION_STATUSES as readonly ExecutionStatus[]).includes(status);
 }
 
 /**
@@ -87,7 +85,11 @@ export async function hotelsToResume(
  * credenciais — o que exige um novo token.
  *
  * @throws ExecutionNotFoundError
+ * Cada execução é retomada no máximo uma vez: para continuar, retoma-se a última execução da
+ * sequência, que só conhece os hotéis que ainda faltam (SC-007).
+ *
  * @throws ExecutionStillActiveError se a execução ainda está em andamento.
+ * @throws ExecutionAlreadyResumedError se ela já foi retomada (cita a retomada).
  * @throws NothingToResumeError se todos os hotéis foram concluídos.
  * @throws ExecutionAlreadyActiveError se a conta já tem uma execução ativa (FR-006).
  */
@@ -99,7 +101,11 @@ export async function resumeExecution(
   const found = await findExecution(db, input.executionId);
   if (!found) throw new ExecutionNotFoundError();
   const { execution } = found;
-  if (isActive(execution.status)) throw new ExecutionStillActiveError(execution.status);
+  if (isActiveExecutionStatus(execution.status)) {
+    throw new ExecutionStillActiveError(execution.status);
+  }
+  const resumedBy = await findResumeOf(db, execution.id);
+  if (resumedBy) throw new ExecutionAlreadyResumedError(resumedBy.id);
 
   const hotelCodes = await hotelsToResume(db, execution);
   return runner.start({

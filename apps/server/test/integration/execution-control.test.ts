@@ -11,7 +11,9 @@ import {
   resumeExecution,
 } from '../../src/executions/resume.js';
 import {
+  createExecution,
   ExecutionAlreadyActiveError,
+  ExecutionAlreadyResumedError,
   findExecution,
   listExecutionHotels,
 } from '../../src/persistence/executions-repo.js';
@@ -315,6 +317,62 @@ describe('cancelamento (FR-022, SC-008)', () => {
 
     expect(await h.runner.cancel(randomUUID(), clientId)).toBe('already_finished');
   });
+
+  it('cancelamento depois que todos os hotéis foram gravados: a execução termina concluída', async () => {
+    const [a, b] = codes('A', 'B') as [string, string];
+    const h = await harness({
+      scenario: { hotels: [hotelWithReservations(a), hotelWithReservations(b)] },
+    });
+    const execution = await h.runner.start(startInput(clientId, { hotelCodes: [a, b] }));
+    // O cancelamento chega logo depois de o último hotel ser gravado.
+    let cancelling: Promise<string> | null = null;
+    await h.events.subscribe(execution.id, 0, (event) => {
+      if (event.type === 'hotel_completed' && event.hotelCode === b) {
+        cancelling = h.runner.cancel(execution.id, clientId);
+      }
+    });
+    await sendTokenWhenAsked(h, execution.id);
+    await h.runner.whenFinished(execution.id);
+
+    expect(cancelling).not.toBeNull();
+    expect(await executionRow(execution.id)).toMatchObject({
+      status: 'completed',
+      endReason: null,
+      cancelledByClientId: null,
+    });
+    expect(await hotelStatuses(execution.id)).toEqual({ [a]: 'completed', [b]: 'completed' });
+  });
+
+  it('segundo pedido de cancelamento enquanto o primeiro termina: também é aceito', async () => {
+    const { h, execution, release } = await startAndPauseAtSecondHotel();
+    const requests: Array<Promise<string>> = [];
+    await h.events.subscribe(execution.id, 0, (event) => {
+      // A execução já está gravando o estado final (cancelada) quando o segundo pedido chega.
+      if (event.status === 'cancelled') requests.push(h.runner.cancel(execution.id, clientId));
+    });
+
+    expect(await h.runner.cancel(execution.id, clientId)).toBe('requested');
+    release.open();
+    await h.runner.whenFinished(execution.id);
+
+    expect(await Promise.all(requests)).toEqual(['requested']);
+    expect((await executionRow(execution.id)).status).toBe('cancelled');
+  });
+
+  it('cancelamento durante o desligamento do servidor: recusado, a execução termina com falha', async () => {
+    const { h, execution } = await startAndPauseAtSecondHotel();
+
+    const shuttingDown = h.runner.shutdown();
+    const outcome = await h.runner.cancel(execution.id, clientId);
+    await shuttingDown;
+
+    expect(outcome).toBe('already_finished');
+    expect(await executionRow(execution.id)).toMatchObject({
+      status: 'failed',
+      endReason: 'server_restarted',
+      cancelledByClientId: null,
+    });
+  });
 });
 
 describe('retomada (FR-023, SC-007)', () => {
@@ -398,6 +456,66 @@ describe('retomada (FR-023, SC-007)', () => {
     );
 
     expect(resumed.requestedHotelCodes).toEqual([a, b]);
+  });
+
+  it('execução já retomada não é retomada de novo; retoma-se a última da sequência (SC-007)', async () => {
+    const { h, execution, hotels, release } = await startAndPauseAtSecondHotel();
+    await h.runner.cancel(execution.id, clientId);
+    release.open();
+    await h.runner.whenFinished(execution.id);
+    const deps = { db: database.db, runner: h.runner };
+    const first = await resumeExecution(deps, {
+      executionId: execution.id,
+      clientId,
+      credentials: credentials(),
+    });
+    // A 1ª retomada falha antes de consultar os hotéis (token errado).
+    await vi.waitFor(() => expect(h.runner.submitToken(first.id, '000000')).toBe(true));
+    await h.runner.whenFinished(first.id);
+
+    const again = resumeExecution(deps, {
+      executionId: execution.id,
+      clientId,
+      credentials: credentials(),
+    });
+    await expect(again).rejects.toBeInstanceOf(ExecutionAlreadyResumedError);
+    await expect(again).rejects.toMatchObject({ resumedBy: first.id });
+
+    const second = await resumeExecution(deps, {
+      executionId: first.id,
+      clientId,
+      credentials: credentials(),
+    });
+    expect(second).toMatchObject({
+      parentExecutionId: first.id,
+      requestedHotelCodes: [hotels.b, hotels.c],
+    });
+    await h.runner.cancel(second.id, clientId);
+    await h.runner.whenFinished(second.id);
+  });
+
+  it('o banco garante uma única retomada por execução, mesmo com pedidos simultâneos', async () => {
+    const parent = await insertExecution(database.db, {
+      clientId,
+      status: 'cancelled',
+      endReason: 'cancelled_by_client',
+    });
+    await insertExecution(database.db, {
+      clientId,
+      parentExecutionId: parent.id,
+      status: 'failed',
+      endReason: 'invalid_token',
+    });
+
+    await expect(
+      createExecution(database.db, {
+        accountKey: `conta-${randomUUID()}`,
+        clientId,
+        period: { from: '2026-11-01', to: '2026-11-07' },
+        requestedHotelCodes: null,
+        parentExecutionId: parent.id,
+      }),
+    ).rejects.toBeInstanceOf(ExecutionAlreadyResumedError);
   });
 
   it('todos os hotéis já foram consultados: nada a retomar', async () => {

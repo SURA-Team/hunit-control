@@ -27,7 +27,7 @@ import type { ExecutionEndReason } from '../persistence/schema.js';
 import type { SecretRegistry } from '../secrets.js';
 import { accountKeyFor } from './account-key.js';
 import type { ExecutionEventBus } from './events.js';
-import { collectHotels } from './hotel-collection.js';
+import { CANCELLED_HOTEL_REASON, collectHotels } from './hotel-collection.js';
 import { StopRequestedError } from './stop.js';
 
 export interface StartExecutionInput {
@@ -88,11 +88,12 @@ export const DEFAULT_CANCEL_GRACE_MS = 10_000;
 const CANCELLED_MESSAGE =
   'Execução cancelada a pedido de um cliente. Os hotéis concluídos continuam gravados; os que ' +
   'estavam em andamento não foram gravados e, com os pendentes, podem ser retomados.';
-const CANCELLED_HOTEL_REASON = 'A execução foi cancelada no meio do hotel; nada foi gravado.';
 
 /**
  * Resultado de um pedido de cancelamento: `requested` = a execução vai terminar como
- * `cancelled`; `already_finished` = ela já tinha terminado (ou estava terminando) ou não existe.
+ * `cancelled` (ou `completed`, se todos os hotéis já tinham terminado); `already_finished` = ela
+ * já tinha terminado, estava gravando o estado final, estava parando por outro motivo (servidor
+ * desligando) ou não existe.
  */
 export type CancelOutcome = 'requested' | 'already_finished';
 
@@ -236,7 +237,11 @@ export class ExecutionRunner {
     const run = this.active.get(executionId);
     if (!run) return this.cancelUntracked(executionId, clientId);
 
-    if (run.finishing) {
+    // Já está sendo cancelada: o pedido repetido tem a mesma resposta do primeiro.
+    if (run.stopReason === 'cancelled_by_client') return 'requested';
+    // Já está gravando o estado final, ou parando por outro motivo (servidor desligando): o
+    // cancelamento não muda mais o resultado.
+    if (run.finishing || run.stopReason) {
       await run.done;
       return 'already_finished';
     }
@@ -379,18 +384,23 @@ export class ExecutionRunner {
           logger: run.logger,
           now: this.now,
           maxPeriodDays: this.options.maxPeriodDays ?? null,
-          hotelConcurrency: this.options.hotelConcurrency ?? 1,
+          hotelConcurrency: this.hotelConcurrency,
           isStopping: () => run.stopReason !== null,
           isCancelled: () => run.stopReason === 'cancelled_by_client',
         });
-        this.throwIfStopping(run);
+        // A coleta só termina normalmente quando todos os hotéis terminaram, mesmo que a parada
+        // tenha chegado depois disso: não havia mais nada a interromper (research R-19).
         // Daqui em diante, um cancelamento não muda mais o resultado.
         run.finishing = true;
         const failed = summary.failed > 0 ? `, ${summary.failed} com falha` : '';
+        const lateCancel =
+          run.stopReason === 'cancelled_by_client'
+            ? ' O cancelamento chegou depois de todos os hotéis terminarem.'
+            : '';
         await this.changeStatus(
           run,
           { to: 'completed' },
-          `Execução concluída: ${summary.completed} hotéis concluídos${failed}; ${summary.reservations} reservas gravadas.`,
+          `Execução concluída: ${summary.completed} hotéis concluídos${failed}; ${summary.reservations} reservas gravadas.${lateCancel}`,
         );
       } catch (error) {
         await this.fail(run, error);

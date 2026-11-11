@@ -200,7 +200,9 @@ paths:
       summary: Cancela a execução (FR-022) — somente operador
       responses:
         '202':
-          description: Cancelamento solicitado; estado final `cancelled` em até 15 s (SC-008)
+          description: |
+            Cancelamento solicitado; a execução para em até 15 s (SC-008) e termina `cancelled` —
+            ou `completed`, se todos os hotéis já tinham terminado quando a parada foi notada
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Execution' }
@@ -242,7 +244,11 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Execução não pode ser retomada (ativa, ou sem hotéis pendentes) ou já há execução ativa na conta
+          description: |
+            Execução não pode ser retomada: ainda ativa ou já há execução ativa na conta
+            (`execution_already_active`), sem hotéis pendentes (`nothing_to_resume`) ou já
+            retomada antes (`execution_already_resumed`; retome a última execução da sequência,
+            citada em `detail`)
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -420,6 +426,7 @@ components:
             - not_awaiting_two_factor
             - execution_already_finished
             - nothing_to_resume
+            - execution_already_resumed
             - evidence_expired
             - internal_error
 

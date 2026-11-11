@@ -175,6 +175,12 @@ describe('estimativa do tempo restante (R-08a)', () => {
     expect(estimateRemainingSeconds(input({ hotels }))).toBeNull();
   });
 
+  it('hotel em andamento sem listagem e sem média por hotel: sem estimativa (e não zero)', () => {
+    const hotels = [hotel({ status: 'running', startedAt: ago(1) })];
+
+    expect(estimateRemainingSeconds(input({ hotels }))).toBeNull();
+  });
+
   it('sem média por hotel, os hotéis pendentes impedem a estimativa', () => {
     const hotels = [hotel({ status: 'running', startedAt: ago(5), reservationsTotal: 3 }), hotel()];
 

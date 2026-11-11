@@ -23,6 +23,21 @@ export class ExecutionAlreadyActiveError extends Error {
   }
 }
 
+/** A execução já foi retomada: retoma-se a última execução da sequência (FR-023). */
+export class ExecutionAlreadyResumedError extends Error {
+  constructor(
+    /** Execução que já retomou esta; `null` quando a recusa veio do banco (pedidos simultâneos). */
+    readonly resumedBy: string | null,
+  ) {
+    super(
+      resumedBy
+        ? `Esta execução já foi retomada pela execução ${resumedBy}; para continuar, retome essa.`
+        : 'Esta execução já foi retomada; para continuar, retome a última execução da sequência.',
+    );
+    this.name = 'ExecutionAlreadyResumedError';
+  }
+}
+
 /** O cursor de paginação não foi gerado por este servidor ou aponta para um registro removido. */
 export class InvalidCursorError extends Error {
   constructor() {
@@ -47,6 +62,7 @@ export interface NewExecution {
  *
  * @throws ExecutionAlreadyActiveError se a conta já tem uma execução ativa. Quem garante a regra
  *   é o índice único parcial do banco, então ela vale mesmo com pedidos simultâneos.
+ * @throws ExecutionAlreadyResumedError se `parentExecutionId` já foi retomada (índice único).
  */
 export async function createExecution(db: Database, input: NewExecution): Promise<ExecutionRow> {
   try {
@@ -67,8 +83,23 @@ export async function createExecution(db: Database, input: NewExecution): Promis
     if (isConstraintViolation(error, PG_UNIQUE_VIOLATION, 'executions_one_active_per_account')) {
       throw new ExecutionAlreadyActiveError();
     }
+    if (isConstraintViolation(error, PG_UNIQUE_VIOLATION, 'executions_one_resume_per_parent')) {
+      throw new ExecutionAlreadyResumedError(null);
+    }
     throw error;
   }
+}
+
+/** A execução que retomou a informada (FR-023), se houver. */
+export async function findResumeOf(
+  db: Database,
+  executionId: string,
+): Promise<ExecutionRow | null> {
+  const [row] = await db
+    .select()
+    .from(executions)
+    .where(eq(executions.parentExecutionId, executionId));
+  return row ?? null;
 }
 
 /**

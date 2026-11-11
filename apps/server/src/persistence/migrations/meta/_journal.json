@@ -15,6 +15,13 @@
       "when": 1794433505592,
       "tag": "0001_reservations_total",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794436294945,
+      "tag": "0002_one_resume_per_parent",
+      "breakpoints": true
     }
   ]
 }

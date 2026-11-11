@@ -109,8 +109,9 @@ export function estimateRemainingSeconds(input: TimingInput): number | null {
     if (hotel.reservationsTotal > 0) {
       if (perReservation === null) return null;
       work += perReservation * Math.max(0, hotel.reservationsTotal - hotel.reservationsSeen);
-    } else if (perHotel !== null) {
+    } else {
       // A listagem ainda não respondeu: resta o que falta para a duração média de um hotel.
+      if (perHotel === null) return null;
       const elapsed = hotel.startedAt ? seconds(hotel.startedAt, now) : 0;
       work += Math.max(0, perHotel - elapsed);
     }

@@ -38,6 +38,10 @@ export const CLASSIFICATION_LABELS: Readonly<Record<Classification, string>> = {
   analysis_error: 'erro de análise',
 };
 
+/** Motivo gravado no hotel que estava em andamento quando a execução foi cancelada. */
+export const CANCELLED_HOTEL_REASON =
+  'A execução foi cancelada no meio do hotel; nada foi gravado.';
+
 export interface HotelCollectionContext {
   executionId: string;
   /** Período de check-in da execução. */
@@ -130,8 +134,10 @@ export async function collectHotels(
   };
 
   const worker = async (): Promise<void> => {
-    for (let hotelCode = queue.shift(); hotelCode !== undefined; hotelCode = queue.shift()) {
-      if (hotelContext.isStopping()) return;
+    // A parada é checada antes de tirar o hotel da fila: o que não começou continua nela.
+    while (queue.length > 0 && !hotelContext.isStopping()) {
+      const hotelCode = queue.shift();
+      if (hotelCode === undefined) return;
       try {
         const collected = await new HotelRun(
           hotelContext,
@@ -154,8 +160,10 @@ export async function collectHotels(
   await Promise.all(Array.from({ length: workers }, worker));
 
   if (fatal) throw (fatal as { error: unknown }).error;
-  // Hotéis que nem começaram ficam `pending`, para a retomada (FR-023).
-  if (context.isStopping()) throw new StopRequestedError();
+  // Hotéis que nem começaram ficam `pending`, para a retomada (FR-023). Se a parada chegou
+  // depois de todos os hotéis terminarem, não havia mais nada a interromper: a coleta termina
+  // normalmente e a execução é concluída (research R-19).
+  if (queue.length > 0) throw new StopRequestedError();
   return summary;
 }
 
@@ -221,24 +229,30 @@ class HotelRun {
       const result = await context.gateway.searchReservations(hotelCode, block, page);
 
       // Se a listagem crescer durante a leitura (reservas novas no Hunit), os totais acompanham.
+      let totalsChanged = false;
       if (totalPages === null || result.totalPages > totalPages) {
         this.progress.pagesTotal += result.totalPages - (totalPages ?? 0);
         totalPages = result.totalPages;
+        totalsChanged = true;
       }
       if (result.totalItems > totalItems) {
         this.progress.reservationsTotal += result.totalItems - totalItems;
         totalItems = result.totalItems;
+        totalsChanged = true;
       }
-      // Totais conhecidos já durante a página: entram no andamento e na estimativa (FR-021a).
-      await this.saveProgress();
 
-      for (const item of result.items) {
+      // O andamento é gravado quando os totais mudam, depois de cada reserva e no fim da página,
+      // sem repetir gravações seguidas: o acompanhamento e a estimativa refletem a reserva em
+      // curso (FR-021, FR-021a).
+      const lastIndex = result.items.length - 1;
+      if (totalsChanged && lastIndex >= 0) await this.saveProgress();
+      for (const [index, item] of result.items.entries()) {
         // Também entre reservas: outro hotel pode ter encerrado a execução (sessão expirada) ou
         // ela pode ter sido cancelada (FR-022).
         if (context.isStopping()) throw new StopRequestedError();
         if (this.records.has(item.reservationNumber)) continue;
         this.records.set(item.reservationNumber, await this.analyze(item));
-        await this.saveProgress();
+        if (index < lastIndex) await this.saveProgress();
       }
 
       if (page <= totalPages) this.progress.pagesDone += 1;
@@ -329,7 +343,7 @@ class HotelRun {
       const outcome = context.isCancelled()
         ? {
             status: 'cancelled' as const,
-            reason: 'A execução foi cancelada no meio do hotel; nada foi gravado.',
+            reason: CANCELLED_HOTEL_REASON,
           }
         : error instanceof SessionExpiredError
           ? { status: 'failed' as const, reason: error.message }

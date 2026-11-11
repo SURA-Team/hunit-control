@@ -88,7 +88,8 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 - Retomada (FR-023): cria nova execução com `parent_execution_id` e `requested_hotel_codes` = hotéis
   da execução original que não estão `completed`. Se a original terminou antes de definir os
   hotéis (ex.: token inválido), repete o pedido original. Só execuções encerradas são retomadas,
-  inclusive `completed` com hotéis falhos (research R-19).
+  inclusive `completed` com hotéis falhos, e cada uma no máximo uma vez (índice único em
+  `parent_execution_id`, research R-19).
 - Cancelamento (FR-022): os hotéis em andamento ficam `cancelled` sem gravar; os pendentes
   continuam `pending`, para a retomada.
 

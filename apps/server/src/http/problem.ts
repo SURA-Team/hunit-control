@@ -30,6 +30,7 @@ export const PROBLEMS: Readonly<Record<ProblemCode, ProblemDefinition>> = {
   not_awaiting_two_factor: { status: 409, title: 'A execução não está aguardando o token' },
   execution_already_finished: { status: 409, title: 'A execução já foi encerrada' },
   nothing_to_resume: { status: 409, title: 'A execução não tem hotéis pendentes para retomar' },
+  execution_already_resumed: { status: 409, title: 'A execução já foi retomada' },
   evidence_expired: { status: 410, title: 'Evidência expirada' },
   internal_error: { status: 500, title: 'Erro interno' },
 };

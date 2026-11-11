@@ -266,6 +266,24 @@ describe('POST /v1/executions/{executionId}/resume (resumeExecution)', () => {
     ]);
   });
 
+  it('409 execution_already_resumed quando a execução já foi retomada, citando a retomada', async () => {
+    const { execution, release } = await startPausedInSecondHotel();
+    await cancel(execution.id);
+    release();
+    await test.harness.runner.whenFinished(execution.id);
+    const first = bodyOf(await resume(execution.id));
+
+    const response = await resume(execution.id);
+
+    expect(response.statusCode).toBe(409);
+    expectMatchesContract('resumeExecution', response);
+    expect(response.json()).toMatchObject({ code: 'execution_already_resumed' });
+    expect(response.json<{ detail: string }>().detail).toContain(first.id);
+
+    await cancel(first.id);
+    await test.harness.runner.whenFinished(first.id);
+  });
+
   it('409 nothing_to_resume quando todos os hotéis foram concluídos', async () => {
     const execution = await start();
     await sendToken(execution.id);

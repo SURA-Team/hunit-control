@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "executions_one_resume_per_parent" ON "executions" USING btree ("parent_execution_id");

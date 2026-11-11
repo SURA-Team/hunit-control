@@ -114,6 +114,10 @@ export const ACTIVE_EXECUTION_STATUSES = [
   'awaiting_2fa',
 ] as const satisfies readonly ExecutionStatus[];
 
+export function isActiveExecutionStatus(status: ExecutionStatus): boolean {
+  return (ACTIVE_EXECUTION_STATUSES as readonly ExecutionStatus[]).includes(status);
+}
+
 /** Quantidade de reservas por classificação. Classificações sem reservas podem faltar. */
 export type ClassificationCounts = Partial<
   Record<(typeof classificationEnum.enumValues)[number], number>
@@ -183,6 +187,9 @@ export const executions = pgTable(
     uniqueIndex('executions_one_active_per_account')
       .on(table.accountKey)
       .where(sql`${table.status} in ('queued', 'running', 'awaiting_2fa')`),
+    // Cada execução é retomada no máximo uma vez; a retomada seguinte parte da última da
+    // sequência, para nenhum hotel concluído ser consultado de novo (FR-023, SC-007).
+    uniqueIndex('executions_one_resume_per_parent').on(table.parentExecutionId),
   ],
 );
 

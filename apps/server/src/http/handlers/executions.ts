@@ -13,13 +13,14 @@ import type { Database } from '../../persistence/db.js';
 import { loadTimingHistory } from '../../persistence/execution-hotels-repo.js';
 import {
   ExecutionAlreadyActiveError,
+  ExecutionAlreadyResumedError,
   findExecution,
   InvalidCursorError,
   listExecutionHotels,
   listExecutions,
   type ExecutionWithClient,
 } from '../../persistence/executions-repo.js';
-import { ACTIVE_EXECUTION_STATUSES, type ExecutionStatus } from '../../persistence/schema.js';
+import { isActiveExecutionStatus as isActive } from '../../persistence/schema.js';
 import { ProblemError } from '../problem.js';
 import { toExecutionSummary, toExecutionView, type ExecutionView } from '../views.js';
 
@@ -28,10 +29,6 @@ type ExecutionParams = operations['getExecution']['parameters']['path'];
 type ListExecutionsQuery = NonNullable<operations['listExecutions']['parameters']['query']>;
 type TwoFactorBody = operations['sendTwoFactor']['requestBody']['content']['application/json'];
 type ResumeBody = operations['resumeExecution']['requestBody']['content']['application/json'];
-
-function isActive(status: ExecutionStatus): boolean {
-  return (ACTIVE_EXECUTION_STATUSES as readonly ExecutionStatus[]).includes(status);
-}
 
 export interface ExecutionHandlerDependencies {
   db: Database;
@@ -207,6 +204,9 @@ export function createExecutionHandlers(dependencies: ExecutionHandlerDependenci
         }
         if (error instanceof NothingToResumeError) {
           throw new ProblemError('nothing_to_resume', error.message);
+        }
+        if (error instanceof ExecutionAlreadyResumedError) {
+          throw new ProblemError('execution_already_resumed', error.message);
         }
         if (error instanceof ExecutionAlreadyActiveError) {
           throw new ProblemError(
