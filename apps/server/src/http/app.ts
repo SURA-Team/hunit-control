@@ -8,6 +8,7 @@ import fastify, {
   type RouteOptions,
 } from 'fastify';
 import openapiGlue from 'fastify-openapi-glue';
+import type { EvidenceStore } from '../evidence/store.js';
 import type { ExecutionEventBus } from '../executions/events.js';
 import type { ExecutionRunner } from '../executions/runner.js';
 import type { Logger } from '../logging.js';
@@ -15,10 +16,12 @@ import { findActiveClientByKeyHash } from '../persistence/clients-repo.js';
 import type { Database } from '../persistence/db.js';
 import { createAuthHook } from './auth.js';
 import { loadContract, type Contract } from './contract.js';
+import { createEvidenceHandlers } from './handlers/evidence.js';
 import { createExecutionEventsHandlers } from './handlers/execution-events.js';
 import { createExecutionHandlers } from './handlers/executions.js';
 import { createHealthHandlers } from './handlers/health.js';
 import { createHotelHandlers } from './handlers/hotels.js';
+import { createReservationHandlers } from './handlers/reservations.js';
 import { ProblemError, sendProblem } from './problem.js';
 
 /** Prefixo das rotas; corresponde a `servers.url` do contrato. */
@@ -36,6 +39,8 @@ export interface AppDependencies {
   logger: Logger;
   events: ExecutionEventBus;
   runner: ExecutionRunner;
+  /** Arquivos de evidência, para o download (FR-024). */
+  evidence: EvidenceStore;
 }
 
 /** Erro gerado pelo próprio Fastify ao ler ou validar a requisição (código `FST_ERR_...`). */
@@ -118,6 +123,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     ...createHealthHandlers(dependencies),
     ...createHotelHandlers(dependencies),
     ...createExecutionHandlers(dependencies),
+    ...createReservationHandlers(dependencies),
+    ...createEvidenceHandlers(dependencies),
     ...executionEvents.handlers,
   };
 

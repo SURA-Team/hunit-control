@@ -87,7 +87,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       logger,
     });
 
-    const app = await buildApp({ db: database.db, logger, events, runner });
+    const app = await buildApp({ db: database.db, logger, events, runner, evidence });
     const url = await app.listen({ port: config.port, host: options.host ?? '0.0.0.0' });
 
     let closing: Promise<void> | null = null;

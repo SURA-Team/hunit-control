@@ -10,9 +10,11 @@ import type {
   ExecutionWithClient,
 } from '../persistence/executions-repo.js';
 import type { HotelRow } from '../persistence/hotels-repo.js';
+import type { ReservationRow } from '../persistence/reservations-repo.js';
 import type { ClassificationCounts } from '../persistence/schema.js';
 
 type Schemas = components['schemas'];
+export type ReservationView = Schemas['Reservation'];
 export type ExecutionView = Schemas['Execution'];
 export type ExecutionSummaryView = Schemas['ExecutionSummary'];
 export type ExecutionEventView = Schemas['ExecutionEvent'];
@@ -104,6 +106,54 @@ export function toExecutionView({
       estimatedRemainingSeconds: null,
     },
     recentEvents: recentEvents.map(toEventView),
+  };
+}
+
+/**
+ * Reserva no formato do contrato (FR-016 a FR-018a). Valores monetários saem como string decimal
+ * (research R-17); o nome do hóspede sai `null` depois da anonimização (FR-026).
+ */
+export function toReservationView(row: ReservationRow): ReservationView {
+  return {
+    hotelCode: row.hotelCode,
+    reservationNumber: row.reservationNumber,
+    guestName: row.anonymizedAt ? null : row.guestName,
+    channel: row.channel,
+    checkIn: row.checkIn,
+    checkOut: row.checkOut,
+    stayPeriod: row.stayPeriod,
+    totalAmount: row.totalAmount,
+    reservationStatus: row.reservationStatus,
+    classification: row.classification,
+    reason: row.reason,
+    payment: {
+      prePaymentFound: row.prePaymentFound,
+      chargedAt: iso(row.chargedAt),
+      chargedBy: row.chargedBy,
+      chargedAmount: row.chargedAmount,
+      transactionId: row.transactionId,
+      authorizationCode: row.authorizationCode,
+      processorReference: row.processorReference,
+      isInstallment: row.isInstallment,
+      installmentCount: row.installmentCount,
+      installmentAmount: row.installmentAmount,
+      prePaymentState: row.prePaymentState,
+      prePaymentMessage: row.prePaymentMessage,
+      chargeActionVisible: row.chargeActionVisible,
+    },
+    tracking: {
+      changedFields: row.changedFields,
+      statusChanged: row.statusChanged,
+      previousClassification: row.previousClassification,
+      previousReservationStatus: row.previousReservationStatus,
+      statusChangedAt: iso(row.statusChangedAt),
+      notFoundSince: iso(row.notFoundSince),
+    },
+    firstVerifiedAt: iso(row.firstVerifiedAt),
+    lastVerifiedAt: iso(row.lastVerifiedAt),
+    verificationCount: row.verificationCount,
+    lastExecutionId: row.lastExecutionId,
+    anonymized: row.anonymizedAt !== null,
   };
 }
 

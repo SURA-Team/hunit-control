@@ -51,6 +51,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     logger: logs.logger,
     events: harness.events,
     runner: harness.runner,
+    evidence: harness.evidence,
   });
   await app.ready();
 

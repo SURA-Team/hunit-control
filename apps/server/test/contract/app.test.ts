@@ -54,6 +54,7 @@ describe('GET /v1/health (T016)', () => {
       logger: logs.logger,
       events: harness.events,
       runner: harness.runner,
+      evidence: harness.evidence,
     });
     await database.close(); // derruba a conexão com o banco
 
@@ -106,9 +107,10 @@ describe('erros no formato RFC 9457 (T015)', () => {
   });
 
   it('responde 501 para operação do contrato ainda sem implementação', async () => {
+    // Cancelamento: entra com a US3 (tasks.md, T057).
     const response = await test.app.inject({
-      method: 'GET',
-      url: '/v1/reservations',
+      method: 'POST',
+      url: '/v1/executions/00000000-0000-4000-8000-000000000000/cancel',
       headers: operator.headers,
     });
 
@@ -241,7 +243,7 @@ describe('validação das requisições contra o contrato (T016)', () => {
       headers: operator.headers,
     });
 
-    expect(response.statusCode).not.toBe(400);
+    expect(response.statusCode).toBe(200);
   });
 });
 
