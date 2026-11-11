@@ -54,7 +54,7 @@ tarefas marcadas ⛔ HUNIT.
 
 ### Domínio e configuração
 
-- [ ] T009 [P] Definir tipos de domínio em `packages/domain/src/types.ts`: `Classification` = `ignored_hotelbeds_258` | `not_virtual_card` | `virtual_card_charge_error` | `virtual_card_already_charged` | `virtual_card_pending_charge` | `analysis_error`; `ReservationStatus` = `active` | `cancelled` | `unknown`; `ReservationSnapshot` exatamente como em data-model.md ("Qualquer `null` nos campos que decidem a classificação leva a `analysis_error`")
+- [ ] T009 [P] Definir tipos de domínio em `packages/domain/src/types.ts`: `Classification` = `ignored_hotelbeds_258` | `not_virtual_card` | `virtual_card_charge_error` | `virtual_card_already_charged` | `virtual_card_validated_only` | `virtual_card_pending_charge` | `analysis_error`; `ReservationStatus` = `active` | `cancelled` | `unknown`; `ReservationSnapshot` exatamente como em data-model.md ("Qualquer `null` nos campos que decidem a classificação leva a `analysis_error`")
 - [ ] T010 [P] Implementar leitura e validação das variáveis de ambiente com zod em `apps/server/src/config.ts` (falha ao iniciar se `ACCOUNT_KEY_SECRET` ou `DATABASE_URL` faltarem; `HOTEL_CONCURRENCY` ≥ 1; `MAX_PERIOD_DAYS` opcional)
 
 ### Banco de dados
@@ -125,7 +125,7 @@ com o Hunit (SC-002); filtro "canceladas pendentes"; segunda execução incremen
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T036 [P] [US2] Testes unitários da classificação em `packages/domain/test/classification.test.ts`: cada regra da FR-013 na ordem (1 "258-" sem abrir … 6 `analysis_error`); `null` em campo decisivo → `analysis_error` (FR-015); reserva cancelada recebe a mesma classificação que teria ativa (FR-014a); `reason` sempre preenchido (FR-014)
+- [ ] T036 [P] [US2] Testes unitários da classificação em `packages/domain/test/classification.test.ts`: cada regra da FR-013 na ordem (1 "258-" sem abrir … 7 `analysis_error`; regra 5 `justValidate` → `virtual_card_validated_only`); `null` em campo decisivo → `analysis_error` (FR-015); reserva cancelada recebe a mesma classificação que teria ativa (FR-014a); `reason` sempre preenchido (FR-014)
 - [ ] T037 [P] [US2] Testes unitários do histórico em `packages/domain/test/verification.test.ts`: reserva nova (`verification_count = 1`); conhecida (`first_verified_at` preservado, `changed_fields`, `previous_classification`, `previous_reservation_status`, `status_changed_at`); ativa → cancelada conta como mudança (FR-018); `not_found_since = coalesce(not_found_since, agora)` só para check-in dentro do período (FR-018a); reaparecimento limpa a marcação
 - [ ] T038 [P] [US2] Testes unitários de período em `packages/domain/test/period.test.ts`: `from <= to`; períodos retroativos e maiores que uma semana aceitos; divisão em blocos de `MAX_PERIOD_DAYS` sem lacunas nem sobreposição (FR-010a)
 - [ ] T039 [P] [US2] Testes de integração da coleta com `FakeHunitGateway` + banco em `apps/server/test/integration/execution-hotels.test.ts`: transação única por hotel; hotel com falha não grava nada e a execução segue (`completed` com hotel `failed`); reservas repetidas entre páginas gravadas uma vez; `reservation_observations` por execução; marcação "não encontrada" só em hotel concluído; nenhuma chamada de escrita no gateway

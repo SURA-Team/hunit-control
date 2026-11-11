@@ -168,7 +168,7 @@ até serem confirmados (ver R-13).
 - **Responsável**: operador com acesso ao Hunit e ao autenticador (usuário do projeto). As tasks de
   Page Objects dependem dessas fixtures.
 
-## R-13a — Coleta pela tela ou pelas respostas HTTP do Hunit — **Spike pendente**
+## R-13a — Coleta pela tela ou pelas respostas HTTP do Hunit — **Spike concluído: rede (JSON)**
 
 - **Hipótese** (sugerida pelo usuário em 2026-11-11): o front do Hunit obtém listagem e detalhe
   das reservas por requisições HTTP (JSON ou HTML parcial). Ler essas respostas pode ser mais
@@ -267,6 +267,55 @@ engano.
 - **Direção provisória**: coleta **híbrida** — login e token pela interface (Playwright); listagem
   e detalhe lidos da API JSON com a sessão autenticada do navegador, somente GET, credenciais de
   sessão mantidas apenas em memória; HTML/tela apenas como diagnóstico.
+
+### Resultado do 3º HAR — abertura de 4 reservas (2026-11-11)
+
+Analisado sem imprimir valores (apenas formas, enums e booleanos). Fecha as perguntas 1–3 do spike.
+
+1. **Listagem**: `GET /api/Entity/GetBookings` com `StatusId, CollectTypeId, PrePaymentStatus,
+   IntegrationStatusId, DateTypeId, StartDate, EndDate (AAAA-MM-DD), Page, PageSize` → `items.items[]`
+   (`id`, `channelIdentifier` = número da reserva exibido, `guestFullName`, `channelName`,
+   `roomStayDescription`, `arrivalDate`, `departureDate`, `statusId`, `collectTypeId`,
+   `prePaymentStatus`, `total`, …) + `items.page/pageSize/total` → paginação calculável
+   (`ceil(total / pageSize)`), FR-011 atendida sem varrer a tela.
+2. **Detalhe**: `GET /api/Company/BookingDetail?id=<id interno>` reproduzível com a sessão. Campos
+   relevantes: `statusId`, `cancellationDate`, `hasCreditCardInfo`, `prePaymentStatus`, `canCharge`,
+   `collectTypeId/collectTypeLabel`, `totals.total`, `guest.fullName`, e `lastPaymentEvent`
+   (`null` quando nunca houve tentativa) com: `user`, `dateTime`, `valueCharged`, `status`,
+   `justValidate`, `authorizationCode`, `transactionId`, `processorReferenceNumber`, `isParceled`,
+   `numberOfInstallments`, `installmentValue`, `description`. → **todos os campos da FR-016**.
+   `ForBooking` não foi chamada pela tela e sai da lista de permissão. A tela também chama
+   `GET /api/bookings/{id}/channel-eligibility` (elegibilidade de no-show/cancelamento) — não
+   necessária, fica fora da lista de permissão.
+3. **Datas**: `DateTypeId=1` foi o padrão da tela nesta captura; o código de "Check-in" deve ser
+   confirmado (o legado usava 2) antes de fixar o filtro.
+4. **Hotel ativo**: só um `X-Company-Id` na captura e nenhuma chamada a `SelectCompany`; a pergunta
+   4 (paralelismo, R-08) continua aberta e será verificada no primeiro acesso real autorizado.
+
+**Mapeamento para `ReservationSnapshot`** (o front mostra o bloco de pagamento só se
+`hasCreditCardInfo`, e o botão de cobrar só se `prePaymentStatus ∈ {Unprocessed, Fail}` **e**
+`canCharge`):
+
+| Regra FR-013 | Condição na resposta do detalhe |
+|---|---|
+| 2 não é cartão virtual | `hasCreditCardInfo = false` |
+| 3 erro na cobrança | `prePaymentStatus = Fail` |
+| 4 já cobrada | `prePaymentStatus = Success` e `lastPaymentEvent.justValidate = false` |
+| 5 cartão validado (não cobrado) | `prePaymentStatus = Success` e `lastPaymentEvent.justValidate = true` |
+| 6 pendente de cobrança | `prePaymentStatus = Unprocessed` e `canCharge = true` |
+| 7 erro de análise | qualquer outro caso (ex.: `Success` sem `lastPaymentEvent`, `Unprocessed` sem `canCharge`, status desconhecido) |
+
+Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa; outro → não identificada.
+
+- **Decision (final)**: coleta **pela rede**. Playwright faz login + 2FA na tela; listagem e
+  detalhe vêm da API JSON (`page.request`, mesma sessão), somente GET e somente as rotas da lista
+  de permissão (`GetCurrentUser`, `GetCurrentUserCompanies`, `GetBookings`, `BookingDetail`).
+  Page Objects ficam restritos a login, 2FA e detecção de sessão. Fixtures de teste da coleta são
+  **JSON anonimizado**.
+- **⚠️ Ponto em aberto (negócio)**: na amostra, as reservas com cartão e cobranças (`Success`/`Fail`)
+  eram todas **Hotel Collect** (`collectTypeId = 1`); a única "Canal Collect" aberta não tinha
+  cartão. O filtro da FR-010 ("Tipo coleta = Canal") precisa ser confirmado com o Financeiro antes
+  da implementação da busca.
 
 ## R-14 — Testes
 

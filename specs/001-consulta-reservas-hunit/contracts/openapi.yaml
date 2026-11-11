@@ -446,6 +446,7 @@ components:
         - not_virtual_card
         - virtual_card_charge_error
         - virtual_card_already_charged
+        - virtual_card_validated_only
         - virtual_card_pending_charge
         - analysis_error
 
@@ -461,6 +462,7 @@ components:
         not_virtual_card: { type: integer }
         virtual_card_charge_error: { type: integer }
         virtual_card_already_charged: { type: integer }
+        virtual_card_validated_only: { type: integer }
         virtual_card_pending_charge: { type: integer }
         analysis_error: { type: integer }
 

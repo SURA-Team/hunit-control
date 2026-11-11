@@ -25,7 +25,7 @@ executions 0..1───* executions   (retomada: parent_execution_id)
 | `execution_status` | `queued`, `running`, `awaiting_2fa`, `completed`, `failed`, `cancelled` | Constitution IV |
 | `execution_end_reason` | `invalid_credentials`, `invalid_token`, `two_factor_timeout`, `hunit_unavailable`, `hunit_screen_not_recognized`, `session_expired`, `server_restarted`, `cancelled_by_client`, `internal_error` | FR-003, edge cases |
 | `hotel_run_status` | `pending`, `running`, `completed`, `failed`, `cancelled` | FR-021 |
-| `classification` | `ignored_hotelbeds_258`, `not_virtual_card`, `virtual_card_charge_error`, `virtual_card_already_charged`, `virtual_card_pending_charge`, `analysis_error` | FR-013 |
+| `classification` | `ignored_hotelbeds_258`, `not_virtual_card`, `virtual_card_charge_error`, `virtual_card_already_charged`, `virtual_card_validated_only`, `virtual_card_pending_charge`, `analysis_error` | FR-013 |
 | `reservation_status` | `active`, `cancelled`, `unknown` | FR-014a |
 | `evidence_kind` | `navigation_failure`, `classification_failure`, `screen_not_recognized`, `reservation_status_unknown` | FR-024 |
 
@@ -193,6 +193,7 @@ Produzido pelos Page Objects, consumido por `classifyReservation` em `packages/d
 | `chargeRecordPresent` | boolean \| null | registro "Cobrado em" |
 | `chargeActionVisible` | boolean \| null | ação de cobrar visível (somente leitura) |
 | `chargeFailed` | boolean \| null | estado ativo indica falha de cobrança |
+| `validationOnly` | boolean \| null | último evento foi só validação do cartão ("Validado em"), sem cobrança |
 | `reservationStatus` | `active` \| `cancelled` \| `unknown` | |
 | `payment` | objeto | `chargedAt`, `chargedBy`, `chargedAmount`, `transactionId`, `authorizationCode`, `processorReference`, `installment*`, `prePaymentState`, `prePaymentMessage` |
 | `listing` | objeto | `guestName`, `channel`, `checkIn`, `checkOut`, `stayPeriod`, `totalAmount` |

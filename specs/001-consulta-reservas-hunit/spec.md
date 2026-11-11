@@ -44,6 +44,9 @@ comercial, relatórios e painéis, e exportação de planilhas.
   reservas canceladas ainda podem ser cobradas. A situação da reserva (ativa/cancelada) é registrada
   separadamente da classificação de cobrança, permitindo distinguir, por exemplo, cancelada e cobrada
   de cancelada e pendente.
+- Q: Como classificar um pré-pagamento em que o cartão foi apenas validado ("Validado em"), sem
+  cobrança? → A: Situação própria, "cartão validado (não cobrado)", separada de "já cobrada" e de
+  "pendente", para o Financeiro analisar à parte.
 - Q: O que fazer quando uma reserva gravada não aparece numa consulta que cobriu seu hotel e período?
   → A: Marcar como "não encontrada na última verificação", mantendo o status anterior e o histórico.
 - Q: Todos os clientes autorizados têm as mesmas permissões? → A: Não; dois níveis por cliente:
@@ -122,16 +125,19 @@ Hunit.
    cobrar **não** é acionada.
 6. **Given** uma reserva com pré-pagamento cujo estado atual indica falha de cobrança, **When** é
    analisada, **Then** é classificada como "erro na cobrança".
-7. **Given** uma reserva com estrutura não reconhecida, estado contraditório ou indeterminado,
+7. **Given** uma reserva com pré-pagamento em que o cartão foi apenas validado ("Validado em"), sem
+   cobrança, **When** é analisada, **Then** é classificada como "cartão validado (não cobrado)",
+   com data/hora da validação registrada.
+8. **Given** uma reserva com estrutura não reconhecida, estado contraditório ou indeterminado,
    **When** é analisada, **Then** é classificada como "erro de análise", com motivo e evidência,
    para revisão humana.
-8. **Given** uma reserva já conhecida de execuções anteriores, **When** é verificada novamente,
+9. **Given** uma reserva já conhecida de execuções anteriores, **When** é verificada novamente,
    **Then** seu registro é atualizado, mantendo a primeira verificação, atualizando a última,
    incrementando a quantidade de verificações e indicando campos alterados e mudança de status
    (status anterior e momento da mudança).
-9. **Given** um hotel concluído, **When** o Financeiro consulta os resultados, **Then** encontra
+10. **Given** um hotel concluído, **When** o Financeiro consulta os resultados, **Then** encontra
    todas as reservas daquele hotel com seus dados e classificação.
-10. **Given** uma reserva cancelada no Hunit com pré-pagamento e registro "Cobrado em", **When** é
+11. **Given** uma reserva cancelada no Hunit com pré-pagamento e registro "Cobrado em", **When** é
     analisada, **Then** é registrada como cancelada e já cobrada, distinguível de uma reserva
     cancelada e pendente de cobrança e de uma reserva ativa e já cobrada.
 
@@ -259,15 +265,17 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 **Classificação**
 
 - **FR-013**: O sistema MUST classificar cada reserva em exatamente uma das situações: ignorada
-  (Hotelbeds 258), não é cartão virtual, já cobrada, pendente de cobrança, erro na cobrança ou erro
-  de análise, aplicando as regras na seguinte ordem:
+  (Hotelbeds 258), não é cartão virtual, já cobrada, cartão validado (não cobrado), pendente de
+  cobrança, erro na cobrança ou erro de análise, aplicando as regras na seguinte ordem:
   1. número iniciando com "258-" → ignorada, sem abrir a reserva;
   2. sem indicação de pré-pagamento → não é cartão virtual;
   3. pré-pagamento cujo estado atual indica falha de cobrança → erro na cobrança;
   4. pré-pagamento com registro de cobrança ("Cobrado em") → já cobrada;
-  5. pré-pagamento sem registro de cobrança e com a ação de cobrar disponível → pendente de
+  5. pré-pagamento com registro apenas de validação do cartão ("Validado em"), sem cobrança →
+     cartão validado (não cobrado);
+  6. pré-pagamento sem registro de cobrança e com a ação de cobrar disponível → pendente de
      cobrança;
-  6. qualquer outro caso (estrutura não reconhecida, contraditória ou indeterminada) → erro de
+  7. qualquer outro caso (estrutura não reconhecida, contraditória ou indeterminada) → erro de
      análise.
 - **FR-014**: Cada classificação MUST registrar o motivo que a determinou.
 - **FR-014a**: O sistema MUST registrar a situação da reserva no Hunit (ativa ou cancelada) de forma
