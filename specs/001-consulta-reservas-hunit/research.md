@@ -234,7 +234,16 @@ SSO **Keycloak** (OpenID Connect com PKCE) em `login.hsystem.com.br`, realm `hsy
 - **Page Objects**: localizar por label (`getByLabel('Endereço de e-mail')`, `getByLabel('Senha')`,
   `getByLabel('Código de uso único')`) e reconhecer a tela pelo título/`form#kc-*`. O sucesso do
   login é detectado pela chegada a `hunit.hsystem.com.br` e por `GetCurrentUser` = 200.
-- **Faltam (T020)**: HTML das mensagens de erro de senha inválida e de token inválido/expirado
+- **Primeiro login real (2026-11-11, `hunit-login-check`, rodado pelo operador)**: três rodadas,
+  todas com o resultado esperado — senha e token corretos → acesso concluído e catálogo lido
+  (`GetCurrentUser.companies` no formato esperado); senha errada → `invalid_credentials`; token
+  errado → `invalid_token`. Mensagens reais: senha errada → `span#input-error` "Nome de usuário
+  ou senha inválida."; token errado → `span#input-error-otp-code` "Código de uso único
+  inválido." (ambas `.kc-feedback-text`, tema PatternFly). O acesso foi concluído sem nenhum
+  redirecionamento fora da lista de permissão: a rota de retorno do login é aceita pela lista
+  atual. Duas diferenças em relação aos HARs, corrigidas: a tela de entrada `/login` exige o
+  clique em "LOGIN ÚNICO", e o rótulo do token é "Código do Autenticador".
+- **(Histórico) Faltavam (T020)**: HTML das mensagens de erro de senha inválida e de token inválido/expirado
   (Keycloak costuma mostrar `#input-error` ou `.kc-feedback-text`, a confirmar). Gravar com senha e
   token **falsos**, nunca os verdadeiros.
 - **Segurança**: o HAR da tela de token contém o POST com usuário e senha em texto puro (o

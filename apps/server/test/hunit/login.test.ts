@@ -217,7 +217,7 @@ describe('PlaywrightHunitGateway contra o Hunit falso', () => {
 
     expect(error).toBeInstanceOf(InvalidCredentialsError);
     expect(error.evidence?.screenshot?.length).toBeGreaterThan(0);
-    expect(error.evidence?.html).toContain('E-mail ou senha inválidos');
+    expect(error.evidence?.html).toContain('Nome de usuário ou senha inválida.');
     expect(error.evidence?.html).not.toContain('errada-123');
   });
 

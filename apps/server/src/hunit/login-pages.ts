@@ -1,10 +1,10 @@
 import type { Locator, Page } from 'playwright';
 
 /**
- * Mensagens de erro do login (Keycloak). O texto e a marcação das mensagens ainda não foram
- * observados no Hunit real (tasks.md, T020): estes são os lugares onde o Keycloak costuma
- * mostrá-las. Por isso aqui se usa CSS, e não papel/rótulo como no resto das telas
- * (constitution, princípio II). Confirmar com as telas reais de senha e token errados.
+ * Mensagens de erro do login (Keycloak). Conferido no Hunit real em 2026-11-11: senha errada →
+ * `#input-error`, token errado → `#input-error-otp-code`, ambos com a classe `kc-feedback-text`.
+ * Os outros seletores cobrem avisos gerais do Keycloak (ex.: tentativa expirada). Não há
+ * rótulo ou papel estável nessas mensagens, por isso aqui se usa CSS (constitution, princípio II).
  */
 const ERROR_MESSAGE = [
   '#input-error',

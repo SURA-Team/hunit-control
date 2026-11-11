@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- RECONSTRUÍDA a partir da análise dos HARs de login (research R-13), sem dados reais. Substituir pelo HTML real anonimizado (tasks.md, T020/T021). -->
-<!-- A marcação da mensagem de erro é a padrão do Keycloak e ainda não foi confirmada no Hunit. -->
+<!-- Marcação e texto da mensagem de erro conferidos com a tela real em 2026-11-11. -->
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
@@ -13,7 +13,7 @@
       <input id="username" name="username" type="text" value="{{username}}" aria-invalid="true" />
       <label for="password">Senha</label>
       <input id="password" name="password" type="password" aria-invalid="true" />
-      <span id="input-error" class="kc-feedback-text" aria-live="polite">E-mail ou senha inválidos.</span>
+      <span id="input-error" class="pf-c-form__helper-text pf-m-error required kc-feedback-text" aria-live="polite">Nome de usuário ou senha inválida.</span>
       <input id="kc-login" name="login" type="submit" value="Entrar" />
     </form>
   </body>
