@@ -102,6 +102,17 @@ até serem confirmados (ver R-13).
   paralelizar a abertura de reservas dentro do mesmo hotel (possível ganho, avaliar após medir o
   tempo do modo sequencial).
 
+## R-08a — Medição de tempo e estimativa (FR-021a, SC-010)
+
+- **Decision**: `execution_hotels` guarda `started_at`/`finished_at` e `reservations_seen`; o runner
+  calcula a média móvel de segundos por reserva aberta (reservas "258-" não contam) e estima o
+  restante = média × reservas ainda não processadas nas páginas conhecidas + média histórica por
+  hotel × hotéis ainda não iniciados. No início da execução usa a média das últimas execuções.
+- **Rationale**: o tempo varia mais com o número de reservas do que com o número de hotéis; a média
+  por reserva corrige a estimativa conforme a execução avança.
+- **Alternatives considered**: média por hotel apenas (distorcida por hotéis muito grandes ou
+  vazios).
+
 ## R-09 — Limite de tamanho do período no Hunit (FR-010a) — **Verificar no mapeamento**
 
 - **Decision**: o executor divide o período em blocos de até `MAX_PERIOD_DAYS` dias (variável de
@@ -152,6 +163,32 @@ até serem confirmados (ver R-13).
   permitem testar os Page Objects sem acessar o Hunit (princípio VII).
 - **Responsável**: operador com acesso ao Hunit e ao autenticador (usuário do projeto). As tasks de
   Page Objects dependem dessas fixtures.
+
+## R-13a — Coleta pela tela ou pelas respostas HTTP do Hunit — **Spike pendente**
+
+- **Hipótese** (sugerida pelo usuário em 2026-11-11): o front do Hunit obtém listagem e detalhe
+  das reservas por requisições HTTP (JSON ou HTML parcial). Ler essas respostas pode ser mais
+  rápido e mais estável do que abrir reserva por reserva na tela. No legado, o detalhe era um
+  modal com `id="bookingDetailView"`, o que sugere um HTML parcial carregado sob demanda.
+- **Spike**: com sessão já logada (login feito antes de gravar), capturar no DevTools um HAR
+  **sanitizado** de: seleção de hotel → filtro → troca de página → abertura de 2–3 reservas. O HAR
+  fica fora do repositório (contém dados de hóspedes) e é analisado para responder:
+  1. a listagem vem de uma resposta própria (JSON/HTML parcial)? com paginação por parâmetro?
+  2. o detalhe da reserva vem de uma requisição GET reproduzível com a sessão atual?
+  3. essas respostas trazem todos os campos da FR-016 (pré-pagamento, "Cobrado em", autorização…)?
+  4. a requisição depende do hotel ativo na sessão (impacta R-08)?
+- **Decision (provisória até o spike)**: a camada `apps/server/src/hunit/` expõe uma interface
+  `HunitGateway` (`login`, `submitToken`, `listHotels`, `selectHotel`, `searchReservations`,
+  `readReservation` → `ReservationSnapshot`). A primeira implementação será escolhida pelo spike:
+  - **Rede**: navegação pela tela só até o filtro; listagem e detalhe lidos das respostas HTTP
+    (interceptadas ou requisitadas via `page.request` com a sessão do navegador);
+  - **Tela**: Page Objects lendo o DOM (plano original).
+  Ambas podem coexistir (rede como principal, tela como alternativa de diagnóstico).
+- **Regras invioláveis**: somente requisições **GET** de leitura podem ser feitas diretamente;
+  nenhuma requisição POST/PUT/DELETE do Hunit é reproduzida (FR-012). Respostas usadas em testes
+  viram fixtures anonimizadas, como os HTML (princípio VII).
+- **Rationale**: o domínio recebe `ReservationSnapshot` nos dois casos (R-06), então a escolha
+  afeta só a camada do Hunit — exatamente o isolamento que o princípio II pede.
 
 ## R-14 — Testes
 

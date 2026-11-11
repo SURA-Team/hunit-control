@@ -98,7 +98,8 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 | `reservations_seen` | int | |
 | `counts` | jsonb | contagem por `classification` |
 | `failure_reason` | text null | |
-| `started_at`, `finished_at` | timestamptz null | |
+| `started_at`, `finished_at` | timestamptz null | duração do hotel (FR-021a) |
+| `reservations_opened` | int | reservas efetivamente abertas/lidas (exclui "258-"); base da média por reserva (R-08a) |
 
 ### execution_events — Eventos recentes (FR-021)
 

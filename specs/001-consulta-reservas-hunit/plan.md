@@ -16,7 +16,9 @@ verificação, e expostos por uma API contract-first (OpenAPI) com acompanhament
 Decisões centrais (detalhes em [research.md](./research.md)): API e automação no **mesmo processo**,
 para que credenciais e token nunca saiam da memória (R-02); **Page Objects** separados do **domínio**
 para que mudanças de tela do Hunit não toquem regras de negócio (R-06); processamento **sequencial**
-por padrão, porque a seleção de hotel no Hunit parece ser estado de sessão (R-08).
+por padrão, porque a seleção de hotel no Hunit parece ser estado de sessão (R-08); a coleta fica
+atrás de uma interface `HunitGateway`, permitindo ler as respostas HTTP do próprio Hunit em vez de
+abrir reserva por reserva, se o spike R-13a confirmar (R-13a).
 
 ## Technical Context
 
@@ -115,7 +117,9 @@ apps/
     │   ├── config.ts            # leitura e validação das variáveis de ambiente
     │   ├── http/                # rotas (handlers do openapi-glue), auth por chave/nível, SSE, erros RFC 9457
     │   ├── executions/          # runner: máquina de estados, 2FA, cancelamento, retomada, eventos
-    │   ├── hunit/               # PAGE OBJECTS — único lugar com seletores/URLs/textos do Hunit
+    │   ├── hunit/               # CAMADA DO HUNIT — único lugar com seletores/URLs/textos/requisições do Hunit
+    │   │   ├── gateway.ts                    # interface HunitGateway → ReservationSnapshot (R-13a)
+    │   │   ├── network/                      # leitura das respostas HTTP (se o spike R-13a confirmar)
     │   │   ├── login-page.ts
     │   │   ├── two-factor-page.ts
     │   │   ├── hotel-selection-page.ts
@@ -168,6 +172,8 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
 | Janela curta do token (~1–2 min) | Execuções falham por tempo | SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
 | Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita aos Page Objects + fixtures |
 | Limite desconhecido de período no Hunit (R-09) | Consultas retroativas falham | Divisão automática configurável |
+| Coleta pela tela é lenta (abrir reserva por reserva) | Meta de tempo não atingida | Spike R-13a: ler respostas HTTP (somente GET) atrás da interface `HunitGateway` |
+| Estimativa de tempo imprecisa no início | Operador planeja mal | Média histórica por reserva; SC-010 mede o erro (R-08a) |
 
 ## Complexity Tracking
 

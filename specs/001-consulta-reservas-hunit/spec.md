@@ -311,6 +311,10 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **FR-021**: O sistema MUST expor o andamento de cada execução: estado, hotel atual, página atual,
   reserva atual, contagens por classificação, hotéis concluídos, falhos e pendentes, e eventos
   recentes.
+- **FR-021a**: O sistema MUST registrar a duração de cada hotel processado e a quantidade de
+  reservas analisadas, e MUST exibir durante a execução uma estimativa do tempo restante baseada
+  no tempo médio por reserva observado (na própria execução ou, no início, nas execuções
+  anteriores). O tempo médio por hotel e por reserva MUST ser consultável por execução.
 - **FR-022**: O sistema MUST permitir cancelar uma execução a qualquer momento, interrompendo-a sem
   aguardar o fim do hotel atual.
 - **FR-023**: O sistema MUST permitir retomar uma execução interrompida a partir do primeiro hotel
@@ -373,7 +377,10 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **SC-008**: Após um cancelamento, a execução para em até 15 segundos.
 - **SC-009**: Uma execução de rotina (todos os hotéis do catálogo, uma semana de check-in) termina
   em até 30 minutos, se o Hunit permitir processar hotéis simultaneamente; caso contrário, em até
-  1 hora. Consultas retroativas maiores têm duração proporcional ao número de reservas.
+  1 hora. Consultas retroativas maiores têm duração proporcional ao número de reservas. A meta é
+  reavaliada com o tempo médio por reserva medido nas primeiras execuções de homologação (FR-021a).
+- **SC-010**: Após metade dos hotéis de uma execução, a estimativa de tempo restante erra em no
+  máximo 20% em relação à duração real.
 
 ## Assumptions
 

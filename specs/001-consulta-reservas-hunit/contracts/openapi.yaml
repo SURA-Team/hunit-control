@@ -518,9 +518,17 @@ components:
                   pagesDone: { type: [integer, 'null'] }
                   pagesTotal: { type: [integer, 'null'] }
                   reservationsSeen: { type: integer }
+                  durationSeconds: { type: [integer, 'null'] }
                   counts: { $ref: '#/components/schemas/ClassificationCounts' }
                   failureReason: { type: [string, 'null'] }
             counts: { $ref: '#/components/schemas/ClassificationCounts' }
+            timing:
+              type: object
+              description: Medição e estimativa (FR-021a)
+              properties:
+                avgSecondsPerReservation: { type: [number, 'null'] }
+                avgSecondsPerHotel: { type: [number, 'null'] }
+                estimatedRemainingSeconds: { type: [integer, 'null'] }
             recentEvents:
               type: array
               maxItems: 50
