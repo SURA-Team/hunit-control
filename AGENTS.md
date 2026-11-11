@@ -28,7 +28,10 @@ funcionar porque o Hunit mudou a UI.
 | `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle) |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
-| `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server` e `db` |
+| `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
+| `deploy/caddy/Caddyfile` | Proxy HTTPS com a autoridade certificadora interna do Caddy (research R-20) |
+| `deploy/backup/` | `backup.sh` (cópia cifrada do banco) e `restore.sh` (restauração), rodados no container `backup` (research R-21) |
+| `README.md` | Visão geral, implantação no PC de produção, cópia de segurança e restauração |
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento |
 
 O monorepo (pnpm + TypeScript) foi criado pela feature 001; a estrutura detalhada está em
@@ -119,13 +122,16 @@ PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tab
 | `pnpm lint` | ESLint + Prettier + lint do contrato OpenAPI (falha se os tipos gerados estiverem desatualizados) |
 | `pnpm format` | Formata o código com o Prettier |
 | `pnpm test` | Roda todos os testes (Vitest) |
-| `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker) |
+| `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker — inclui o teste de segurança SC-004 e o de cópia e restauração, que roda os scripts de `deploy/backup/` num container `postgres:17`) |
 | `pnpm build` | Compila os pacotes para `dist/` |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
 | `pnpm --filter @hunit/server db:generate --name=<descrição>` | Gera uma migration depois de mudar `apps/server/src/persistence/schema.ts` (não precisa de banco) |
-| `docker compose up -d --build` | Sobe `server` e `db` (antes, copie `.env.example` para `.env` e preencha) |
+| `docker compose up -d --build` | Sobe `server`, `db`, `proxy` e `backup` (antes, copie `.env.example` para `.env` e preencha as obrigatórias: `POSTGRES_PASSWORD`, `ACCOUNT_KEY_SECRET`, `SERVER_HOSTNAME`, `BACKUP_DIR`, `BACKUP_PASSPHRASE`) |
 | `docker compose exec server node dist/cli.js create-client --name <nome> --role <operator\|reader>` | Cadastra um cliente da API e mostra a chave dele, uma única vez |
 | `docker compose exec server node dist/cli.js revoke-client --name <nome>` | Revoga um cliente: a chave deixa de ser aceita |
+| `docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt .\hunit-raiz.crt` | Exporta o certificado raiz do proxy HTTPS, para instalar nas máquinas clientes (passo a passo no `README.md`) |
+| `docker compose run --rm --entrypoint bash backup /scripts/restore.sh <arquivo>` | Restaura uma cópia de segurança (com o `server` parado; passo a passo no `README.md`) |
+| `docker compose logs backup` | Mostra as cópias de segurança feitas, apagadas e as falhas |
 | `pnpm --filter @hunit/server start` | Sobe o servidor fora do Docker (depois do `pnpm build`; exige as variáveis do `.env.example` no ambiente e um PostgreSQL) |
 | `pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw` | Verificação manual do login no Hunit **real**, rodada pelo operador num terminal interativo (depois do `pnpm build`): pede e-mail, senha e token (ocultos), mostra o resultado e as rotas barradas pela proteção e guarda as telas sanitizadas na pasta ignorada pelo Git |
 | `pnpm --filter @hunit/server hunit:reservations-check --hotel <código> --from AAAA-MM-DD --to AAAA-MM-DD --save-dir test/fixtures/hunit/raw` | Verificação manual da leitura das reservas no Hunit **real** (mesmo modo de uso do `login-check`): lê a listagem de 1 hotel com os filtros fixos, confere que o Hunit os respeitou, abre algumas reservas e mostra número, situação e classificação (nunca o hóspede); `--parallel-hotel <código>` testa a leitura de dois hotéis ao mesmo tempo; guarda as respostas JSON na pasta ignorada pelo Git. `--help` mostra as opções |
@@ -142,6 +148,13 @@ Regras ao mexer em dependências e no contrato:
   — as duas cópias devem ficar idênticas.
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
+- Mudou o `docker-compose.yml`? O teste `apps/server/test/unit/compose-config.test.ts` confere que
+  só o `proxy` publica porta para a rede, que a porta do `server` fica em `127.0.0.1` e que o
+  `backup` usa a mesma imagem do `db`. Variável nova vai também para o `.env.example`, com
+  comentário.
+- Os scripts de `deploy/backup/` rodam em bash dentro do container `postgres:17`; mantenha os
+  finais de linha LF (o `.gitattributes` já força) e nunca escreva a `BACKUP_PASSPHRASE` ou a senha
+  do banco na saída.
 
 O servidor responde à API desde a Fase 3 da feature 001 (login com token e catálogo de hotéis)
 e, desde a Fase 4, consulta, classifica e grava as reservas por hotel, com consulta pela API
@@ -149,5 +162,8 @@ e, desde a Fase 4, consulta, classifica e grava as reservas por hotel, com consu
 estimativa de tempo (`current` e `timing` em `GET /v1/executions/{id}`), cancela
 (`POST /v1/executions/{id}/cancel`) e retoma execuções a partir dos hotéis não concluídos
 (`POST /v1/executions/{id}/resume`). Os códigos dos filtros e o tamanho de página do Hunit foram
-confirmados em parte com o `hunit:reservations-check` (T022). Ainda não existe o app Electron;
-documente aqui quando for criado.
+confirmados em parte com o `hunit:reservations-check` (T022). Desde a Fase 6, apaga as evidências
+vencidas e anonimiza reservas antigas sozinho (`apps/server/src/maintenance/retention.ts`, ao subir e
+a cada 24 h), aceita conexões da rede só por HTTPS (container `proxy`) e faz cópias cifradas do
+banco (container `backup`); a implantação no PC de produção está no `README.md`. Ainda não existe
+o app Electron; documente aqui quando for criado.

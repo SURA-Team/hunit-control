@@ -62,6 +62,9 @@ export default defineConfig({
           globalSetup: [fromRoot('./apps/server/test/helpers/postgres-global-setup.ts')],
           // Na primeira vez o Docker ainda precisa baixar a imagem do PostgreSQL.
           hookTimeout: 120_000,
+          // Com a suíte inteira em paralelo (inclusive o teste de cópia de segurança, que sobe
+          // outro PostgreSQL), testes de banco que levam ~4 s passavam dos 5 s padrão.
+          testTimeout: 15_000,
         },
       },
     ],

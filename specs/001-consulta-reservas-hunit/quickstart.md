@@ -34,9 +34,10 @@ Resultado esperado: todos os testes passam, incluindo:
 ## 2. Subir o ambiente
 
 ```powershell
-Copy-Item .env.example .env       # preencher ACCOUNT_KEY_SECRET e senhas do banco
+Copy-Item .env.example .env       # preencher POSTGRES_PASSWORD, ACCOUNT_KEY_SECRET, SERVER_HOSTNAME,
+                                  # BACKUP_DIR e BACKUP_PASSPHRASE (detalhes no README.md)
 docker compose up -d --build
-curl http://localhost:3000/v1/health        # → {"status":"ok"}
+curl.exe http://127.0.0.1:3000/v1/health    # → {"status":"ok"} (porta HTTP só no próprio PC)
 docker compose exec server node dist/cli.js create-client --name desktop --role operator
 docker compose exec server node dist/cli.js create-client --name leitura --role reader
 ```
@@ -63,7 +64,7 @@ Pela API — a senha e o token são lidos sem aparecer na tela e sem ir para o h
 PowerShell (nunca escreva credenciais direto na linha de comando):
 
 ```powershell
-$api = 'http://localhost:3000/v1'
+$api = 'http://127.0.0.1:3000/v1'   # no próprio PC; de outra máquina: https://<SERVER_HOSTNAME>/v1
 $auth = @{ Authorization = "Bearer $OP" }
 $user = Read-Host 'E-mail do Hunit'
 $pass = [Net.NetworkCredential]::new('', (Read-Host 'Senha' -AsSecureString)).Password
