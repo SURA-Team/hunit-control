@@ -216,9 +216,12 @@ até serem confirmados (ver R-13).
 Com a coleta pela rede (R-13a), a tela só é usada no login. O login **não é do Hunit**: é um
 SSO **Keycloak** (OpenID Connect com PKCE) em `login.hsystem.com.br`, realm `hsystem`.
 
-1. `https://hunit.hsystem.com.br/login` → o front chama `GetCurrentUser` (401 sem sessão) e
-   redireciona para `GET hunit-api…/api/Account/SSOLogin?returnUrl=…` → **302** para
-   `login.hsystem.com.br/auth/realms/hsystem/protocol/openid-connect/auth`.
+1. `https://hunit.hsystem.com.br/login` mostra a **tela de entrada** do Hunit, só com o botão
+   **"LOGIN ÚNICO"** (MUI, clique tratado por JavaScript); o clique leva a
+   `GET hunit-api…/api/Account/SSOLogin?returnUrl=…` → **302** para
+   `login.hsystem.com.br/auth/realms/hsystem/protocol/openid-connect/auth`. *(Corrigido em
+   2026-11-11 no primeiro login real: os HARs não mostravam o clique, e a versão anterior deste
+   item dizia que o redirecionamento era automático — o login falhava por esperar os campos.)*
 2. **Tela de credenciais** (`<title>Entrar em hsystem</title>`, `h1#kc-page-title` "Entrar na sua
    conta"): `form#kc-form-login`; label **"Endereço de e-mail"** → `input#username`; label
    **"Senha"** → `input#password`; botão de envio `input#kc-login`.
