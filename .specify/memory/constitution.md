@@ -16,19 +16,28 @@ referência de comportamento; nenhum código novo pode depender dele.
 **Justificativa**: o Hunit muda sem aviso; specs estáveis separam o que o sistema faz de
 como ele interage com a UI, tornando correções localizadas e rastreáveis.
 
-### II. Isolamento da UI do Hunit (Page Objects)
+### II. Isolamento do Hunit (camada do Hunit)
 
-- O Hunit não tem API pública. Todo seletor e toda interação com páginas do Hunit MUST
-  ficar exclusivamente na camada de Page Objects.
-- Regras de negócio, jobs e a API MUST NOT referenciar seletores, URLs internas ou
-  estrutura HTML do Hunit.
+- O Hunit não tem API pública. Toda interação com o Hunit MUST ficar exclusivamente na
+  **camada do Hunit**, composta por:
+  - **Page Objects**, para as telas operadas pelo navegador (ex.: login e 2FA);
+  - **leitores da API interna**, para respostas HTTP que o próprio front do Hunit consome,
+    lidas com a sessão autenticada do navegador.
+- Regras de negócio, jobs e a API MUST NOT referenciar seletores, URLs internas, rotas,
+  estrutura HTML ou formato de respostas do Hunit; recebem apenas objetos neutros do
+  domínio.
+- Leitores da API interna MUST fazer somente requisições de leitura, restritas a uma lista
+  explícita de rotas permitidas; rotas que cobram, alteram dados ou revelam dados de cartão
+  MUST ser bloqueadas explicitamente.
 - Seletores SHOULD preferir localizadores semânticos (role, label, texto visível) a
   CSS/XPath acoplados à estrutura.
-- Falha de seletor ou de navegação MUST gerar erro explícito e tipado, acompanhado de
-  screenshot e HTML da página como evidência. Falhas silenciosas são proibidas.
+- Tela ou resposta não reconhecida MUST gerar erro explícito e tipado, acompanhado de
+  evidência do que foi recebido: screenshot e HTML para telas, ou a resposta recebida para
+  leitores da API. Falhas silenciosas são proibidas.
 
 **Justificativa**: a quebra que motivou esta reescrita foi uma mudança de UI do Hunit;
-mudanças futuras devem exigir alterações apenas nos Page Objects.
+mudanças futuras, de tela ou de API interna, devem exigir alterações apenas na camada do
+Hunit.
 
 ### III. API-First com Contrato
 
@@ -84,8 +93,10 @@ financeiro direto.
 
 - Lógica de domínio MUST ter testes unitários.
 - Endpoints MUST ter testes de contrato validados contra o OpenAPI.
-- Page Objects MUST ser testados contra fixtures HTML salvas do Hunit, permitindo
-  detectar quebras de UI sem acessar o Hunit real. Fixtures MUST ser anonimizadas.
+- A camada do Hunit MUST ser testada contra fixtures salvas do Hunit (HTML para Page
+  Objects, JSON para leitores da API interna), permitindo detectar quebras sem acessar o
+  Hunit real. Fixtures MUST ser anonimizadas.
+- A lista de rotas permitidas e bloqueadas da camada do Hunit MUST ter teste automatizado.
 - Testes são escritos junto com a implementação de cada task; uma task não está
   concluída sem seus testes passando.
 
@@ -130,4 +141,4 @@ de execução) que aumentaram o custo de manutenção.
 - Toda revisão de plan, tasks e código MUST verificar conformidade com estes princípios.
 - Orientações operacionais para agentes de código ficam em `AGENTS.md`.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-11
+**Version**: 1.1.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-11
