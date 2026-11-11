@@ -14,7 +14,7 @@
  * anonimizado antes de virar fixture (T021).
  *
  *   pnpm --filter @hunit/server build
- *   pnpm --filter @hunit/server hunit:login-check -- --save-dir test/fixtures/hunit/raw
+ *   pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -72,7 +72,10 @@ function askHidden(question: string): Promise<string> {
 }
 
 async function main(): Promise<number> {
-  const { values } = parseArgs({ options: { 'save-dir': { type: 'string' } } });
+  // O pnpm repassa um "--" literal quando o comando é chamado como `pnpm ... -- --save-dir x`.
+  const argv = process.argv.slice(2);
+  const args = argv[0] === '--' ? argv.slice(1) : argv;
+  const { values } = parseArgs({ args, options: { 'save-dir': { type: 'string' } } });
   const saveDir = values['save-dir'] ? path.resolve(values['save-dir']) : null;
 
   if (!process.stdin.isTTY) {

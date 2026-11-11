@@ -127,7 +127,7 @@ PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tab
 | `docker compose exec server node dist/cli.js create-client --name <nome> --role <operator\|reader>` | Cadastra um cliente da API e mostra a chave dele, uma única vez |
 | `docker compose exec server node dist/cli.js revoke-client --name <nome>` | Revoga um cliente: a chave deixa de ser aceita |
 | `pnpm --filter @hunit/server start` | Sobe o servidor fora do Docker (depois do `pnpm build`; exige as variáveis do `.env.example` no ambiente e um PostgreSQL) |
-| `pnpm --filter @hunit/server hunit:login-check -- --save-dir test/fixtures/hunit/raw` | Verificação manual do login no Hunit **real**, rodada pelo operador num terminal interativo (depois do `pnpm build`): pede e-mail, senha e token (ocultos), mostra o resultado e as rotas barradas pela proteção e guarda as telas sanitizadas na pasta ignorada pelo Git |
+| `pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw` | Verificação manual do login no Hunit **real**, rodada pelo operador num terminal interativo (depois do `pnpm build`): pede e-mail, senha e token (ocultos), mostra o resultado e as rotas barradas pela proteção e guarda as telas sanitizadas na pasta ignorada pelo Git |
 
 Regras ao mexer em dependências e no contrato:
 

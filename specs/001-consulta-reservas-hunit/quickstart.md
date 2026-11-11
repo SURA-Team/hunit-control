@@ -53,7 +53,7 @@ do banco). Ela pede e-mail, senha e token no próprio terminal, sem gravar nada:
 
 ```powershell
 pnpm build
-pnpm --filter @hunit/server hunit:login-check -- --save-dir test/fixtures/hunit/raw
+pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw
 ```
 
 Se aparecer uma rota "(redirecionamento — passou)", ela é a rota real de retorno do login (T022):
