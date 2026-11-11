@@ -220,6 +220,50 @@ até serem confirmados (ver R-13).
   `MenuCapabilities` apareceram só como `OPTIONS`); (3) mecanismo de autenticação da API (o HAR
   sanitizado remove `Authorization`/cookies); (4) significado de `statusId` (vistos 1, 2, 3) para
   ativa/cancelada.
+### Resultado do 2º HAR + leitura do bundle JS do front (2026-11-11)
+
+O 2º HAR capturou um recarregamento da página (sem troca de hotel nem abertura de reserva), mas
+incluiu o bundle JavaScript do front, que lista as rotas e enums usados pela tela:
+
+- **Autenticação**: o cliente HTTP do front usa `withCredentials: true` (cookies), sem cabeçalho
+  `Authorization`. Login por SSO: `GET /api/Account/SSOLogin?returnUrl=…` (redireciona para o
+  provedor de login, onde ficam senha e 2FA). → O contexto do Playwright, depois do login, já
+  carrega os cookies; chamadas à API podem usar o `APIRequestContext` do próprio contexto do
+  navegador, sem extrair nem guardar nenhum segredo.
+- **Hotel**: um interceptor adiciona `X-Company-Id` (hotel selecionado) em toda requisição. Existe
+  também `POST /api/Account/SelectCompany` (a tela chama ao trocar de hotel) — verificar se a API
+  aceita só o cabeçalho sem o `SelectCompany` antes de paralelizar.
+- **Catálogo de hotéis**: `GET /api/Account/GetCurrentUser` (`companies[]` com `id`, `name`,
+  `isActive`) e `GET /api/Account/GetCurrentUserCompanies?search&page&pageSize`.
+- **Detalhe**: `GET /api/Company/BookingDetail?id=<id da reserva>`; também
+  `GET /api/Company/ForBooking?bookingId=<id>`. Formato da resposta ainda não observado.
+- **Situação da reserva**: `statusId` 1 = nova, 2 = alterada, 3 = **cancelada** (a tela mostra
+  "cancelada" se `statusId === 3`, senão "ativa"). Atenção: no **filtro** `StatusId` os códigos
+  são outros: 0 = Todas, 1 = Ativas, 2 = Canceladas.
+- **Situação do pré-pagamento** (`prePaymentStatus`): `Success` = cobrado, `Fail` = falha na
+  cobrança, `Unprocessed` = não cobrado; qualquer outro valor = sem pré-pagamento (`na`). A ação
+  de cobrar aparece quando o status é `Unprocessed` ou `Fail`.
+- **Nuance nova**: um evento de pré-pagamento com `justValidate = true` é exibido como "Validado
+  em" em vez de "Cobrado em" — o cartão foi **validado, não cobrado**. Precisa de decisão de
+  negócio (ver pendência na spec).
+
+#### Rotas que o sistema NUNCA pode chamar (lista de bloqueio do `read-only-guard`)
+
+| Rota | Motivo |
+|---|---|
+| `POST /api/Payment/CalculePrePayment` | primeiro passo da cobrança (no legado, o botão de cobrar tinha a classe `calculeprepayment`) |
+| `POST /api/Payment/ChargePrePayment` | **executa a cobrança** |
+| `GET /api/Payment/UpdatePrePaymentInformation`, `POST …/UpdatePrePaymentInformationPost` | atualiza informação de pagamento — GET com possível efeito colateral |
+| `POST /api/Company/BookingPaymentDetails` | revela dados do cartão (exige captcha); o sistema não precisa nem pode ver dados de cartão |
+| `POST /api/Company/CancelBooking`, `POST /api/Company/EditBooking`, `POST /api/Company/ReactivateIntegration` | alteram reservas |
+| `POST /api/bookings/{id}/events/*` (`cancel-invalid-card`, `update-dates`) | alteram reservas |
+
+Por isso o guard passa a ser **lista de permissão por rota**, não só por método: depois do login,
+o cliente de API do sistema só conhece `GetCurrentUser`, `GetCurrentUserCompanies`, `GetBookings`,
+`BookingDetail` e `ForBooking`; no navegador, qualquer requisição a `hunit-api` fora da lista de
+permissão é abortada, e as rotas da tabela acima são bloqueadas mesmo se aparecerem na lista por
+engano.
+
 - **Direção provisória**: coleta **híbrida** — login e token pela interface (Playwright); listagem
   e detalhe lidos da API JSON com a sessão autenticada do navegador, somente GET, credenciais de
   sessão mantidas apenas em memória; HTML/tela apenas como diagnóstico.
