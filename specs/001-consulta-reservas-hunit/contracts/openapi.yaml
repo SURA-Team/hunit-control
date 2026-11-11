@@ -7,6 +7,8 @@ info:
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
+    Erros são devolvidos como `application/problem+json` (RFC 9457) com um `code` estável.
+    Qualquer operação pode responder 500 com `code = internal_error` em caso de falha inesperada.
 servers:
   - url: /v1
 security:
@@ -36,6 +38,11 @@ paths:
                 required: [status]
                 properties:
                   status: { type: string, enum: [ok] }
+        '503':
+          description: Serviço indisponível (o banco de dados não respondeu)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /hotels:
     get:
@@ -103,6 +110,7 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/ExecutionSummary' }
                   nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /executions/{executionId}:
@@ -118,6 +126,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Execution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -142,6 +151,7 @@ paths:
           content:
             text/event-stream:
               schema: { $ref: '#/components/schemas/ExecutionEvent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -168,6 +178,7 @@ paths:
       responses:
         '202':
           description: Token entregue à execução; o resultado chega pelo estado/eventos
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -190,6 +201,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Execution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -222,6 +234,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Execution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -304,6 +317,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -328,10 +342,14 @@ paths:
             image/png: {}
             text/html: {}
             application/json: {}
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '410':
           description: Evidência expirada (retenção de 30 dias — FR-025)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
 components:
   securitySchemes:
@@ -357,7 +375,7 @@ components:
 
   responses:
     BadRequest:
-      description: Requisição inválida
+      description: Requisição inválida (parâmetro, corpo ou formato fora do contrato)
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -400,6 +418,7 @@ components:
             - execution_already_finished
             - nothing_to_resume
             - evidence_expired
+            - internal_error
 
     HunitCredentials:
       type: object
