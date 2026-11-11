@@ -18,9 +18,9 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 import type { Page } from 'playwright';
+import { ask, askHidden, commandArgs } from './cli-prompt.js';
 import { capturePageEvidence } from './evidence/capture.js';
 import type { EvidenceMaterial } from './evidence/material.js';
 import { sanitizeHtml } from './evidence/sanitize.js';
@@ -32,50 +32,11 @@ import { SecretRegistry } from './secrets.js';
 const DEFAULT_WEB_URL = 'https://hunit.hsystem.com.br';
 const DEFAULT_API_URL = 'https://hunit-api.hsystem.com.br';
 
-async function ask(question: string): Promise<string> {
-  const readline = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return (await readline.question(question)).trim();
-  } finally {
-    readline.close();
-  }
-}
-
-/** Lê uma linha sem mostrar o que é digitado. */
-function askHidden(question: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const { stdin, stdout } = process;
-    stdout.write(question);
-    stdin.setRawMode(true);
-    stdin.setEncoding('utf8');
-    stdin.resume();
-
-    let value = '';
-    const finish = (error?: Error) => {
-      stdin.off('data', onData);
-      stdin.setRawMode(false);
-      stdin.pause();
-      stdout.write('\n');
-      if (error) reject(error);
-      else resolve(value);
-    };
-    const onData = (chunk: string) => {
-      for (const char of chunk) {
-        if (char === '\r' || char === '\n') return finish();
-        if (char === '\u0003') return finish(new Error('Cancelado.'));
-        if (char === '\u007f' || char === '\b') value = value.slice(0, -1);
-        else value += char;
-      }
-    };
-    stdin.on('data', onData);
-  });
-}
-
 async function main(): Promise<number> {
-  // O pnpm repassa um "--" literal quando o comando é chamado como `pnpm ... -- --save-dir x`.
-  const argv = process.argv.slice(2);
-  const args = argv[0] === '--' ? argv.slice(1) : argv;
-  const { values } = parseArgs({ args, options: { 'save-dir': { type: 'string' } } });
+  const { values } = parseArgs({
+    args: commandArgs(),
+    options: { 'save-dir': { type: 'string' } },
+  });
   const saveDir = values['save-dir'] ? path.resolve(values['save-dir']) : null;
 
   if (!process.stdin.isTTY) {

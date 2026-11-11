@@ -177,6 +177,38 @@ describe('PlaywrightHunitGateway contra o Hunit falso', () => {
     throw new Error('era esperada uma falha');
   }
 
+  it('depois do acesso, lê listagem e detalhe com a sessão do navegador e o hotel no cabeçalho', async () => {
+    const { server, gateway } = await open();
+    await gateway.login({ username: USERNAME, password: PASSWORD });
+    await gateway.submitToken(TOKEN);
+
+    const page = await gateway.searchReservations(
+      '101',
+      { from: '2026-11-01', to: '2026-11-07' },
+      1,
+    );
+    const first = page.items[0];
+    if (!first) throw new Error('a listagem da fixture veio vazia');
+    const { snapshot } = await gateway.readReservation('101', first);
+
+    expect(page).toMatchObject({ page: 1, totalPages: 2, totalItems: 3 });
+    expect(snapshot).toMatchObject({ reservationNumber: 'BK-1001', chargeRecordPresent: true });
+    expect(server.apiReads.map((read) => [read.url.split('?')[0], read.companyId])).toEqual([
+      ['/api/Entity/GetBookings', '101'],
+      ['/api/Company/BookingDetail', '101'],
+    ]);
+  });
+
+  it('leitura de reservas sem sessão válida → SessionExpiredError', async () => {
+    const { gateway } = await open();
+
+    const error = await rejection(
+      gateway.searchReservations('101', { from: '2026-11-01', to: '2026-11-07' }, 1),
+    );
+
+    expect(error.code).toBe('session_expired');
+  });
+
   it('login com token: pede o token, conclui o acesso e lê o catálogo de hotéis ativos', async () => {
     const { server, gateway } = await open();
 

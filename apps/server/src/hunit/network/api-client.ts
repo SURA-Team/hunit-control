@@ -18,6 +18,12 @@ export interface HunitApiClientOptions {
   webUrl: string;
   /** Tempo máximo de cada requisição, em milissegundos. */
   timeoutMs: number;
+  /**
+   * Chamado com cada resposta JSON recebida, antes de ser conferida. Usado só pela verificação
+   * manual (`hunit-reservations-check`) para guardar as respostas reais como material de
+   * fixtures (T020).
+   */
+  onResponse?: (route: HunitApiRoute, body: unknown) => void | Promise<void>;
 }
 
 export interface HunitGetOptions {
@@ -84,13 +90,16 @@ export class HunitApiClient {
       });
     }
 
+    let parsed: unknown;
     try {
-      return JSON.parse(body) as unknown;
+      parsed = JSON.parse(body) as unknown;
     } catch (error) {
       throw new ScreenNotRecognizedError(`a resposta de ${route} não é JSON`, {
         evidence: { response: body },
         cause: error,
       });
     }
+    await this.options.onResponse?.(route, parsed);
+    return parsed;
   }
 }

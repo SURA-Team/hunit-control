@@ -43,6 +43,10 @@ export interface FakeHunitServerOptions {
   callbackPath?: string;
   /** Corpo de `GetCurrentUser` para a sessão válida. Padrão: a fixture `current-user.json`. */
   currentUser?: unknown;
+  /** Corpo de `GetBookings` para a sessão válida. Padrão: a fixture `bookings-page-1.json`. */
+  bookings?: unknown;
+  /** Corpo de `BookingDetail` para a sessão válida. Padrão: a fixture `booking-detail-charged.json`. */
+  bookingDetail?: unknown;
 }
 
 export interface FakeHunitServer {
@@ -50,6 +54,8 @@ export interface FakeHunitServer {
   apiUrl: string;
   /** Requisições recebidas pela API ("MÉTODO /caminho"). */
   apiRequests: string[];
+  /** Leituras de reservas recebidas pela API: caminho com parâmetros e hotel (`X-Company-Id`). */
+  apiReads: Array<{ url: string; companyId: string | undefined }>;
   /** Tokens recebidos pela tela do token. */
   tokensReceived: string[];
   close(): Promise<void>;
@@ -84,6 +90,7 @@ export async function startFakeHunitServer(
   options: FakeHunitServerOptions,
 ): Promise<FakeHunitServer> {
   const apiRequests: string[] = [];
+  const apiReads: FakeHunitServer['apiReads'] = [];
   const tokensReceived: string[] = [];
   const callbackPath = options.callbackPath ?? '/signin-oidc';
   const urls = { web: '', api: '', login: '' };
@@ -188,13 +195,27 @@ export async function startFakeHunitServer(
       });
       return;
     }
-    if (pathname === '/api/Account/GetCurrentUser') {
+    const readers: Record<string, () => unknown> = {
+      '/api/Account/GetCurrentUser': () =>
+        options.currentUser ?? readJsonFixture('current-user.json'),
+      '/api/Entity/GetBookings': () => options.bookings ?? readJsonFixture('bookings-page-1.json'),
+      '/api/Company/BookingDetail': () =>
+        options.bookingDetail ?? readJsonFixture('booking-detail-charged.json'),
+    };
+    const reader = readers[pathname];
+    if (reader && request.method === 'GET') {
+      if (pathname !== '/api/Account/GetCurrentUser') {
+        apiReads.push({
+          url: request.url ?? '',
+          companyId: request.headers['x-company-id'] as string | undefined,
+        });
+      }
       if (!(request.headers.cookie ?? '').includes(`${SESSION_COOKIE}=valid`)) {
         response.writeHead(401).end();
         return;
       }
       response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify(options.currentUser ?? readJsonFixture('current-user.json')));
+      response.end(JSON.stringify(reader()));
       return;
     }
     response.writeHead(404).end();
@@ -213,6 +234,7 @@ export async function startFakeHunitServer(
     webUrl: urls.web,
     apiUrl: urls.api,
     apiRequests,
+    apiReads,
     tokensReceived,
     async close() {
       await Promise.all(

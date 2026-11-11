@@ -22,7 +22,7 @@ import type {
   ReservationPage,
 } from './gateway.js';
 import { HunitEntryPage, isLoginExpiredPage, LoginPage, TwoFactorPage } from './login-pages.js';
-import { HunitApiClient } from './network/api-client.js';
+import { HunitApiClient, type HunitApiClientOptions } from './network/api-client.js';
 import { readBookingDetail } from './network/booking-detail.js';
 import { searchBookings } from './network/bookings.js';
 import { readCatalog } from './network/catalog.js';
@@ -48,6 +48,11 @@ export interface PlaywrightGatewayOptions {
    * (`hunit-login-check`) para guardar as telas reais como material de fixtures (T020).
    */
   onScreen?: (screen: 'hunit_entry' | 'login' | 'two_factor', page: Page) => Promise<void>;
+  /**
+   * Chamado com cada resposta JSON da API do Hunit. Usado pela verificação manual das reservas
+   * (`hunit-reservations-check`) para guardar as respostas reais (T020).
+   */
+  onApiResponse?: HunitApiClientOptions['onResponse'];
 }
 
 const DEFAULT_STEP_TIMEOUT_MS = 30_000;
@@ -93,6 +98,7 @@ export class PlaywrightHunitGateway implements HunitGateway {
       apiUrl: options.apiUrl,
       webUrl: options.webUrl,
       timeoutMs: this.stepTimeoutMs,
+      ...(options.onApiResponse && { onResponse: options.onApiResponse }),
     });
   }
 

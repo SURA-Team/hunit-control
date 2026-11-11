@@ -164,8 +164,12 @@ describe('GET /v1/executions/{executionId} (getExecution)', () => {
   it('200 com estado, prazo do token e eventos recentes; reader também pode consultar', async () => {
     const { id } = bodyOf(await start());
     await waitForStatus(id, 'awaiting_2fa');
-
-    const response = await get(id, reader);
+    // O evento é gravado logo depois da mudança de estado: espera ele também.
+    let response = await get(id, reader);
+    await vi.waitFor(async () => {
+      response = await get(id, reader);
+      expect(bodyOf(response).recentEvents.at(-1)?.status).toBe('awaiting_2fa');
+    });
 
     expect(response.statusCode).toBe(200);
     expectMatchesContract('getExecution', response);
