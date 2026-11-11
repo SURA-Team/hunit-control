@@ -1,0 +1,432 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-11 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 1,
+  "displayName": "Usuário Fictício 1",
+  "email": "usuario1@exemplo.test",
+  "language": "pt",
+  "isInternal": false,
+  "allowPmsConfiguration": false,
+  "allowConfigurationlUpdates": false,
+  "allowChannelUpdates": true,
+  "allowFinancialUpdates": true,
+  "allowInternalAccessManagement": false,
+  "allowRestrictedCompanySettings": false,
+  "companies": [
+    {
+      "id": 3544,
+      "name": "Hotel Fictício 1",
+      "isActive": true
+    },
+    {
+      "id": 4909,
+      "name": "Hotel Fictício 2",
+      "isActive": true
+    },
+    {
+      "id": 4636,
+      "name": "Hotel Fictício 3",
+      "isActive": true
+    },
+    {
+      "id": 4740,
+      "name": "Hotel Fictício 4",
+      "isActive": true
+    },
+    {
+      "id": 4658,
+      "name": "Hotel Fictício 5",
+      "isActive": true
+    },
+    {
+      "id": 4640,
+      "name": "Hotel Fictício 6",
+      "isActive": true
+    },
+    {
+      "id": 4461,
+      "name": "Hotel Fictício 7",
+      "isActive": true
+    },
+    {
+      "id": 1563,
+      "name": "Hotel Fictício 8",
+      "isActive": true
+    },
+    {
+      "id": 4918,
+      "name": "Hotel Fictício 9",
+      "isActive": true
+    },
+    {
+      "id": 2234,
+      "name": "Hotel Fictício 10",
+      "isActive": true
+    },
+    {
+      "id": 4535,
+      "name": "Hotel Fictício 11",
+      "isActive": true
+    },
+    {
+      "id": 4171,
+      "name": "Hotel Fictício 12",
+      "isActive": true
+    },
+    {
+      "id": 1652,
+      "name": "Hotel Fictício 13",
+      "isActive": true
+    },
+    {
+      "id": 5255,
+      "name": "Hotel Fictício 14",
+      "isActive": true
+    },
+    {
+      "id": 3794,
+      "name": "Hotel Fictício 15",
+      "isActive": true
+    },
+    {
+      "id": 3660,
+      "name": "Hotel Fictício 16",
+      "isActive": true
+    },
+    {
+      "id": 1099,
+      "name": "Hotel Fictício 17",
+      "isActive": true
+    },
+    {
+      "id": 4030,
+      "name": "Hotel Fictício 18",
+      "isActive": true
+    },
+    {
+      "id": 4072,
+      "name": "Hotel Fictício 19",
+      "isActive": true
+    },
+    {
+      "id": 2240,
+      "name": "Hotel Fictício 20",
+      "isActive": true
+    },
+    {
+      "id": 4988,
+      "name": "Hotel Fictício 21",
+      "isActive": true
+    },
+    {
+      "id": 1690,
+      "name": "Hotel Fictício 22",
+      "isActive": true
+    },
+    {
+      "id": 4944,
+      "name": "Hotel Fictício 23",
+      "isActive": true
+    },
+    {
+      "id": 4202,
+      "name": "Hotel Fictício 24",
+      "isActive": true
+    },
+    {
+      "id": 4203,
+      "name": "Hotel Fictício 25",
+      "isActive": true
+    },
+    {
+      "id": 1607,
+      "name": "Hotel Fictício 26",
+      "isActive": true
+    },
+    {
+      "id": 5325,
+      "name": "Hotel Fictício 27",
+      "isActive": true
+    },
+    {
+      "id": 5299,
+      "name": "Hotel Fictício 28",
+      "isActive": true
+    },
+    {
+      "id": 4734,
+      "name": "Hotel Fictício 29",
+      "isActive": true
+    },
+    {
+      "id": 3135,
+      "name": "Hotel Fictício 30",
+      "isActive": true
+    },
+    {
+      "id": 2442,
+      "name": "Hotel Fictício 31",
+      "isActive": true
+    },
+    {
+      "id": 5135,
+      "name": "Hotel Fictício 32",
+      "isActive": true
+    },
+    {
+      "id": 1101,
+      "name": "Hotel Fictício 33",
+      "isActive": true
+    },
+    {
+      "id": 1457,
+      "name": "Hotel Fictício 34",
+      "isActive": true
+    },
+    {
+      "id": 3490,
+      "name": "Hotel Fictício 35",
+      "isActive": true
+    },
+    {
+      "id": 4920,
+      "name": "Hotel Fictício 36",
+      "isActive": true
+    },
+    {
+      "id": 4243,
+      "name": "Hotel Fictício 37",
+      "isActive": true
+    },
+    {
+      "id": 4951,
+      "name": "Hotel Fictício 38",
+      "isActive": true
+    },
+    {
+      "id": 5245,
+      "name": "Hotel Fictício 39",
+      "isActive": true
+    },
+    {
+      "id": 3360,
+      "name": "Hotel Fictício 40",
+      "isActive": true
+    },
+    {
+      "id": 2134,
+      "name": "Hotel Fictício 41",
+      "isActive": true
+    },
+    {
+      "id": 3342,
+      "name": "Hotel Fictício 42",
+      "isActive": true
+    },
+    {
+      "id": 2396,
+      "name": "Hotel Fictício 43",
+      "isActive": true
+    },
+    {
+      "id": 1801,
+      "name": "Hotel Fictício 44",
+      "isActive": true
+    },
+    {
+      "id": 4948,
+      "name": "Hotel Fictício 45",
+      "isActive": true
+    },
+    {
+      "id": 4543,
+      "name": "Hotel Fictício 46",
+      "isActive": true
+    },
+    {
+      "id": 3835,
+      "name": "Hotel Fictício 47",
+      "isActive": true
+    },
+    {
+      "id": 5302,
+      "name": "Hotel Fictício 48",
+      "isActive": true
+    },
+    {
+      "id": 1102,
+      "name": "Hotel Fictício 49",
+      "isActive": true
+    },
+    {
+      "id": 1103,
+      "name": "Hotel Fictício 50",
+      "isActive": true
+    },
+    {
+      "id": 1883,
+      "name": "Hotel Fictício 51",
+      "isActive": true
+    },
+    {
+      "id": 2724,
+      "name": "Hotel Fictício 52",
+      "isActive": true
+    },
+    {
+      "id": 3292,
+      "name": "Hotel Fictício 53",
+      "isActive": true
+    },
+    {
+      "id": 4219,
+      "name": "Hotel Fictício 54",
+      "isActive": true
+    },
+    {
+      "id": 2594,
+      "name": "Hotel Fictício 55",
+      "isActive": true
+    },
+    {
+      "id": 4359,
+      "name": "Hotel Fictício 56",
+      "isActive": true
+    },
+    {
+      "id": 4874,
+      "name": "Hotel Fictício 57",
+      "isActive": true
+    },
+    {
+      "id": 4718,
+      "name": "Hotel Fictício 58",
+      "isActive": true
+    },
+    {
+      "id": 4717,
+      "name": "Hotel Fictício 59",
+      "isActive": true
+    },
+    {
+      "id": 4949,
+      "name": "Hotel Fictício 60",
+      "isActive": true
+    },
+    {
+      "id": 4680,
+      "name": "Hotel Fictício 61",
+      "isActive": true
+    },
+    {
+      "id": 5242,
+      "name": "Hotel Fictício 62",
+      "isActive": true
+    },
+    {
+      "id": 4404,
+      "name": "Hotel Fictício 63",
+      "isActive": true
+    },
+    {
+      "id": 1542,
+      "name": "Hotel Fictício 64",
+      "isActive": true
+    },
+    {
+      "id": 4858,
+      "name": "Hotel Fictício 65",
+      "isActive": true
+    },
+    {
+      "id": 4919,
+      "name": "Hotel Fictício 66",
+      "isActive": true
+    },
+    {
+      "id": 5222,
+      "name": "Hotel Fictício 67",
+      "isActive": true
+    },
+    {
+      "id": 3220,
+      "name": "Hotel Fictício 68",
+      "isActive": true
+    },
+    {
+      "id": 3572,
+      "name": "Hotel Fictício 69",
+      "isActive": true
+    },
+    {
+      "id": 4118,
+      "name": "Hotel Fictício 70",
+      "isActive": true
+    },
+    {
+      "id": 2886,
+      "name": "Hotel Fictício 71",
+      "isActive": true
+    },
+    {
+      "id": 4357,
+      "name": "Hotel Fictício 72",
+      "isActive": true
+    },
+    {
+      "id": 3599,
+      "name": "Hotel Fictício 73",
+      "isActive": true
+    },
+    {
+      "id": 4950,
+      "name": "Hotel Fictício 74",
+      "isActive": true
+    },
+    {
+      "id": 5361,
+      "name": "Hotel Fictício 75",
+      "isActive": true
+    },
+    {
+      "id": 5362,
+      "name": "Hotel Fictício 76",
+      "isActive": true
+    },
+    {
+      "id": 5405,
+      "name": "Hotel Fictício 77",
+      "isActive": true
+    },
+    {
+      "id": 5406,
+      "name": "Hotel Fictício 78",
+      "isActive": true
+    },
+    {
+      "id": 5423,
+      "name": "Hotel Fictício 79",
+      "isActive": true
+    },
+    {
+      "id": 5422,
+      "name": "Hotel Fictício 80",
+      "isActive": true
+    },
+    {
+      "id": 5388,
+      "name": "Hotel Fictício 81",
+      "isActive": true
+    },
+    {
+      "id": 5374,
+      "name": "Hotel Fictício 82",
+      "isActive": true
+    },
+    {
+      "id": 5372,
+      "name": "Hotel Fictício 83",
+      "isActive": true
+    }
+  ],
+  "allowExportToTdf": false
+}

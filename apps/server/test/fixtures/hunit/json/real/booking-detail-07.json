@@ -1,0 +1,99 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-11 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 19011837,
+  "channelIdentifier": "RES-0031",
+  "statusId": 2,
+  "channelId": 29,
+  "channelName": "DECOLAR",
+  "integrationStatusId": 2,
+  "adultCount": 1,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 30",
+    "email": null,
+    "phone": null,
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-10T00:00:00",
+  "departureDate": "2026-11-11T00:00:00",
+  "roomStays": [
+    {
+      "id": 20755080,
+      "roomRateName": "anonimizado-7",
+      "guestName": "Hóspede Fictício 30",
+      "adultCount": 1,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-10T00:00:00",
+      "departureDate": "2026-11-11T00:00:00",
+      "numberOfUnits": 1,
+      "total": 79.8798,
+      "canceled": false,
+      "perDayRates": [
+        {
+          "roomRateId": 88765,
+          "roomRateName": "anonimizado-7",
+          "initialDate": "2026-11-10T00:00:00",
+          "amount": 79.8798
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 79.8798,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 79.8798,
+    "commission": -0.0002,
+    "prePaidToChannel": 0,
+    "valueToCharge": 79.8798,
+    "paymentTypeLabel": "cartão de crédito",
+    "taxesIncluded": 1.5663
+  },
+  "createDateTime": "2026-11-10T20:56:42",
+  "lastUpdateDateTime": "2026-11-10T21:00:08",
+  "pmsIdentifier": null,
+  "comments": "Texto fictício 2",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 36303811,
+  "prePaymentStatus": "Success",
+  "lastPaymentEvent": {
+    "user": "Operador Fictício 2",
+    "dateTime": "2026-11-11T09:51:55.0519-03:00",
+    "valueCharged": 79.88,
+    "status": "Success",
+    "justValidate": false,
+    "authorizationCode": "AUT-0006",
+    "transactionId": "TRX-0006",
+    "processorReferenceNumber": "REF-0006",
+    "isParceled": false,
+    "numberOfInstallments": 1,
+    "installmentValue": 79.88,
+    "description": "Texto fictício 1"
+  },
+  "canCharge": true,
+  "paymentTypeId": 1
+}

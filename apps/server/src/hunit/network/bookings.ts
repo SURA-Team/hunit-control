@@ -69,6 +69,16 @@ export function reservationStatusOf(statusId: number): ReservationStatus {
   return ACTIVE_STATUS_IDS.has(statusId) ? 'active' : 'unknown';
 }
 
+/**
+ * Itens de uma resposta de `GetBookings` já lida, sem conferir página nem filtros. Usado pela
+ * geração das fixtures reais (T021); a coleta usa `searchBookings`. `null` se o formato não for
+ * o esperado.
+ */
+export function listItemsOf(body: unknown): ReservationListItem[] | null {
+  const parsed = bookingsResponseSchema.safeParse(body);
+  return parsed.success ? parsed.data.items.items.map(toListItem) : null;
+}
+
 function toListItem(booking: Booking): ReservationListItem {
   const checkIn = toIsoDate(booking.arrivalDate) as string;
   const checkOut = toIsoDate(booking.departureDate) as string;

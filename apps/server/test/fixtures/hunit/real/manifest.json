@@ -1,0 +1,98 @@
+{
+  "generatedAt": "2026-11-11",
+  "html": [
+    {
+      "file": "html/real/hunit-entry.html",
+      "screen": "hunit_entry"
+    },
+    {
+      "file": "html/real/login.html",
+      "screen": "login"
+    },
+    {
+      "file": "html/real/two-factor.html",
+      "screen": "two_factor"
+    },
+    {
+      "file": "html/real/login-error.html",
+      "screen": "login_error"
+    },
+    {
+      "file": "html/real/two-factor-error.html",
+      "screen": "two_factor_error"
+    }
+  ],
+  "currentUser": "json/real/current-user.json",
+  "bookings": [
+    "json/real/bookings-01.json",
+    "json/real/bookings-02.json",
+    "json/real/bookings-03.json",
+    "json/real/bookings-04.json",
+    "json/real/bookings-05.json"
+  ],
+  "details": [
+    {
+      "file": "json/real/booking-detail-01.json",
+      "bookingId": "17899044",
+      "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-02.json",
+      "bookingId": "18582106",
+      "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-03.json",
+      "bookingId": "18660850",
+      "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-04.json",
+      "bookingId": "18992991",
+      "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-05.json",
+      "bookingId": "19001795",
+      "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-06.json",
+      "bookingId": "19003672",
+      "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-07.json",
+      "bookingId": "19011837",
+      "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    }
+  ]
+}

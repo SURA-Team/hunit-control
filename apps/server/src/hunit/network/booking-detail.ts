@@ -129,16 +129,22 @@ export async function readBookingDetail(
     companyId: hotelCode,
     query: { id: item.bookingId },
   });
-  const evidence = { response: JSON.stringify(body) };
+  return { snapshot: snapshotOf(body, item), evidence: { response: JSON.stringify(body) } };
+}
 
+/**
+ * Retrato da reserva a partir de uma resposta de `BookingDetail` já lida.
+ *
+ * @throws ScreenNotRecognizedError (resposta fora do formato, com a resposta como evidência).
+ */
+export function snapshotOf(body: unknown, item: ReservationListItem): ReservationSnapshot {
   const parsed = bookingDetailSchema.safeParse(body);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((issue) => issue.path.join('.')))];
     throw new ScreenNotRecognizedError(
       `o detalhe da reserva ${item.reservationNumber} (BookingDetail) não tem o formato esperado (campos: ${fields.join(', ')})`,
-      { evidence },
+      { evidence: { response: JSON.stringify(body) } },
     );
   }
-
-  return { snapshot: toReservationSnapshot(parsed.data, item), evidence };
+  return toReservationSnapshot(parsed.data, item);
 }

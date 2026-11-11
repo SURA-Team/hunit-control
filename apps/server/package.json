@@ -13,7 +13,8 @@
     "start": "node --enable-source-maps dist/main.js",
     "db:generate": "drizzle-kit generate",
     "hunit:login-check": "node dist/hunit-login-check.js",
-    "hunit:reservations-check": "node dist/hunit-reservations-check.js"
+    "hunit:reservations-check": "node dist/hunit-reservations-check.js",
+    "hunit:anonymize-fixtures": "node dist/hunit-anonymize-fixtures.js"
   },
   "dependencies": {
     "@hunit/contracts": "workspace:*",

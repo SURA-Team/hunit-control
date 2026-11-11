@@ -13,8 +13,13 @@
  * pasta `test/fixtures/hunit/raw/`, que é ignorada pelo Git: o material ainda precisa ser
  * anonimizado antes de virar fixture (T021).
  *
+ * Com `--wait-token <segundos>`, espera esse tempo com a tela do token aberta antes de pedir o
+ * token: serve para medir quanto tempo a tela aceita (T022, FR-004) e para capturar a tela de
+ * token expirado (T020). O tempo entre a tela abrir e o token ser enviado é sempre mostrado.
+ *
  *   pnpm --filter @hunit/server build
  *   pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw
+ *   pnpm --filter @hunit/server hunit:login-check --wait-token 240 --save-dir test/fixtures/hunit/raw
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -35,9 +40,14 @@ const DEFAULT_API_URL = 'https://hunit-api.hsystem.com.br';
 async function main(): Promise<number> {
   const { values } = parseArgs({
     args: commandArgs(),
-    options: { 'save-dir': { type: 'string' } },
+    options: { 'save-dir': { type: 'string' }, 'wait-token': { type: 'string' } },
   });
   const saveDir = values['save-dir'] ? path.resolve(values['save-dir']) : null;
+  const waitTokenSeconds = Number(values['wait-token'] ?? 0);
+  if (!Number.isInteger(waitTokenSeconds) || waitTokenSeconds < 0) {
+    process.stderr.write('--wait-token deve ser um número inteiro de segundos (0 ou mais).\n');
+    return 1;
+  }
 
   if (!process.stdin.isTTY) {
     process.stderr.write('Rode este comando num terminal interativo (ele pede senha e token).\n');
@@ -75,13 +85,22 @@ async function main(): Promise<number> {
   );
 
   let exitCode = 0;
+  /** Quando a tela do token abriu e quando o token foi enviado (T022). */
+  let tokenScreenAt: number | null = null;
+  let tokenSentAt: number | null = null;
   try {
     process.stdout.write('Abrindo o Hunit e enviando usuário e senha...\n');
     const outcome = await gateway.login({ username, password });
     if (outcome === 'two_factor_required') {
+      tokenScreenAt = Date.now();
+      process.stdout.write(`Tela do token aberta às ${clock(tokenScreenAt)}.\n`);
+      if (waitTokenSeconds > 0) await countdown(waitTokenSeconds);
       const token = await askHidden('Token do autenticador (não aparece): ');
       secrets.register(token);
-      process.stdout.write('Enviando o token...\n');
+      tokenSentAt = Date.now();
+      process.stdout.write(
+        `Enviando o token ${seconds(tokenSentAt - tokenScreenAt)} s depois de a tela abrir...\n`,
+      );
       await gateway.submitToken(token);
     }
     const hotels = await gateway.listHotels();
@@ -112,8 +131,36 @@ async function main(): Promise<number> {
       ? `\nRequisições ao hunit-api barradas ou detectadas pela proteção:\n  ${blocked.join('\n  ')}\n`
       : '\nNenhuma requisição ao hunit-api foi barrada pela proteção.\n',
   );
+  if (tokenScreenAt !== null && tokenSentAt !== null) {
+    process.stdout.write(
+      `\nTempo com a tela do token aberta até o envio: ${seconds(tokenSentAt - tokenScreenAt)} s ` +
+        `(${exitCode === 0 ? 'aceito' : 'não aceito'}). Registre na T022.\n`,
+    );
+  }
   if (saveDir) process.stdout.write(`\nTelas salvas em: ${saveDir}\n`);
   return exitCode;
+}
+
+function clock(time: number): string {
+  return new Date(time).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+function seconds(milliseconds: number): number {
+  return Math.round(milliseconds / 1000);
+}
+
+/** Espera com a tela do token aberta, avisando a cada 30 s quanto falta. */
+async function countdown(total: number): Promise<void> {
+  process.stdout.write(
+    `Esperando ${total} s antes de pedir o token (não digite nada ainda; Ctrl+C cancela).\n`,
+  );
+  for (let left = total; left > 0;) {
+    const step = Math.min(left, 30);
+    await new Promise((resolve) => setTimeout(resolve, step * 1000));
+    left -= step;
+    if (left > 0) process.stdout.write(`  faltam ${left} s...\n`);
+  }
+  process.stdout.write('Pronto: abra o autenticador e digite o token ATUAL.\n');
 }
 
 process.exitCode = await main().catch((error: unknown) => {

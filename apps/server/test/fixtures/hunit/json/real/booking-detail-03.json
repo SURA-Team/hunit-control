@@ -1,0 +1,164 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-11 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 18660850,
+  "channelIdentifier": "RES-0024",
+  "statusId": 3,
+  "channelId": 3,
+  "channelName": "HOTELS.COM",
+  "integrationStatusId": 2,
+  "adultCount": 3,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 23",
+    "email": null,
+    "phone": null,
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-10T00:00:00",
+  "departureDate": "2026-11-24T00:00:00",
+  "roomStays": [
+    {
+      "id": 20375315,
+      "roomRateName": "anonimizado-5",
+      "guestName": "Hóspede Fictício 23",
+      "adultCount": 3,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-10T00:00:00",
+      "departureDate": "2026-11-24T00:00:00",
+      "numberOfUnits": 1,
+      "total": 2427.44,
+      "canceled": true,
+      "perDayRates": [
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-10T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-11T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-12T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-13T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-14T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-15T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-16T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-17T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-18T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-19T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-20T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-21T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-22T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88766,
+          "roomRateName": "anonimizado-5",
+          "initialDate": "2026-11-23T00:00:00",
+          "amount": 0
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 2427.44,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 2427.44,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 2427.44,
+    "paymentTypeLabel": null,
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-11-07T05:50:00",
+  "lastUpdateDateTime": "2026-11-07T05:51:38",
+  "pmsIdentifier": null,
+  "comments": "",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 36240516,
+  "prePaymentStatus": "Unprocessed",
+  "lastPaymentEvent": null,
+  "canCharge": true,
+  "paymentTypeId": null
+}
