@@ -143,6 +143,22 @@ export class ExecutionEventBus {
     return rows.reverse().map(toEvent);
   }
 
+  /** Último evento `status_changed` da execução, ou `null` se ela ainda não tem nenhum. */
+  async lastStatusChange(executionId: string): Promise<ExecutionEvent | null> {
+    const [row] = await this.options.db
+      .select()
+      .from(executionEvents)
+      .where(
+        and(
+          eq(executionEvents.executionId, executionId),
+          eq(executionEvents.type, 'status_changed'),
+        ),
+      )
+      .orderBy(desc(executionEvents.id))
+      .limit(1);
+    return row ? toEvent(row) : null;
+  }
+
   /** Quantidade de assinantes de uma execução (para diagnóstico e testes). */
   subscriberCount(executionId: string): number {
     return this.listeners.get(executionId)?.size ?? 0;

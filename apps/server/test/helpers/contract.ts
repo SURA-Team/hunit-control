@@ -116,3 +116,16 @@ export function expectMatchesContract(operationId: string, response: HttpRespons
 export const contractOperations = [...contract.operations.values()];
 
 export const contractDocument = contract.document;
+
+/** Falha se `value` não seguir o schema `components.schemas.<name>` do contrato. */
+export function expectMatchesSchema(name: string, value: unknown): void {
+  const schemaRef = `${SCHEMA_KEY}${pointer('components', 'schemas', name)}`;
+  const validate = ajv.getSchema(schemaRef) as ValidateFunction | undefined;
+  if (!validate) throw new Error(`O contrato não tem o schema "${name}".`);
+  if (!validate(value)) {
+    const problems = (validate.errors ?? [])
+      .map((error) => `  ${error.instancePath || '(raiz)'} ${error.message ?? ''}`)
+      .join('\n');
+    throw new Error(`O valor não segue o schema "${name}":\n${problems}`);
+  }
+}

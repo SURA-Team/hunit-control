@@ -8,12 +8,17 @@ import fastify, {
   type RouteOptions,
 } from 'fastify';
 import openapiGlue from 'fastify-openapi-glue';
+import type { ExecutionEventBus } from '../executions/events.js';
+import type { ExecutionRunner } from '../executions/runner.js';
 import type { Logger } from '../logging.js';
 import { findActiveClientByKeyHash } from '../persistence/clients-repo.js';
 import type { Database } from '../persistence/db.js';
 import { createAuthHook } from './auth.js';
 import { loadContract, type Contract } from './contract.js';
+import { createExecutionEventsHandlers } from './handlers/execution-events.js';
+import { createExecutionHandlers } from './handlers/executions.js';
 import { createHealthHandlers } from './handlers/health.js';
+import { createHotelHandlers } from './handlers/hotels.js';
 import { ProblemError, sendProblem } from './problem.js';
 
 /** Prefixo das rotas; corresponde a `servers.url` do contrato. */
@@ -29,6 +34,8 @@ export type OperationHandlers = Partial<Record<OperationId, OperationHandler>>;
 export interface AppDependencies {
   db: Database;
   logger: Logger;
+  events: ExecutionEventBus;
+  runner: ExecutionRunner;
 }
 
 /** Erro gerado pelo próprio Fastify ao ler ou validar a requisição (código `FST_ERR_...`). */
@@ -106,8 +113,12 @@ function acceptOnlyJsonBodies(app: FastifyInstance, contract: Contract): void {
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
   const contract = loadContract();
 
+  const executionEvents = createExecutionEventsHandlers(dependencies);
   const handlers: OperationHandlers = {
     ...createHealthHandlers(dependencies),
+    ...createHotelHandlers(dependencies),
+    ...createExecutionHandlers(dependencies),
+    ...executionEvents.handlers,
   };
 
   // Declarado com o tipo de logger do Fastify para a aplicação ter o tipo padrão.
@@ -128,6 +139,12 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
 
   app.decorateRequest('client', null);
   acceptOnlyJsonBodies(app, contract);
+
+  // Streams de eventos ficam abertos indefinidamente; sem isto o servidor não conseguiria desligar.
+  app.addHook('preClose', (done) => {
+    executionEvents.closeAll();
+    done();
+  });
 
   app.setErrorHandler((error, request, reply) => {
     const problem = toProblemError(error);

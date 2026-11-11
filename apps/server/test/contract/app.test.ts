@@ -10,6 +10,7 @@ import {
 import { expectMatchesContract } from '../helpers/contract.js';
 import { createTestDatabase } from '../helpers/db.js';
 import { captureLogs } from '../helpers/log-capture.js';
+import { createRunnerHarness } from '../helpers/runner.js';
 
 let test: TestApp;
 let operator: TestClient;
@@ -47,11 +48,18 @@ describe('GET /v1/health (T016)', () => {
   it('responde 503 quando o banco não responde, sem expor detalhes internos', async () => {
     const database = await createTestDatabase();
     const logs = captureLogs();
-    const app = await buildApp({ db: database.db, logger: logs.logger });
+    const harness = await createRunnerHarness(database, { logs });
+    const app = await buildApp({
+      db: database.db,
+      logger: logs.logger,
+      events: harness.events,
+      runner: harness.runner,
+    });
     await database.close(); // derruba a conexão com o banco
 
     const response = await app.inject({ method: 'GET', url: '/v1/health' });
     await app.close();
+    await harness.close();
 
     expect(response.statusCode).toBe(503);
     expect(problem(response)).toMatchObject({
