@@ -1,0 +1,200 @@
+# Research: Consulta de Reservas de Cartão Virtual no Hunit
+
+**Feature**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Date**: 2026-11-11
+
+Cada item registra a decisão, a justificativa e as alternativas avaliadas. Itens marcados como
+**Verificar no mapeamento** dependem da interface atual do Hunit e têm uma decisão padrão segura
+até serem confirmados (ver R-13).
+
+---
+
+## R-01 — Runtime e organização do código
+
+- **Decision**: Node.js 24 LTS, TypeScript 5.x em modo `strict`, monorepo com **pnpm workspaces**.
+- **Rationale**: exigido pela constitution (TypeScript em todo o projeto, tipos compartilhados com o
+  futuro Electron). pnpm é rápido, econômico em disco e tem suporte nativo a workspaces.
+- **Alternatives considered**: npm workspaces (mais lento, hoisting menos previsível); Nx/Turborepo
+  (orquestração desnecessária para 3 pacotes — princípio VIII).
+
+## R-02 — API e automação no mesmo processo
+
+- **Decision**: um único serviço `server` (um container) contém a API HTTP e o executor da
+  automação (Playwright). O PostgreSQL roda em um segundo container.
+- **Rationale**: FR-005 proíbe armazenar senha e token. Com API e worker em processos separados,
+  credenciais e token teriam de passar por fila/banco/rede interna. No mesmo processo, eles ficam
+  apenas em memória, do request HTTP até o navegador. Como só há uma execução ativa por conta
+  (FR-006), não há ganho em escalar workers separadamente. Se o servidor reiniciar, a execução fica
+  interrompida e é retomada com novo login (já previsto em FR-023).
+- **Alternatives considered**:
+  - API + worker separados com fila (pg-boss/BullMQ): exigiria trafegar credenciais por um meio
+    persistente ou criar um canal cifrado ad hoc — mais complexo e mais arriscado.
+  - Redis para fila/pub-sub: infraestrutura extra sem necessidade descrita na spec.
+
+## R-03 — Framework HTTP e contrato
+
+- **Decision**: Fastify 5, **contract-first**: o arquivo `packages/contracts/openapi.yaml` é a
+  fonte da verdade; tipos TypeScript gerados com `openapi-typescript`; rotas e validação de
+  request/response carregadas do contrato com `fastify-openapi-glue`.
+- **Rationale**: princípio III (contrato OpenAPI versionado como fonte da verdade). Gerar tipos a
+  partir do contrato garante que servidor, Electron e Sura vejam o mesmo formato.
+- **Alternatives considered**: code-first com TypeBox/zod gerando o OpenAPI (o contrato vira
+  subproduto do código, invertendo a fonte da verdade); NestJS (estrutura pesada para o escopo).
+
+## R-04 — Acompanhamento em tempo real (SC-005: aviso de token em até 5 s)
+
+- **Decision**: Server-Sent Events em `GET /v1/executions/{id}/events`, mais `GET
+  /v1/executions/{id}` para o estado completo (fallback por polling).
+- **Rationale**: SSE é HTTP simples, unidirecional (servidor → cliente), funciona no Electron e em
+  qualquer linguagem do Sura; atende 5 s com folga. Comandos (token, cancelar) usam POST normal.
+- **Alternatives considered**: WebSocket (bidirecional, desnecessário); somente polling (exigiria
+  intervalos ≤ 2 s para garantir 5 s, gerando tráfego inútil); webhooks (Sura precisaria expor
+  endpoint — fica para spec futura de integração).
+
+## R-05 — Banco de dados e acesso
+
+- **Decision**: PostgreSQL 17; Drizzle ORM para schema tipado e `drizzle-kit` para migrations SQL
+  versionadas no repositório.
+- **Rationale**: Postgres é a fonte da verdade (princípio VI). Drizzle mantém o SQL explícito, tipa
+  as consultas e gera migrations revisáveis.
+- **Alternatives considered**: Prisma (engine própria, menos controle do SQL, imagem maior);
+  Kysely (ótimo, mas sem ferramenta de migration integrada); SQL puro (sem tipos).
+
+## R-06 — Isolamento do Hunit e regras de classificação
+
+- **Decision**: duas camadas separadas:
+  1. **Page Objects** (`apps/server/src/hunit/`): únicos lugares com seletores, URLs e textos do
+     Hunit. Extraem da tela um objeto neutro `ReservationSnapshot` (pré-pagamento presente?,
+     registro "Cobrado em"?, ação de cobrar visível?, estado de falha?, situação da reserva, dados
+     da cobrança).
+  2. **Domínio** (`packages/domain/`): função pura `classifyReservation(snapshot)` com as regras da
+     FR-013 na ordem definida, sem nenhuma dependência de navegador ou HTML.
+- **Rationale**: princípio II. No legado, regras e marcadores HTML estavam misturados
+  (`'class="pre-payment-container'` dentro da classificação), por isso uma mudança de tela quebrou
+  regra de negócio. Agora uma mudança de tela afeta só o Page Object; o domínio e seus testes não
+  mudam.
+- **Alternatives considered**: classificar diretamente o HTML (modelo do legado — rejeitado pelo
+  motivo acima).
+
+## R-07 — Botão "Exportar reservas" do Hunit
+
+- **Decision**: **não usar**. A coleta lê a listagem na tela e abre cada reserva.
+- **Rationale**: confirmado pelo usuário em 2026-11-11: o arquivo exportado não traz status do
+  pagamento, código de autorização, valor cobrado nem quem cobrou — justamente os dados que definem
+  a classificação.
+- **Alternatives considered**: exportar para obter a listagem e abrir só as reservas com
+  pré-pagamento — rejeitado porque a indicação de pré-pagamento também não vem no arquivo, então
+  todas as reservas teriam de ser abertas de qualquer forma; o ganho seria pequeno e adicionaria
+  uma segunda fonte (download + parsing de arquivo) a manter.
+
+## R-08 — Paralelismo entre hotéis (SC-009) — **Verificar no mapeamento**
+
+- **Decision**: processar **um hotel por vez** por padrão, com a concorrência configurável
+  (`HOTEL_CONCURRENCY`, padrão `1`). Habilitar valores > 1 somente após o teste descrito abaixo
+  passar em homologação.
+- **Rationale**: no legado, o hotel é escolhido numa tela `Account/SelectCompany` após o login,
+  o que indica que o **hotel ativo é estado da sessão**. Abas paralelas na mesma sessão
+  provavelmente trocariam o hotel umas das outras; sessões separadas exigiriam **um token 2FA por
+  sessão**, inviável para o operador. Por isso a meta realista tende a ser a de 1 hora (SC-009,
+  modo sequencial).
+- **Teste de verificação**: com uma sessão logada, abrir duas abas, selecionar hotéis diferentes
+  em cada uma e conferir se a listagem de reservas da primeira aba continua no hotel original.
+- **Alternatives considered**: várias sessões com vários tokens (péssimo para o operador);
+  paralelizar a abertura de reservas dentro do mesmo hotel (possível ganho, avaliar após medir o
+  tempo do modo sequencial).
+
+## R-09 — Limite de tamanho do período no Hunit (FR-010a) — **Verificar no mapeamento**
+
+- **Decision**: o executor divide o período em blocos de até `MAX_PERIOD_DAYS` dias (variável de
+  ambiente; sem valor = sem divisão). As reservas dos blocos são unidas e deduplicadas por
+  hotel + número antes da gravação do hotel.
+- **Rationale**: atende períodos retroativos longos sem depender de saber agora o limite do Hunit.
+- **Alternatives considered**: recusar períodos longos (contraria FR-010a).
+
+## R-10 — Autenticação dos clientes (FR-007)
+
+- **Decision**: chave de API por cliente, enviada em `Authorization: Bearer <chave>`. O banco
+  guarda apenas o hash SHA-256 da chave, o nome do cliente e o nível (`operator` | `reader`).
+  Chaves são criadas por um comando administrativo no servidor e mostradas uma única vez.
+- **Rationale**: simples para clientes máquina-a-máquina (Sura) e para o Electron; revogável por
+  cliente; nenhuma chave em texto puro no banco.
+- **Alternatives considered**: OAuth2 client credentials (exige provedor de identidade — fora do
+  escopo); JWT próprio (complexidade de emissão/rotação sem benefício agora).
+
+## R-11 — Identificação da conta do Hunit sem guardar credenciais (FR-006)
+
+- **Decision**: `account_key = HMAC-SHA256(usuário normalizado, ACCOUNT_KEY_SECRET)`.
+- **Rationale**: permite aplicar "uma execução ativa por conta" e auditar execuções por conta sem
+  armazenar o usuário do Hunit.
+- **Alternatives considered**: guardar o usuário em texto (dado de credencial — evitado);
+  hash sem segredo (vulnerável a dicionário de e-mails).
+
+## R-12 — Credenciais e token fora de logs e evidências (FR-005, SC-004)
+
+- **Decision**:
+  - logs com Pino (padrão do Fastify), com `redact` para `password`, `token`, `authorization` e
+    `credentials.*`;
+  - corpo das rotas de início/retomada/token nunca logado;
+  - capturas de tela da tela de login usam a opção `mask` do Playwright sobre todos os campos de
+    entrada; o HTML salvo como evidência passa por um sanitizador que remove o atributo `value` de
+    todos os `<input>`;
+  - teste automatizado de SC-004: roda o fluxo contra fixtures com senha/token conhecidos e procura
+    essas strings em todos os logs e evidências gerados.
+- **Rationale**: defesa em camadas; o teste transforma SC-004 em verificação contínua.
+
+## R-13 — Mapeamento da interface atual do Hunit — **Ação necessária**
+
+- **Decision**: antes de implementar os Page Objects, gravar o fluxo real com
+  `npx playwright codegen https://extranet.hunit.com.br/HUNIT/Account/Login` e salvar o HTML das
+  telas (login, token, seleção de hotel, filtro/listagem de reservas, detalhe de reserva em cada
+  situação: sem pré-pagamento, cobrada, pendente, falha, cancelada). O HTML é **anonimizado** e vira
+  fixture em `apps/server/test/fixtures/hunit/`.
+- **Rationale**: o legado parou por mudança de UI; nenhum seletor antigo é confiável. Fixtures
+  permitem testar os Page Objects sem acessar o Hunit (princípio VII).
+- **Responsável**: operador com acesso ao Hunit e ao autenticador (usuário do projeto). As tasks de
+  Page Objects dependem dessas fixtures.
+
+## R-14 — Testes
+
+- **Decision**: Vitest em todos os pacotes.
+  - **Domínio**: testes unitários das regras da FR-013 e do histórico de verificação (FR-018/018a).
+  - **Page Objects**: Chromium real do Playwright carregando as fixtures HTML (`page.setContent` /
+    rotas interceptadas).
+  - **Contrato**: `fastify.inject` + validação das respostas contra o `openapi.yaml`.
+  - **Integração com banco**: Testcontainers (PostgreSQL efêmero).
+- **Rationale**: uma ferramenta só; cada camada indica onde está a falha (princípio VII).
+- **Alternatives considered**: Jest (mais lento com ESM/TS); Playwright Test como runner geral
+  (bom para E2E, desnecessário para unidade).
+
+## R-15 — Gravação por hotel e histórico (FR-017 a FR-019)
+
+- **Decision**: durante o processamento de um hotel, os registros ficam em memória; ao concluir o
+  hotel, uma **única transação** grava/atualiza as reservas, as observações da execução e aplica a
+  marcação "não encontrada" (FR-018a). Se o hotel falhar ou for cancelado, a transação não ocorre.
+- **Rationale**: FR-019 (sem resultados parciais) e FR-018a (marcação só em hotel concluído).
+- **Alternatives considered**: gravar reserva a reserva (deixaria hotéis parciais).
+
+## R-16 — Evidências e retenção (FR-024 a FR-027)
+
+- **Decision**: arquivos (PNG + HTML sanitizado) no volume `/data/evidence/<execução>/`; metadados
+  na tabela `evidence`. Uma rotina diária interna remove evidências com mais de 30 dias e anonimiza
+  `guest_name` de reservas com check-in há mais de 5 anos.
+- **Rationale**: arquivos binários fora do banco; volume declarado (princípio V); rotina interna
+  evita infraestrutura de agendamento extra.
+- **Alternatives considered**: armazenar binários no Postgres (banco cresce rápido); object storage
+  S3/MinIO (container extra sem necessidade agora).
+
+## R-17 — Datas e valores
+
+- **Decision**: a API usa datas ISO (`YYYY-MM-DD`) e horários ISO 8601 com fuso; DD/MM/AAAA é
+  formato de exibição dos clientes. Valores monetários em `numeric(12,2)`, moeda BRL, expostos na
+  API como string decimal (`"1234.56"`).
+- **Rationale**: ISO evita ambiguidade entre linguagens (Sura); string decimal evita erro de ponto
+  flutuante.
+
+## R-18 — Containers
+
+- **Decision**: `docker-compose.yml` com `server` (imagem construída a partir de
+  `mcr.microsoft.com/playwright` na **mesma versão** do pacote `playwright` do projeto) e `db`
+  (`postgres:17`), volumes `pgdata` e `evidence`. Configuração somente por variáveis de ambiente
+  (`.env.example` versionado).
+- **Rationale**: princípio V; a imagem oficial já traz o Chromium e as dependências de sistema.
