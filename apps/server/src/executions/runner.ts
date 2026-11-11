@@ -6,7 +6,12 @@ import {
   TwoFactorTimeoutError,
   type HunitErrorCode,
 } from '../hunit/errors.js';
-import type { CreateHunitGateway, HunitCredentials, HunitGateway } from '../hunit/gateway.js';
+import type {
+  CreateHunitGateway,
+  HunitCredentials,
+  HunitGateway,
+  HunitHotel,
+} from '../hunit/gateway.js';
 import type { Logger } from '../logging.js';
 import type { Database } from '../persistence/db.js';
 import {
@@ -16,11 +21,14 @@ import {
   type ExecutionRow,
   type ExecutionTransition,
 } from '../persistence/executions-repo.js';
+import { failRunningExecutionHotels } from '../persistence/execution-hotels-repo.js';
 import { saveCatalog } from '../persistence/hotels-repo.js';
 import type { ExecutionEndReason } from '../persistence/schema.js';
 import type { SecretRegistry } from '../secrets.js';
 import { accountKeyFor } from './account-key.js';
 import type { ExecutionEventBus } from './events.js';
+import { collectHotels } from './hotel-collection.js';
+import { StopRequestedError } from './stop.js';
 
 export interface StartExecutionInput {
   /** Cliente da API que pediu a execução. */
@@ -44,6 +52,8 @@ export interface ExecutionRunnerOptions {
   accountKeySecret: string;
   /** Quanto tempo esperar pelo token depois que o Hunit o pede (FR-004). */
   twoFactorTimeoutMs: number;
+  /** Tamanho máximo de cada consulta ao Hunit, em dias; `null` = sem divisão (research R-09). */
+  maxPeriodDays?: number | null;
   logger: Logger;
   /** Relógio; os testes podem informar um fixo. */
   now?: () => Date;
@@ -65,14 +75,6 @@ const END_REASON_MESSAGES: Readonly<Partial<Record<ExecutionEndReason, string>>>
   internal_error: 'Erro interno do servidor; a execução foi interrompida.',
 };
 
-/** Pedido de parada (servidor desligando) recebido enquanto a execução esperava algo. */
-class StopRequestedError extends Error {
-  constructor() {
-    super('A execução foi interrompida.');
-    this.name = 'StopRequestedError';
-  }
-}
-
 interface TokenWaiter {
   resolve(token: string): void;
   reject(error: Error): void;
@@ -81,6 +83,9 @@ interface TokenWaiter {
 /** Uma execução em andamento neste processo. */
 interface ActiveRun {
   executionId: string;
+  period: Period;
+  /** `null` = todos os hotéis do catálogo (FR-009). */
+  hotelCodes: string[] | null;
   logger: Logger;
   gateway: HunitGateway | null;
   /** Preenchido enquanto a execução espera o token (estado `awaiting_2fa`). */
@@ -115,8 +120,9 @@ function formatTime(date: Date): string {
  * permite que usuário, senha e token fiquem só em memória, sem passar por fila ou banco.
  *
  * Ciclo de uma execução: `queued` → `running` (login) → `awaiting_2fa` (espera o token do
- * operador) → `running` (token enviado, catálogo lido) → `completed`; qualquer falha leva a
- * `failed` com o motivo correspondente (FR-003).
+ * operador) → `running` (token enviado, catálogo lido, hotéis consultados e gravados um a um —
+ * `hotel-collection.ts`) → `completed`; qualquer falha da execução leva a `failed` com o motivo
+ * correspondente (FR-003). Hotel com falha não encerra a execução: fica marcado e ela segue.
  *
  * Proteção dos segredos (FR-005, research R-12): senha e token ficam registrados no
  * `SecretRegistry` apenas até o acesso ser concluído, e as referências a eles são descartadas
@@ -166,6 +172,8 @@ export class ExecutionRunner {
 
     const run: ActiveRun = {
       executionId: execution.id,
+      period: input.period,
+      hotelCodes: input.hotelCodes,
       logger: this.options.logger.child({ executionId: execution.id }),
       gateway: null,
       tokenWaiter: null,
@@ -244,8 +252,27 @@ export class ExecutionRunner {
         // Acesso concluído: senha e token não são mais necessários (FR-005).
         releaseAccess();
 
-        await this.updateCatalog(run, gateway);
-        await this.changeStatus(run, { to: 'completed' }, 'Execução concluída.');
+        const catalog = await this.updateCatalog(run, gateway);
+        const summary = await collectHotels({
+          executionId: run.executionId,
+          period: run.period,
+          requestedHotelCodes: run.hotelCodes,
+          catalog,
+          gateway,
+          db: this.options.db,
+          events: this.options.events,
+          evidence: this.options.evidence,
+          logger: run.logger,
+          now: this.now,
+          maxPeriodDays: this.options.maxPeriodDays ?? null,
+          isStopping: () => run.stopReason !== null,
+        });
+        const failed = summary.failed > 0 ? `, ${summary.failed} com falha` : '';
+        await this.changeStatus(
+          run,
+          { to: 'completed' },
+          `Execução concluída: ${summary.completed} hotéis concluídos${failed}; ${summary.reservations} reservas gravadas.`,
+        );
       } catch (error) {
         await this.fail(run, error);
       } finally {
@@ -297,7 +324,7 @@ export class ExecutionRunner {
     }
   }
 
-  private async updateCatalog(run: ActiveRun, gateway: HunitGateway): Promise<void> {
+  private async updateCatalog(run: ActiveRun, gateway: HunitGateway): Promise<HunitHotel[]> {
     const catalog = await gateway.listHotels();
     await saveCatalog(this.options.db, catalog, this.now());
     await this.options.events.publish({
@@ -305,6 +332,7 @@ export class ExecutionRunner {
       type: 'catalog_updated',
       message: `Catálogo de hotéis atualizado: ${catalog.length} hotéis disponíveis.`,
     });
+    return catalog;
   }
 
   /**
@@ -423,6 +451,11 @@ export async function failInterruptedExecutions(
   events: ExecutionEventBus,
 ): Promise<ExecutionRow[]> {
   const interrupted = await failAllActive(db, 'server_restarted');
+  await failRunningExecutionHotels(
+    db,
+    interrupted.map((execution) => execution.id),
+    'O servidor foi reiniciado no meio do hotel; nada foi gravado.',
+  );
   for (const execution of interrupted) {
     await events.publish({
       executionId: execution.id,

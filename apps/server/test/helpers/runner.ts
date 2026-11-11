@@ -29,6 +29,8 @@ export interface RunnerHarness {
 export interface RunnerHarnessOptions {
   scenario?: FakeScenario;
   twoFactorTimeoutMs?: number;
+  /** Tamanho máximo de cada consulta ao Hunit, em dias (MAX_PERIOD_DAYS). */
+  maxPeriodDays?: number | null;
   /** Usa estes componentes em vez de criar novos (ex.: os da aplicação HTTP de teste). */
   secrets?: SecretRegistry;
   logs?: CapturedLogs;
@@ -58,6 +60,7 @@ export async function createRunnerHarness(
     createGateway: hunit.createGateway,
     accountKeySecret: TEST_ACCOUNT_KEY_SECRET,
     twoFactorTimeoutMs: options.twoFactorTimeoutMs ?? 60_000,
+    maxPeriodDays: options.maxPeriodDays ?? null,
     logger: logs.logger,
   });
 

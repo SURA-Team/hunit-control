@@ -106,8 +106,13 @@ describe('acesso com token (FR-001, FR-002)', () => {
       expect.arrayContaining(['Hotel Alfa', 'Hotel Beta']),
     );
 
+    // Os eventos da consulta dos hotéis (US2) ficam entre o catálogo e a conclusão.
     const events = await eventsOf(h, execution.id);
-    expect(events.map((event) => [event.type, event.status])).toEqual([
+    expect(
+      events
+        .filter((event) => event.type === 'status_changed' || event.type === 'catalog_updated')
+        .map((event) => [event.type, event.status]),
+    ).toEqual([
       ['status_changed', 'queued'],
       ['status_changed', 'running'],
       ['status_changed', 'awaiting_2fa'],

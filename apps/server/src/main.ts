@@ -83,6 +83,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
         }),
       accountKeySecret: config.accountKeySecret,
       twoFactorTimeoutMs: config.hunit.twoFactorTimeoutSeconds * 1000,
+      maxPeriodDays: config.hunit.maxPeriodDays,
       logger,
     });
 
