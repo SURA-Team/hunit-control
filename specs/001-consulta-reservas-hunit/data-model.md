@@ -86,7 +86,11 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 - Ao iniciar, o servidor marca como `failed/server_restarted` toda execução que estava ativa
   (credenciais em memória foram perdidas).
 - Retomada (FR-023): cria nova execução com `parent_execution_id` e `requested_hotel_codes` = hotéis
-  da execução original que não estão `completed`.
+  da execução original que não estão `completed`. Se a original terminou antes de definir os
+  hotéis (ex.: token inválido), repete o pedido original. Só execuções encerradas são retomadas,
+  inclusive `completed` com hotéis falhos (research R-19).
+- Cancelamento (FR-022): os hotéis em andamento ficam `cancelled` sem gravar; os pendentes
+  continuam `pending`, para a retomada.
 
 ### execution_hotels — Processamento de hotel (FR-019, FR-021)
 
@@ -95,6 +99,7 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 | `execution_id` + `hotel_code` | PK composta | |
 | `status` | `hotel_run_status` | |
 | `pages_total`, `pages_done` | int null | `pages_total` descoberto dinamicamente (FR-011) |
+| `reservations_total` | int | reservas informadas pela listagem do Hunit (soma dos blocos do período); base das "reservas ainda não processadas" da estimativa (R-08a) |
 | `reservations_seen` | int | |
 | `counts` | jsonb | contagem por `classification` |
 | `failure_reason` | text null | |

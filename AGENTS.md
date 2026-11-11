@@ -145,6 +145,9 @@ Regras ao mexer em dependências e no contrato:
 
 O servidor responde à API desde a Fase 3 da feature 001 (login com token e catálogo de hotéis)
 e, desde a Fase 4, consulta, classifica e grava as reservas por hotel, com consulta pela API
-(`/v1/reservations`) e download de evidências. Os códigos dos filtros e o tamanho de página do
-Hunit ainda serão confirmados com o `hunit:reservations-check` (T022). Ainda não existe o app
-Electron; documente aqui quando for criado.
+(`/v1/reservations`) e download de evidências. Desde a Fase 5, acompanha o andamento com
+estimativa de tempo (`current` e `timing` em `GET /v1/executions/{id}`), cancela
+(`POST /v1/executions/{id}/cancel`) e retoma execuções a partir dos hotéis não concluídos
+(`POST /v1/executions/{id}/resume`). Os códigos dos filtros e o tamanho de página do Hunit foram
+confirmados em parte com o `hunit:reservations-check` (T022). Ainda não existe o app Electron;
+documente aqui quando for criado.

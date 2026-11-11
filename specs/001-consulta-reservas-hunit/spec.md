@@ -329,7 +329,8 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **FR-022**: O sistema MUST permitir cancelar uma execução a qualquer momento, interrompendo-a sem
   aguardar o fim do hotel atual.
 - **FR-023**: O sistema MUST permitir retomar uma execução interrompida a partir do primeiro hotel
-  não concluído, exigindo novo acesso com token.
+  não concluído, exigindo novo acesso com token. Uma execução concluída em que algum hotel falhou
+  também pode ser retomada; só os hotéis não concluídos são consultados (research R-19).
 
 **Evidências**
 

@@ -153,6 +153,31 @@ até serem confirmados (ver R-13).
   por reserva corrige a estimativa conforme a execução avança.
 - **Alternatives considered**: média por hotel apenas (distorcida por hotéis muito grandes ou
   vazios).
+- **Implementado 2026-11-11 (Fase 5, T054)** em `apps/server/src/executions/timing.ts` (funções
+  puras) e calculado a cada `GET /v1/executions/{id}`:
+  - **"Reservas ainda não processadas nas páginas conhecidas"** exigiu um dado novo:
+    `execution_hotels.reservations_total` (migration `0001`), o total que o Hunit informa na
+    listagem (`totalItems`), somado entre os blocos do período. Restante do hotel em andamento =
+    `reservations_total − reservations_seen`. Antes de a primeira página responder, vale "média
+    por hotel − tempo já gasto no hotel".
+  - O andamento do hotel (`pages_*`, `reservations_*`, contagens) passa a ser gravado também logo
+    após cada listagem e após cada reserva, não só no fim de cada página: o acompanhamento e a
+    estimativa refletem a reserva em curso.
+  - **Média por reserva** = tempo dos hotéis que abriram reservas ÷ reservas abertas (o hotel em
+    andamento conta até agora; hotéis com falha ou cancelados também, porque o tempo foi real).
+    **Média por hotel** = duração média dos hotéis concluídos. As duas, em `timing`, são sempre
+    as **da própria execução** (FR-021a: "consultável por execução"); sem medição, `null`.
+  - **Média histórica** (início da execução): últimos 50 hotéis concluídos de outras execuções
+    (`loadTimingHistory`), usada só na estimativa enquanto a execução não mediu nada.
+  - Com `HOTEL_CONCURRENCY` > 1, o trabalho restante é dividido pelo número de hotéis processados
+    ao mesmo tempo (limitado aos hotéis que faltam).
+  - Sem estimativa (`null`): execução encerrada; antes do acesso ao Hunit (os hotéis ainda não
+    foram definidos — o catálogo só é lido depois do token); ou falta medição para alguma parte
+    (ex.: primeira execução da história, antes de o primeiro hotel terminar).
+  - `current` (FR-021) é o hotel em andamento com o evento mais recente, a página em leitura
+    (`pages_done + 1`, limitada a `pages_total`) e a **última reserva analisada** nele (o evento é
+    publicado depois da análise). Com hotéis em paralelo, os demais aparecem em `hotels`.
+  - A SC-010 (erro da estimativa) continua a medir na homologação (T062).
 
 ## R-09 — Limite de tamanho do período no Hunit (FR-010a) — **Verificar no mapeamento**
 
@@ -577,3 +602,44 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
   do container.
 - O `docker-compose.yml` monta a `DATABASE_URL` do servidor a partir de `POSTGRES_PASSWORD`, para
   a senha do banco ser informada uma única vez no `.env`.
+
+## R-19 — Cancelamento e retomada (FR-022, FR-023, SC-007, SC-008)
+
+Decisões da implementação da Fase 5 (2026-11-11, T055–T057).
+
+- **Cancelamento cooperativo com prazo**: `POST /cancel` marca o motivo da parada na execução em
+  andamento (`stopReason = cancelled_by_client`, quem cancelou) e responde 202 na hora. Os hotéis
+  checam a parada antes de cada página, de cada reserva e **da gravação** — este último ponto foi
+  acrescentado porque um cancelamento durante a última reserva gravava o hotel. Se a chamada ao
+  Hunit em andamento não terminar em 10 s (`cancelGraceMs`), o navegador é fechado à força, o que
+  a interrompe; o pior caso fica dentro dos 15 s da SC-008. A espera do token é interrompida na
+  hora.
+  - Todos os hotéis em andamento (podem ser vários, com `HOTEL_CONCURRENCY`) ficam `cancelled`, sem
+    gravar; os concluídos continuam gravados; os não iniciados ficam `pending`.
+  - A execução termina como `cancelled/cancelled_by_client` com `cancelled_by_client_id`.
+  - **Corrida com o fim da execução**: depois que o executor começa a gravar o estado final
+    (concluída ou falha), o cancelamento não muda mais o resultado — o pedido espera o fim e
+    responde `409 execution_already_finished`. O cancelamento de uma execução já encerrada também
+    é 409.
+  - Execução ativa no banco que não está em andamento no processo (não deveria acontecer com um
+    único servidor): cancelada direto no banco, com os hotéis em andamento marcados `cancelled`.
+  - Desligamento do servidor durante um cancelamento: vale o primeiro motivo (a execução termina
+    `cancelled`).
+  - Ajuste: o evento `queued` passou a ser publicado pelo executor, depois que a execução já está
+    registrada em memória — um cancelamento imediato após a criação sempre a encontra.
+- **Retomada**: cria uma nova execução com `parent_execution_id`, o mesmo período, o cliente que
+  pediu a retomada e novas credenciais (novo login e novo token). `requested_hotel_codes` = hotéis
+  da original que não estão `completed` (`pending`, `failed` — inclusive os pedidos que não
+  estavam no catálogo — e `cancelled`), na ordem do pedido original quando ele lista os hotéis.
+  - Execução que terminou antes de definir os hotéis (ex.: token inválido): repete o pedido
+    original (`null` = todos os hotéis).
+  - **Também vale para execução `completed` com hotéis que falharam** (permite tentar de novo só
+    os hotéis falhos). Se todos foram concluídos: `409 nothing_to_resume`.
+  - Execução ainda ativa: `409 execution_already_active` (cancele ou aguarde). Conta das novas
+    credenciais com execução ativa: `409 execution_already_active` (FR-006).
+  - A conta das novas credenciais não precisa ser a mesma da execução original (outro operador
+    pode retomar); os hotéis que ela não enxergar falham como "não está no catálogo".
+- **Alternatives considered**: o handler de cancelamento gravar `cancelled` direto no banco
+  (atômico, mas o navegador seguiria aberto por até 10 s e a conta ficaria livre para outra
+  execução com a sessão antiga ainda ativa); recusar a retomada de execução `completed` (obrigaria
+  uma execução nova, que reprocessaria os hotéis já concluídos).

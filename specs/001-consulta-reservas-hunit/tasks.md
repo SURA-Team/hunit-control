@@ -167,16 +167,21 @@ novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T051 [P] [US3] Testes de integração em `apps/server/test/integration/execution-control.test.ts`: cancelamento → `cancelled/cancelled_by_client` em ≤ 15 s sem gravar o hotel em andamento (SC-008); `cancelled_by_client_id` preenchido; retomada cria execução com `parent_execution_id` e `requested_hotel_codes` = hotéis não `completed` (SC-007); retomada sem hotéis pendentes → 409 `nothing_to_resume`
-- [ ] T052 [P] [US3] Testes unitários da estimativa em `apps/server/test/unit/timing.test.ts`: média por reserva (exclui "258-"), média histórica no início, estimativa restante (R-08a)
-- [ ] T053 [P] [US3] Testes de contrato de `POST /v1/executions/{id}/cancel`, `POST /v1/executions/{id}/resume`, `GET /v1/executions` (filtro `status`, cursor) e campos `current`, `hotels[].durationSeconds`, `timing` de `GET /v1/executions/{id}` em `apps/server/test/contract/executions-us3.test.ts`
+- [X] T051 [P] [US3] Testes de integração em `apps/server/test/integration/execution-control.test.ts`: cancelamento → `cancelled/cancelled_by_client` em ≤ 15 s sem gravar o hotel em andamento (SC-008); `cancelled_by_client_id` preenchido; retomada cria execução com `parent_execution_id` e `requested_hotel_codes` = hotéis não `completed` (SC-007); retomada sem hotéis pendentes → 409 `nothing_to_resume`
+  - **Concluída (2026-11-11)**: também cobre o fechamento forçado do navegador quando a leitura não termina, o prazo padrão de 10 s, hotéis em paralelo (todos os em andamento ficam `cancelled`), cancelamento durante a espera do token, execução já encerrada, execução ativa só no banco, e a retomada de execução `completed` com hotel falho e de execução que falhou antes de definir os hotéis. O 409 `nothing_to_resume` pela API está em `executions-us3.test.ts`
+- [X] T052 [P] [US3] Testes unitários da estimativa em `apps/server/test/unit/timing.test.ts`: média por reserva (exclui "258-"), média histórica no início, estimativa restante (R-08a)
+- [X] T053 [P] [US3] Testes de contrato de `POST /v1/executions/{id}/cancel`, `POST /v1/executions/{id}/resume`, `GET /v1/executions` (filtro `status`, cursor) e campos `current`, `hotels[].durationSeconds`, `timing` de `GET /v1/executions/{id}` em `apps/server/test/contract/executions-us3.test.ts`
+  - **Concluída (2026-11-11)**: com todas as operações implementadas, o teste do 501 em `test/contract/app.test.ts` passou a conferir que toda operação do contrato tem handler (`createOperationHandlers`) e que o handler de reserva (`notImplemented`) responde 501
 
 ### Implementation for User Story 3
 
-- [ ] T054 [P] [US3] Implementar cálculo de médias e tempo restante em `apps/server/src/executions/timing.ts` (R-08a) e gravar `started_at`, `finished_at` e `reservations_opened` em `execution_hotels` (FR-021a)
-- [ ] T055 [US3] Implementar o cancelamento cooperativo com `AbortController` no runner (`apps/server/src/executions/runner.ts`): checagem entre reservas e páginas, fechamento forçado do contexto do navegador após 10 s, hotel em andamento marcado `cancelled` sem commit
-- [ ] T056 [US3] Implementar a retomada em `apps/server/src/executions/resume.ts` (valida execução encerrada com hotéis pendentes e ausência de execução ativa na conta; cria a nova execução e inicia o runner com as novas credenciais)
-- [ ] T057 [US3] Implementar os handlers `cancelExecution` e `resumeExecution` em `apps/server/src/http/handlers/executions.ts` e completar `getExecution` com `current`, `hotels[]` (duração, contagens, `failureReason`), `timing` e os 50 eventos mais recentes (FR-021)
+- [X] T054 [P] [US3] Implementar cálculo de médias e tempo restante em `apps/server/src/executions/timing.ts` (R-08a) e gravar `started_at`, `finished_at` e `reservations_opened` em `execution_hotels` (FR-021a)
+  - **Concluída (2026-11-11)**: nova coluna `execution_hotels.reservations_total` (migration `0001_reservations_total`), base das "reservas ainda não processadas"; andamento gravado também após cada listagem e cada reserva; média histórica em `loadTimingHistory` (`persistence/execution-hotels-repo.ts`). Regras em research R-08a, "Implementado"
+- [X] T055 [US3] Implementar o cancelamento cooperativo com `AbortController` no runner (`apps/server/src/executions/runner.ts`): checagem entre reservas e páginas, fechamento forçado do contexto do navegador após 10 s, hotel em andamento marcado `cancelled` sem commit
+  - **Concluída (2026-11-11)** com `stopReason = cancelled_by_client` no `ActiveRun` (em vez de `AbortController`: os pontos de checagem da T063 já existiam) e `ExecutionRunner.cancel`. Acrescentado um ponto de checagem antes da gravação do hotel. Decisões (corrida com o fim da execução, execução fora do processo) em research R-19
+- [X] T056 [US3] Implementar a retomada em `apps/server/src/executions/resume.ts` (valida execução encerrada com hotéis pendentes e ausência de execução ativa na conta; cria a nova execução e inicia o runner com as novas credenciais)
+  - **Concluída (2026-11-11)**: execução `completed` com hotéis falhos também pode ser retomada (spec FR-023 e research R-19 atualizados)
+- [X] T057 [US3] Implementar os handlers `cancelExecution` e `resumeExecution` em `apps/server/src/http/handlers/executions.ts` e completar `getExecution` com `current`, `hotels[]` (duração, contagens, `failureReason`), `timing` e os 50 eventos mais recentes (FR-021)
 
 **Checkpoint**: todas as histórias funcionam de forma independente.
 
