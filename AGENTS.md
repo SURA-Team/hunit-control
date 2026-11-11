@@ -92,7 +92,9 @@ Não altere nada dentro de `legacy/`. O histórico completo está em
 ## Comandos
 
 Pré-requisitos: Node.js 24 LTS ou mais novo, pnpm na versão do campo `packageManager` do
-`package.json` (com o Node 24, basta rodar `corepack enable` uma vez) e Docker Desktop.
+`package.json` e Docker Desktop. Para instalar o pnpm sem precisar de administrador:
+`npm install -g pnpm@<versão do packageManager>` (hoje `pnpm@12.18.0`). Com permissão de
+administrador, `corepack enable` também funciona.
 
 | Comando | O que faz |
 |---|---|
