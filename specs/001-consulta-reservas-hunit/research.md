@@ -15,6 +15,16 @@ até serem confirmados (ver R-13).
   futuro Electron). pnpm é rápido, econômico em disco e tem suporte nativo a workspaces.
 - **Alternatives considered**: npm workspaces (mais lento, hoisting menos previsível); Nx/Turborepo
   (orquestração desnecessária para 3 pacotes — princípio VIII).
+- **Atualização 2026-11-11 (implementação da Fase 1)**: versões fixadas — pnpm 12.18 (campo
+  `packageManager`) e TypeScript 5.9.3. O TypeScript 7 já é a versão "latest" no npm, mas o
+  `typescript-eslint` só aceita até a 6.0 e o `openapi-typescript` só a 5.x; por isso o 5.x do
+  plano continua valendo. Rever quando essas duas ferramentas aceitarem versões mais novas.
+  Node.js 24 LTS é o mínimo para desenvolvimento (`.nvmrc`, `engines`); em produção vale o Node da
+  imagem oficial do Playwright (ver R-18).
+- **Política de dependências** (`pnpm-workspace.yaml`, princípio VI): `minimumReleaseAge` de 3 dias
+  (versões recém-publicadas não são instaladas) e `allowBuilds` negando os scripts de instalação
+  de `esbuild`, `ssh2`, `cpu-features` e `protobufjs` — todos vêm de ferramentas de desenvolvimento
+  e funcionam sem o script.
 
 ## R-02 — API e automação no mesmo processo
 
@@ -359,6 +369,11 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
 - **Rationale**: uma ferramenta só; cada camada indica onde está a falha (princípio VII).
 - **Alternatives considered**: Jest (mais lento com ESM/TS); Playwright Test como runner geral
   (bom para E2E, desnecessário para unidade).
+- **Atualização 2026-11-11 (implementação da Fase 1)**: Vitest 5. Os projetos por pacote ficam em
+  `vitest.config.ts` (`test.projects`); o `vitest.workspace.ts` foi descontinuado. Nos testes e na
+  checagem de tipos, `@hunit/domain` e `@hunit/contracts` são lidos direto do código-fonte (alias
+  no Vitest, `paths` no `tsconfig.json` do servidor), sem depender de build; só o build de
+  produção usa os `dist`.
 
 ## R-15 — Gravação por hotel e histórico (FR-017 a FR-019)
 
@@ -393,3 +408,16 @@ Situação da reserva (FR-014a): `statusId = 3` → cancelada; `1`/`2` → ativa
   (`postgres:17`), volumes `pgdata` e `evidence`. Configuração somente por variáveis de ambiente
   (`.env.example` versionado).
 - **Rationale**: princípio V; a imagem oficial já traz o Chromium e as dependências de sistema.
+- **Atualização 2026-11-11 (implementação da Fase 1)**: a imagem
+  `mcr.microsoft.com/playwright:v1.65.0-noble` traz o **Node.js 26 LTS** (não o 24) e não inclui o
+  corepack. Decisão: usar a imagem oficial como ela vem — o servidor roda em Node 26 no container;
+  o código é compilado para ES2023 com os tipos do Node 24, então só usa o que existe nas duas
+  versões. O pnpm é instalado no estágio de build com `npm`, na versão do campo `packageManager`.
+  Alternativa descartada por ora: copiar o Node 24 para dentro da imagem (dois Node na mesma
+  imagem, mais manutenção, sem ganho claro).
+- O serviço `server` roda como `pwuser` (sem root), com `init: true` e `shm_size: 1gb` (exigências
+  do Chromium). Verificado em 2026-11-11: a imagem constrói, contém só dependências de produção, o
+  código fica somente leitura para o processo, `/data/evidence` é gravável e o Chromium abre dentro
+  do container.
+- O `docker-compose.yml` monta a `DATABASE_URL` do servidor a partir de `POSTGRES_PASSWORD`, para
+  a senha do banco ser informada uma única vez no `.env`.

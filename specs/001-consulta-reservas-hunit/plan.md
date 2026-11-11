@@ -24,7 +24,9 @@ verificado no primeiro acesso real (R-08).
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.x (`strict`) sobre Node.js 24 LTS
+**Language/Version**: TypeScript 5.x (`strict`) sobre Node.js LTS — 24 é o mínimo para
+desenvolvimento; em produção vale o Node da imagem oficial do Playwright (26 LTS em 2026-11,
+ver research R-18)
 
 **Primary Dependencies**: Fastify 5, fastify-openapi-glue, openapi-typescript, Playwright
 (Chromium), Drizzle ORM + drizzle-kit, Pino
@@ -92,9 +94,11 @@ specs/001-consulta-reservas-hunit/
 ### Source Code (repository root)
 
 ```text
-package.json                 # scripts raiz (test, lint, build)
-pnpm-workspace.yaml
-tsconfig.base.json
+package.json                 # scripts raiz (build, typecheck, lint, test)
+pnpm-workspace.yaml          # pacotes + política de dependências (idade mínima, scripts de instalação)
+tsconfig.base.json           # opções comuns do TypeScript
+eslint.config.js             # lint + regra de pureza do domínio (princípio II)
+vitest.config.ts             # um projeto de teste por pacote
 docker-compose.yml           # server + db, volumes pgdata e evidence
 .env.example                 # variáveis (sem segredos reais)
 

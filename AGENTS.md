@@ -25,11 +25,15 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/memory/constitution.md` | Princípios não negociáveis do projeto |
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
+| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle) |
+| `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
+| `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
+| `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server` e `db` |
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento |
 
-O código novo (monorepo TypeScript: API, worker, Electron, tipos compartilhados) ainda não
-existe; a estrutura será definida no `plan.md` da primeira feature. Atualize esta tabela
-quando ela for criada.
+O monorepo (pnpm + TypeScript) foi criado pela feature 001; a estrutura detalhada está em
+`specs/001-consulta-reservas-hunit/plan.md`. O app desktop (`apps/desktop`, Electron) ainda não
+existe e terá uma feature própria. Atualize esta tabela quando a estrutura mudar.
 
 ## Fluxo de trabalho (Spec-Driven Development)
 
@@ -87,5 +91,30 @@ Não altere nada dentro de `legacy/`. O histórico completo está em
 
 ## Comandos
 
-Ainda não há comandos de build/teste. Documente aqui (instalar, testar, subir containers,
-rodar o Electron) assim que forem criados pela primeira feature.
+Pré-requisitos: Node.js 24 LTS ou mais novo, pnpm na versão do campo `packageManager` do
+`package.json` (com o Node 24, basta rodar `corepack enable` uma vez) e Docker Desktop.
+
+| Comando | O que faz |
+|---|---|
+| `pnpm install` | Instala as dependências do monorepo |
+| `pnpm typecheck` | Checa os tipos de todos os pacotes |
+| `pnpm lint` | ESLint + Prettier + lint do contrato OpenAPI (falha se os tipos gerados estiverem desatualizados) |
+| `pnpm format` | Formata o código com o Prettier |
+| `pnpm test` | Roda os testes (Vitest). Um pacote só: `pnpm test --project domain` (ou `contracts`, `server`) |
+| `pnpm build` | Compila os pacotes para `dist/` |
+| `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
+| `docker compose up -d --build` | Sobe `server` e `db` (antes, copie `.env.example` para `.env` e preencha) |
+
+Regras ao mexer em dependências e no contrato:
+
+- O `pnpm-workspace.yaml` só aceita versões publicadas há 3 dias ou mais e nega scripts de
+  instalação de dependências. Se uma dependência nova exigir script, avalie e registre a decisão
+  em `allowBuilds`.
+- A versão do pacote `playwright` e a da imagem em `apps/server/Dockerfile` têm de ser iguais
+  (há um teste que confere).
+- Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
+  `generate` e copie o arquivo para `specs/001-consulta-reservas-hunit/contracts/openapi.yaml`
+  — as duas cópias devem ficar idênticas.
+
+Ainda não existem: comando para rodar o servidor em desenvolvimento, criação de clientes da API
+(`create-client`) e o Electron. Documente aqui quando forem criados.
