@@ -52,6 +52,11 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Capturas de rede e fixtures brutas do Hunit (contêm dados de hóspedes e, no login, a senha).
+# Só as fixtures anonimizadas são versionadas (tasks.md, T020/T021).
+*.har
+apps/server/test/fixtures/hunit/raw/
+
 # ============================================================
 # Node / TypeScript / Electron
 # ============================================================
@@ -60,6 +65,7 @@ dist/
 build/
 out/
 coverage/
+.vitest/
 *.tsbuildinfo
 .npm/
 .pnpm-store/

@@ -1,0 +1,28 @@
+{
+  "name": "@hunit/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contrato OpenAPI da API do HUNIT Control (fonte da verdade) e tipos gerados a partir dele",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./openapi.yaml": "./openapi.yaml"
+  },
+  "files": [
+    "dist",
+    "openapi.yaml"
+  ],
+  "scripts": {
+    "generate": "openapi-typescript openapi.yaml -o src/generated.ts",
+    "lint": "redocly lint openapi.yaml && openapi-typescript openapi.yaml -o src/generated.ts --check",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.76.0",
+    "openapi-typescript": "^7.13.0"
+  }
+}

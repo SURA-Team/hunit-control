@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Na checagem de tipos (e no editor), os pacotes do workspace são lidos direto do
+    // código-fonte, sem depender de um build anterior. O build usa tsconfig.build.json.
+    "paths": {
+      "@hunit/domain": ["../../packages/domain/src/index.ts"],
+      "@hunit/contracts": ["../../packages/contracts/src/index.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

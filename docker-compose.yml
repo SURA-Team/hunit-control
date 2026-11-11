@@ -1,0 +1,54 @@
+# HUNIT Control — servidor (API + automação do Hunit) e banco de dados.
+#
+# Toda a configuração vem de variáveis de ambiente (constitution, princípio V):
+# copie .env.example para .env, preencha POSTGRES_PASSWORD e ACCOUNT_KEY_SECRET e rode
+#   docker compose up -d --build
+name: hunit-control
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    init: true # encerra corretamente os processos-filho do Chromium
+    shm_size: 1gb # o Chromium precisa de mais memória compartilhada que o padrão do Docker (64 MB)
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://hunit:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}@db:5432/hunit
+      ACCOUNT_KEY_SECRET: ${ACCOUNT_KEY_SECRET:?defina ACCOUNT_KEY_SECRET no arquivo .env}
+      HUNIT_WEB_URL: ${HUNIT_WEB_URL:-https://hunit.hsystem.com.br}
+      HUNIT_API_URL: ${HUNIT_API_URL:-https://hunit-api.hsystem.com.br}
+      TWO_FACTOR_TIMEOUT_SECONDS: ${TWO_FACTOR_TIMEOUT_SECONDS:-120}
+      HOTEL_CONCURRENCY: ${HOTEL_CONCURRENCY:-1}
+      MAX_PERIOD_DAYS: ${MAX_PERIOD_DAYS:-}
+      EVIDENCE_DIR: /data/evidence
+      EVIDENCE_RETENTION_DAYS: ${EVIDENCE_RETENTION_DAYS:-30}
+      RESERVATION_RETENTION_YEARS: ${RESERVATION_RETENTION_YEARS:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '${PORT:-3000}:3000'
+    volumes:
+      - evidence:/data/evidence
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hunit
+      POSTGRES_DB: hunit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hunit -d hunit']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata: # dados do PostgreSQL (fonte da verdade)
+  evidence: # capturas de tela, HTML e respostas guardados como evidência de falhas

@@ -1,0 +1,19 @@
+# Gerados e dependências
+node_modules/
+dist/
+coverage/
+.vitest/
+pnpm-lock.yaml
+packages/contracts/src/generated.ts
+
+# Contrato da API: mantido idêntico à cópia em specs/ (tasks.md, T061)
+packages/contracts/openapi.yaml
+
+# Documentação e artefatos do Spec Kit (não reformatar)
+*.md
+specs/
+.specify/
+.claude/
+
+# Sistema antigo (somente leitura)
+legacy/

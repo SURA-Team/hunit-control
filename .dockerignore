@@ -1,0 +1,21 @@
+# Lista de permissão: nada entra no contexto do build, exceto o que está liberado abaixo.
+# Assim, dados sensíveis da raiz (legacy/, .env, HARs, planilhas) nunca chegam à imagem.
+*
+
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!apps/
+!packages/
+
+# Dentro do que foi liberado, continua de fora:
+**/node_modules/
+**/dist/
+**/test/
+**/coverage/
+**/.vitest/
+**/.env
+**/.env.*
+**/*.har
+**/*.log

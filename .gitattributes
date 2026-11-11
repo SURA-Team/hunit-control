@@ -1,0 +1,3 @@
+# Finais de linha sempre LF, inclusive no Windows: o código roda em containers Linux
+# e o Prettier confere o final de linha.
+* text=auto eol=lf

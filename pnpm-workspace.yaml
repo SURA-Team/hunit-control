@@ -1,0 +1,17 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Segurança da cadeia de dependências (constitution, princípio VI):
+# só instala versões publicadas há pelo menos 3 dias (o padrão do pnpm é 1 dia).
+# Versões recém-publicadas são o alvo mais comum de pacotes maliciosos.
+minimumReleaseAge: 4320
+
+# Scripts de instalação de dependências só rodam se aprovados aqui (true).
+# Nenhum dos abaixo é necessário: todos vêm de ferramentas de desenvolvimento
+# (drizzle-kit, vite, testcontainers) e funcionam sem o script de instalação.
+allowBuilds:
+  cpu-features: false # binário nativo opcional do ssh2 (testcontainers)
+  esbuild: false # só otimiza o binário; a API usada por drizzle-kit/tsx funciona sem ele
+  protobufjs: false # apenas imprime um aviso de versão (testcontainers)
+  ssh2: false # aceleração nativa opcional (testcontainers)
