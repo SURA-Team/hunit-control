@@ -126,9 +126,9 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 | `classification` | `classification` | FR-013 |
 | `reason` | text | FR-014 |
 | `pre_payment_found` | boolean | |
-| `charged_at` | timestamptz null | "Cobrado em" |
-| `charged_by` | text null | |
-| `charged_amount` | numeric(12,2) null | |
+| `charged_at` | timestamptz null | data/hora do último evento de pagamento: "Cobrado em" ou, se a classificação for `virtual_card_validated_only`, "Validado em" |
+| `charged_by` | text null | responsável pelo último evento de pagamento |
+| `charged_amount` | numeric(12,2) null | valor do último evento de pagamento (pode ser 0 numa validação) |
 | `transaction_id`, `authorization_code`, `processor_reference` | text null | |
 | `is_installment` | boolean null | |
 | `installment_count` | int null | |

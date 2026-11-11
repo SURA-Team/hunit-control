@@ -54,12 +54,12 @@ retroativas de meses; poucos clientes (desktop, Sura)
 | # | Princípio | Avaliação | Status |
 |---|---|---|---|
 | I | Spec-First | Spec 001 aprovada e clarificada (5 perguntas) antes deste plano | ✅ |
-| II | Isolamento da UI do Hunit | Seletores, URLs e formatos de resposta do Hunit só em `apps/server/src/hunit/`; domínio recebe `ReservationSnapshot` neutro (R-06); falhas de tela geram `hunit_screen_not_recognized` + evidência (FR-024) | ✅ |
+| II | Isolamento do Hunit (v1.1.0) | Seletores, rotas e formatos de resposta do Hunit só na camada `apps/server/src/hunit/` (Page Objects de login/2FA + leitores da API em `network/`); domínio recebe `ReservationSnapshot` neutro (R-06); leitores só fazem GET em rotas permitidas, com bloqueio explícito de cobrança/cartão/alteração (T045); tela ou resposta não reconhecida → `hunit_screen_not_recognized` + evidência (screenshot/HTML ou resposta JSON) | ✅ |
 | III | API-First com Contrato | `openapi.yaml` contract-first; tipos gerados para servidor e futuro Electron (R-03) | ✅ |
 | IV | Jobs Assíncronos com Intervenção Humana | Estados `queued…cancelled` + `awaiting_2fa`; retomada por hotel; índice único parcial por conta (data-model) | ✅ |
 | V | Servidor Central e Containers | `server` + `db` em Docker Compose; config só por env; estado só em volumes declarados (R-18) | ✅ |
 | VI | Dados e Segurança | Postgres fonte da verdade; sem credenciais/token/sessão persistidos; chaves de API com hash; redação de logs e máscara em evidências (R-10–R-12); retenção e anonimização (R-16) | ✅ |
-| VII | Testes em Camadas | Unitários de domínio, Page Objects e leitores da API contra fixtures anonimizadas (HTML/JSON), contrato contra OpenAPI, teste automatizado de SC-004 (R-14) | ✅ |
+| VII | Testes em Camadas (v1.1.0) | Unitários de domínio, Page Objects (HTML) e leitores da API (JSON) contra fixtures anonimizadas, teste da lista de rotas permitidas/bloqueadas (T045), contrato contra OpenAPI, teste automatizado de SC-004 (R-14) | ✅ |
 | VIII | Simplicidade | 2 containers, sem fila/Redis/object storage; paralelismo desligado até ser validado | ✅ |
 
 **Nota sobre o princípio V**: a constitution lista "API, worker e PostgreSQL" em containers. Aqui

@@ -177,12 +177,11 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 
 ### Edge Cases
 
-- O Hunit exibe avisos ou janelas informativas (ex.: "Bloqueios de Processamento") antes da
-  listagem: a execução os dispensa apenas quando forem informativos e conhecidos; avisos
-  desconhecidos encerram o hotel como "tela do Hunit não reconhecida".
-- Um hotel não oferece algum filtro esperado na tela de reservas: se o filtro estiver configurado
-  como "Todos/Todas" (sem restrição), o hotel é processado normalmente; se o filtro restringir a
-  consulta (ex.: Tipo coleta pagamento = Canal), o hotel é marcado como falha com motivo.
+- O Hunit exibe avisos ou janelas informativas (ex.: "Bloqueios de Processamento"): não
+  interferem na consulta e são ignorados; avisos que impeçam a leitura das reservas encerram o
+  hotel como "tela do Hunit não reconhecida".
+- O Hunit ignora ou deixa de aceitar um filtro restritivo (ex.: Tipo coleta pagamento = Canal): o
+  hotel é marcado como falha com motivo (FR-010), sem gravar reservas fora do escopo.
 - O período informado não retorna reservas para um hotel: o hotel é concluído com zero reservas,
   sem erro.
 - A sessão do Hunit expira no meio da execução: a execução encerra como interrompida, permitindo a
@@ -213,7 +212,7 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   verificação em duas etapas, e aceitar o token de qualquer cliente autorizado.
 - **FR-003**: O sistema MUST encerrar a execução com motivo distinto para: credenciais inválidas,
   token inválido, tempo de espera do token esgotado, Hunit indisponível e tela do Hunit não
-  reconhecida.
+  reconhecida (inclui telas e respostas do Hunit em formato inesperado).
 - **FR-004**: O tempo de espera do token MUST acompanhar o limite da tela de verificação do Hunit
   (cerca de 1 a 2 minutos; valor exato a confirmar no mapeamento da tela). Se o Hunit expirar a tela
   de verificação, ou se esse limite for atingido sem token, a execução MUST encerrar com o motivo
@@ -252,8 +251,10 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   | Status da integração (PMS) | Todas |
   | Demais campos (nº da reserva, canais, hóspede, tipo de quarto, nº integração PMS) | sem filtro |
 
-  Se algum desses filtros ou valores deixar de existir na tela do Hunit, o hotel MUST ser marcado
-  como falha com o motivo "tela do Hunit não reconhecida", em vez de consultar sem o filtro.
+  Se algum desses filtros ou valores deixar de existir no Hunit, ou se o resultado trouxer reservas
+  que não respeitam os filtros (ex.: outro tipo de coleta ou check-in fora do período), o hotel MUST
+  ser marcado como falha com o motivo "tela do Hunit não reconhecida", em vez de gravar o
+  resultado.
 - **FR-010a**: O período de check-in MUST aceitar qualquer intervalo de datas, inclusive totalmente
   no passado e maior que uma semana, para permitir consultas retroativas de reservas que passaram
   sem cobrança. A data inicial MUST ser menor ou igual à final. Se o Hunit limitar o tamanho do
@@ -332,8 +333,9 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 
 **Evidências**
 
-- **FR-024**: Toda falha de navegação ou de classificação MUST gerar evidência (captura da tela e
-  conteúdo da página) vinculada à execução, ao hotel e, quando houver, à reserva.
+- **FR-024**: Toda falha de navegação, de leitura ou de classificação MUST gerar evidência do que
+  foi recebido do Hunit (captura e conteúdo da tela, ou a resposta recebida) vinculada à execução,
+  ao hotel e, quando houver, à reserva.
 - **FR-025**: Evidências MUST NOT conter credenciais nem token e MUST ser mantidas por 30 dias.
 
 **Retenção de dados**
@@ -359,7 +361,8 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   (ativa/cancelada/não identificada), os dados do pré-pagamento e da cobrança, a classificação de
   cobrança atual, a marcação "não encontrada na última verificação" e o histórico de verificação (primeira/última verificação,
   contagem, mudanças).
-- **Evidência**: captura de tela e conteúdo de página vinculados a uma falha, com execução, hotel e
+- **Evidência**: o que foi recebido do Hunit numa falha (captura e conteúdo da tela, ou a resposta
+  recebida), com execução, hotel e
   reserva de origem e data de expiração.
 - **Cliente autorizado**: um sistema ou aplicativo identificado individualmente (ex.: app desktop,
   Sura), com nível de acesso "operador" ou "consulta".
@@ -371,7 +374,7 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **SC-001**: Em uma execução concluída, 100% das reservas listadas pelo Hunit para os hotéis e o
   período solicitados aparecem nos resultados com uma classificação.
 - **SC-002**: Em uma amostra de 50 reservas conferidas manualmente no Hunit, ao menos 98% têm a
-  mesma situação (cobrada, pendente, erro na cobrança, não é cartão virtual) que o sistema
+  mesma situação (cobrada, cartão validado, pendente, erro na cobrança, não é cartão virtual) que o sistema
   registrou, e nenhuma reserva pendente aparece como cobrada.
 - **SC-003**: Zero cobranças disparadas e zero alterações feitas no Hunit pelo sistema em qualquer
   execução.
@@ -400,9 +403,11 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   informado por um humano; reaproveitar a sessão do Hunit entre execuções está fora do escopo desta
   feature.
 - Uma única conta do Hunit dá acesso a todos os hotéis do catálogo da rede.
-- O período de check-in é obrigatório e informado como data inicial e final (DD/MM/AAAA).
+- O período de check-in é obrigatório e informado como data inicial e final (exibido como
+  DD/MM/AAAA; o formato técnico de troca de dados é definido no plano).
 - Se o Hunit permite processar vários hotéis simultaneamente com a mesma conta ainda é
-  desconhecido; precisa ser verificado na fase de planejamento e define qual meta da SC-009 vale.
+  desconhecido; será verificado no primeiro acesso real autorizado e define qual meta da SC-009
+  vale.
 - Os filtros da FR-010 são fixos nesta feature; permitir que o operador escolha filtros por
   execução fica para uma spec futura, se houver necessidade.
 - Os nomes de filtros, telas e textos do Hunit citados nesta spec refletem a interface atual

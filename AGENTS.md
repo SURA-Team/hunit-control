@@ -78,7 +78,9 @@ Não altere nada dentro de `legacy/`. O histórico completo está em
 
 - Acesso real ao Hunit só com autorização explícita do usuário — ele exige credenciais e
   token 2FA de um humano.
-- Interações com o Hunit ficam exclusivamente nos Page Objects; prefira localizadores por
+- Interações com o Hunit ficam exclusivamente na camada do Hunit (`apps/server/src/hunit/`):
+  Page Objects para telas (login/2FA) e leitores da API interna (somente GET, lista de rotas
+  permitidas; rotas de cobrança, cartão e alteração bloqueadas). Nas telas, prefira localizadores por
   role/label/texto a CSS/XPath.
 - Para mapear a UI nova, peça ao usuário para gravar o fluxo com `npx playwright codegen` ou
   salvar o HTML das páginas (anonimizado).
