@@ -1,0 +1,11 @@
+{
+  "_fixture": "SINTÉTICA, no formato lido do código da tela do Hunit (research R-13a). Substituir pela resposta real anonimizada (tasks.md, T020/T021).",
+  "id": "00000000-0000-0000-0000-000000000001",
+  "displayName": "Usuário de Teste",
+  "email": "usuario@exemplo.test",
+  "companies": [
+    { "id": 101, "name": "Hotel Exemplo Centro", "isActive": true },
+    { "id": 102, "name": "Hotel Exemplo Praia", "isActive": true },
+    { "id": 103, "name": "Hotel Exemplo Desativado", "isActive": false }
+  ]
+}

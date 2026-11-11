@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<!-- RECONSTRUÍDA a partir da análise dos HARs de login (research R-13), sem dados reais. Substituir pelo HTML real anonimizado (tasks.md, T020/T021). -->
+<!-- Tentativa de login expirada: o Keycloak volta à tela de usuário e senha com um aviso. -->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Entrar em hsystem</title>
+  </head>
+  <body>
+    <div class="alert-error">
+      <span class="kc-feedback-text">Tempo esgotado. Faça login novamente.</span>
+    </div>
+    <h1 id="kc-page-title">Entrar na sua conta</h1>
+    <form id="kc-form-login" action="{{action}}" method="post">
+      <label for="username">Endereço de e-mail</label>
+      <input id="username" name="username" type="text" />
+      <label for="password">Senha</label>
+      <input id="password" name="password" type="password" />
+      <input id="kc-login" name="login" type="submit" value="Entrar" />
+    </form>
+  </body>
+</html>

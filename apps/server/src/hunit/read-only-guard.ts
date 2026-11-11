@@ -10,6 +10,11 @@
  * 2. `installBrowserGuard` — o que a PÁGINA aberta no navegador pode pedir ao hunit-api: só o
  *    necessário para o login (`BROWSER_LOGIN_ALLOWED_ROUTES`); o resto é abortado.
  *
+ *    Limite do Playwright: num redirecionamento HTTP ("302, vá para X"), só o primeiro endereço
+ *    passa pela interceptação; o salto para X sai do navegador sem poder ser abortado. Esses
+ *    saltos são DETECTADOS e informados com `sent: true`, e quem usa o navegador (o gateway)
+ *    interrompe o acesso. Na prática só o login (Keycloak e a própria API) redireciona.
+ *
  * Nas duas, a lista de bloqueio (`isBlockedRoute`) é conferida primeiro e vence qualquer
  * permissão: mesmo que alguém acrescente por engano uma rota perigosa a uma lista de
  * permissão, ela continua bloqueada.
@@ -183,12 +188,17 @@ export interface BlockedRequest {
   /** Caminho pedido, sem os parâmetros. */
   path: string;
   reason: GuardRefusal;
+  /**
+   * `true` quando a requisição veio de um redirecionamento: ela saiu do navegador (a
+   * interceptação não alcança esses saltos) e foi apenas detectada, não bloqueada.
+   */
+  sent?: boolean;
 }
 
 export interface BrowserGuardOptions {
   /** Endereço da API interna do Hunit (HUNIT_API_URL). */
   apiUrl: string;
-  /** Chamado a cada requisição abortada, para registro em log. */
+  /** Chamado a cada requisição abortada, ou detectada fora da lista num redirecionamento. */
   onBlocked?: (request: BlockedRequest) => void;
 }
 
@@ -217,6 +227,28 @@ export async function installBrowserGuard(
     }
     onBlocked?.({ method: request.method(), path: pathOf(request.url()), reason: verdict.reason });
     await route.abort('blockedbyclient');
+  });
+
+  // Saltos de redirecionamento não passam pela interceptação acima (limite do Playwright):
+  // ficam ao menos detectados, para o acesso ser interrompido.
+  context.on('request', (request) => {
+    if (request.redirectedFrom() === null) return;
+    let url: URL;
+    try {
+      url = new URL(request.url());
+    } catch {
+      return;
+    }
+    if (!isApiHost(url)) return;
+    const verdict = checkBrowserRequest(request.method(), request.url(), apiUrl);
+    if (!verdict.allowed) {
+      onBlocked?.({
+        method: request.method(),
+        path: pathOf(request.url()),
+        reason: verdict.reason,
+        sent: true,
+      });
+    }
   });
 
   // Conexões em tempo real (notificações do Hunit) não são necessárias e ficam fechadas.

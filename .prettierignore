@@ -18,3 +18,6 @@ specs/
 
 # Sistema antigo (somente leitura)
 legacy/
+
+# Fixtures do Hunit: ficam como foram capturadas (ou reconstruídas), sem reformatação.
+apps/server/test/fixtures/
