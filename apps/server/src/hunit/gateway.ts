@@ -106,5 +106,29 @@ export interface ReservationPage {
   items: ReservationListItem[];
 }
 
+/**
+ * Aviso de que uma leitura do Hunit falhou por indisponibilidade passageira e vai ser repetida
+ * (FR-011a, research R-23).
+ */
+export interface HunitRetryNotice {
+  /** Número desta nova tentativa, começando em 1. */
+  attempt: number;
+  /** Total de novas tentativas permitidas. */
+  maxAttempts: number;
+  /** Espera antes desta tentativa, em milissegundos. */
+  delayMs: number;
+  /** Hotel da leitura, ou `null` quando ela não é de um hotel (ex.: catálogo). */
+  hotelCode: string | null;
+  /** O que aconteceu, para o operador. Nunca cita usuário, senha ou token. */
+  reason: string;
+}
+
+/** Recebe os avisos de nova tentativa; a leitura espera a promessa antes de seguir. */
+export type HunitRetryListener = (notice: HunitRetryNotice) => void | Promise<void>;
+
 /** Cria a sessão do Hunit de uma execução. Cada execução tem a sua, com navegador próprio. */
-export type CreateHunitGateway = (options: { executionId: string }) => Promise<HunitGateway>;
+export type CreateHunitGateway = (options: {
+  executionId: string;
+  /** Chamado antes de cada nova tentativa de uma leitura (FR-011a). */
+  onRetry?: HunitRetryListener;
+}) => Promise<HunitGateway>;

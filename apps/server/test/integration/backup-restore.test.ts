@@ -324,3 +324,64 @@ describe('restauração completa', () => {
     }
   });
 });
+
+/**
+ * Modo contínuo, o do serviço `backup` em produção (homologação T062). Antes da correção, o laço
+ * rodava a verificação em `(check_once) || log ...`, contexto em que o bash ignora o `set -e`: uma
+ * falha no meio não impedia o arquivo de receber o nome final.
+ */
+describe('modo contínuo (produção)', () => {
+  /** Roda o laço por alguns segundos: a primeira verificação acontece logo ao iniciar. */
+  async function backupLoop(env: Record<string, string>, seconds = 10) {
+    // --foreground: sem ele, o timeout manda o sinal ao grupo de processos inteiro e acaba
+    // derrubando um processo do PostgreSQL deste mesmo container, que reinicia em recuperação.
+    return run(['timeout', '--foreground', String(seconds), 'bash', '/scripts/backup.sh'], env);
+  }
+
+  it('banco fora do ar: nenhuma cópia ganha o nome final e a falha vai para o log', async () => {
+    await reset();
+    const previous = backupNameFor(3);
+    await shell(`echo anterior > /backups/${previous}`);
+
+    const result = await backupLoop(backupEnv({ PGPORT: '1' }));
+
+    expect(await listBackups()).toEqual([previous]);
+    expect(result.output).toContain('a verificação falhou');
+    expect(result.output).not.toContain('concluída');
+  });
+
+  it('banco no ar: grava a cópia e segue no laço', async () => {
+    await reset();
+
+    const result = await backupLoop(backupEnv());
+
+    const files = await listBackups();
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(BACKUP_NAME);
+    expect(result.output).toContain('concluída');
+    expect(result.output).not.toContain('a verificação falhou');
+  });
+
+  it('cópia grande: a conferência lê a cópia inteira, sem "Broken pipe" no gpg', async () => {
+    await reset();
+    // ~2 MB de texto pouco compressível: o dump passa bem do buffer de um pipe (64 KB).
+    await shell(
+      `psql -U ${container.getUsername()} -d ${container.getDatabase()} -c ` +
+        `"update reservations set reason = (select string_agg(md5(random()::text), '') ` +
+        `from generate_series(1, 60000)) where reservation_number = '9002'"`,
+    );
+    try {
+      const result = await backupOnce();
+
+      expect(result.exitCode, result.output).toBe(0);
+      expect(result.output).not.toContain('Broken pipe');
+      expect(await listBackups()).toHaveLength(1);
+    } finally {
+      await shell(
+        `psql -U ${container.getUsername()} -d ${container.getDatabase()} -c ` +
+          `"update reservations set reason = 'pré-pagamento sem registro de cobrança' ` +
+          `where reservation_number = '9002'"`,
+      );
+    }
+  });
+});

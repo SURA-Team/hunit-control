@@ -456,6 +456,40 @@ describe('falhas de hotel (FR-019, edge cases)', () => {
     expect(await hotelRun(execution.id, 'G1')).toMatchObject({ status: 'failed' });
   });
 
+  it('cada nova tentativa da camada do Hunit vira aviso com o hotel (FR-011a, R-23)', async () => {
+    const h = await harness({
+      scenario: {
+        hotels: [{ code: 'R1', name: 'Hotel Retentativa', reservations: [reservation('8001')] }],
+      },
+    });
+    h.hunit.before('readReservation', async (call) => {
+      await h.hunit.sessions[call.session - 1]?.notifyRetry({
+        attempt: 1,
+        maxAttempts: 3,
+        delayMs: 2_000,
+        hotelCode: call.hotelCode,
+        reason: 'O Hunit está indisponível: a API respondeu 503 a /api/Company/BookingDetail',
+      });
+    });
+
+    const execution = await run(h);
+
+    expect(execution.status).toBe('completed');
+    expect(await reservationsOf('R1')).toHaveLength(1);
+    const events = await h.events.listRecent(execution.id, 100);
+    expect(events.filter((event) => event.type === 'warning')).toEqual([
+      expect.objectContaining({
+        hotelCode: 'R1',
+        message:
+          'Hotel Retentativa (R1): O Hunit está indisponível: a API respondeu 503 a ' +
+          '/api/Company/BookingDetail. Nova tentativa 1 de 3 em 2 s.',
+      }),
+    ]);
+    expect(h.logs.records()).toContainEqual(
+      expect.objectContaining({ hotelCode: 'R1', attempt: 1, delayMs: 2_000 }),
+    );
+  });
+
   it('sessão expirada no meio de um hotel encerra a execução; os seguintes ficam pendentes', async () => {
     const h = await harness({
       scenario: {

@@ -85,8 +85,11 @@ make_backup() {
   TMP_FILE="$BACKUP_DEST/.${name}.tmp"
   log "fazendo a cópia $name"
   pg_dump --format=custom --no-owner --no-privileges | encrypt_to "$TMP_FILE"
-  # Confere que a cópia abre e é um dump válido antes de dar o nome final.
-  decrypt "$TMP_FILE" | pg_restore --list >/dev/null
+  # Confere que a cópia abre e é um dump válido antes de dar o nome final. O `pg_restore --list`
+  # só lê o índice do começo; o `cat` lê o resto, para o gpg decifrar até o fim e conferir a
+  # integridade da cifra (sem ele, cópias grandes davam "Broken pipe" e a conferência parava no
+  # meio).
+  decrypt "$TMP_FILE" | { pg_restore --list >/dev/null && cat >/dev/null; }
   mv "$TMP_FILE" "$BACKUP_DEST/$name"
   TMP_FILE=""
   log "cópia $name concluída ($(du -h "$BACKUP_DEST/$name" | cut -f1))"
@@ -127,6 +130,9 @@ fi
 log "verificando a cada $BACKUP_CHECK_MINUTES min; nova cópia quando a mais nova passar de $BACKUP_INTERVAL_HOURS h"
 while true; do
   # Uma falha (banco parado, pasta indisponível) não derruba o laço: tenta de novo na próxima.
-  (check_once) || log "a verificação falhou; nova tentativa em $BACKUP_CHECK_MINUTES min"
+  # A verificação roda num processo próprio, no modo "once", onde o `set -e` vale. Dentro de
+  # `(check_once) || ...`, o bash ignora o `set -e`, e uma falha no meio deixava a cópia receber
+  # o nome final (homologação T062).
+  bash "${BASH_SOURCE[0]}" once || log "a verificação falhou; nova tentativa em $BACKUP_CHECK_MINUTES min"
   sleep "$((BACKUP_CHECK_MINUTES * 60))"
 done

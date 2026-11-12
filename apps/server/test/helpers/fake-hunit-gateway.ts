@@ -25,6 +25,7 @@ import type {
   HunitCredentials,
   HunitGateway,
   HunitHotel,
+  HunitRetryNotice,
   LoginOutcome,
   ReservationDetail,
   ReservationListItem,
@@ -256,8 +257,8 @@ export class FakeHunit {
     this.scenario = scenario;
   }
 
-  readonly createGateway: CreateHunitGateway = () => {
-    const gateway = new FakeHunitGateway(this, this.sessions.length + 1);
+  readonly createGateway: CreateHunitGateway = (options) => {
+    const gateway = new FakeHunitGateway(this, this.sessions.length + 1, options.onRetry);
     this.sessions.push(gateway);
     return Promise.resolve(gateway);
   };
@@ -305,6 +306,8 @@ export class FakeHunitGateway implements HunitGateway {
     private readonly hunit: FakeHunit,
     /** Número da sessão, começando em 1. */
     readonly session: number,
+    /** Aviso de nova tentativa informado pelo executor em `createGateway` (research R-23). */
+    private readonly onRetry: ((notice: HunitRetryNotice) => void | Promise<void>) | undefined,
   ) {
     this.closedSignal = new Promise<never>((_resolve, reject) => {
       this.rejectPending = reject;
@@ -315,6 +318,15 @@ export class FakeHunitGateway implements HunitGateway {
 
   get closed(): boolean {
     return this.isClosed;
+  }
+
+  /**
+   * Simula o aviso que o gateway real dá antes de repetir uma leitura que falhou por erro
+   * passageiro do Hunit (FR-011a, research R-23). Use dentro de um `before`.
+   */
+  async notifyRetry(notice: HunitRetryNotice): Promise<void> {
+    if (!this.onRetry) throw this.misuse('o executor não informou onRetry ao criar o gateway');
+    await this.onRetry(notice);
   }
 
   async login(credentials: HunitCredentials): Promise<LoginOutcome> {
