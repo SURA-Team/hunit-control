@@ -155,6 +155,44 @@ com o Hunit (SC-002); filtro "canceladas pendentes"; segunda execução incremen
 - [X] T063 [US2] Processar hotéis em paralelo (research R-08, verificado no Hunit real em 2026-11-11): `collectHotels` em `apps/server/src/executions/hotel-collection.ts` usa até `HOTEL_CONCURRENCY` hotéis ao mesmo tempo (padrão 1 = um por vez), com a mesma sessão; cada hotel continua gravado na sua própria transação (FR-019). Falha que encerra a execução (sessão expirada, parada) num hotel faz os outros em andamento pararem no próximo ponto de checagem (antes de cada página e de cada reserva) sem gravar nada, e os hotéis não iniciados ficam `pending` para a retomada. Testes em `apps/server/test/integration/execution-hotels.test.ts`: nunca mais que N hotéis ao mesmo tempo; com N = 1, nenhuma sobreposição; sessão expirada num hotel interrompe o outro em andamento
   - **Concluída (2026-11-11)**: fila de hotéis atendida por até `HOTEL_CONCURRENCY` trabalhadores (`collectHotels`). A primeira falha que encerra a execução é guardada e faz os demais hotéis pararem antes da próxima página ou reserva (ficam `failed`, sem gravar); os não iniciados ficam `pending`. Padrão continua 1; subir aos poucos na homologação (T062), observando 429/5xx do Hunit
 
+### Forma de pagamento nas reservas sem pré-pagamento (clarificação 2026-11-11, FR-013 regra 2, FR-018b, research R-22)
+
+Reserva sem pré-pagamento passa a ser classificada pela forma de pagamento informada pelo Hunit:
+"faturado" → `invoiced` (faturada, sem ação); "cartão de crédito" → `charge_at_terminal` (cobrar na
+maquininha); forma não informada ou desconhecida → `analysis_error`. `not_virtual_card` deixa de ser
+produzida, mas continua no banco e no contrato como obsoleta. Contrato 1.2.0 (já editado em
+`packages/contracts/openapi.yaml`, na cópia em `specs/…/contracts/` e em `generated.ts`; ainda sem
+commit).
+
+**Independent Test**: com o Hunit simulado, uma reserva sem cartão e forma "faturado" sai `invoiced`,
+uma com "cartão de crédito" sai `charge_at_terminal` e uma sem forma sai `analysis_error`; numa
+segunda execução em que a reserva `charge_at_terminal` ganha pré-pagamento, ela vira
+`virtual_card_pending_charge` com `previousClassification = charge_at_terminal` e nenhum dado
+apagado.
+
+#### Testes (escrever antes e confirmar que falham)
+
+- [ ] T071 [P] [US2] Testes da regra 2 em `packages/domain/test/classification.test.ts` (substituem os de `not_virtual_card`, linhas 68 e 155): sem pré-pagamento e `paymentForm.kind = 'invoiced'` → `invoiced`; `'credit_card'` → `charge_at_terminal`; `'unrecognized'` → `analysis_error` com motivo citando o rótulo ("forma de pagamento desconhecida: <rótulo>"); `paymentForm = null` → `analysis_error` com o motivo "forma de pagamento não informada pelo Hunit"; com pré-pagamento, a forma não muda nada (regras 3 a 7 iguais); cancelada recebe a mesma classificação que ativa (FR-014a); `not_virtual_card` nunca é produzida; `reason` sempre preenchido (FR-014)
+- [ ] T072 [P] [US2] Teste da FR-018b em `packages/domain/test/verification.test.ts`: registro existente `charge_at_terminal` com forma "cartão de crédito" + observação nova `virtual_card_pending_charge` → `previousClassification = 'charge_at_terminal'`, `statusChanged = true`, `statusChangedAt = agora`, `firstVerifiedAt` preservado, `verificationCount` + 1 e todos os campos do registro continuam presentes (nada vira `null` por causa da mudança); `paymentForm` diferente entra em `changedFields`
+- [ ] T073 [P] [US2] Testes do leitor em `apps/server/test/hunit/reservations.test.ts` com a tabela do research R-22: `paymentTypeId = 1` → `{ kind: 'credit_card' }`; rótulo "Faturado", "FATURADA " ou "faturado" sem código → `invoiced`; rótulo "Cartão de Crédito" sem código → `credit_card`; código 1 com rótulo "faturado" → `unrecognized`; código desconhecido (ex.: 7) sem rótulo → `unrecognized` com `label = "7"`; código e rótulo vazios ou ausentes → `paymentForm = null`; `label` sempre o texto como o Hunit enviou, só sem espaços nas pontas. Trocar os casos `not-virtual-card` (linhas 243, 253 e 328) por fixtures sintéticas novas em `apps/server/test/fixtures/hunit/json/`: `booking-detail-invoiced.json` (`hasCreditCardInfo: false`, `totals.paymentTypeLabel: "Faturado"`), `booking-detail-charge-at-terminal.json` (`hasCreditCardInfo: false`, `paymentTypeId: 1`, `totals.paymentTypeLabel: "cartão de crédito"`) e `booking-detail-no-card-no-form.json` (`hasCreditCardInfo: false`, sem forma); remover `booking-detail-not-virtual-card.json`
+- [ ] T074 [P] [US2] Testes de integração em `apps/server/test/integration/execution-hotels.test.ts`: trocar a reserva `1005` (`reservationDetails.notVirtualCard()`) por três reservas sem cartão — faturada, cartão de crédito e sem forma — com `invoiced`, `charge_at_terminal` e `analysis_error` gravados, `payment_form` gravado ("Faturado", "cartão de crédito", `null`) e as contagens do hotel com as chaves novas; e duas execuções seguidas em que a reserva `charge_at_terminal` ganha pré-pagamento na segunda → `virtual_card_pending_charge`, `previous_classification = 'charge_at_terminal'`, `first_verified_at` preservado (FR-018b). Em `apps/server/test/helpers/fake-hunit-gateway.ts`, trocar `reservationDetails.notVirtualCard()` por `invoiced()`, `chargeAtTerminal()` e `noCardNoForm()`
+- [ ] T075 [P] [US2] Testes de contrato em `apps/server/test/contract/reservations.test.ts`: `GET /v1/reservations?classification=charge_at_terminal` e `?classification=invoiced` aceitos e filtrando; a reserva devolve `paymentForm` (string ou `null`) e valida contra o contrato 1.2.0; uma reserva gravada antes com `not_virtual_card` continua válida na resposta (valor obsoleto aceito)
+
+#### Implementação
+
+- [ ] T076 [US2] Tipos do domínio em `packages/domain/src/types.ts`: `CLASSIFICATIONS` na mesma ordem do contrato — `ignored_hotelbeds_258`, `invoiced`, `charge_at_terminal`, `not_virtual_card` (comentário: "obsoleta: não é mais produzida; só em registros anteriores à R-22"), `virtual_card_charge_error`, `virtual_card_already_charged`, `virtual_card_validated_only`, `virtual_card_pending_charge`, `analysis_error`; novo tipo `PaymentForm = { kind: 'invoiced' | 'credit_card' | 'unrecognized'; label: string }` e campo `paymentForm: PaymentForm | null` no `ReservationSnapshot` ("`null` = forma não informada", data-model). Depende de T071
+- [ ] T077 [US2] Regra 2 em `packages/domain/src/classification.ts`: sem pré-pagamento → pela forma (`invoiced` → `invoiced`; `credit_card` → `charge_at_terminal`; `unrecognized` ou `null` → `analysis_error`); motivos novos em `CLASSIFICATION_REASONS` (`invoiced`: "Reserva sem pré-pagamento, faturada: não exige cobrança."; `chargeAtTerminal`: "Reserva sem pré-pagamento com forma de pagamento cartão de crédito: cobrar na maquininha."; `paymentFormMissing` e `paymentFormUnknown`), sem nome de hóspede; remover `notVirtualCard`. Depende de T076
+- [ ] T078 [US2] Histórico em `packages/domain/src/verification.ts`: `paymentForm: string | null` (o rótulo) nos dados da reserva e na lista de campos comparados (`changedFields`); a mesclagem continua sem apagar campos (FR-018b). Depende de T076 e T072
+- [ ] T079 [US2] Leitor em `apps/server/src/hunit/network/booking-detail.ts`: `paymentTypeId: z.number().int().nullish()` e `totals: z.object({ paymentTypeLabel: z.string().nullish() }).nullish()` no schema (campos opcionais: a ausência não recusa a resposta); função `paymentFormOf` com a tabela do research R-22 (constante `PAYMENT_TYPE_CREDIT_CARD_ID = 1`; rótulo comparado sem acentos, sem diferença de maiúsculas e com espaços colapsados; "cartao de credito" → `credit_card`; começa com "faturad" → `invoiced`; código e rótulo contraditórios → `unrecognized`; `label` = rótulo original sem espaços nas pontas, ou o código em texto se o rótulo vier vazio); preencher `paymentForm` em `toReservationSnapshot`; atualizar o comentário da tabela de mapeamento. Depende de T073 e T076
+- [ ] T080 [US2] Banco: em `apps/server/src/persistence/schema.ts`, `classificationEnum` com os valores na ordem de T076 e coluna `paymentForm: text('payment_form')` ("text null; forma de pagamento como o Hunit informa; `null` = não informada", data-model) em `reservations`; gerar a migration com `pnpm --filter @hunit/server db:generate --name=payment_form` e conferir que ela só acrescenta (`ALTER TYPE "classification" ADD VALUE ... BEFORE 'not_virtual_card'` e `ADD COLUMN "payment_form" text`), sem recriar o tipo nem tocar nos dados. Depende de T076
+- [ ] T081 [US2] Gravação e API: `payment_form` gravado a partir de `snapshot.paymentForm?.label ?? null` no registro montado em `apps/server/src/executions/hotel-collection.ts` e no upsert de `apps/server/src/persistence/reservations-repo.ts` (`UPSERT_SET`); `paymentForm` na resposta de reserva em `apps/server/src/http/views.ts`; `CLASSIFICATION_LABELS` em `hotel-collection.ts` com `invoiced: 'faturada'`, `charge_at_terminal: 'cobrar na maquininha'` e `not_virtual_card: 'não é cartão virtual (obsoleta)'`; `FakeHunitGateway` com `paymentForm: null` no detalhe padrão. Incluir no mesmo commit o contrato 1.2.0 já editado (as duas cópias e `generated.ts`). Depende de T077 a T080
+- [ ] T082 [P] [US2] `apps/server/src/hunit-reservations-check.ts`: para reserva sem pré-pagamento, mostrar também a forma de pagamento como veio do Hunit (rótulo e código, nunca dados do hóspede), para o operador conferir na captura da T020 o código de "faturado" e se a forma vem preenchida nas reservas sem cartão (research R-22, "A verificar"). Depende de T079
+
+**Checkpoint**: `pnpm test`, `pnpm typecheck` e `pnpm lint` passam com o contrato 1.2.0; reservas sem
+cartão saem faturada, cobrar na maquininha ou erro de análise. ⛔ HUNIT: a captura da T020 confirma o
+código de "faturado" e se a forma vem preenchida nas reservas sem cartão; se o código for outro
+número, só a T079 muda (constante e teste).
+
 **Checkpoint**: US1 e US2 funcionam; a consulta de rotina é possível.
 
 ---
@@ -235,6 +273,9 @@ novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403
   (T042–T044) podem começar já na Phase 2.
 - **US3 (Phase 5)**: depende de US1 (runner) e usa o processamento de hotéis de US2 para
   cancelamento/retomada significativos.
+- **Forma de pagamento (T071–T082, US2)**: testes T071–T075 em paralelo; depois T076 → T077 e
+  T078 (domínio), T079 (leitor), T080 (banco) → T081 (gravação, API e commit do contrato 1.2.0);
+  T082 depois de T079. Independente da Phase 6; a T020 (captura) confirma o código de "faturado".
 - **Polish (Phase 6)**: após as histórias desejadas; T062 exige o Hunit real. Implantação:
   T064 → T065 e T066 → T067 (testes antes); as duas trilhas são independentes entre si e das
   demais tarefas da fase. T060 documenta o que T065 e T067 criarem.
