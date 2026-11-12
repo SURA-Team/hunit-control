@@ -25,7 +25,9 @@ import { Attention } from './attention.js';
 import { ConfigStore, DEFAULT_PREFERENCES } from './config-store.js';
 import { ConnectionManager } from './connection.js';
 import { CredentialsVault } from './credentials-vault.js';
+import { ExecutionWatcher } from './execution-watcher.js';
 import { createInvokeHandlers, type InvokeHandlers } from './ipc-handlers.js';
+import { createStoryHandlers } from './story-handlers.js';
 import { createMainWindow, denyAllPermissions, rendererLocation } from './window.js';
 
 const APP_USER_MODEL_ID = 'io.github.sura-team.hunit-control';
@@ -110,35 +112,55 @@ async function start(): Promise<void> {
     isSoundEnabled: () => preferences.soundEnabled,
   });
 
-  const handlers: InvokeHandlers = createInvokeHandlers({
-    appVersion: app.getVersion(),
-    config: configStore,
-    connection,
-    vault,
-    attention,
-    dialogs: {
-      pickCertificateFile: async () => {
-        const options = {
-          title: 'Certificado raiz do servidor',
-          properties: ['openFile' as const],
-          filters: [{ name: 'Certificado', extensions: ['crt', 'cer', 'pem'] }],
-        };
-        const picked = mainWindow
-          ? await dialog.showOpenDialog(mainWindow, options)
-          : await dialog.showOpenDialog(options);
-        const file = picked.filePaths[0];
-        if (picked.canceled || !file) return null;
-        if ((await stat(file)).size > MAX_CERTIFICATE_FILE_BYTES) {
-          return { content: '' };
-        }
-        return { content: await readFile(file, 'utf8') };
-      },
+  const watcher = new ExecutionWatcher({
+    getApi: () => connection.getApi(),
+    onChanged: (executionId) => send(EVENTS.executionsChanged, { executionId }),
+    onTwoFactorRequested: (request) => {
+      attention.alertTwoFactor();
+      send(EVENTS.twoFactorRequested, request);
     },
-    createApi: (config) => new ApiClient(config),
-    onPreferences: (next) => {
-      preferences = next;
-    },
+    onTwoFactorClosed: (event) => send(EVENTS.twoFactorClosed, event),
+    onFinished: (summary) => attention.notifyFinished(summary),
+    reportFailure: (error) => connection.reportFailure(error),
   });
+
+  const handlers: InvokeHandlers = {
+    ...createInvokeHandlers({
+      appVersion: app.getVersion(),
+      config: configStore,
+      connection,
+      vault,
+      attention,
+      dialogs: {
+        pickCertificateFile: async () => {
+          const options = {
+            title: 'Certificado raiz do servidor',
+            properties: ['openFile' as const],
+            filters: [{ name: 'Certificado', extensions: ['crt', 'cer', 'pem'] }],
+          };
+          const picked = mainWindow
+            ? await dialog.showOpenDialog(mainWindow, options)
+            : await dialog.showOpenDialog(options);
+          const file = picked.filePaths[0];
+          if (picked.canceled || !file) return null;
+          if ((await stat(file)).size > MAX_CERTIFICATE_FILE_BYTES) {
+            return { content: '' };
+          }
+          return { content: await readFile(file, 'utf8') };
+        },
+      },
+      createApi: (config) => new ApiClient(config),
+      onPreferences: (next) => {
+        preferences = next;
+      },
+    }),
+    ...createStoryHandlers({
+      getApi: () => connection.getApi(),
+      vault,
+      watcher,
+      reportFailure: (error) => connection.reportFailure(error),
+    }),
+  };
 
   const location = rendererLocation();
 
@@ -167,6 +189,7 @@ async function start(): Promise<void> {
 
   app.on('window-all-closed', () => app.quit());
   app.on('will-quit', () => {
+    watcher.stopAll();
     vault.dispose();
     void connection.dispose();
   });
