@@ -32,7 +32,9 @@ comercial, relatórios e painéis, e exportação de planilhas.
 - Q: Em quais máquinas aparece o pedido de token? → A: Cada pessoa tem a própria conta do Hunit e
   o próprio autenticador; o aviso aparece só na máquina de quem iniciou (ou retomou) a execução. As
   outras máquinas veem apenas o estado na lista. Como as contas são diferentes, as duas pessoas
-  podem rodar execuções ao mesmo tempo, uma por conta.
+  podem rodar execuções ao mesmo tempo, uma por conta. *(Nota posterior: "cada pessoa tem a
+  própria conta" vale para o Financeiro; a Controladoria usa a conta gerencial dela — ver a revisão
+  abaixo e as premissas. A regra do aviso não muda.)*
 - Q: Por quanto tempo usuário e senha do Hunit ficam na memória do aplicativo? → A: Até o
   aplicativo ser encerrado ou até 8 horas sem nenhuma ação no aplicativo (prazo ajustável), o que
   vier primeiro. O aplicativo não roda em segundo plano na área de notificação: fechar a janela
@@ -257,7 +259,8 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
   servidor. O aviso MUST acontecer mesmo com o aplicativo minimizado ou atrás de outras janelas;
   com o aplicativo encerrado não há aviso (ver FR-026).
 - **FR-012**: O aviso de token (FR-011) MUST ser entregue somente na máquina que iniciou ou retomou
-  a execução, porque o token vem do autenticador da pessoa dona da conta do Hunit usada. Nas
+  a execução, porque quem iniciou é quem está esperando o pedido e tem acesso ao autenticador da
+  conta do Hunit usada. Nas
   demais máquinas, a execução MUST aparecer na lista como "aguardando token", sem aviso.
 - **FR-013**: O aplicativo MUST enviar o token informado e mostrar se ele foi aceito; se recusado
   ou fora do prazo, MUST explicar o motivo.
