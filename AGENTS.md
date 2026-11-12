@@ -32,6 +32,7 @@ funcionar porque o Hunit mudou a UI.
 | `deploy/caddy/Caddyfile` | Proxy HTTPS com a autoridade certificadora interna do Caddy (research R-20) |
 | `deploy/backup/` | `backup.sh` (cópia cifrada do banco) e `restore.sh` (restauração), rodados no container `backup` (research R-21) |
 | `README.md` | Visão geral, implantação no PC de produção, cópia de segurança e restauração |
+| `.claude/skills/`, `skills-lock.json` | Skills do Claude Code versionados: os do Spec Kit e o `playwright-best-practices` (MIT, de `currents-dev`, instalado com `npx skills`; o lock guarda a origem e a versão). Atualize com `npx skills update -p` e revise o diff antes do commit |
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento. **Não é versionado** (está no `.gitignore`): existe só na máquina de quem desenvolve |
 
 O monorepo (pnpm + TypeScript) foi criado pela feature 001; a estrutura detalhada está em
