@@ -13,7 +13,7 @@
 A feature 001 entregou o servidor do HUNIT Control: ele acessa o Hunit com o token 2FA informado por
 uma pessoa, consulta e classifica as reservas de cartão virtual por hotel, grava o resultado e
 permite acompanhar, cancelar e retomar cada execução. Tudo isso, porém, só é acessível chamando a
-API diretamente, o que não é viável para o Financeiro no dia a dia. O sistema anterior, que tinha
+API diretamente, o que não é viável para o Financeiro e a Controladoria no dia a dia. O sistema anterior, que tinha
 interface própria, deixou de funcionar quando o Hunit mudou suas telas.
 
 Esta feature entrega o aplicativo de desktop que os operadores usam para fazer, sem conhecimento
@@ -33,6 +33,22 @@ comercial, relatórios e painéis, e exportação de planilhas.
   o próprio autenticador; o aviso aparece só na máquina de quem iniciou (ou retomou) a execução. As
   outras máquinas veem apenas o estado na lista. Como as contas são diferentes, as duas pessoas
   podem rodar execuções ao mesmo tempo, uma por conta.
+- Q: Por quanto tempo usuário e senha do Hunit ficam na memória do aplicativo? → A: Até o
+  aplicativo ser encerrado ou até 8 horas sem nenhuma ação no aplicativo (prazo ajustável), o que
+  vier primeiro. O aplicativo não roda em segundo plano na área de notificação: fechar a janela
+  encerra o aplicativo, porque a execução continua no servidor.
+- Q: Por quais dados, além dos filtros básicos, o Financeiro precisa encontrar uma reserva? → A:
+  Busca livre por número da reserva (sem precisar do hotel), nome do hóspede, transação, código de
+  autorização e referência da operadora; filtro por canal; e busca por valor (valor total da
+  reserva ou valor cobrado), como no legado, para conciliar com o extrato da operadora do cartão.
+- Q: Com o servidor desligado, o aplicativo continua mostrando as últimas reservas consultadas? →
+  A: Sim, mas só o que já estava aberto na tela, em memória, até o aplicativo ser fechado, com o
+  aviso "dados de HH:MM — servidor indisponível"; nada de reservas é gravado em disco.
+- Correção do usuário (2026-11-12): serão 4 usuários iniciais, do Financeiro e da Controladoria; o
+  Comercial, com mais pessoas, poderá usar depois, somente se o sistema for validado.
+- Q: A Controladoria vai iniciar execuções ou só consultar? → A: Só consultar: as pessoas da
+  Controladoria usam o perfil consulta; quem opera (perfil operador, com conta própria no Hunit) é
+  o Financeiro.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -69,7 +85,7 @@ contagens por situação.
 5. **Given** o prazo do token esgotado, **When** a execução falha por tempo, **Then** o aplicativo
    explica o motivo e oferece iniciar de novo com os mesmos dados já preenchidos.
 6. **Given** uma execução iniciada, **When** o operador volta à tela inicial, **Then** usuário e
-   senha do Hunit continuam preenchidos até o aplicativo ser encerrado.
+   senha do Hunit continuam preenchidos até o aplicativo ser encerrado ou ficar 8 horas sem uso.
 7. **Given** uma execução concluída, **When** o operador abre o resultado, **Then** vê a contagem
    de reservas por situação de cobrança, os hotéis concluídos e os que falharam, com o motivo.
 8. **Given** usuário ou senha incorretos, **When** o servidor informa a falha de acesso, **Then** o
@@ -115,9 +131,10 @@ cancelar no meio, retomar e confirmar que só os hotéis pendentes foram process
 
 ### User Story 3 - Consultar reservas e evidências (Priority: P3)
 
-O operador (ou alguém com perfil de consulta) procura reservas já gravadas filtrando por hotel,
-período de check-in, situação de cobrança, situação da reserva (ativa ou cancelada) e reservas não
-encontradas na última verificação, ou localiza uma reserva pelo hotel e número. Abre o detalhe
+O operador do Financeiro ou alguém da Controladoria (perfil consulta) procura reservas já gravadas filtrando por hotel,
+período de check-in, situação de cobrança, situação da reserva (ativa ou cancelada), canal e
+reservas não encontradas na última verificação; ou encontra uma reserva digitando o número, o nome
+do hóspede, a transação, o código de autorização ou o valor que aparece no extrato da operadora. Abre o detalhe
 para ver os dados da cobrança e o histórico de verificações. Quando um hotel falha, baixa a
 evidência (captura de tela ou resposta recebida do Hunit) para entender o que aconteceu.
 
@@ -132,17 +149,20 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 1. **Given** reservas gravadas, **When** o operador combina filtros, **Then** a lista mostra só as
    reservas que atendem a todos eles, com hotel, número, hóspede, check-in, valor, situação de
    cobrança e situação da reserva.
-2. **Given** uma lista com muitas reservas, **When** o operador chega ao fim do que foi exibido,
+2. **Given** um código de autorização e um valor tirados do extrato da operadora, **When** o
+   operador os digita na busca, **Then** a lista mostra a reserva correspondente, sem precisar
+   saber o hotel.
+3. **Given** uma lista com muitas reservas, **When** o operador chega ao fim do que foi exibido,
    **Then** consegue carregar as próximas sem perder os filtros.
-3. **Given** uma reserva na lista, **When** o operador a abre, **Then** vê os dados da cobrança,
+4. **Given** uma reserva na lista, **When** o operador a abre, **Then** vê os dados da cobrança,
    o motivo da classificação, a classificação anterior (se mudou) e as datas da primeira e da
    última verificação.
-4. **Given** uma reserva anonimizada pelo prazo de retenção, **When** ela aparece, **Then** o
+5. **Given** uma reserva anonimizada pelo prazo de retenção, **When** ela aparece, **Then** o
    aplicativo indica que o nome do hóspede foi anonimizado, em vez de mostrar campo vazio.
-5. **Given** um hotel que falhou numa execução, **When** o operador pede a evidência, **Then** o
+6. **Given** um hotel que falhou numa execução, **When** o operador pede a evidência, **Then** o
    arquivo é salvo onde ele escolher; se a evidência já expirou, o aplicativo explica que ela não
    está mais disponível.
-6. **Given** uma chave de acesso com perfil de consulta, **When** o operador usa o aplicativo,
+7. **Given** uma chave de acesso com perfil de consulta, **When** o operador usa o aplicativo,
    **Then** consulta execuções, reservas e evidências, e as ações de iniciar, enviar token,
    cancelar e retomar não aparecem.
 
@@ -151,8 +171,9 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 ### Edge Cases
 
 - **Servidor desligado ou inacessível** (o servidor roda num PC ligado manualmente): o aplicativo
-  mostra claramente que o servidor está indisponível, tenta reconectar sozinho e volta a funcionar
-  sem precisar ser reiniciado.
+  mostra claramente que o servidor está indisponível, mantém visível (marcado com o horário) o que
+  já estava na tela, tenta reconectar sozinho e volta a funcionar sem precisar ser reiniciado. Se o
+  aplicativo for aberto com o servidor fora do ar, não há dados a mostrar até a conexão voltar.
 - **Identidade do servidor não confirmada** (certificado desconhecido ou trocado): o aplicativo
   recusa a conexão, explica o problema e não oferece opção de "continuar mesmo assim".
 - **Chave de acesso inválida ou revogada**: o aplicativo informa e leva o operador à configuração.
@@ -166,8 +187,11 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
   aviso vai só para a máquina que iniciou; se o token for enviado por outro caminho, o pedido se
   encerra na máquina que iniciou.
 - **Aplicativo fechado com execução em andamento**: a execução continua no servidor; o operador é
-  avisado antes de encerrar que não receberá o pedido de token enquanto o aplicativo estiver
-  fechado.
+  avisado antes de fechar que não receberá o pedido de token enquanto o aplicativo estiver
+  fechado. Ao reabrir, se a execução estiver aguardando token e ainda houver prazo, o pedido
+  aparece (FR-019).
+- **8 horas sem uso**: usuário e senha são apagados da memória; ao iniciar ou retomar uma execução,
+  o aplicativo explica que as credenciais foram apagadas por inatividade e pede de novo.
 - **Período inválido** (data final antes da inicial) ou nenhum hotel no catálogo ainda (primeira
   execução): o aplicativo impede o envio no primeiro caso e, no segundo, permite apenas "todos os
   hotéis", explicando que o catálogo será obtido nessa execução.
@@ -195,18 +219,27 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 - **FR-004**: O aplicativo MUST identificar o perfil da chave (operador ou consulta) e exibir
   somente as ações permitidas a esse perfil.
 - **FR-005**: Quando o servidor estiver inacessível, o aplicativo MUST indicar isso de forma
-  visível em todas as telas e MUST tentar reconectar automaticamente.
+  visível em todas as telas e MUST tentar reconectar automaticamente. O que já estava carregado na
+  tela (listas, detalhes, acompanhamento) MUST continuar visível, marcado com o horário em que foi
+  obtido e o aviso de servidor indisponível; ações que dependem do servidor ficam desabilitadas até
+  a reconexão, e nada novo é exibido como se fosse atual.
 
 **Credenciais do Hunit**
 
 - **FR-006**: Usuário e senha do Hunit MUST ser informados no aplicativo e MUST permanecer
-  preenchidos apenas na memória até o aplicativo ser encerrado, inclusive depois de iniciar uma
-  execução, para reaproveitar em novas execuções e retomadas.
+  preenchidos apenas na memória, inclusive depois de iniciar uma execução, para reaproveitar em
+  novas execuções e retomadas, até o primeiro destes: o aplicativo ser encerrado ou passarem 8
+  horas sem nenhuma ação do operador no aplicativo (prazo ajustável na configuração). Ao apagar
+  por inatividade, o aplicativo MUST informar o operador na próxima vez que ele precisar das
+  credenciais.
 - **FR-007**: Usuário, senha e token do Hunit MUST NOT ser gravados em disco (configuração,
   registros, cache, relatórios de erro ou qualquer outro arquivo) e MUST NOT aparecer em mensagens
   de erro.
 - **FR-008**: O operador MUST poder limpar usuário e senha da memória a qualquer momento, sem
   encerrar o aplicativo.
+- **FR-008a**: Dados de reservas e execuções (nomes de hóspedes, valores, dados de cobrança) MUST
+  ficar só na memória enquanto exibidos e MUST NOT ser gravados em disco pelo aplicativo; a única
+  exceção são os arquivos de evidência que o operador escolhe salvar (FR-024).
 
 **Execução**
 
@@ -218,8 +251,8 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 - **FR-011**: Quando uma execução passar a aguardar o token, o aplicativo MUST, em até 5 segundos:
   emitir uma notificação do sistema operacional com som, trazer a janela para a frente com o campo
   do token em foco e exibir o tempo restante em contagem regressiva até o prazo informado pelo
-  servidor. O aviso MUST acontecer mesmo com o aplicativo minimizado ou fechado para a área de
-  notificação.
+  servidor. O aviso MUST acontecer mesmo com o aplicativo minimizado ou atrás de outras janelas;
+  com o aplicativo encerrado não há aviso (ver FR-026).
 - **FR-012**: O aviso de token (FR-011) MUST ser entregue somente na máquina que iniciou ou retomou
   a execução, porque o token vem do autenticador da pessoa dona da conta do Hunit usada. Nas
   demais máquinas, a execução MUST aparecer na lista como "aguardando token", sem aviso.
@@ -246,8 +279,15 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 **Consulta de reservas e evidências**
 
 - **FR-020**: O aplicativo MUST permitir consultar as reservas gravadas combinando os filtros:
-  hotel, período de check-in, situação de cobrança, situação da reserva (ativa/cancelada), "não
-  encontrada na última verificação" e execução; e localizar uma reserva pelo hotel e número.
+  hotel, período de check-in, situação de cobrança, situação da reserva (ativa/cancelada), canal,
+  "não encontrada na última verificação" e execução; e localizar uma reserva pelo hotel e número.
+- **FR-020a**: O aplicativo MUST oferecer um campo de busca livre que encontra reservas pelo número
+  da reserva (sem precisar informar o hotel), nome do hóspede (sem diferenciar maiúsculas e
+  acentos, por parte do nome), número da transação, código de autorização ou referência da
+  operadora, combinável com os filtros da FR-020.
+- **FR-020b**: O aplicativo MUST permitir buscar reservas por valor em reais, encontrando as
+  reservas cujo valor total ou valor cobrado seja exatamente o informado, combinável com os demais
+  filtros (por exemplo, para conciliar uma linha do extrato da operadora do cartão).
 - **FR-021**: A lista de reservas MUST mostrar hotel, número, hóspede, canal, check-in, check-out,
   valor total, situação de cobrança e situação da reserva, e MUST permitir carregar mais resultados
   mantendo os filtros.
@@ -264,9 +304,10 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 
 - **FR-025**: O aplicativo MUST ser instalável no Windows por um instalador, sem pedir credenciais
   do Hunit na instalação, e MUST mostrar sua versão.
-- **FR-026**: Fechar a janela MUST manter o aplicativo ativo na área de notificação (para continuar
-  recebendo o pedido de token); encerrar de fato MUST ser uma ação explícita, que descarta usuário
-  e senha da memória e, se houver execução ativa, avisa antes.
+- **FR-026**: Fechar a janela MUST encerrar o aplicativo e descartar usuário e senha da memória; o
+  aplicativo MUST NOT continuar rodando em segundo plano na área de notificação. Se houver execução
+  ativa iniciada nesta máquina, o aplicativo MUST avisar antes de fechar que a execução continua no
+  servidor, mas o pedido de token não será recebido enquanto ele estiver fechado.
 - **FR-027**: O aplicativo MUST permitir uma única instância por usuário da máquina.
 - **FR-028**: O aplicativo MUST NOT conter regras de negócio: classificação, retomada e demais
   regras ficam no servidor, e o aplicativo apenas exibe o que o servidor informa.
@@ -276,7 +317,7 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 - **Configuração da conexão**: endereço do servidor, chave de acesso e o necessário para confirmar a
   identidade do servidor; guardada por usuário da máquina; a chave fica protegida.
 - **Sessão de acesso ao Hunit**: usuário e senha do Hunit mantidos só na memória enquanto o
-  aplicativo está aberto; nunca persistidos.
+  aplicativo está aberto e em uso (apagados após 8 horas sem ação); nunca persistidos.
 - **Execução** (vinda do servidor): quem iniciou, período, hotéis e seus estados, estado geral,
   prazo do token, andamento, estimativa, contagens por situação e ligação com a execução retomada.
 - **Reserva** (vinda do servidor): dados da reserva, situação de cobrança e da reserva, dados da
@@ -293,14 +334,16 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 - **SC-001**: Com o aplicativo já configurado, o operador inicia uma execução de rotina (todos os
   hotéis, uma semana de check-in) em até 1 minuto a partir da abertura do aplicativo.
 - **SC-002**: Em 100% dos pedidos de token, o aviso chega ao operador em até 5 segundos, inclusive
-  com o aplicativo minimizado, atrás de outras janelas ou fechado para a área de notificação.
+  com o aplicativo minimizado ou atrás de outras janelas.
 - **SC-003**: Em homologação, nenhuma execução falha por prazo do token esgotado quando o operador
   está diante da máquina no momento do pedido.
 - **SC-004**: Zero ocorrências de usuário, senha ou token do Hunit em qualquer arquivo gravado pelo
   aplicativo na máquina, verificadas por busca depois de um ciclo completo de uso (execução,
-  retomada, erro de senha e erro de token).
-- **SC-005**: O operador encontra uma reserva específica, ou a lista das pendentes de cobrança de
-  um hotel numa semana, em até 30 segundos.
+  retomada, erro de senha e erro de token); e zero nomes de hóspedes ou dados de cobrança em
+  arquivos do aplicativo, exceto as evidências salvas pelo operador.
+- **SC-005**: O operador encontra uma reserva específica (pelo número, hóspede, código de
+  autorização ou valor de uma linha do extrato da operadora), ou a lista das pendentes de cobrança
+  de um hotel numa semana, em até 30 segundos.
 - **SC-006**: Depois que o servidor volta a ficar acessível, o aplicativo volta a funcionar sozinho
   em até 30 segundos, sem ser reiniciado.
 - **SC-007**: Zero conexões estabelecidas com um servidor cuja identidade não foi confirmada.
@@ -311,19 +354,23 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 
 ## Assumptions
 
-- Os usuários são 2 pessoas do Financeiro, cada uma na sua máquina Windows (10 ou 11), na mesma
-  rede local do servidor; acesso de fora da rede está fora do escopo, como na feature 001.
-- Cada pessoa tem a própria conta do Hunit e o próprio autenticador (clarificação de 2026-11-12).
+- Os usuários iniciais são 4 pessoas do Financeiro e da Controladoria, cada uma na sua máquina
+  Windows (10 ou 11), na mesma rede local do servidor; acesso de fora da rede está fora do escopo,
+  como na feature 001. O Comercial, com mais pessoas, poderá usar depois, se o sistema for
+  validado; isso não muda esta spec, só a quantidade de chaves e de instalações.
+- Quem opera (Financeiro) tem a própria conta do Hunit e o próprio autenticador (clarificação de
+  2026-11-12); a Controladoria só consulta e não precisa de conta no Hunit.
 - Cada máquina recebe sua própria chave de acesso, criada no servidor pelo responsável, e é por ela
-  que o aplicativo sabe quais execuções foram iniciadas naquela máquina; as duas pessoas usam o
-  perfil operador. O perfil consulta já existe e é suportado, para uso futuro.
+  que o aplicativo sabe quais execuções foram iniciadas naquela máquina. As máquinas do Financeiro
+  usam o perfil operador; as da Controladoria, o perfil consulta.
 - O servidor da feature 001 está implantado com conexão cifrada e certificado emitido pela
   autoridade certificadora interna do servidor; confiar nesse certificado faz parte da
   configuração de cada máquina.
 - O que o servidor ainda não oferece e o aplicativo precisar (por exemplo, informar o perfil da
   chave) será acrescentado à API nesta feature, sem quebrar a compatibilidade com a 001.
 - A distribuição é feita por instalador, entregue manualmente às máquinas; atualização automática
-  fica fora do escopo enquanto houver só 2 máquinas.
+  fica fora do escopo enquanto forem poucas máquinas (4); deve ser reavaliada se o Comercial
+  passar a usar.
 - A interface é em português do Brasil.
 - A permissão de notificações do Windows pode estar desativada; nesse caso vale o aviso dentro do
   aplicativo (FR-011) e a configuração indica o bloqueio.
