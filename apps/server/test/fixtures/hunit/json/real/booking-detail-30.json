@@ -1,0 +1,98 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 18742406,
+  "channelIdentifier": "RES-0154",
+  "statusId": 3,
+  "channelId": 1183,
+  "channelName": "G8 Operadora de Turismo",
+  "integrationStatusId": 2,
+  "adultCount": 1,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 138",
+    "email": "usuario22@exemplo.test",
+    "phone": null,
+    "document": null,
+    "street": "anonimizado-18",
+    "city": "anonimizado-18",
+    "country": null,
+    "postalCode": "anonimizado-18"
+  },
+  "arrivalDate": "2026-11-03T00:00:00",
+  "departureDate": "2026-11-06T00:00:00",
+  "roomStays": [
+    {
+      "id": 20463262,
+      "roomRateName": "anonimizado-16",
+      "guestName": "Hóspede Fictício 138",
+      "adultCount": 1,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-03T00:00:00",
+      "departureDate": "2026-11-06T00:00:00",
+      "numberOfUnits": 1,
+      "total": 480,
+      "canceled": true,
+      "perDayRates": [
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-03T00:00:00",
+          "amount": 150
+        },
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-04T00:00:00",
+          "amount": 165
+        },
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-05T00:00:00",
+          "amount": 165
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 480,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 480,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 480,
+    "paymentTypeLabel": "cartão de crédito",
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-10-15T19:28:59",
+  "lastUpdateDateTime": "2026-10-18T16:42:09",
+  "pmsIdentifier": null,
+  "comments": "Texto fictício 10",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 35915491,
+  "prePaymentStatus": "Unprocessed",
+  "lastPaymentEvent": null,
+  "canCharge": true,
+  "paymentTypeId": 1
+}

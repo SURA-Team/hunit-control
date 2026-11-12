@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-11",
+  "generatedAt": "2026-11-12",
   "html": [
     {
       "file": "html/real/hunit-entry.html",
@@ -28,7 +28,15 @@
     "json/real/bookings-02.json",
     "json/real/bookings-03.json",
     "json/real/bookings-04.json",
-    "json/real/bookings-05.json"
+    "json/real/bookings-05.json",
+    "json/real/bookings-06.json",
+    "json/real/bookings-07.json",
+    "json/real/bookings-08.json",
+    "json/real/bookings-09.json",
+    "json/real/bookings-10.json",
+    "json/real/bookings-11.json",
+    "json/real/bookings-12.json",
+    "json/real/bookings-13.json"
   ],
   "details": [
     {
@@ -89,6 +97,744 @@
       "file": "json/real/booking-detail-07.json",
       "bookingId": "19011837",
       "bookingsFile": "json/real/bookings-04.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-08.json",
+      "bookingId": "18046971",
+      "bookingsFile": "json/real/bookings-06.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-09.json",
+      "bookingId": "18174970",
+      "bookingsFile": "json/real/bookings-06.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-10.json",
+      "bookingId": "17452615",
+      "bookingsFile": "json/real/bookings-06.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-11.json",
+      "bookingId": "18349050",
+      "bookingsFile": "json/real/bookings-06.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-12.json",
+      "bookingId": "18424915",
+      "bookingsFile": "json/real/bookings-06.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-13.json",
+      "bookingId": "18488450",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-14.json",
+      "bookingId": "18515276",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-15.json",
+      "bookingId": "18521483",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-16.json",
+      "bookingId": "18540410",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-17.json",
+      "bookingId": "18573725",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-18.json",
+      "bookingId": "18597549",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-19.json",
+      "bookingId": "18617893",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-20.json",
+      "bookingId": "18633868",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "invoiced",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-21.json",
+      "bookingId": "18633869",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "invoiced",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-22.json",
+      "bookingId": "18641430",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-23.json",
+      "bookingId": "18641550",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-24.json",
+      "bookingId": "18641616",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-25.json",
+      "bookingId": "18653990",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-26.json",
+      "bookingId": "18658410",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-27.json",
+      "bookingId": "18661989",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-28.json",
+      "bookingId": "18716912",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-29.json",
+      "bookingId": "18720745",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-30.json",
+      "bookingId": "18742406",
+      "bookingsFile": "json/real/bookings-07.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-31.json",
+      "bookingId": "18793057",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-32.json",
+      "bookingId": "18812429",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-33.json",
+      "bookingId": "17227753",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-34.json",
+      "bookingId": "18890015",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "invoiced",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-35.json",
+      "bookingId": "18923395",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-36.json",
+      "bookingId": "18925613",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-37.json",
+      "bookingId": "18933147",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-38.json",
+      "bookingId": "18933359",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-39.json",
+      "bookingId": "18975819",
+      "bookingsFile": "json/real/bookings-08.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-40.json",
+      "bookingId": "16569789",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-41.json",
+      "bookingId": "16569801",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-42.json",
+      "bookingId": "16569960",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-43.json",
+      "bookingId": "16569961",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-44.json",
+      "bookingId": "16801109",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-45.json",
+      "bookingId": "16802635",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-46.json",
+      "bookingId": "16804154",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-47.json",
+      "bookingId": "17085949",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-48.json",
+      "bookingId": "17187721",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-49.json",
+      "bookingId": "17278214",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-50.json",
+      "bookingId": "17302427",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-51.json",
+      "bookingId": "17329476",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-52.json",
+      "bookingId": "17335936",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-53.json",
+      "bookingId": "17345147",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-54.json",
+      "bookingId": "17374230",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-55.json",
+      "bookingId": "17421290",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-56.json",
+      "bookingId": "17535843",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-57.json",
+      "bookingId": "17730075",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-58.json",
+      "bookingId": "17841891",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-59.json",
+      "bookingId": "17839182",
+      "bookingsFile": "json/real/bookings-09.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-60.json",
+      "bookingId": "17872778",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-61.json",
+      "bookingId": "17992361",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-62.json",
+      "bookingId": "18000955",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-63.json",
+      "bookingId": "18001090",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-64.json",
+      "bookingId": "18011237",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-65.json",
+      "bookingId": "18055169",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "invoiced",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-66.json",
+      "bookingId": "18055168",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "invoiced",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-67.json",
+      "bookingId": "18055170",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "invoiced",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-68.json",
+      "bookingId": "18058245",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-69.json",
+      "bookingId": "17940820",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-70.json",
+      "bookingId": "18082752",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-71.json",
+      "bookingId": "18088124",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-72.json",
+      "bookingId": "18102263",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-73.json",
+      "bookingId": "18157518",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-74.json",
+      "bookingId": "18165001",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-75.json",
+      "bookingId": "18210908",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-76.json",
+      "bookingId": "18215677",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-77.json",
+      "bookingId": "18215678",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-78.json",
+      "bookingId": "18215839",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-79.json",
+      "bookingId": "18216736",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-80.json",
+      "bookingId": "18218861",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-81.json",
+      "bookingId": "18239196",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-82.json",
+      "bookingId": "18240498",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-83.json",
+      "bookingId": "18244133",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-84.json",
+      "bookingId": "18235881",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_pending_charge",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-85.json",
+      "bookingId": "18245694",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-86.json",
+      "bookingId": "18249979",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-87.json",
+      "bookingId": "18259223",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "analysis_error",
+        "reservationStatus": "cancelled"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-88.json",
+      "bookingId": "18259604",
+      "bookingsFile": "json/real/bookings-10.json",
+      "expected": {
+        "classification": "virtual_card_already_charged",
+        "reservationStatus": "active"
+      }
+    },
+    {
+      "file": "json/real/booking-detail-89.json",
+      "bookingId": "18275096",
+      "bookingsFile": "json/real/bookings-11.json",
       "expected": {
         "classification": "virtual_card_already_charged",
         "reservationStatus": "active"

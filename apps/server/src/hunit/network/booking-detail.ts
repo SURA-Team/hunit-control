@@ -51,14 +51,17 @@ const bookingDetailSchema = z.object({
 
 type BookingDetail = z.infer<typeof bookingDetailSchema>;
 
-/** Código de "cartão de crédito" em `paymentTypeId`, visto nas respostas reais (research R-22). */
-const PAYMENT_TYPE_CREDIT_CARD_ID = 1;
+/** Códigos de `paymentTypeId` vistos nas respostas reais (research R-22). */
+const PAYMENT_TYPE_IDS: ReadonlyMap<number, PaymentForm['kind']> = new Map([
+  [1, 'credit_card'], // "cartão de crédito"
+  [6, 'invoiced'], // "faturado" (captura de 2026-11-12)
+]);
 
 /** Rótulo sem acentos, em minúsculas e com espaços colapsados, para comparar. */
 function normalizeLabel(label: string): string {
   return label
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // acentos separados pelo NFD
+    .replace(/[\u0300-\u036f]/g, '') // acentos separados pelo NFD
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
@@ -74,9 +77,9 @@ function kindOfLabel(label: string): PaymentForm['kind'] {
 /**
  * Forma de pagamento da reserva (research R-22):
  * - o rótulo decide quando vem preenchido: "cartão de crédito" → `credit_card`;
- *   "faturado"/"faturada" → `invoiced` (o código de "faturado" ainda não foi visto); outro →
+ *   "faturado"/"faturada" → `invoiced`; outro → `unrecognized`;
+ * - sem rótulo, só o código conhecido decide: 1 → `credit_card`; 6 → `invoiced`; outro código →
  *   `unrecognized`;
- * - sem rótulo, só o código conhecido decide: 1 → `credit_card`; outro código → `unrecognized`;
  * - código conhecido que discorda do rótulo → `unrecognized` (contraditório);
  * - os dois vazios → `null` (não informada).
  */
@@ -88,8 +91,7 @@ export function paymentFormOf(
   if (label === null && id === null) return null;
 
   // Código desconhecido não contradiz o rótulo: só não confirma nada.
-  const fromKnownId: PaymentForm['kind'] | null =
-    id === PAYMENT_TYPE_CREDIT_CARD_ID ? 'credit_card' : null;
+  const fromKnownId = id === null ? null : (PAYMENT_TYPE_IDS.get(id) ?? null);
   const fromLabel = label === null ? null : kindOfLabel(label);
   const contradictory = fromKnownId !== null && fromLabel !== null && fromLabel !== fromKnownId;
   const kind = contradictory ? 'unrecognized' : (fromLabel ?? fromKnownId ?? 'unrecognized');

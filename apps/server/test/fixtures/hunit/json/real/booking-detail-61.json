@@ -1,0 +1,130 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 17992361,
+  "channelIdentifier": "RES-0252",
+  "statusId": 2,
+  "channelId": 1,
+  "channelName": "EXPEDIA",
+  "integrationStatusId": 2,
+  "adultCount": 3,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 227",
+    "email": "usuario34@exemplo.test",
+    "phone": "anonimizado-13",
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-07T00:00:00",
+  "departureDate": "2026-11-11T00:00:00",
+  "roomStays": [
+    {
+      "id": 19651154,
+      "roomRateName": "anonimizado-31",
+      "guestName": "Hóspede Fictício 227",
+      "adultCount": 3,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-07T00:00:00",
+      "departureDate": "2026-11-11T00:00:00",
+      "numberOfUnits": 1,
+      "total": 724.52,
+      "canceled": false,
+      "perDayRates": [
+        {
+          "roomRateId": 114768,
+          "roomRateName": "anonimizado-31",
+          "initialDate": "2026-11-07T00:00:00",
+          "amount": 181.13
+        },
+        {
+          "roomRateId": 114768,
+          "roomRateName": "anonimizado-31",
+          "initialDate": "2026-11-08T00:00:00",
+          "amount": 181.13
+        },
+        {
+          "roomRateId": 114768,
+          "roomRateName": "anonimizado-31",
+          "initialDate": "2026-11-09T00:00:00",
+          "amount": 181.13
+        },
+        {
+          "roomRateId": 114768,
+          "roomRateName": "anonimizado-31",
+          "initialDate": "2026-11-10T00:00:00",
+          "amount": 181.13
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [
+        {
+          "description": "Texto fictício 3",
+          "amount": 0
+        },
+        {
+          "description": "Texto fictício 4",
+          "amount": 0
+        },
+        {
+          "description": "Texto fictício 5",
+          "amount": 0
+        }
+      ],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 724.52,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 724.52,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 724.52,
+    "paymentTypeLabel": null,
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-08-03T17:00:00",
+  "lastUpdateDateTime": "2026-08-03T17:00:33",
+  "pmsIdentifier": null,
+  "comments": "",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 34670842,
+  "prePaymentStatus": "Success",
+  "lastPaymentEvent": {
+    "user": "Operador Fictício 1",
+    "dateTime": "2026-11-07T09:54:53.0935878-03:00",
+    "valueCharged": 724.52,
+    "status": "Success",
+    "justValidate": false,
+    "authorizationCode": "AUT-0046",
+    "transactionId": "TRX-0046",
+    "processorReferenceNumber": "REF-0046",
+    "isParceled": false,
+    "numberOfInstallments": 1,
+    "installmentValue": 724.52,
+    "description": "Texto fictício 1"
+  },
+  "canCharge": true,
+  "paymentTypeId": null
+}

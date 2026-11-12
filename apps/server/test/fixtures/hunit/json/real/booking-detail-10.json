@@ -1,0 +1,92 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 17452615,
+  "channelIdentifier": "RES-0097",
+  "statusId": 3,
+  "channelId": 1,
+  "channelName": "EXPEDIA",
+  "integrationStatusId": 2,
+  "adultCount": 3,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 89",
+    "email": null,
+    "phone": null,
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-03T00:00:00",
+  "departureDate": "2026-11-05T00:00:00",
+  "roomStays": [
+    {
+      "id": 19063545,
+      "roomRateName": "anonimizado-2",
+      "guestName": "Hóspede Fictício 89",
+      "adultCount": 3,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-03T00:00:00",
+      "departureDate": "2026-11-05T00:00:00",
+      "numberOfUnits": 1,
+      "total": 287.3,
+      "canceled": true,
+      "perDayRates": [
+        {
+          "roomRateId": 88770,
+          "roomRateName": "anonimizado-2",
+          "initialDate": "2026-11-03T00:00:00",
+          "amount": 0
+        },
+        {
+          "roomRateId": 88770,
+          "roomRateName": "anonimizado-2",
+          "initialDate": "2026-11-04T00:00:00",
+          "amount": 0
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 287.3,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 287.3,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 287.3,
+    "paymentTypeLabel": null,
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-09-04T13:56:00",
+  "lastUpdateDateTime": "2026-09-04T13:57:36",
+  "pmsIdentifier": null,
+  "comments": "",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 35208407,
+  "prePaymentStatus": "Unprocessed",
+  "lastPaymentEvent": null,
+  "canCharge": true,
+  "paymentTypeId": null
+}

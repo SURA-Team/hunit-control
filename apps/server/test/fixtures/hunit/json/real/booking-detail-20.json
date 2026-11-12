@@ -1,0 +1,110 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 18633868,
+  "channelIdentifier": "RES-0132",
+  "statusId": 1,
+  "channelId": 891,
+  "channelName": "EHTL Viagens Online",
+  "integrationStatusId": 2,
+  "adultCount": 1,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 119",
+    "email": "usuario16@exemplo.test",
+    "phone": null,
+    "document": null,
+    "street": "anonimizado-18",
+    "city": "anonimizado-18",
+    "country": null,
+    "postalCode": "anonimizado-18"
+  },
+  "arrivalDate": "2026-11-09T00:00:00",
+  "departureDate": "2026-11-14T00:00:00",
+  "roomStays": [
+    {
+      "id": 20346183,
+      "roomRateName": "anonimizado-16",
+      "guestName": "Hóspede Fictício 119",
+      "adultCount": 1,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-09T00:00:00",
+      "departureDate": "2026-11-14T00:00:00",
+      "numberOfUnits": 1,
+      "total": 1047.25,
+      "canceled": false,
+      "perDayRates": [
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-09T00:00:00",
+          "amount": 209.45
+        },
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-10T00:00:00",
+          "amount": 209.45
+        },
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-11T00:00:00",
+          "amount": 209.45
+        },
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-12T00:00:00",
+          "amount": 209.45
+        },
+        {
+          "roomRateId": 88764,
+          "roomRateName": "anonimizado-16",
+          "initialDate": "2026-11-13T00:00:00",
+          "amount": 209.45
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 1047.25,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 1047.25,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 1047.25,
+    "paymentTypeLabel": "faturado",
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-10-05T20:08:40",
+  "lastUpdateDateTime": "2026-10-05T17:22:48",
+  "pmsIdentifier": null,
+  "comments": "Texto fictício 8",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": false,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 35697689,
+  "prePaymentStatus": "Unprocessed",
+  "lastPaymentEvent": null,
+  "canCharge": false,
+  "paymentTypeId": 6
+}

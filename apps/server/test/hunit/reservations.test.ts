@@ -293,6 +293,17 @@ describe('readBookingDetail (BookingDetail → ReservationSnapshot)', () => {
       { paymentTypeId: 1, totals: { paymentTypeLabel: 'faturado' } },
       { kind: 'unrecognized', label: 'faturado' },
     ],
+    ['código 6 sem rótulo', { paymentTypeId: 6 }, { kind: 'invoiced', label: '6' }],
+    [
+      'formato real de "faturado": código 6 e rótulo "faturado"',
+      { paymentTypeId: 6, totals: { paymentTypeLabel: 'faturado' } },
+      { kind: 'invoiced', label: 'faturado' },
+    ],
+    [
+      'código 6 com rótulo "cartão de crédito" (contraditório)',
+      { paymentTypeId: 6, totals: { paymentTypeLabel: 'cartão de crédito' } },
+      { kind: 'unrecognized', label: 'cartão de crédito' },
+    ],
     [
       'rótulo "Faturado" com código ainda desconhecido (o rótulo decide)',
       { paymentTypeId: 3, totals: { paymentTypeLabel: 'Faturado' } },

@@ -1,0 +1,105 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 18933147,
+  "channelIdentifier": "RES-0183",
+  "statusId": 2,
+  "channelId": 1,
+  "channelName": "EXPEDIA",
+  "integrationStatusId": 2,
+  "adultCount": 2,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 163",
+    "email": "usuario27@exemplo.test",
+    "phone": "anonimizado-23",
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-04T00:00:00",
+  "departureDate": "2026-11-06T00:00:00",
+  "roomStays": [
+    {
+      "id": 20669113,
+      "roomRateName": "anonimizado-12",
+      "guestName": "Hóspede Fictício 163",
+      "adultCount": 2,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-04T00:00:00",
+      "departureDate": "2026-11-06T00:00:00",
+      "numberOfUnits": 1,
+      "total": 406.2,
+      "canceled": false,
+      "perDayRates": [
+        {
+          "roomRateId": 88769,
+          "roomRateName": "anonimizado-12",
+          "initialDate": "2026-11-04T00:00:00",
+          "amount": 190.25
+        },
+        {
+          "roomRateId": 88769,
+          "roomRateName": "anonimizado-12",
+          "initialDate": "2026-11-05T00:00:00",
+          "amount": 215.95
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 406.2,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 406.2,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 406.2,
+    "paymentTypeLabel": null,
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-11-03T21:55:00",
+  "lastUpdateDateTime": "2026-11-03T21:56:40",
+  "pmsIdentifier": null,
+  "comments": "",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 36180000,
+  "prePaymentStatus": "Success",
+  "lastPaymentEvent": {
+    "user": "Operador Fictício 2",
+    "dateTime": "2026-11-04T09:19:40.9104275-03:00",
+    "valueCharged": 406.2,
+    "status": "Success",
+    "justValidate": false,
+    "authorizationCode": "AUT-0030",
+    "transactionId": "TRX-0030",
+    "processorReferenceNumber": "REF-0030",
+    "isParceled": false,
+    "numberOfInstallments": 1,
+    "installmentValue": 406.2,
+    "description": "Texto fictício 1"
+  },
+  "canCharge": true,
+  "paymentTypeId": null
+}

@@ -1,0 +1,110 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 18055170,
+  "channelIdentifier": "RES-0258",
+  "statusId": 1,
+  "channelId": 1157,
+  "channelName": "Loumar Turismo",
+  "integrationStatusId": 2,
+  "adultCount": 2,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 232",
+    "email": "usuario35@exemplo.test",
+    "phone": null,
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-03T00:00:00",
+  "departureDate": "2026-11-08T00:00:00",
+  "roomStays": [
+    {
+      "id": 19719125,
+      "roomRateName": "anonimizado-34",
+      "guestName": "Hóspede Fictício 232",
+      "adultCount": 2,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-03T00:00:00",
+      "departureDate": "2026-11-08T00:00:00",
+      "numberOfUnits": 1,
+      "total": 1157.8,
+      "canceled": false,
+      "perDayRates": [
+        {
+          "roomRateId": 114773,
+          "roomRateName": "anonimizado-34",
+          "initialDate": "2026-11-03T00:00:00",
+          "amount": 231.56
+        },
+        {
+          "roomRateId": 114773,
+          "roomRateName": "anonimizado-34",
+          "initialDate": "2026-11-04T00:00:00",
+          "amount": 231.56
+        },
+        {
+          "roomRateId": 114773,
+          "roomRateName": "anonimizado-34",
+          "initialDate": "2026-11-05T00:00:00",
+          "amount": 231.56
+        },
+        {
+          "roomRateId": 114773,
+          "roomRateName": "anonimizado-34",
+          "initialDate": "2026-11-06T00:00:00",
+          "amount": 231.56
+        },
+        {
+          "roomRateId": 114773,
+          "roomRateName": "anonimizado-34",
+          "initialDate": "2026-11-07T00:00:00",
+          "amount": 231.56
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 1157.8,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 1157.8,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 1157.8,
+    "paymentTypeLabel": "faturado",
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-08-09T19:13:57",
+  "lastUpdateDateTime": "2026-08-09T16:23:08",
+  "pmsIdentifier": null,
+  "comments": "",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": false,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 34769708,
+  "prePaymentStatus": "Unprocessed",
+  "lastPaymentEvent": null,
+  "canCharge": false,
+  "paymentTypeId": 6
+}

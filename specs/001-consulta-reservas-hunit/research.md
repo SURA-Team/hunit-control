@@ -853,3 +853,12 @@ anexa o comprovante, na spec das tratativas); não informada ou desconhecida →
 - **A verificar na captura (T020/T022)**: código e rótulo de "faturado"; se `paymentTypeId` e
   `paymentTypeLabel` vêm preenchidos nas reservas sem cartão. Até lá, reserva sem cartão e com forma
   vazia vai para erro de análise — o lado seguro.
+- **Verificado em 2026-11-12** (`hunit:reservations-check`, 82 detalhes em duas rodadas; fixtures
+  reais anonimizadas): "faturado" = **`paymentTypeId = 6`**, rótulo "faturado" — 6 reservas ativas
+  sem cartão, todas classificadas como faturada; o código 6 entrou no mapeamento ao lado do 1. Nas
+  reservas **com** cartão a forma vem quase sempre vazia (71 de 75), o que não importa: a regra 2 só
+  olha a forma sem pré-pagamento. **8 reservas sem cartão e sem forma, todas canceladas**
+  (`statusId = 3`) — nenhuma ativa veio sem forma, o que sugere que o Hunit apaga a forma quando a
+  reserva é cancelada; hoje vão para erro de análise (decisão pendente com o usuário). Nenhuma
+  reserva de cartão de crédito sem cartão virtual ("cobrar na maquininha") apareceu: o código 1 vem
+  de reservas com cartão.

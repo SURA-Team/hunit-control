@@ -1,0 +1,255 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 18515276,
+  "channelIdentifier": "RES-0109",
+  "statusId": 2,
+  "channelId": 3,
+  "channelName": "HOTELS.COM",
+  "integrationStatusId": 2,
+  "adultCount": 1,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 99",
+    "email": "usuario11@exemplo.test",
+    "phone": "anonimizado-3",
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-03T00:00:00",
+  "departureDate": "2026-11-30T00:00:00",
+  "roomStays": [
+    {
+      "id": 20217974,
+      "roomRateName": "anonimizado-11",
+      "guestName": "Hóspede Fictício 99",
+      "adultCount": 1,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-03T00:00:00",
+      "departureDate": "2026-11-30T00:00:00",
+      "numberOfUnits": 1,
+      "total": 3737.34,
+      "canceled": false,
+      "perDayRates": [
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-03T00:00:00",
+          "amount": 121.78
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-04T00:00:00",
+          "amount": 121.78
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-05T00:00:00",
+          "amount": 121.78
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-06T00:00:00",
+          "amount": 121.78
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-07T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-08T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-09T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-10T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-11T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-12T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-13T00:00:00",
+          "amount": 132.6
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-14T00:00:00",
+          "amount": 132.6
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-15T00:00:00",
+          "amount": 121.78
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-16T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-17T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-18T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-19T00:00:00",
+          "amount": 173.2
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-20T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-21T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-22T00:00:00",
+          "amount": 132.6
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-23T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-24T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-25T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-26T00:00:00",
+          "amount": 146.14
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-27T00:00:00",
+          "amount": 121.78
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-28T00:00:00",
+          "amount": 121.78
+        },
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-29T00:00:00",
+          "amount": 121.78
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 3737.34,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 3737.34,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 3737.34,
+    "paymentTypeLabel": null,
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-09-23T14:34:00",
+  "lastUpdateDateTime": "2026-09-23T14:34:43",
+  "pmsIdentifier": null,
+  "comments": "",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 35504446,
+  "prePaymentStatus": "Success",
+  "lastPaymentEvent": {
+    "user": "Operador Fictício 2",
+    "dateTime": "2026-11-03T09:03:58.075328-03:00",
+    "valueCharged": 3737.34,
+    "status": "Success",
+    "justValidate": false,
+    "authorizationCode": "AUT-0012",
+    "transactionId": "TRX-0012",
+    "processorReferenceNumber": "REF-0012",
+    "isParceled": false,
+    "numberOfInstallments": 1,
+    "installmentValue": 3737.34,
+    "description": "Texto fictício 1"
+  },
+  "canCharge": true,
+  "paymentTypeId": null
+}

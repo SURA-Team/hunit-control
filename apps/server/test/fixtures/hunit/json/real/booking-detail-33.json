@@ -1,0 +1,86 @@
+{
+  "_fixture": "REAL, anonimizada em 2026-11-12 (tasks.md, T021). Não editar à mão: gerar de novo com hunit:anonymize-fixtures.",
+  "id": 17227753,
+  "channelIdentifier": "RES-0174",
+  "statusId": 3,
+  "channelId": 1,
+  "channelName": "EXPEDIA",
+  "integrationStatusId": 2,
+  "adultCount": 1,
+  "childCount": 0,
+  "childAges": [],
+  "cancellationDate": null,
+  "guest": {
+    "fullName": "Hóspede Fictício 155",
+    "email": null,
+    "phone": null,
+    "document": null,
+    "street": null,
+    "city": null,
+    "country": null,
+    "postalCode": null
+  },
+  "arrivalDate": "2026-11-03T00:00:00",
+  "departureDate": "2026-11-04T00:00:00",
+  "roomStays": [
+    {
+      "id": 18819416,
+      "roomRateName": "anonimizado-11",
+      "guestName": "Hóspede Fictício 155",
+      "adultCount": 1,
+      "childCount": 0,
+      "childAgeText": null,
+      "childAges": [],
+      "arrivalDate": "2026-11-03T00:00:00",
+      "departureDate": "2026-11-04T00:00:00",
+      "numberOfUnits": 1,
+      "total": 145.63,
+      "canceled": true,
+      "perDayRates": [
+        {
+          "roomRateId": 88762,
+          "roomRateName": "anonimizado-11",
+          "initialDate": "2026-11-03T00:00:00",
+          "amount": 0
+        }
+      ],
+      "extraServices": [],
+      "specialItems": [],
+      "taxes": []
+    }
+  ],
+  "totals": {
+    "diarias": 145.63,
+    "taxes": 0,
+    "extras": 0,
+    "interests": 0,
+    "total": 145.63,
+    "commission": 0,
+    "prePaidToChannel": 0,
+    "valueToCharge": 145.63,
+    "paymentTypeLabel": null,
+    "taxesIncluded": 0
+  },
+  "createDateTime": "2026-10-30T09:46:00",
+  "lastUpdateDateTime": "2026-10-30T09:47:42",
+  "pmsIdentifier": null,
+  "comments": "",
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal Collect",
+  "hasCreditCardInfo": true,
+  "loyaltyBadge": null,
+  "access": {
+    "canSeeCard": true,
+    "hasInternalAccess": false,
+    "canConfigurePms": false,
+    "hideCvv": false,
+    "showCreditCard": true,
+    "canEditBooking": false,
+    "canDownloadPaymentReturn": false
+  },
+  "bookingRetrievalId": 36102114,
+  "prePaymentStatus": "Unprocessed",
+  "lastPaymentEvent": null,
+  "canCharge": true,
+  "paymentTypeId": null
+}
