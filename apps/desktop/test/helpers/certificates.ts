@@ -8,9 +8,17 @@ import 'reflect-metadata';
 import { webcrypto } from 'node:crypto';
 import * as x509 from '@peculiar/x509';
 
-type CryptoKeyPair = webcrypto.CryptoKeyPair;
+/**
+ * O par de chaves no tipo que o @peculiar/x509 espera. Este arquivo é compilado com e sem os tipos
+ * do DOM (testes do processo principal e de ponta a ponta), e os tipos de criptografia do Node e
+ * do DOM não se misturam: as conversões ficam só nas bordas com o `webcrypto` do Node.
+ */
+type CryptoKeyPair = Parameters<typeof x509.X509CertificateGenerator.createSelfSigned>[0]['keys'];
 
-x509.cryptoProvider.set(webcrypto as unknown as Parameters<typeof x509.cryptoProvider.set>[0]);
+const setCryptoProvider = x509.cryptoProvider.set.bind(x509.cryptoProvider) as (
+  crypto: unknown,
+) => void;
+setCryptoProvider(webcrypto);
 
 const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256', hash: 'SHA-256' } as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -45,7 +53,8 @@ export interface TestCertificates {
 }
 
 async function newKeys(): Promise<CryptoKeyPair> {
-  return webcrypto.subtle.generateKey(ALGORITHM, true, ['sign', 'verify']);
+  const keys = await webcrypto.subtle.generateKey(ALGORITHM, true, ['sign', 'verify']);
+  return keys as unknown as CryptoKeyPair;
 }
 
 async function privateKeyPem(keys: CryptoKeyPair): Promise<string> {

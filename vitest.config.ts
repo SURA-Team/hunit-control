@@ -100,6 +100,10 @@ export default defineConfig({
           include: ['test/e2e/**/*.test.ts'],
           environment: 'node',
           fileParallelism: false,
+          globalSetup: [
+            fromRoot('./apps/server/test/helpers/postgres-global-setup.ts'),
+            fromRoot('./apps/desktop/test/e2e/global-setup.ts'),
+          ],
           testTimeout: 60_000,
           // Compilar o app e subir o PostgreSQL (na primeira vez, baixar a imagem) leva tempo.
           hookTimeout: 180_000,

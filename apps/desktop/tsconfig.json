@@ -10,7 +10,8 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "paths": {
-      "@hunit/contracts": ["../../packages/contracts/src/index.ts"]
+      "@hunit/contracts": ["../../packages/contracts/src/index.ts"],
+      "@hunit/domain": ["../../packages/domain/src/index.ts"]
     }
   },
   "include": ["src", "test", "electron.vite.config.ts"]

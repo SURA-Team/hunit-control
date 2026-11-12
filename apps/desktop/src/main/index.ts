@@ -36,6 +36,17 @@ const MAX_CERTIFICATE_FILE_BYTES = 64 * 1024;
 const testDataDir = process.env['HUNIT_DESKTOP_USER_DATA_DIR'];
 if (!app.isPackaged && testDataDir) app.setPath('userData', testDataDir);
 
+/**
+ * Ganchos dos testes de ponta a ponta (nunca no app instalado): as notificações pedidas ficam
+ * registradas para o teste conferir, já que a notificação real do Windows não é observável.
+ */
+const testHooks =
+  !app.isPackaged && process.env['HUNIT_DESKTOP_TEST_HOOKS'] === '1'
+    ? (((globalThis as Record<string, unknown>)['__hunitTest'] ??= {
+        notifications: [],
+      }) as { notifications: Array<{ title: string; body: string }> })
+    : null;
+
 app.setAppUserModelId(APP_USER_MODEL_ID);
 
 if (!app.requestSingleInstanceLock()) {
@@ -92,6 +103,7 @@ async function start(): Promise<void> {
   const attention = new Attention({
     getWindow: () => mainWindow,
     showNotification: (options) => {
+      testHooks?.notifications.push({ title: options.title, body: options.body });
       if (Notification.isSupported()) new Notification(options).show();
     },
     playSound: () => send(EVENTS.attentionPlaySound),

@@ -3,7 +3,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@hunit/contracts": ["../../packages/contracts/src/index.ts"]
+      "@hunit/contracts": ["../../packages/contracts/src/index.ts"],
+      "@hunit/domain": ["../../packages/domain/src/index.ts"]
     }
   },
   "include": [
@@ -12,7 +13,6 @@
     "src/shared",
     "electron.vite.config.ts",
     "test/main",
-    "test/e2e",
     "test/helpers"
   ]
 }

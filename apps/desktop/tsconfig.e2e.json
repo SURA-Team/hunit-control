@@ -1,0 +1,14 @@
+{
+  // Testes de ponta a ponta: rodam no Node, mas o código passado a `window.evaluate` roda na
+  // página; por isso têm os tipos do Node e do DOM, sem afrouxar o tsconfig do processo principal.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "paths": {
+      "@hunit/contracts": ["../../packages/contracts/src/index.ts"],
+      "@hunit/domain": ["../../packages/domain/src/index.ts"]
+    }
+  },
+  "include": ["test/e2e", "test/helpers"]
+}
