@@ -171,7 +171,29 @@ EvidenceSummary:
     expiresAt: { type: string, format: date-time }
 ```
 
-## 6. O que não muda
+## 6. Avisos no estado da execução (FR-016a)
+
+Acréscimo de 2026-11-12, depois da homologação da 001: o servidor repete as leituras do Hunit que
+falham por erro passageiro e publica um evento `warning` a cada nova tentativa ("<hotel>: <motivo>.
+Nova tentativa N de 5 em S s."). O `recentEvents` traz os 50 eventos mais recentes **de qualquer
+tipo**: com 5 hotéis ao mesmo tempo, os eventos de reserva classificada tiram um aviso da lista em
+poucos segundos. Por isso o estado da execução ganha a lista própria dos avisos.
+
+```yaml
+# components/schemas/Execution — campo novo, sempre presente (entra em required)
+warnings:
+  type: array
+  maxItems: 20
+  description: |
+    Os 20 eventos `warning` mais recentes da execução, mais recentes primeiro (feature 002).
+    Inclui as novas tentativas por erro passageiro do Hunit e o hotel que a conta não acessa.
+  items: { $ref: '#/components/schemas/ExecutionEvent' }
+```
+
+Regras: só eventos do tipo `warning`, da própria execução; lista vazia quando não houve aviso. A
+mensagem vai como o servidor a escreveu; o app não a interpreta (princípio III).
+
+## 7. O que não muda
 
 - Autenticação (`Authorization: Bearer <chave>`), formatos de erro (`application/problem+json`) e
   todas as rotas e campos existentes.

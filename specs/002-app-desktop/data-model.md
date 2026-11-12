@@ -102,7 +102,7 @@ os acréscimos desta feature estão em [contracts/api-changes.md](./contracts/ap
 
 | Entidade (spec) | Esquema da API | Uso no app |
 |---|---|---|
-| Execução | `Execution`, `ExecutionSummary` (+ `requestedClient`) | lista, acompanhamento, pedido de token, retomada |
+| Execução | `Execution` (+ `warnings`), `ExecutionSummary` (+ `requestedClient`) | lista, acompanhamento (com os avisos, FR-016a), pedido de token, retomada |
 | Reserva | `Reservation` | lista com filtros e busca, detalhe |
 | Hotel | `Hotel` | seleção de hotéis; nome do hotel nas listas |
 | Evidência | `EvidenceSummary` (novo) | lista por execução e hotel; download |

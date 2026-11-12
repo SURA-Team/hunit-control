@@ -28,8 +28,9 @@ Abordagem técnica (detalhes em [research.md](./research.md)):
 - **Servidor fora do ar**: cache só em memória (TanStack Query) mantém o que estava na tela, com o
   horário; nada de reservas no disco.
 - **Acréscimos compatíveis à API** (contrato 1.3.0 → 1.4.0): `/me`, quem iniciou e filtro de ativas
-  na lista de execuções, busca livre, canal e valor nas reservas, lista de canais e lista de
-  evidências da execução ([contracts/api-changes.md](./contracts/api-changes.md)).
+  na lista de execuções, busca livre, canal e valor nas reservas, lista de canais, lista de
+  evidências da execução e os avisos no estado da execução
+  ([contracts/api-changes.md](./contracts/api-changes.md)).
 - **Instalador** NSIS por usuário (sem administrador), com as *fuses* de segurança do Electron.
 
 ## Technical Context

@@ -83,6 +83,12 @@ cobertos pelo [quickstart.md](./quickstart.md).
   fora do app); `net.fetch` com `setCertificateVerifyProc` para "aceitar se a raiz bater" (fácil de
   errar: a sobreposição também desliga outras verificações, como a do nome); fixar a impressão
   digital do certificado final (o Caddy renova a cada poucas horas).
+- **Confirmado na homologação da 001 (2026-11-12)**: o PC de uma colega não deixou instalar o
+  certificado raiz na máquina (exige administrador e pode ser bloqueado por política). Com esta
+  decisão, o app não precisa disso — nem em `Cert:\CurrentUser\Root`: instalar só serve para abrir o
+  servidor no navegador ou no `curl`. O servidor de produção é acessado pelo IP
+  (`SERVER_HOSTNAME`); o Node não manda SNI para IP, e o Caddy já responde sem SNI desde o
+  `default_sni` (feature 001, R-20).
 
 ## R-04 — Chave de acesso guardada protegida (FR-003)
 
@@ -203,7 +209,8 @@ cobertos pelo [quickstart.md](./quickstart.md).
 
 ## R-10 — O que a API ganha nesta feature (contrato 1.3.0 → 1.4.0)
 
-A implementação revelou que a API da 001 não cobre quatro necessidades da spec 002. Todas são
+A implementação revelou que a API da 001 não cobre quatro necessidades da spec 002; a homologação
+da 001 acrescentou uma quinta (os avisos). Todas são
 **acréscimos compatíveis** (versão MINOR do contrato; nada existente muda de comportamento).
 Detalhes em [contracts/api-changes.md](./contracts/api-changes.md).
 
@@ -213,6 +220,7 @@ Detalhes em [contracts/api-changes.md](./contracts/api-changes.md).
 | Quem iniciou, na lista de execuções (FR-015) e execuções ativas desta máquina (FR-019) | `ExecutionSummary.requestedClient`; filtro `active` em `GET /v1/executions` |
 | Busca livre, canal e valor (FR-020, FR-020a, FR-020b) | parâmetros `q`, `channel` e `amount` em `GET /v1/reservations`; `GET /v1/channels` |
 | Evidências de uma execução (FR-024) | `GET /v1/executions/{id}/evidence` |
+| Avisos da execução, como as novas tentativas por erro passageiro do Hunit (FR-016a; acrescentado em 2026-11-12, depois da homologação da 001) | `Execution.warnings`: os 20 eventos `warning` mais recentes |
 
 - **Decision (busca)**: no servidor, `q` (2 a 100 caracteres, sem espaços nas pontas) encontra a
   reserva se **qualquer** destes bater: número da reserva, transação, código de autorização ou
@@ -225,6 +233,14 @@ Detalhes em [contracts/api-changes.md](./contracts/api-changes.md).
 - **Decision (evidências)**: hoje o identificador da evidência só aparece dentro do texto da
   mensagem do evento `evidence_recorded`; ler esse texto no app seria frágil. A rota nova lista as
   evidências da execução com hotel, reserva, motivo, arquivos disponíveis e validade.
+- **Decision (avisos)**: o estado da execução traz os 20 avisos mais recentes, mais recentes
+  primeiro. O `recentEvents` não serve para isso: são os 50 eventos mais recentes de qualquer tipo, e
+  com 5 hotéis ao mesmo tempo (`HOTEL_CONCURRENCY=5`, homologação da 001) os eventos de reserva
+  classificada tiram um aviso da lista em poucos segundos. Juntar os avisos no processo principal a
+  partir do fluxo de eventos também funcionaria, mas tiraria o estado do servidor (R-06) e não
+  cobriria um detalhe aberto depois que o aviso passou. O app mostra a mensagem como o servidor a
+  escreveu e, num hotel em andamento, o aviso mais recente dele com o horário; não decide se a
+  tentativa deu certo — o progresso do hotel mostra isso.
 - **Rationale**: o princípio III exige que toda funcionalidade passe pela API; filtrar no app
   exigiria baixar todas as reservas. Volume estimado: algumas centenas de milhares de reservas em 5
   anos; comparações sem índice novo respondem em poucas centenas de milissegundos. **Medir** na

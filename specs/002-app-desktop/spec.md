@@ -53,6 +53,10 @@ comercial, relatórios e painéis, e exportação de planilhas.
   usando a conta de perfil gerencial dela no Hunit. O perfil consulta continua disponível para quem
   só precisa consultar. Permissões mais finas (por ação e por escopo) ficam para a integração com o
   Sura.
+- Acréscimo do usuário (2026-11-12, depois da homologação da 001): na homologação, o Hunit
+  respondeu com erros passageiros, e o servidor passou a repetir a leitura até 5 vezes, com esperas
+  de até 30 segundos, avisando a cada tentativa. O acompanhamento mostra esses avisos do servidor,
+  para o hotel não parecer travado (FR-016a).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -130,6 +134,10 @@ cancelar no meio, retomar e confirmar que só os hotéis pendentes foram process
 6. **Given** já existe uma execução ativa para a mesma conta do Hunit, **When** o operador tenta
    iniciar outra, **Then** o aplicativo explica que só pode haver uma por vez por conta e leva o
    operador à execução ativa.
+7. **Given** uma execução em andamento em que o Hunit responde com erro passageiro, **When** o
+   servidor espera para tentar de novo a leitura de um hotel, **Then** o acompanhamento mostra o
+   aviso do servidor junto do hotel (motivo, número da tentativa e espera) e na lista de avisos da
+   execução, e o operador entende que a execução não travou.
 
 ---
 
@@ -201,6 +209,10 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
   hotéis", explicando que o catálogo será obtido nessa execução.
 - **Hotel pedido que a conta não acessa**: aparece como pendente com o motivo, como o servidor
   informa.
+- **Hunit instável (erros passageiros)**: o servidor repete a leitura até 5 vezes, com esperas de
+  até 30 segundos, e avisa a cada tentativa; com vários hotéis ao mesmo tempo, o mesmo episódio
+  pode gerar avisos em todos eles. O aplicativo mostra cada aviso junto do hotel e na lista de
+  avisos da execução. Se as tentativas se esgotarem, o hotel aparece como falhou, com o motivo.
 - **Notificações do sistema operacional desativadas**: o aviso de token continua acontecendo dentro
   do aplicativo (janela à frente, som e destaque). Como o aplicativo não consegue saber se o
   Windows bloqueou as notificações dele, a configuração oferece "Testar aviso", que dispara o aviso
@@ -275,6 +287,10 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 - **FR-016**: Para uma execução em andamento, o aplicativo MUST mostrar, atualizado enquanto ela
   avança (no máximo 5 segundos de atraso em relação ao servidor): estado, hotel atual, progresso de
   cada hotel, tempo estimado restante e contagens por situação de cobrança.
+- **FR-016a**: O acompanhamento de uma execução MUST mostrar os avisos do servidor sobre ela (por
+  exemplo, nova tentativa depois de um erro passageiro do Hunit, ou hotel que a conta não acessa)
+  com horário, hotel e a mensagem como o servidor a escreveu, os mais recentes primeiro. Enquanto
+  um hotel estiver em andamento, o aviso mais recente dele, com o horário, aparece junto do hotel.
 - **FR-017**: O operador MUST poder cancelar uma execução ativa, com confirmação.
 - **FR-018**: O operador MUST poder retomar uma execução interrompida com hotéis pendentes,
   informando o acesso ao Hunit (preenchido se ainda estiver na memória) e o token, e o aplicativo

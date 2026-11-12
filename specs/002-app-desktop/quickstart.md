@@ -28,7 +28,7 @@ pnpm test --project desktop-e2e    # app real (Electron) contra o servidor de te
 |---|---|
 | `desktop` | SC-007: raiz errada, nome do servidor errado e certificado vencido são recusados sem enviar nenhuma requisição; a chave só é gravada cifrada; o cofre esvazia após o prazo de inatividade e não esvazia com eventos em segundo plano; entrada inválida da interface é recusada |
 | `desktop-ui` | todo valor dos enums da API tem nome em português e tom; a contagem do token usa a diferença de relógio; "dados de HH:MM — servidor indisponível" aparece com dados antigos; perfil consulta não vê iniciar, token, cancelar nem retomar (SC-009); "1.234,56" vira "1234.56" |
-| `server-db` | `/me`, `/channels`, evidências da execução, `requestedClient` e `active` na lista de execuções, `q`/`channel`/`amount` nas reservas — respostas validadas contra o `openapi.yaml` 1.4.0 e os exemplos de [api-changes.md](./contracts/api-changes.md) |
+| `server-db` | `/me`, `/channels`, evidências da execução, `requestedClient` e `active` na lista de execuções, `warnings` no estado da execução, `q`/`channel`/`amount` nas reservas — respostas validadas contra o `openapi.yaml` 1.4.0 e os exemplos de [api-changes.md](./contracts/api-changes.md) |
 | `desktop-e2e` | US1 (configurar, iniciar, aviso de token com janela minimizada, token aceito e recusado, resumo final), US2 (acompanhar, cancelar, retomar), US3 (busca por código de autorização e por valor, evidência salva), servidor caindo e voltando (SC-006) e varredura da pasta de dados do app sem senha, token nem nomes de hóspedes (SC-004) |
 
 ## 2. Gerar o instalador
@@ -87,6 +87,10 @@ Cronometrar a partir da cópia do instalador para a máquina.
 5. Fechar o app com uma execução ativa → aviso de que o pedido de token não será recebido; reabrir
    com a execução aguardando token dentro do prazo → o pedido reaparece com o tempo correto
    (FR-019, FR-026).
+6. Numa rotina completa (todos os hotéis, 5 ao mesmo tempo), se o Hunit responder com erro
+   passageiro: o aviso "Nova tentativa N de 5" aparece junto do hotel, com o horário, e na lista de
+   avisos da execução, e o progresso do hotel volta a andar depois da nova tentativa (FR-016a). Se
+   não houver erro na rotina, conferir no teste automatizado (T060).
 
 ## 5. Homologação — consulta (Financeiro e Controladoria)
 
