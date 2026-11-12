@@ -84,6 +84,13 @@ comercial, relatórios e painéis, e exportação de planilhas.
   de "cobrar na maquininha" para "pendente de cobrança" normalmente, o que é útil para análise; a
   mudança só entra no histórico, sem apagar a reserva (FR-018b). (Esclarecimento de 2026-11-11.)
 
+- Q: Reservas canceladas sem pré-pagamento e sem forma de pagamento (8 na captura de 2026-11-12,
+  todas DECOLAR) precisam de atenção? → A: Não. São cancelamentos antecipados ou no-shows isentos,
+  sem nada a cobrar (por isso não têm cartão nem forma). Basta classificá-las como canceladas, sem
+  ação: situação "cancelada sem cobrança". Reserva **ativa** sem pré-pagamento e sem forma continua
+  em erro de análise, e reserva cancelada com forma informada segue a forma (faturada ou cobrar na
+  maquininha). (Esclarecimento de 2026-11-12.)
+
 ### Session 2026-11-11 (implantação)
 
 - Q: Onde o sistema roda nesta fase e quem o usa? → A: Num computador comum da empresa, ligado e
@@ -181,13 +188,16 @@ Hunit.
 12. **Given** uma reserva sem indicação de pré-pagamento e com forma de pagamento "cartão de
     crédito", **When** é analisada, **Then** é classificada como "cobrar na maquininha", para o
     comercial cobrar fora do Hunit.
-13. **Given** uma reserva sem indicação de pré-pagamento e sem forma de pagamento informada (ou com
-    uma forma desconhecida), **When** é analisada, **Then** é classificada como "erro de análise",
-    com motivo e evidência.
+13. **Given** uma reserva **ativa** sem indicação de pré-pagamento e sem forma de pagamento
+    informada (ou qualquer reserva sem pré-pagamento com uma forma desconhecida), **When** é
+    analisada, **Then** é classificada como "erro de análise", com motivo e evidência.
 14. **Given** uma reserva classificada como "cobrar na maquininha", **When** uma verificação
     seguinte encontra pré-pagamento nela, **Then** ela passa para a situação correspondente (ex.:
     "pendente de cobrança"), a mudança fica no histórico com a classificação anterior e a reserva
     e o seu histórico continuam gravados (FR-018b).
+15. **Given** uma reserva **cancelada** sem indicação de pré-pagamento e sem forma de pagamento
+    informada (cancelamento antecipado ou no-show isento), **When** é analisada, **Then** é
+    classificada como "cancelada sem cobrança", sem exigir ação.
 
 ---
 
@@ -335,13 +345,17 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 **Classificação**
 
 - **FR-013**: O sistema MUST classificar cada reserva em exatamente uma das situações: ignorada
-  (Hotelbeds 258), faturada, cobrar na maquininha, já cobrada, cartão validado (não cobrado),
-  pendente de cobrança, erro na cobrança ou erro de análise, aplicando as regras na seguinte ordem:
+  (Hotelbeds 258), faturada, cobrar na maquininha, cancelada sem cobrança, já cobrada, cartão
+  validado (não cobrado), pendente de cobrança, erro na cobrança ou erro de análise, aplicando as
+  regras na seguinte ordem:
   1. número iniciando com "258-" → ignorada, sem abrir a reserva;
   2. sem indicação de pré-pagamento, conforme a forma de pagamento informada pelo Hunit:
      a. "faturado" → faturada (não exige ação: o canal paga por fatura);
      b. "cartão de crédito" → cobrar na maquininha (o comercial cobra fora do Hunit);
-     c. forma não informada ou desconhecida → erro de análise;
+     c. forma não informada e reserva cancelada → cancelada sem cobrança (cancelamento
+        antecipado ou no-show isento: nada a cobrar);
+     d. forma não informada e reserva ativa (ou situação não identificada), ou forma
+        desconhecida → erro de análise;
   3. pré-pagamento cujo estado atual indica falha de cobrança → erro na cobrança;
   4. pré-pagamento com registro de cobrança ("Cobrado em") → já cobrada;
   5. pré-pagamento com registro apenas de validação do cartão ("Validado em"), sem cobrança →
@@ -354,7 +368,9 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **FR-014a**: O sistema MUST registrar a situação da reserva no Hunit (ativa ou cancelada) de forma
   independente da classificação de cobrança: uma reserva cancelada recebe a mesma classificação de
   cobrança que receberia se estivesse ativa (ex.: cancelada + já cobrada, cancelada + pendente de
-  cobrança). Se a situação não puder ser identificada, MUST ser registrada como "não identificada",
+  cobrança). Única exceção: sem pré-pagamento e sem forma de pagamento, a cancelada é "cancelada sem
+  cobrança" e a ativa é "erro de análise" (FR-013, regra 2c e 2d). Se a situação não puder ser
+  identificada, MUST ser registrada como "não identificada",
   com evidência, sem impedir a classificação de cobrança.
 - **FR-015**: Diante de estado ambíguo, o sistema MUST classificar como "erro de análise" e MUST NOT
   presumir cobrança.
@@ -476,7 +492,7 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   período solicitados aparecem nos resultados com uma classificação.
 - **SC-002**: Em uma amostra de 50 reservas conferidas manualmente no Hunit, ao menos 98% têm a
   mesma situação (cobrada, cartão validado, pendente, erro na cobrança, faturada, cobrar na
-  maquininha) que o sistema registrou, nenhuma reserva pendente aparece como cobrada e nenhuma
+  maquininha, cancelada sem cobrança) que o sistema registrou, nenhuma reserva pendente aparece como cobrada e nenhuma
   reserva a cobrar na maquininha aparece como faturada.
 - **SC-003**: Zero cobranças disparadas e zero alterações feitas no Hunit pelo sistema em qualquer
   execução.
