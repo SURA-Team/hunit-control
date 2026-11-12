@@ -25,7 +25,7 @@ executions 0..1───* executions   (retomada: parent_execution_id)
 | `execution_status` | `queued`, `running`, `awaiting_2fa`, `completed`, `failed`, `cancelled` | Constitution IV |
 | `execution_end_reason` | `invalid_credentials`, `invalid_token`, `two_factor_timeout`, `hunit_unavailable`, `hunit_screen_not_recognized`, `session_expired`, `server_restarted`, `cancelled_by_client`, `internal_error` | FR-003, edge cases |
 | `hotel_run_status` | `pending`, `running`, `completed`, `failed`, `cancelled` | FR-021 |
-| `classification` | `ignored_hotelbeds_258`, `not_virtual_card`, `virtual_card_charge_error`, `virtual_card_already_charged`, `virtual_card_validated_only`, `virtual_card_pending_charge`, `analysis_error` | FR-013 |
+| `classification` | `ignored_hotelbeds_258`, `invoiced`, `charge_at_terminal`, `virtual_card_charge_error`, `virtual_card_already_charged`, `virtual_card_validated_only`, `virtual_card_pending_charge`, `analysis_error`; e `not_virtual_card`, **obsoleta** (não é mais produzida; só em registros anteriores à R-22) | FR-013, R-22 |
 | `reservation_status` | `active`, `cancelled`, `unknown` | FR-014a |
 | `evidence_kind` | `navigation_failure`, `classification_failure`, `screen_not_recognized`, `reservation_status_unknown` | FR-024 |
 
@@ -158,6 +158,7 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 | `installment_amount` | numeric(12,2) null | |
 | `pre_payment_state`, `pre_payment_message` | text null | |
 | `charge_action_visible` | boolean | apenas sinal; nunca acionado (FR-012) |
+| `payment_form` | text null | forma de pagamento como o Hunit informa (rótulo, ou o código se o rótulo vier vazio); `null` = não informada (FR-016, R-22) |
 | `first_verified_at`, `last_verified_at` | timestamptz | FR-018 |
 | `verification_count` | int | ≥ 1 |
 | `changed_fields` | text[] | campos alterados na última verificação |
@@ -173,7 +174,10 @@ queued ──► running ──► awaiting_2fa ──► running ──► comp
 1. Reserva nova → insere com `first_verified_at = last_verified_at = agora`, `verification_count = 1`.
 2. Reserva conhecida → compara campos; atualiza `changed_fields`; se `classification` ou
    `reservation_status` mudou, guarda o anterior e `status_changed_at = agora`; incrementa
-   `verification_count`; `last_verified_at = agora`; `not_found_since = null`.
+   `verification_count`; `last_verified_at = agora`; `not_found_since = null`. Nada é apagado: os
+   demais campos só mudam para o valor observado, e a mudança de classificação (ex.:
+   `charge_at_terminal` → `virtual_card_pending_charge`, quando o pré-pagamento aparece depois)
+   fica registrada (FR-018b).
 3. Reservas do hotel com `check_in` dentro do período consultado que **não** foram vistas →
    `not_found_since = coalesce(not_found_since, agora)`; nada mais muda (FR-018a).
 
@@ -218,6 +222,7 @@ Produzido pela camada do Hunit (leitor do `BookingDetail`, research R-13a), cons
 | `chargeFailed` | boolean \| null | estado ativo indica falha de cobrança |
 | `validationOnly` | boolean \| null | último evento foi só validação do cartão ("Validado em"), sem cobrança |
 | `reservationStatus` | `active` \| `cancelled` \| `unknown` | |
+| `paymentForm` | objeto \| null | `kind`: `invoiced` \| `credit_card` \| `unrecognized`; `label`: texto como o Hunit informa. `null` = forma não informada. Só decide a regra 2 da FR-013 (sem pré-pagamento); `unrecognized` ou `null` nessa regra → `analysis_error` (R-22) |
 | `payment` | objeto | `chargedAt`, `chargedBy`, `chargedAmount`, `transactionId`, `authorizationCode`, `processorReference`, `installment*`, `prePaymentState`, `prePaymentMessage` |
 | `listing` | objeto | `guestName`, `channel`, `checkIn`, `checkOut`, `stayPeriod`, `totalAmount` |
 

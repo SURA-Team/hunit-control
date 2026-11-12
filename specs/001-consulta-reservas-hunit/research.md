@@ -421,7 +421,7 @@ Analisado sem imprimir valores (apenas formas, enums e booleanos). Fecha as perg
 
 | Regra FR-013 | Condição na resposta do detalhe |
 |---|---|
-| 2 não é cartão virtual | `hasCreditCardInfo = false` |
+| 2 sem pré-pagamento (faturada, cobrar na maquininha ou erro de análise, pela forma de pagamento — R-22) | `hasCreditCardInfo = false` |
 | 3 erro na cobrança | `prePaymentStatus = Fail` |
 | 4 já cobrada | `prePaymentStatus = Success` e `lastPaymentEvent.justValidate = false` |
 | 5 cartão validado (não cobrado) | `prePaymentStatus = Success` e `lastPaymentEvent.justValidate = true` |
@@ -783,3 +783,61 @@ integração com o Sura. Dois ambientes: desenvolvimento (máquina do dev, Hunit
   - **verificado no Docker Desktop (Windows)**: uma pasta local do Windows montada como
     `BACKUP_DIR` recebe a cópia e a restauração pelo comando documentado funciona. Falta
     conferir com a pasta sincronizada que for escolhida no PC de produção (homologação, T062).
+
+## R-22 — Forma de pagamento nas reservas sem pré-pagamento (FR-013 regra 2, FR-018b)
+
+Contexto: clarificação de 2026-11-11 (forma de pagamento). Reserva sem pré-pagamento deixa de ser
+"não é cartão virtual" e passa a depender da forma de pagamento informada pelo Hunit: "faturado" →
+faturada (sem ação); "cartão de crédito" → cobrar na maquininha (o comercial cobra fora do Hunit e
+anexa o comprovante, na spec das tratativas); não informada ou desconhecida → erro de análise.
+
+- **Decision**:
+  1. **Origem**: o `BookingDetail` traz `paymentTypeId` (número) e `totals.paymentTypeLabel`
+     (texto). Nas 7 reservas reais capturadas (todas com cartão), dois vieram com
+     `paymentTypeId = 1` / "cartão de crédito" e cinco com os dois vazios — o que não afeta a
+     classificação delas, porque a regra 2 só vale sem pré-pagamento. A listagem (`GetBookings`)
+     não traz a forma de pagamento.
+  2. **Mapeamento na camada do Hunit** (`network/booking-detail.ts`) para o campo neutro
+     `paymentForm` do `ReservationSnapshot`:
+
+     | `paymentForm` | Condição na resposta |
+     |---|---|
+     | `credit_card` | `paymentTypeId = 1` ou rótulo "cartão de crédito" |
+     | `invoiced` | rótulo começando com "faturad" (código numérico a confirmar) |
+     | `unrecognized` | código ou rótulo preenchidos, mas fora dos casos acima, ou código e rótulo contraditórios |
+     | `null` | código e rótulo vazios |
+
+     O rótulo é comparado sem acentos, sem diferença de maiúsculas e sem espaços extras. O texto
+     como o Hunit mostra (o rótulo; ou o código, se o rótulo vier vazio) é gravado em
+     `reservations.payment_form` (FR-016) e aparece no motivo do erro de análise.
+  3. **Domínio** (`classifyReservation`, regra 2): sem pré-pagamento → `invoiced` → `invoiced`
+     ("faturada"); `credit_card` → `charge_at_terminal` ("cobrar na maquininha"); `unrecognized` ou
+     `null` → `analysis_error`, com motivos distintos ("forma de pagamento não informada pelo Hunit"
+     / "forma de pagamento desconhecida: <rótulo>"). As regras 3 a 7 não mudam.
+  4. **`not_virtual_card` fica obsoleta, não removida**: deixa de ser produzida, mas continua no
+     enum do banco e no contrato, marcada como obsoleta. O PostgreSQL não remove um valor de enum
+     sem recriar o tipo, e o que foi gravado antes continua verdadeiro para o momento em que foi
+     gravado (`previous_classification`, `reservation_observations`, `counts` de execuções
+     antigas). Uma reserva gravada antes com `not_virtual_card` passa para a nova situação na
+     próxima verificação, e a mudança fica no histórico (FR-018b). Como a homologação (T062) ainda
+     não aconteceu, na prática não há registros antigos.
+  5. **Contrato 1.1.1 → 1.2.0**: só acréscimos — `invoiced` e `charge_at_terminal` em
+     `Classification` e `ClassificationCounts`, campo `paymentForm` na `Reservation` — e
+     `not_virtual_card` descrita como obsoleta. Nenhum cliente existe ainda; os clientes futuros já
+     devem tolerar valores novos em listas fechadas (R-19).
+  6. **FR-018b** já é atendida pela gravação (`mergeVerification`, data-model "Regras de
+     atualização"): o upsert nunca apaga dados; mudança de classificação guarda
+     `previous_classification` e `status_changed_at`; `payment_form` entra na comparação dos campos
+     alterados. Um teste novo cobre a passagem de `charge_at_terminal` para
+     `virtual_card_pending_charge` com os dados preservados.
+- **Rationale**: a forma de pagamento é um detalhe de formato do Hunit e fica na camada do Hunit
+  (princípio II); o domínio recebe um valor neutro e decide a regra. Combinar código e rótulo
+  resolve hoje o "cartão de crédito" pelo código conhecido e o "faturado" pelo rótulo, até a captura
+  confirmar o código. Na dúvida, erro de análise (FR-015): nada passa despercebido.
+- **Alternatives considered**: recriar o enum sem `not_virtual_card` (migração que reescreve
+  histórico e quebra o contrato, sem ganho, já que não há dados); usar só o código (o de "faturado"
+  é desconhecido) ou só o rótulo (texto muda com mais facilidade que código); tratar forma vazia
+  como "cobrar na maquininha" ou como "faturada" (descartado pelo usuário: erro de análise).
+- **A verificar na captura (T020/T022)**: código e rótulo de "faturado"; se `paymentTypeId` e
+  `paymentTypeLabel` vêm preenchidos nas reservas sem cartão. Até lá, reserva sem cartão e com forma
+  vazia vai para erro de análise — o lado seguro.

@@ -23,6 +23,12 @@ cada requisição (`X-Company-Id`); o paralelismo entre hotéis com a mesma sess
 Hunit real e é controlado por `HOTEL_CONCURRENCY` (padrão 1, subir aos poucos na homologação —
 R-08).
 
+**Revisão 2026-11-11 (forma de pagamento, R-22)**: reserva sem pré-pagamento é classificada pela
+forma de pagamento que o Hunit informa no detalhe — faturada (`invoiced`), cobrar na maquininha
+(`charge_at_terminal`) ou erro de análise. A camada do Hunit converte `paymentTypeId` e o rótulo da
+forma num valor neutro do `ReservationSnapshot`; o domínio aplica a regra. `not_virtual_card` fica
+obsoleta (não é removida do banco nem do contrato) e o contrato vai a 1.2.0, só com acréscimos.
+
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x (`strict`) sobre Node.js LTS — 24 é o mínimo para
@@ -75,6 +81,11 @@ escalar a automação no futuro, a separação vira uma emenda/spec própria.
 **Resultado pré-Fase 0**: aprovado. **Resultado pós-Fase 1** (após data-model e contrato):
 aprovado — nenhuma entidade ou endpoint armazena ou devolve credenciais; `HunitCredentials` e
 `token` são `writeOnly`; nenhum endpoint executa ação no Hunit fora do fluxo de leitura.
+
+**Reavaliação após a R-22 (forma de pagamento)**: aprovado. A leitura da forma de pagamento fica na
+camada do Hunit e chega ao domínio como valor neutro (II); o contrato muda só com acréscimos e
+sobe para 1.2.0 (III); a mudança de classificação vai para o histórico sem apagar dados (VI);
+nenhuma estrutura nova além de uma coluna e dois valores de enum (VIII).
 
 ## Project Structure
 
@@ -206,6 +217,7 @@ POST /resume ─► nova execução (parent_execution_id) só com os hotéis nã
 | Janela curta do token (~1–2 min) | Execuções falham por tempo | SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
 | Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita à camada do Hunit + fixtures |
 | Limite desconhecido de período no Hunit (R-09) | Consultas retroativas falham | Divisão automática configurável |
+| Código de "faturado" e preenchimento da forma de pagamento sem cartão ainda não vistos (R-22) | Reservas faturadas caem em erro de análise | Rótulo "faturad…" já reconhecido; forma vazia → erro de análise (lado seguro); confirmar na captura (T020) |
 | Estimativa de tempo imprecisa no início | Operador planeja mal | Média histórica por reserva; SC-010 mede o erro (R-08a) |
 | Disco do PC de produção falha ou o PC é perdido | Perda do histórico de reservas | Cópia diária cifrada fora do PC + restauração testada (R-21, SC-011); `.env` guardado à parte |
 | PC desligado na hora das rotinas | Evidências vencidas e anonimização atrasadas; dia sem cópia | Rotinas verificam o atraso ao subir (FR-029): manutenção roda ao iniciar, backup olha a idade da cópia mais nova |
