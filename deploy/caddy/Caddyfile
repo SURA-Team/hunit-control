@@ -9,6 +9,10 @@
 	skip_install_trust
 	# Só a porta HTTPS é publicada: sem redirecionamento de HTTP (porta 80) para HTTPS.
 	auto_https disable_redirects
+	# Quem acessa pelo IP (https://192.168.0.50) não manda SNI. Sem SNI, o Caddy procuraria o
+	# certificado pelo IP local da conexão, que dentro do container é o da rede do Docker, e
+	# recusaria o aperto de mão.
+	default_sni {$SERVER_HOSTNAME}
 }
 
 {$SERVER_HOSTNAME}, localhost {

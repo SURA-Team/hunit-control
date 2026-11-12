@@ -87,6 +87,10 @@ describe('proxy HTTPS (FR-032, R-20)', () => {
     expect(caddyfile).toMatch(/reverse_proxy server:3000 \{[^}]*flush_interval -1/);
   });
 
+  it('atende quem acessa pelo IP, que não manda SNI (homologação T062)', () => {
+    expect(caddyfile).toMatch(/^\s*default_sni \{\$SERVER_HOSTNAME\}\s*$/m);
+  });
+
   it('guarda a autoridade certificadora num volume nomeado', () => {
     const volumes = (services['proxy']?.volumes ?? []).map(String);
     expect(volumes).toContain('caddy-data:/data');
