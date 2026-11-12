@@ -198,8 +198,9 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
 - **Hotel pedido que a conta não acessa**: aparece como pendente com o motivo, como o servidor
   informa.
 - **Notificações do sistema operacional desativadas**: o aviso de token continua acontecendo dentro
-  do aplicativo (janela à frente, som e destaque), e a configuração indica que as notificações
-  estão bloqueadas.
+  do aplicativo (janela à frente, som e destaque). Como o aplicativo não consegue saber se o
+  Windows bloqueou as notificações dele, a configuração oferece "Testar aviso", que dispara o aviso
+  completo para o operador conferir se a notificação aparece.
 - **Segunda instância do aplicativo na mesma máquina**: em vez de abrir outra, a janela já aberta
   vem para a frente.
 
@@ -372,8 +373,9 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
   fica fora do escopo enquanto forem poucas máquinas (4); deve ser reavaliada se o Comercial
   passar a usar.
 - A interface é em português do Brasil.
-- A permissão de notificações do Windows pode estar desativada; nesse caso vale o aviso dentro do
-  aplicativo (FR-011) e a configuração indica o bloqueio.
+- A permissão de notificações do Windows pode estar desativada sem que o aplicativo consiga
+  detectar; nesse caso vale o aviso dentro do aplicativo (FR-011), e "Testar aviso" na
+  configuração permite ao operador conferir (ajuste feito no plano, research R-07).
 - Os nomes em português das situações de cobrança seguem os usados na spec 001 (FR-013).
 - Relatórios, painéis com gráficos, exportação para planilha, tratativas manuais, importação do
   histórico e sincronização com a planilha do comercial ficam para specs próprias; o resumo por
