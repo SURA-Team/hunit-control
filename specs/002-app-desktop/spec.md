@@ -46,9 +46,11 @@ comercial, relatórios e painéis, e exportação de planilhas.
   aviso "dados de HH:MM — servidor indisponível"; nada de reservas é gravado em disco.
 - Correção do usuário (2026-11-12): serão 4 usuários iniciais, do Financeiro e da Controladoria; o
   Comercial, com mais pessoas, poderá usar depois, somente se o sistema for validado.
-- Q: A Controladoria vai iniciar execuções ou só consultar? → A: Só consultar: as pessoas da
-  Controladoria usam o perfil consulta; quem opera (perfil operador, com conta própria no Hunit) é
-  o Financeiro.
+- Q: A Controladoria vai iniciar execuções ou só consultar? → A (revisada pelo usuário em
+  2026-11-12, depois do plano): a Controladoria também pode iniciar execuções, com perfil operador,
+  usando a conta de perfil gerencial dela no Hunit. O perfil consulta continua disponível para quem
+  só precisa consultar. Permissões mais finas (por ação e por escopo) ficam para a integração com o
+  Sura.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -131,7 +133,7 @@ cancelar no meio, retomar e confirmar que só os hotéis pendentes foram process
 
 ### User Story 3 - Consultar reservas e evidências (Priority: P3)
 
-O operador do Financeiro ou alguém da Controladoria (perfil consulta) procura reservas já gravadas filtrando por hotel,
+O operador, ou alguém com perfil de consulta, procura reservas já gravadas filtrando por hotel,
 período de check-in, situação de cobrança, situação da reserva (ativa ou cancelada), canal e
 reservas não encontradas na última verificação; ou encontra uma reserva digitando o número, o nome
 do hóspede, a transação, o código de autorização ou o valor que aparece no extrato da operadora. Abre o detalhe
@@ -359,11 +361,17 @@ semana, abrir uma delas, conferir os dados da cobrança e baixar a evidência de
   Windows (10 ou 11), na mesma rede local do servidor; acesso de fora da rede está fora do escopo,
   como na feature 001. O Comercial, com mais pessoas, poderá usar depois, se o sistema for
   validado; isso não muda esta spec, só a quantidade de chaves e de instalações.
-- Quem opera (Financeiro) tem a própria conta do Hunit e o próprio autenticador (clarificação de
-  2026-11-12); a Controladoria só consulta e não precisa de conta no Hunit.
+- Quem opera usa uma conta do Hunit com o autenticador correspondente (clarificação de
+  2026-11-12): cada pessoa do Financeiro tem a própria conta; a Controladoria usa a conta de perfil
+  gerencial dela. Se duas pessoas usarem a mesma conta, vale a regra da 001 de uma execução ativa
+  por conta, e o token vem do autenticador dessa conta.
 - Cada máquina recebe sua própria chave de acesso, criada no servidor pelo responsável, e é por ela
-  que o aplicativo sabe quais execuções foram iniciadas naquela máquina. As máquinas do Financeiro
-  usam o perfil operador; as da Controladoria, o perfil consulta.
+  que o aplicativo sabe quais execuções foram iniciadas naquela máquina. As 4 máquinas iniciais
+  usam o perfil operador; o perfil consulta fica para quem só precisar consultar.
+- Os dois perfis da API (operador e consulta) bastam para esta feature. Um modelo de permissões
+  mais fino, por ação e por escopo (por exemplo, quais operações e quais dados cada cliente pode
+  usar), será necessário na integração com o Sura e fica para a spec dessa integração; ele deve
+  entrar como acréscimo, sem quebrar este aplicativo.
 - O servidor da feature 001 está implantado com conexão cifrada e certificado emitido pela
   autoridade certificadora interna do servidor; confiar nesse certificado faz parte da
   configuração de cada máquina.

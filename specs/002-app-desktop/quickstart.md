@@ -11,8 +11,8 @@ seções 3 a 7 são a homologação, feita nas máquinas Windows dos usuários c
 - Servidor da 001 no ar com o proxy HTTPS (`docker compose up -d`) e o certificado raiz exportado
   (`docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt .\hunit-raiz.crt`).
 - Uma chave de API por máquina, criada no servidor:
-  - Financeiro (perfil operador): `docker compose exec server node dist/cli.js create-client --name financeiro-<pessoa> --role operator`
-  - Controladoria (perfil consulta): `docker compose exec server node dist/cli.js create-client --name controladoria-<pessoa> --role reader`
+  - Financeiro e Controladoria (perfil operador): `docker compose exec server node dist/cli.js create-client --name <setor>-<pessoa> --role operator`
+  - Uma chave de perfil consulta só para validar a SC-009 (revogar depois com `revoke-client`): `docker compose exec server node dist/cli.js create-client --name teste-consulta --role reader`
 - Para os testes automatizados: Node 24, pnpm e Docker em execução (como na 001).
 
 ## 1. Testes automatizados (sem o Hunit real)
@@ -97,8 +97,9 @@ Cronometrar a partir da cópia do instalador para a máquina.
 3. Buscar parte do nome de um hóspede sem acento (ex.: "joao" para "João").
 4. Numa execução com hotel em falha, abrir as evidências e salvar uma → arquivo gravado onde foi
    escolhido.
-5. Na máquina da Controladoria (perfil consulta): as ações iniciar, token, cancelar e retomar não
-   aparecem (SC-009); consultas e evidências funcionam.
+5. Configurar o app com a chave `teste-consulta` (perfil consulta): as ações iniciar, token,
+   cancelar e retomar não aparecem (SC-009); consultas e evidências funcionam. Voltar à chave da
+   máquina e revogar a de teste.
 
 ## 6. Servidor indisponível (FR-005, SC-006)
 

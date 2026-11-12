@@ -6,8 +6,9 @@
 
 ## Summary
 
-App desktop em **Electron** (`apps/desktop`) para o Financeiro (perfil operador) e a Controladoria
-(perfil consulta) usarem, sem conhecimento técnico, tudo o que o servidor da feature 001 já faz:
+App desktop em **Electron** (`apps/desktop`) para o Financeiro e a Controladoria (perfil operador;
+o perfil consulta continua disponível) usarem, sem conhecimento técnico, tudo o que o servidor da
+feature 001 já faz:
 iniciar a consulta ao Hunit, responder ao pedido de token a tempo, acompanhar, cancelar e retomar
 execuções, e consultar reservas e evidências.
 
@@ -66,7 +67,7 @@ reserva em disco (FR-008a); conexão só com o servidor de identidade confirmada
 app sem regra de negócio (FR-028, princípio III); sem execução em segundo plano depois de fechada a
 janela (FR-026); instalador sem assinatura de código (R-11).
 
-**Scale/Scope**: 4 usuários iniciais (2 operadores, 2 consulta), podendo chegar a algumas dezenas
+**Scale/Scope**: 4 usuários iniciais (todos com perfil operador), podendo chegar a algumas dezenas
 se o Comercial entrar; 4 áreas de tela (Executar, Execuções, Reservas, Configuração) mais o diálogo
 de token; cerca de 25 funções na ponte; reservas na casa de centenas de milhares em 5 anos.
 

@@ -42,6 +42,10 @@ ClientIdentity:
     role: { $ref: '#/components/schemas/ClientRole' }
 ```
 
+**Evolução prevista**: a integração com o Sura vai exigir permissões por ação e por escopo
+(spec 002, premissas). Elas devem entrar como campos novos de `ClientIdentity` (acréscimo
+compatível); o app continua funcionando pelo `role` até passar a usá-las.
+
 ## 2. Lista de execuções: quem iniciou e filtro de ativas (FR-015, FR-019)
 
 ```yaml
