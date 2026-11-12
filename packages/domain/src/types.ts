@@ -12,6 +12,8 @@
  * - `ignored_hotelbeds_258`: número começa com "258-"; a reserva não é aberta.
  * - `invoiced`: sem pré-pagamento e forma de pagamento "faturado": não exige ação (R-22).
  * - `charge_at_terminal`: sem pré-pagamento e forma "cartão de crédito": cobrar na maquininha.
+ * - `cancelled_no_charge`: cancelada, sem pré-pagamento e sem forma de pagamento: cancelamento
+ *   antecipado ou no-show isento, sem cobrança.
  * - `not_virtual_card`: **obsoleta** — não é mais produzida; só aparece em registros gravados antes
  *   da R-22 (o banco e o contrato a mantêm para esse histórico).
  * - `virtual_card_charge_error`: o estado atual do pré-pagamento indica falha de cobrança.
@@ -24,6 +26,7 @@ export const CLASSIFICATIONS = [
   'ignored_hotelbeds_258',
   'invoiced',
   'charge_at_terminal',
+  'cancelled_no_charge',
   'not_virtual_card',
   'virtual_card_charge_error',
   'virtual_card_already_charged',

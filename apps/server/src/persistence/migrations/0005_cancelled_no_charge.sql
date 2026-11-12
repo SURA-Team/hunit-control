@@ -1,0 +1,1 @@
+ALTER TYPE "public"."classification" ADD VALUE 'cancelled_no_charge' BEFORE 'not_virtual_card';

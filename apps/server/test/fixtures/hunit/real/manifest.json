@@ -431,7 +431,7 @@
       "bookingId": "16801109",
       "bookingsFile": "json/real/bookings-09.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },
@@ -440,7 +440,7 @@
       "bookingId": "16802635",
       "bookingsFile": "json/real/bookings-09.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },
@@ -503,7 +503,7 @@
       "bookingId": "17335936",
       "bookingsFile": "json/real/bookings-09.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },
@@ -593,7 +593,7 @@
       "bookingId": "18000955",
       "bookingsFile": "json/real/bookings-10.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },
@@ -692,7 +692,7 @@
       "bookingId": "18157518",
       "bookingsFile": "json/real/bookings-10.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },
@@ -737,7 +737,7 @@
       "bookingId": "18215839",
       "bookingsFile": "json/real/bookings-10.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },
@@ -782,7 +782,7 @@
       "bookingId": "18244133",
       "bookingsFile": "json/real/bookings-10.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },
@@ -818,7 +818,7 @@
       "bookingId": "18259223",
       "bookingsFile": "json/real/bookings-10.json",
       "expected": {
-        "classification": "analysis_error",
+        "classification": "cancelled_no_charge",
         "reservationStatus": "cancelled"
       }
     },

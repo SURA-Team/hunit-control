@@ -231,6 +231,52 @@ describe('regra 2 — reserva sem pré-pagamento, pela forma de pagamento (resea
     },
   );
 
+  describe('sem forma de pagamento: a situação da reserva decide (regra 2c/2d)', () => {
+    const noForm = (
+      detailStatus: ReservationSnapshot['reservationStatus'],
+      listed = detailStatus,
+    ) =>
+      classifyReservation(
+        '1001',
+        snapshot({ prePaymentPresent: false, paymentForm: null, reservationStatus: detailStatus }),
+        listed,
+      );
+
+    it('cancelada → cancelada sem cobrança (cancelamento antecipado ou no-show isento)', () => {
+      expect(noForm('cancelled')).toMatchObject({
+        classification: 'cancelled_no_charge',
+        reason: CLASSIFICATION_REASONS.cancelledNoCharge,
+        reservationStatus: 'cancelled',
+      });
+    });
+
+    it('ativa → erro de análise', () => {
+      expect(noForm('active')).toMatchObject({
+        classification: 'analysis_error',
+        reason: CLASSIFICATION_REASONS.paymentFormMissing,
+      });
+    });
+
+    it('situação não identificada no detalhe usa a da listagem', () => {
+      expect(noForm('unknown', 'cancelled').classification).toBe('cancelled_no_charge');
+    });
+
+    it('situação não identificada nos dois → erro de análise', () => {
+      expect(noForm('unknown', 'unknown').classification).toBe('analysis_error');
+    });
+
+    it.each([
+      [invoicedForm, 'invoiced'],
+      [creditCardForm, 'charge_at_terminal'],
+    ] as const)('cancelada com forma informada segue a forma (%j)', (paymentForm, expected) => {
+      const result = classifyReservation(
+        '1001',
+        snapshot({ prePaymentPresent: false, paymentForm, reservationStatus: 'cancelled' }),
+      );
+      expect(result.classification).toBe(expected);
+    });
+  });
+
   it('"não é cartão virtual" nunca é produzida', () => {
     for (const paymentForm of [invoicedForm, creditCardForm, null] as const) {
       expect(noCard(paymentForm).classification).not.toBe('not_virtual_card');
@@ -279,6 +325,7 @@ describe('FR-014 — motivo sempre preenchido', () => {
     ['1001', snapshot({ prePaymentPresent: false })],
     ['1001', snapshot({ prePaymentPresent: false, paymentForm: invoicedForm })],
     ['1001', snapshot({ prePaymentPresent: false, paymentForm: creditCardForm })],
+    ['1001', snapshot({ prePaymentPresent: false, reservationStatus: 'cancelled' })],
     [
       '1001',
       snapshot({ prePaymentPresent: false, paymentForm: { kind: 'unrecognized', label: 'Pix' } }),

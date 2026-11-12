@@ -69,6 +69,10 @@ const hotelR2: FakeHotel = {
     // Sem pré-pagamento (research R-22): faturada e cobrar na maquininha.
     reservation('F1', { detail: reservationDetails.invoiced() }),
     reservation('M1', { detail: reservationDetails.chargeAtTerminal() }),
+    reservation('N1', {
+      reservationStatus: 'cancelled',
+      detail: reservationDetails.noCardNoForm(),
+    }),
   ],
 };
 
@@ -127,6 +131,7 @@ describe('GET /v1/reservations (FR-020)', () => {
       'R2/C2',
       'R2/F1',
       'R2/M1',
+      'R2/N1',
     ]);
   });
 
@@ -165,6 +170,7 @@ describe('GET /v1/reservations (FR-020)', () => {
   it('faturadas e a cobrar na maquininha (research R-22)', async () => {
     expect(await numbers('?classification=invoiced')).toEqual(['R2/F1']);
     expect(await numbers('?classification=charge_at_terminal')).toEqual(['R2/M1']);
+    expect(await numbers('?classification=cancelled_no_charge')).toEqual(['R2/N1']);
   });
 
   it('"não encontrada na última verificação" (notFound)', async () => {
@@ -178,7 +184,7 @@ describe('GET /v1/reservations (FR-020)', () => {
   });
 
   it('por execução: só o que ela observou', async () => {
-    expect(await numbers(`?executionId=${firstExecutionId}`)).toHaveLength(8);
+    expect(await numbers(`?executionId=${firstExecutionId}`)).toHaveLength(9);
     expect(await numbers(`?executionId=${secondExecutionId}`)).toEqual([
       'R1/258-1',
       'R1/C1',

@@ -34,6 +34,7 @@ export const CLASSIFICATION_LABELS: Readonly<Record<Classification, string>> = {
   ignored_hotelbeds_258: 'ignorada (Hotelbeds 258)',
   invoiced: 'faturada',
   charge_at_terminal: 'cobrar na maquininha',
+  cancelled_no_charge: 'cancelada sem cobrança',
   not_virtual_card: 'não é cartão virtual (obsoleta)',
   virtual_card_charge_error: 'erro na cobrança',
   virtual_card_already_charged: 'já cobrada',

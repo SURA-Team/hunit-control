@@ -258,18 +258,20 @@ export interface components {
         /**
          * @description Situação de cobrança da reserva (FR-013). Reserva sem pré-pagamento: `invoiced` (faturada,
          *     sem ação) ou `charge_at_terminal` (forma cartão de crédito: cobrar na maquininha), conforme
-         *     a forma de pagamento informada pelo Hunit; forma não informada ou desconhecida →
-         *     `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
+         *     a forma de pagamento informada pelo Hunit; sem forma informada, `cancelled_no_charge` se a
+         *     reserva está cancelada (cancelamento antecipado ou no-show isento, desde a versão 1.3.0) ou
+         *     `analysis_error` se está ativa; forma desconhecida → `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
          *     só aparece em registros gravados antes; a reserva muda de situação na próxima verificação.
          * @enum {string}
          */
-        Classification: "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
+        Classification: "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "cancelled_no_charge" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
         /** @enum {string} */
         ReservationStatus: "active" | "cancelled" | "unknown";
         ClassificationCounts: {
             ignored_hotelbeds_258?: number;
             invoiced?: number;
             charge_at_terminal?: number;
+            cancelled_no_charge?: number;
             /** @description Obsoleta (ver Classification) */
             not_virtual_card?: number;
             virtual_card_charge_error?: number;

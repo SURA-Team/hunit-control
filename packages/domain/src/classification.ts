@@ -20,6 +20,8 @@ export const CLASSIFICATION_REASONS = {
     'Reserva sem pré-pagamento com forma de pagamento cartão de crédito: cobrar na maquininha.',
   paymentFormMissing:
     'Reserva sem pré-pagamento e sem forma de pagamento informada pelo Hunit: não é possível saber se precisa ser cobrada.',
+  cancelledNoCharge:
+    'Reserva cancelada sem pré-pagamento e sem forma de pagamento: cancelamento antecipado ou no-show isento, sem cobrança.',
   /** Seguido da forma informada pelo Hunit e de ponto final. */
   paymentFormUnknown: 'Reserva sem pré-pagamento com forma de pagamento desconhecida:',
   chargeFailedUnknown: 'Não foi possível determinar se a cobrança do pré-pagamento falhou.',
@@ -48,11 +50,21 @@ type Decision = Pick<ClassificationResult, 'classification' | 'reason'>;
 
 const analysisError = (reason: string): Decision => ({ classification: 'analysis_error', reason });
 
-/** Regra 2 da FR-013: reserva sem pré-pagamento, pela forma de pagamento informada pelo Hunit. */
-function decideWithoutPrePayment(snapshot: ReservationSnapshot): Decision {
+/**
+ * Regra 2 da FR-013: reserva sem pré-pagamento, pela forma de pagamento informada pelo Hunit. Sem
+ * forma, a situação resolvida decide: cancelada → sem cobrança (2c); senão, erro de análise (2d).
+ */
+function decideWithoutPrePayment(
+  snapshot: ReservationSnapshot,
+  reservationStatus: ReservationStatus,
+): Decision {
   const reasons = CLASSIFICATION_REASONS;
   const form = snapshot.paymentForm;
-  if (form === null) return analysisError(reasons.paymentFormMissing);
+  if (form === null) {
+    return reservationStatus === 'cancelled'
+      ? { classification: 'cancelled_no_charge', reason: reasons.cancelledNoCharge }
+      : analysisError(reasons.paymentFormMissing);
+  }
   switch (form.kind) {
     case 'invoiced':
       return { classification: 'invoiced', reason: reasons.invoiced };
@@ -67,13 +79,13 @@ function decideWithoutPrePayment(snapshot: ReservationSnapshot): Decision {
  * Regras 2 a 7 da FR-013, na ordem. Cada sinal só é consultado quando a regra anterior não
  * decidiu; um sinal `null` consultado leva a erro de análise (FR-015: nunca presumir cobrança).
  */
-function decide(snapshot: ReservationSnapshot): Decision {
+function decide(snapshot: ReservationSnapshot, reservationStatus: ReservationStatus): Decision {
   const reasons = CLASSIFICATION_REASONS;
   if (!snapshot.structureRecognized) return analysisError(reasons.structureNotRecognized);
 
   // Regra 2 — sem pré-pagamento: a forma de pagamento decide (research R-22).
   if (snapshot.prePaymentPresent === null) return analysisError(reasons.prePaymentUnknown);
-  if (!snapshot.prePaymentPresent) return decideWithoutPrePayment(snapshot);
+  if (!snapshot.prePaymentPresent) return decideWithoutPrePayment(snapshot, reservationStatus);
 
   // Regra 3 — falha de cobrança no estado atual.
   if (snapshot.chargeFailed === null) return analysisError(reasons.chargeFailedUnknown);
@@ -132,7 +144,7 @@ export function classifyReservation(
   }
 
   const decision = snapshot
-    ? decide(snapshot)
+    ? decide(snapshot, reservationStatus)
     : analysisError(CLASSIFICATION_REASONS.detailUnavailable);
   return { ...decision, reservationStatus };
 }

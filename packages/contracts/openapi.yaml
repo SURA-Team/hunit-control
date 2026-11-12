@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.2.0
+  version: 1.3.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -494,13 +494,15 @@ components:
       description: |
         Situação de cobrança da reserva (FR-013). Reserva sem pré-pagamento: `invoiced` (faturada,
         sem ação) ou `charge_at_terminal` (forma cartão de crédito: cobrar na maquininha), conforme
-        a forma de pagamento informada pelo Hunit; forma não informada ou desconhecida →
-        `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
+        a forma de pagamento informada pelo Hunit; sem forma informada, `cancelled_no_charge` se a
+        reserva está cancelada (cancelamento antecipado ou no-show isento, desde a versão 1.3.0) ou
+        `analysis_error` se está ativa; forma desconhecida → `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
         só aparece em registros gravados antes; a reserva muda de situação na próxima verificação.
       enum:
         - ignored_hotelbeds_258
         - invoiced
         - charge_at_terminal
+        - cancelled_no_charge
         - not_virtual_card
         - virtual_card_charge_error
         - virtual_card_already_charged
@@ -519,6 +521,7 @@ components:
         ignored_hotelbeds_258: { type: integer }
         invoiced: { type: integer }
         charge_at_terminal: { type: integer }
+        cancelled_no_charge: { type: integer }
         not_virtual_card: { type: integer, description: Obsoleta (ver Classification) }
         virtual_card_charge_error: { type: integer }
         virtual_card_already_charged: { type: integer }

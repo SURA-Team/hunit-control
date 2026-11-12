@@ -83,6 +83,7 @@ export const classificationEnum = pgEnum('classification', [
   'ignored_hotelbeds_258',
   'invoiced',
   'charge_at_terminal',
+  'cancelled_no_charge',
   'not_virtual_card',
   'virtual_card_charge_error',
   'virtual_card_already_charged',

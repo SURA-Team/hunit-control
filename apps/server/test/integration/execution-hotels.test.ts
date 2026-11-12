@@ -213,6 +213,10 @@ describe('hotel concluído (FR-011 a FR-019)', () => {
               reservation('901', { detail: reservationDetails.invoiced() }),
               reservation('902', { detail: reservationDetails.chargeAtTerminal() }),
               reservation('903', { detail: reservationDetails.noCardNoForm() }),
+              reservation('904', {
+                reservationStatus: 'cancelled',
+                detail: reservationDetails.noCardNoForm(),
+              }),
             ],
           },
         ],
@@ -232,10 +236,11 @@ describe('hotel concluído (FR-011 a FR-019)', () => {
       ['901', 'invoiced', 'Faturado', false],
       ['902', 'charge_at_terminal', 'cartão de crédito', false],
       ['903', 'analysis_error', null, false],
+      ['904', 'cancelled_no_charge', null, false], // cancelamento antecipado ou no-show isento
     ]);
     expect(await hotelRun(execution.id, 'A9')).toMatchObject({
       status: 'completed',
-      counts: { invoiced: 1, charge_at_terminal: 1, analysis_error: 1 },
+      counts: { invoiced: 1, charge_at_terminal: 1, analysis_error: 1, cancelled_no_charge: 1 },
     });
     // A reserva sem forma de pagamento vai para revisão com evidência (spec, US2 cenário 13).
     const proofs = await database.db
