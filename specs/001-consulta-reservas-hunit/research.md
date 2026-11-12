@@ -142,6 +142,27 @@ até serem confirmados (ver R-13).
 - **Alternatives considered**: várias sessões com vários tokens (péssimo para o operador);
   paralelizar a abertura de reservas dentro do mesmo hotel (possível ganho, avaliar após medir o
   tempo do modo sequencial).
+- **Medido na homologação (2026-11-12, T062)**: rotina completa, com 83 hotéis e check-in de 01/11
+  a 07/11, no modo sequencial (`HOTEL_CONCURRENCY=1`). Foram **13 min 18 s** para 8.215 reservas:
+  2.441 abertas e 5.774 Hotelbeds "258-" ignoradas sem abrir. Todos os hotéis concluídos. A média
+  foi de 9,43 s por hotel (mediana 6,9 s; o mais lento levou 35,5 s) e 0,32 s por reserva aberta.
+  Cerca de 2 min desse tempo foram espera de novas tentativas (8 episódios de 17 s, R-23).
+  **Meta resultante da SC-009: rotina semanal em até 20 min no modo sequencial**, bem abaixo da
+  hora prevista. O paralelismo não é necessário por ora; com o Hunit já devolvendo 503 no modo
+  sequencial, subir `HOTEL_CONCURRENCY` arriscaria mais erros sem necessidade.
+- **Paralelismo medido (2026-11-12, T062, `HOTEL_CONCURRENCY=5`)**: mesma rotina em **5 min 17 s**
+  (2,5× mais rápida). Houve 10 episódios de 503 e, em todos, os 5 hotéis em andamento receberam o
+  erro no mesmo segundo: é o Hunit inteiro que fica indisponível, não uma leitura. Por número de
+  leituras, a frequência foi parecida com a do modo sequencial (1 episódio a cada 260 a 330
+  leituras), o que sugere um limite por volume de leituras. Em 9 episódios a 3ª nova tentativa
+  resolveu. Num deles, outro episódio emendou e os 4 hotéis em andamento falharam. A retomada
+  (FR-023) leu os 4 juntos em 52 s, com mais um episódio resolvido. A segunda verificação das
+  reservas deu certo: `verificationCount` = 2, a primeira data foi preservada, nenhuma reserva
+  "não encontrada" e nenhuma mudança de situação.
+- **Decisão (2026-11-12)**: **`HOTEL_CONCURRENCY=5` em produção**, junto com 5 novas tentativas
+  (R-23). É o padrão do `.env.example` e do Compose; o código continua com 1 quando a variável
+  não vem. Num período retroativo de 3 meses, a estimativa é de ~1 h, contra ~3 h no modo
+  sequencial. Se o Hunit passar a recusar muito, volta-se para 1 só no `.env`.
 
 ## R-08a — Medição de tempo e estimativa (FR-021a, SC-010)
 
@@ -178,6 +199,10 @@ até serem confirmados (ver R-13).
     (`pages_done + 1`, limitada a `pages_total`) e a **última reserva analisada** nele (o evento é
     publicado depois da análise). Com hotéis em paralelo, os demais aparecem em `hotels`.
   - A SC-010 (erro da estimativa) continua a medir na homologação (T062).
+- **SC-010 medida (2026-11-12, T062)**: na rotina completa (83 hotéis), quando metade dos hotéis
+  terminou, a estimativa era de 362 s restantes; faltavam de fato 418 s. O **erro foi de 13%**,
+  dentro da meta de 20%. A estimativa ficou curta em parte por causa das esperas de novas
+  tentativas (R-23), que se concentraram na segunda metade.
 
 ## R-09 — Limite de tamanho do período no Hunit (FR-010a) — **Verificar no mapeamento**
 
@@ -188,6 +213,13 @@ até serem confirmados (ver R-13).
 - **Alternatives considered**: recusar períodos longos (contraria FR-010a).
 - **Atualização 2026-11-11 (Hunit real)**: um período de 3 dias foi aceito sem divisão. O limite
   do Hunit continua desconhecido; medir com um período retroativo longo na homologação (T062).
+- **Homologação (2026-11-12, T062)**: um período retroativo de **92 dias** (01/08 a 31/10, hotel
+  4543) foi aceito numa consulta só, sem `MAX_PERIOD_DAYS`. Foram 60 páginas e 2.980 reservas, com
+  check-in do primeiro ao último dia do período; 872 foram abertas e o hotel levou 294 s. Houve 6
+  avisos de nova tentativa, todos resolvidos, e nenhum erro de análise. Para os períodos usados, o
+  Hunit não tem limite a contornar: `MAX_PERIOD_DAYS` continua vazio. O `PageSize` máximo não foi
+  medido. O tempo já atende a SC-009 com folga, e medir exigiria uma opção nova no
+  `hunit:reservations-check`; fica dispensado.
 
 ## R-10 — Autenticação dos clientes (FR-007)
 
@@ -259,6 +291,13 @@ Medido com `hunit:login-check --wait-token`, em duas rodadas: o token foi **acei
 não foi capturada (T020). Decisão: `TWO_FACTOR_TIMEOUT_SECONDS` passa de 120 para **300** s por
 padrão — tempo de sobra para o operador, com margem abaixo do que foi medido. O máximo aceito pela
 configuração continua 600 s; subir além de 491 s só depois de medir o limite.
+
+**Homologação (2026-11-12, T062)**: com `--wait-token 900`, o token foi enviado **930 s** depois de a
+tela abrir. O Hunit **recusou** e respondeu como token inválido (`invalid_token`); não apareceu uma
+tela própria de "token expirado" nem a volta ao login. O limite fica entre 491 e 930 s. Não dá para
+separar expiração de um erro de digitação nessa rodada, mas o efeito para o operador é o mesmo:
+"token recusado, inicie de novo". O padrão de 300 s continua com folga, e nenhuma mudança é
+necessária.
 
 ### Resultado dos HARs de login (2026-11-11, analisados sem expor valores)
 
@@ -742,6 +781,19 @@ integração com o Sura. Dois ambientes: desenvolvimento (máquina do dev, Hunit
   configuração válida para nome, IP e `localhost` (repetido); certificado emitido também para IP;
   eventos SSE chegam ao cliente no momento em que o servidor os envia; certificado raiz em
   `/data/caddy/pki/authorities/local/root.crt` (exportado com `docker compose cp`).
+- **Homologação (2026-11-12, T062)**:
+  - o acesso pelo IP (`https://<IP>/v1/health`) falhava no aperto de mão. Quem acessa por IP não
+    manda SNI, e sem SNI o Caddy procura o certificado pelo IP local da conexão, que dentro do
+    container é o da rede do Docker. Correção: `default_sni {$SERVER_HOSTNAME}` nas opções globais
+    do Caddyfile, com teste em `compose-config.test.ts`. Pelo nome (`localhost`) funcionava, por isso
+    a verificação da T065 não pegou;
+  - o PC de produção ficou numa rede compartilhada do prédio, sem rede própria nem reserva de IP
+    (regra do prédio). Decisão do responsável: expor a porta HTTPS a essa rede, protegida pelo HTTPS
+    e pelas chaves da API, com a rede mantida como **Pública** no Windows (a Privada liga a
+    Descoberta de Rede para o prédio todo). O Docker Desktop cria a regra "Docker Desktop Backend",
+    que libera qualquer porta dele no perfil Público; ela é desligada e substituída por uma regra só
+    para a porta HTTPS. Se o IP mudar, troca-se o `SERVER_HOSTNAME`: o certificado raiz continua o
+    mesmo. VPN (Tailscale, ZeroTier, NetBird, WireGuard) foi avaliada e adiada.
 
 ## R-21 — Cópia de segurança e restauração (FR-029, FR-030, FR-031, SC-011, SC-012)
 
@@ -791,6 +843,19 @@ integração com o Sura. Dois ambientes: desenvolvimento (máquina do dev, Hunit
   - **verificado no Docker Desktop (Windows)**: uma pasta local do Windows montada como
     `BACKUP_DIR` recebe a cópia e a restauração pelo comando documentado funciona. Falta
     conferir com a pasta sincronizada que for escolhida no PC de produção (homologação, T062).
+  - **PC de produção (2026-11-12, T062)**: `BACKUP_DIR` numa pasta do Dropbox para empresas
+    (aplicativo de desktop, pasta real no disco, caminho com espaços e acentos), que tem outros
+    arquivos da equipe. O Docker Desktop montou a pasta e a primeira cópia foi gravada e conferida.
+    Falta: ver a cópia sincronizada na nuvem, a cópia em atraso (SC-012) e a restauração (SC-011).
+  - **Homologação (2026-11-12, T062)**: cópia em atraso (SC-012) e restauração (SC-011) ✓ no PC de
+    produção. A homologação também achou um **bug no modo contínuo**. O laço chamava
+    `(check_once) || log ...`, e nesse contexto o bash ignora o `set -e`: uma falha no `pg_dump`,
+    no `gpg` ou na conferência não impedia o arquivo de receber o nome final nem o "concluída". A
+    conferência `decrypt | pg_restore --list` também parava de ler depois do índice ("Broken pipe"
+    no gpg em cópias grandes), sem conferir a integridade da cifra até o fim. Os testes da T066 só
+    usavam o modo `once`, por isso não pegaram. **Correção (T091)**: o laço roda
+    `bash backup.sh once` num processo próprio, e a conferência lê o resto do fluxo com `cat`
+    depois do `pg_restore --list`. Os testes passaram a rodar também o modo contínuo.
 
 ## R-22 — Forma de pagamento nas reservas sem pré-pagamento (FR-013 regra 2, FR-018b)
 
@@ -872,3 +937,53 @@ anexa o comprovante, na spec das tratativas); não informada ou desconhecida →
   acréscimo). Contrato 1.2.0 → **1.3.0**, só acréscimo em `Classification` e
   `ClassificationCounts`. As fixtures reais são geradas de novo: as 8 reservas do manifesto passam a
   esperar `cancelled_no_charge`.
+
+## R-23 — Novas tentativas em erros passageiros do Hunit (FR-011a, SC-008)
+
+Contexto: homologação de 2026-11-12 (T062). Na primeira execução real, o detalhe da 52ª reserva de
+um hotel recebeu **503**, uns 4 s depois de o hotel começar. O hotel foi descartado inteiro, como
+previsto (gravação por hotel, R-15). A retomada leu as mesmas 220 reservas em 14 s, sem erro: foi
+um soluço do Hunit, não um limite fixo de velocidade. Sem nova tentativa, a rotina com 83 hotéis e
+milhares de leituras perderia hotéis inteiros por soluços assim.
+
+- **Decision**: o leitor da API interna (`HunitApiClient.get`, camada do Hunit) repete a leitura
+  quando ela falha com o que hoje vira `HunitUnavailableError`: sem resposta (rede, tempo
+  esgotado), **429** ou **5xx**. Até **5 novas tentativas**, com espera de **2, 5, 10, 20 e
+  30 s** (eram 3 tentativas, de 2, 5 e 10 s; ampliadas depois da rotina completa, abaixo). Se
+  o Hunit mandar `Retry-After` (segundos ou data HTTP), a espera segue o cabeçalho, até **30 s**.
+  Esgotadas as tentativas, o erro sobe como antes e o hotel falha (FR-023 permite retomá-lo).
+  Não são repetidos: sessão expirada (401, 403, redirecionamento), outro status e resposta que não
+  é JSON (`ScreenNotRecognizedError`, com evidência).
+- **Aviso ao operador**: cada nova tentativa chama `onRetry` com tentativa, total, espera, hotel
+  (`X-Company-Id`) e o motivo (a mensagem do erro, que já cita status e rota). O gateway repassa a
+  `CreateHunitGateway({ executionId, onRetry })`. O executor publica um evento `warning` com o
+  hotel ("…; nova tentativa 1 de 3 em 2 s") e registra no log. O contrato da API não muda: o tipo
+  `warning` já existe.
+- **Cancelamento (SC-008)**: o gateway tem um `AbortController`, abortado no `close()`. A espera
+  entre tentativas termina na hora com o fechamento, e nenhuma tentativa nova começa depois dele:
+  o erro original sobe. Como o cancelamento fecha o navegador à força se a leitura não terminar em
+  10 s (R-19), a parada continua dentro de 15 s mesmo no meio de uma espera.
+- **Somente leitura (FR-012)**: só existem GETs no leitor, e a lista de permissão é conferida antes
+  da primeira tentativa, com a mesma URL para todas.
+- **Rationale**: a camada do Hunit é quem sabe o que é passageiro (constitution, princípio II); o
+  executor só recebe o aviso e, no fim, o mesmo erro de antes. Esperas curtas resolvem soluços
+  sem atrasar o caso normal; no pior caso, uma leitura que nunca volta custa uns 67 s a mais antes
+  de o hotel falhar.
+- **Alternatives considered**: espaçar todas as leituras (a retomada leu 16 por segundo sem erro:
+  atrasaria a rotina sem motivo medido); repetir o hotel inteiro (refaz centenas de leituras por
+  causa de uma); tentativas sem limite (a execução poderia ficar presa); decidir no executor (ele
+  teria de conhecer status HTTP do Hunit).
+- **Verificação**: testes do leitor contra um servidor HTTP simulado (503 seguido de sucesso, 429
+  com `Retry-After`, limite de tentativas, erros que não são repetidos, fechamento durante a espera)
+  e teste do executor (o aviso vira evento `warning` com o hotel). Na homologação (T062), observar
+  os avisos na rotina completa.
+- **Homologação (2026-11-12, rotina completa)**: 8 episódios em 83 hotéis (7 com 503 e 1 com 500;
+  5 no detalhe e 3 na listagem). **Todos os 8 gastaram as 3 novas tentativas** e deram certo na
+  quarta requisição. Ou seja, o Hunit fica indisponível por mais de 7 s e menos de 17 s de cada
+  vez. Nenhum hotel falhou, mas a folga é pequena: um episódio um pouco mais longo descartaria o
+  hotel. Os episódios ficaram mais frequentes no fim da rotina (4 nos últimos 2 min), o que pode
+  indicar limite de carga no Hunit.
+- **Decisão (2026-11-12, depois das rotinas sequencial e paralela)**: o usuário aprovou **5 novas
+  tentativas** (2, 5, 10, 20 e 30 s, cobrindo indisponibilidades de até ~67 s) e
+  **`HOTEL_CONCURRENCY=5`** em produção (R-08). Com 5 hotéis em paralelo, a rotina caiu para
+  5 min 17 s, mas 4 hotéis falharam num episódio que passou dos 17 s.
