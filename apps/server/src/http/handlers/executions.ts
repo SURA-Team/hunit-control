@@ -38,6 +38,8 @@ export interface ExecutionHandlerDependencies {
 
 /** Quantos eventos recentes acompanham o estado da execução (FR-021; limite do contrato). */
 const RECENT_EVENTS = 50;
+/** Quantos avisos acompanham o estado da execução (specs/002, FR-016a; limite do contrato). */
+const RECENT_WARNINGS = 20;
 const DEFAULT_PAGE_SIZE = 50;
 
 /** Cliente autenticado da requisição. As operações daqui sempre exigem autenticação. */
@@ -58,9 +60,10 @@ export function createExecutionHandlers(dependencies: ExecutionHandlerDependenci
   async function viewOf(found: ExecutionWithClient): Promise<ExecutionView> {
     const { execution } = found;
     const active = isActive(execution.status);
-    const [hotels, recentEvents, history] = await Promise.all([
+    const [hotels, recentEvents, warnings, history] = await Promise.all([
       listExecutionHotels(db, execution.id),
       events.listRecent(execution.id, RECENT_EVENTS),
+      events.listRecentWarnings(execution.id, RECENT_WARNINGS),
       // A média histórica só serve para estimar o tempo restante de uma execução ativa.
       active
         ? loadTimingHistory(db, { excludeExecutionId: execution.id })
@@ -73,7 +76,7 @@ export function createExecutionHandlers(dependencies: ExecutionHandlerDependenci
       concurrency: runner.hotelConcurrency,
       now: new Date(),
     });
-    return toExecutionView({ found, hotels, recentEvents, timing });
+    return toExecutionView({ found, hotels, recentEvents, warnings, timing });
   }
 
   return {
@@ -120,10 +123,14 @@ export function createExecutionHandlers(dependencies: ExecutionHandlerDependenci
       try {
         const page = await listExecutions(db, {
           status: query.status,
+          active: query.active,
           limit: query.limit ?? DEFAULT_PAGE_SIZE,
           cursor: query.cursor,
         });
-        return { items: page.items.map(toExecutionSummary), nextCursor: page.nextCursor };
+        return {
+          items: page.items.map((item) => toExecutionSummary(item, item.clientName)),
+          nextCursor: page.nextCursor,
+        };
       } catch (error) {
         if (error instanceof InvalidCursorError) {
           throw new ProblemError('validation_error', 'O parâmetro "cursor" é inválido.');

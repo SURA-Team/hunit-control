@@ -27,9 +27,11 @@ function iso(date: Date | null): string | null {
   return date ? date.toISOString() : null;
 }
 
-export function toExecutionSummary(row: ExecutionRow): ExecutionSummaryView {
+/** Resumo da execução; `clientName` é quem a iniciou ou retomou (`requestedClient`). */
+export function toExecutionSummary(row: ExecutionRow, clientName: string): ExecutionSummaryView {
   return {
     id: row.id,
+    requestedClient: clientName,
     parentExecutionId: row.parentExecutionId,
     status: row.status,
     endReason: row.endReason,
@@ -72,6 +74,8 @@ export interface ExecutionViewParts {
   found: ExecutionWithClient;
   hotels: readonly ExecutionHotelRow[];
   recentEvents: readonly ExecutionEvent[];
+  /** Avisos mais recentes, dos mais novos para os mais antigos (specs/002, FR-016a). */
+  warnings: readonly ExecutionEvent[];
   /** Médias e estimativa (FR-021a), calculadas por `executionTiming`. */
   timing: ExecutionTiming;
 }
@@ -117,12 +121,12 @@ export function toExecutionView({
   found,
   hotels,
   recentEvents,
+  warnings,
   timing,
 }: ExecutionViewParts): ExecutionView {
   const { execution, clientName } = found;
   return {
-    ...toExecutionSummary(execution),
-    requestedClient: clientName,
+    ...toExecutionSummary(execution, clientName),
     twoFactorDeadline: iso(execution.twoFactorDeadline),
     current: currentPosition(execution, hotels, recentEvents),
     hotels: hotels.map((run) => ({
@@ -139,6 +143,7 @@ export function toExecutionView({
     counts: sumCounts(hotels.map((run) => run.counts)),
     timing,
     recentEvents: recentEvents.map(toEventView),
+    warnings: warnings.map(toEventView),
   };
 }
 

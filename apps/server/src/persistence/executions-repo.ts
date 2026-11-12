@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, notInArray, sql, type SQL } from 'drizzle-orm';
 import type { Period } from '@hunit/domain';
 import type { Database } from './db.js';
 import { isConstraintViolation, PG_UNIQUE_VIOLATION } from './errors.js';
@@ -231,13 +231,18 @@ export async function listExecutionHotels(
 
 export interface ListExecutionsOptions {
   status?: ExecutionStatus | undefined;
+  /** true = só ativas (fila, em andamento, aguardando token); false = só encerradas (feature 002). */
+  active?: boolean | undefined;
   limit: number;
   /** Valor de `nextCursor` de uma página anterior. */
   cursor?: string | undefined;
 }
 
+/** Execução da lista, com o nome do cliente da API que a iniciou ou retomou (feature 002). */
+export type ExecutionListItem = ExecutionRow & { clientName: string };
+
 export interface ExecutionPage {
-  items: ExecutionRow[];
+  items: ExecutionListItem[];
   /** Cursor da próxima página; `null` quando esta é a última. */
   nextCursor: string | null;
 }
@@ -269,6 +274,11 @@ export async function listExecutions(
 ): Promise<ExecutionPage> {
   const conditions: SQL[] = [];
   if (options.status) conditions.push(eq(executions.status, options.status));
+  if (options.active === true) {
+    conditions.push(inArray(executions.status, [...ACTIVE_EXECUTION_STATUSES]));
+  } else if (options.active === false) {
+    conditions.push(notInArray(executions.status, [...ACTIVE_EXECUTION_STATUSES]));
+  }
 
   if (options.cursor !== undefined) {
     const cursorId = decodeCursor(options.cursor);
@@ -284,13 +294,16 @@ export async function listExecutions(
 
   // Lê um registro a mais para saber se existe uma próxima página.
   const rows = await db
-    .select()
+    .select({ execution: executions, clientName: apiClients.name })
     .from(executions)
+    .innerJoin(apiClients, eq(apiClients.id, executions.clientId))
     .where(and(...conditions))
     .orderBy(desc(executions.createdAt), desc(executions.id))
     .limit(options.limit + 1);
 
-  const items = rows.slice(0, options.limit);
+  const items = rows
+    .slice(0, options.limit)
+    .map(({ execution, clientName }) => ({ ...execution, clientName }));
   const last = items.at(-1);
   return {
     items,

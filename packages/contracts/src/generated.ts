@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nome e perfil do cliente dono da chave usada (feature 002) */
+        get: operations["getCurrentClient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hotels": {
         parameters: {
             query?: never;
@@ -94,6 +111,29 @@ export interface paths {
          *     `Last-Event-ID` (se houver) e termina.
          */
         get: operations["streamExecutionEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/executions/{executionId}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                executionId: components["parameters"]["ExecutionId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Evidências de falha registradas na execução (feature 002)
+         * @description Evidências vencidas já foram removidas pela rotina diária e não aparecem; o download de
+         *     uma que venceu entre a lista e o pedido responde `evidence_expired`.
+         */
+        get: operations["listExecutionEvidence"];
         put?: never;
         post?: never;
         delete?: never;
@@ -188,6 +228,23 @@ export interface paths {
         };
         /** Detalhe de uma reserva */
         get: operations["getReservation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Canais presentes nas reservas gravadas, em ordem alfabética (feature 002) */
+        get: operations["listChannels"];
         put?: never;
         post?: never;
         delete?: never;
@@ -291,6 +348,8 @@ export interface components {
         ExecutionSummary: {
             /** Format: uuid */
             id: string;
+            /** @description Nome do cliente que iniciou (ou retomou) */
+            requestedClient: string;
             /** Format: uuid */
             parentExecutionId?: string | null;
             status: components["schemas"]["ExecutionStatus"];
@@ -302,8 +361,6 @@ export interface components {
             finishedAt?: string | null;
         };
         Execution: components["schemas"]["ExecutionSummary"] & {
-            /** @description Nome do cliente que iniciou */
-            requestedClient: string;
             /**
              * Format: date-time
              * @description Prazo para envio do token quando status = awaiting_2fa
@@ -334,6 +391,12 @@ export interface components {
                 estimatedRemainingSeconds?: number | null;
             };
             recentEvents: components["schemas"]["ExecutionEvent"][];
+            /**
+             * @description Os 20 eventos `warning` mais recentes da execução, mais recentes primeiro (feature
+             *     002). Inclui as novas tentativas por erro passageiro do Hunit e o hotel que a conta
+             *     não acessa.
+             */
+            warnings: components["schemas"]["ExecutionEvent"][];
         };
         ExecutionEvent: {
             id: string;
@@ -402,6 +465,28 @@ export interface components {
             /** Format: uuid */
             lastExecutionId?: string;
             anonymized?: boolean;
+        };
+        /** @enum {string} */
+        ClientRole: "operator" | "reader";
+        ClientIdentity: {
+            /** @description Mesmo valor de Execution.requestedClient para as execuções iniciadas por este cliente */
+            name: string;
+            role: components["schemas"]["ClientRole"];
+        };
+        EvidenceSummary: {
+            /** Format: uuid */
+            id: string;
+            hotelCode?: string | null;
+            reservationNumber?: string | null;
+            /** @enum {string} */
+            kind: "navigation_failure" | "classification_failure" | "screen_not_recognized" | "reservation_status_unknown";
+            reason: string;
+            /** @description Arquivos disponíveis para GET /evidence/{evidenceId}/{file} */
+            files: ("screenshot" | "html" | "response")[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
         };
     };
     responses: {
@@ -485,6 +570,27 @@ export interface operations {
             };
         };
     };
+    getCurrentClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cliente autenticado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientIdentity"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listHotels: {
         parameters: {
             query?: never;
@@ -512,6 +618,11 @@ export interface operations {
         parameters: {
             query?: {
                 status?: components["schemas"]["ExecutionStatus"];
+                /**
+                 * @description true = só execuções ativas (queued, running, awaiting_2fa); false = só encerradas;
+                 *     omitido = todas. Combinável com `status` (feature 002).
+                 */
+                active?: boolean;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -618,6 +729,33 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["ExecutionEvent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listExecutionEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                executionId: components["parameters"]["ExecutionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evidências, mais recentes primeiro */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["EvidenceSummary"][];
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -760,6 +898,18 @@ export interface operations {
                 notFound?: boolean;
                 checkInFrom?: string;
                 checkInTo?: string;
+                /**
+                 * @description Busca livre (feature 002). Encontra a reserva se o número da reserva, a transação, o
+                 *     código de autorização ou a referência da operadora forem iguais ao texto (sem
+                 *     diferenciar maiúsculas), ou se o nome do hóspede contiver o texto (sem diferenciar
+                 *     maiúsculas e acentos). Espaços nas pontas são ignorados. Reservas anonimizadas não são
+                 *     encontradas pelo nome.
+                 */
+                q?: string;
+                /** @description Canal exatamente como em Reservation.channel (ver GET /channels) */
+                channel?: string;
+                /** @description Valor em BRL; encontra reservas cujo valor total OU valor cobrado seja igual */
+                amount?: string;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -809,6 +959,29 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lista de canais */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: string[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     getEvidenceFile: {

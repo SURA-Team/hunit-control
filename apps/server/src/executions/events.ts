@@ -143,6 +143,21 @@ export class ExecutionEventBus {
     return rows.reverse().map(toEvent);
   }
 
+  /**
+   * Avisos mais recentes da execução (eventos `warning`), dos mais novos para os mais antigos
+   * (specs/002, FR-016a). Os avisos de nova tentativa por erro passageiro do Hunit saem de
+   * `listRecent` em segundos quando vários hotéis rodam ao mesmo tempo; esta lista os mantém.
+   */
+  async listRecentWarnings(executionId: string, limit = 20): Promise<ExecutionEvent[]> {
+    const rows = await this.options.db
+      .select()
+      .from(executionEvents)
+      .where(and(eq(executionEvents.executionId, executionId), eq(executionEvents.type, 'warning')))
+      .orderBy(desc(executionEvents.id))
+      .limit(limit);
+    return rows.map(toEvent);
+  }
+
   /** Último evento `status_changed` da execução, ou `null` se ela ainda não tem nenhum. */
   async lastStatusChange(executionId: string): Promise<ExecutionEvent | null> {
     const [row] = await this.options.db

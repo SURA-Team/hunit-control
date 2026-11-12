@@ -16,6 +16,7 @@ import { findActiveClientByKeyHash } from '../persistence/clients-repo.js';
 import type { Database } from '../persistence/db.js';
 import { createAuthHook } from './auth.js';
 import { loadContract, type Contract } from './contract.js';
+import { createClientHandlers } from './handlers/clients.js';
 import { createEvidenceHandlers } from './handlers/evidence.js';
 import { createExecutionEventsHandlers } from './handlers/execution-events.js';
 import { createExecutionHandlers } from './handlers/executions.js';
@@ -116,6 +117,7 @@ export function createOperationHandlers(dependencies: AppDependencies): {
   return {
     handlers: {
       ...createHealthHandlers(dependencies),
+      ...createClientHandlers(),
       ...createHotelHandlers(dependencies),
       ...createExecutionHandlers(dependencies),
       ...createReservationHandlers(dependencies),

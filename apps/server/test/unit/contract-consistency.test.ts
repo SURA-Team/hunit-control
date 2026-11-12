@@ -4,6 +4,8 @@ import { OPERATOR_ONLY_OPERATIONS } from '../../src/http/auth.js';
 import { PROBLEMS } from '../../src/http/problem.js';
 import {
   classificationEnum,
+  clientRoleEnum,
+  evidenceKindEnum,
   executionEndReasonEnum,
   executionStatusEnum,
   hotelRunStatusEnum,
@@ -51,6 +53,18 @@ describe('domínio × banco × contrato', () => {
     expect(contractEnum('ExecutionStatus')).toEqual(executionStatusEnum.enumValues);
     expect(contractEnum('ExecutionEndReason')).toEqual(executionEndReasonEnum.enumValues);
     expect(contractEnum('HotelRunStatus')).toEqual(hotelRunStatusEnum.enumValues);
+  });
+
+  it('perfis dos clientes e tipos de evidência são os mesmos (feature 002)', () => {
+    const schemas = contractDocument.components?.['schemas'] as Record<
+      string,
+      { properties?: Record<string, { enum?: string[] }> }
+    >;
+
+    expect(contractEnum('ClientRole')).toEqual(clientRoleEnum.enumValues);
+    expect(schemas['EvidenceSummary']?.properties?.['kind']?.enum).toEqual(
+      evidenceKindEnum.enumValues,
+    );
   });
 
   it('os códigos de erro do servidor são exatamente os do contrato', () => {

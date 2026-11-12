@@ -1,0 +1,824 @@
+openapi: 3.1.0
+info:
+  title: HUNIT Control API
+  version: 1.4.0
+  license:
+    name: Uso interno — proprietário
+    identifier: LicenseRef-Proprietary
+  description: |
+    API de consulta de reservas de cartão virtual no Hunit (feature 001). A feature 002 (app
+    desktop) acrescenta, sem quebrar os clientes existentes: `/me`, quem iniciou e o filtro de
+    ativas na lista de execuções, os avisos no estado da execução, a busca livre, o canal e o
+    valor nas reservas, a lista de canais e a lista de evidências de uma execução.
+    Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
+    usados em memória e nunca armazenados nem devolvidos.
+    Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
+    Erros são devolvidos como `application/problem+json` (RFC 9457) com um `code` estável.
+    Qualquer operação pode responder 500 com `code = internal_error` em caso de falha inesperada.
+servers:
+  - url: /v1
+security:
+  - apiKey: []
+
+tags:
+  - name: executions
+    description: Execuções da consulta no Hunit — início, token 2FA, acompanhamento, cancelamento e retomada
+  - name: reservations
+    description: Reservas consultadas, com a classificação e o histórico de verificações
+  - name: hotels
+    description: Catálogo de hotéis lido do Hunit
+  - name: evidence
+    description: Arquivos de evidência das falhas (captura, HTML e resposta), guardados por tempo limitado
+  - name: health
+    description: Disponibilidade do serviço
+  - name: clients
+    description: O cliente da API dono da chave usada (feature 002)
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Verifica se o serviço e o banco estão disponíveis
+      security: []
+      responses:
+        '200':
+          description: Serviço disponível
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+        '503':
+          description: Serviço indisponível (o banco de dados não respondeu)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /me:
+    get:
+      tags: [clients]
+      operationId: getCurrentClient
+      summary: Nome e perfil do cliente dono da chave usada (feature 002)
+      responses:
+        '200':
+          description: Cliente autenticado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClientIdentity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /hotels:
+    get:
+      tags: [hotels]
+      operationId: listHotels
+      summary: Último catálogo de hotéis conhecido (FR-008)
+      responses:
+        '200':
+          description: Catálogo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Hotel' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /executions:
+    post:
+      tags: [executions]
+      operationId: createExecution
+      summary: Inicia uma execução (FR-001) — somente operador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartExecutionRequest' }
+      responses:
+        '202':
+          description: Execução criada; acompanhe pelo GET ou pelos eventos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Execution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Já existe execução ativa para esta conta do Hunit (FR-006)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    get:
+      tags: [executions]
+      operationId: listExecutions
+      summary: Lista execuções (mais recentes primeiro)
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ExecutionStatus' }
+        - name: active
+          in: query
+          description: |
+            true = só execuções ativas (queued, running, awaiting_2fa); false = só encerradas;
+            omitido = todas. Combinável com `status` (feature 002).
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Página de execuções
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ExecutionSummary' }
+                  nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /executions/{executionId}:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    get:
+      tags: [executions]
+      operationId: getExecution
+      summary: Estado completo e andamento da execução (FR-021)
+      responses:
+        '200':
+          description: Execução
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Execution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /executions/{executionId}/events:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    get:
+      tags: [executions]
+      operationId: streamExecutionEvents
+      summary: Stream de eventos em tempo real (Server-Sent Events)
+      description: |
+        Cada mensagem SSE tem `id` (sequencial), `event` (tipo) e `data` (JSON de ExecutionEvent).
+        Reconexão com o cabeçalho `Last-Event-ID` reenvia os eventos posteriores.
+        O evento `status_changed` com `status = awaiting_2fa` é enviado em até 5 s (SC-005).
+        O stream termina depois do evento `status_changed` com estado final (`completed`,
+        `failed` ou `cancelled`); para uma execução já encerrada, envia os eventos posteriores ao
+        `Last-Event-ID` (se houver) e termina.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Stream aberto
+          content:
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/ExecutionEvent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /executions/{executionId}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    get:
+      tags: [evidence]
+      operationId: listExecutionEvidence
+      summary: Evidências de falha registradas na execução (feature 002)
+      description: |
+        Evidências vencidas já foram removidas pela rotina diária e não aparecem; o download de
+        uma que venceu entre a lista e o pedido responde `evidence_expired`.
+      responses:
+        '200':
+          description: Evidências, mais recentes primeiro
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/EvidenceSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /executions/{executionId}/two-factor:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    post:
+      tags: [executions]
+      operationId: sendTwoFactor
+      summary: Envia o token 2FA (FR-002) — somente operador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                  pattern: '^[0-9]{4,10}$'
+                  writeOnly: true
+      responses:
+        '202':
+          description: Token entregue à execução; o resultado chega pelo estado/eventos
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Execução não está aguardando token (expirada, cancelada ou já autenticada)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /executions/{executionId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    post:
+      tags: [executions]
+      operationId: cancelExecution
+      summary: Cancela a execução (FR-022) — somente operador
+      responses:
+        '202':
+          description: |
+            Cancelamento solicitado; a execução para em até 15 s (SC-008) e termina `cancelled` —
+            ou `completed`, se todos os hotéis já tinham terminado quando a parada foi notada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Execution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Execução já encerrada
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /executions/{executionId}/resume:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    post:
+      tags: [executions]
+      operationId: resumeExecution
+      summary: Retoma uma execução interrompida a partir do primeiro hotel não concluído (FR-023)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credentials]
+              additionalProperties: false
+              properties:
+                credentials: { $ref: '#/components/schemas/HunitCredentials' }
+      responses:
+        '202':
+          description: Nova execução criada (parentExecutionId = execução original)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Execution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Execução não pode ser retomada: ainda ativa ou já há execução ativa na conta
+            (`execution_already_active`), sem hotéis pendentes (`nothing_to_resume`) ou já
+            retomada antes (`execution_already_resumed`; retome a última execução da sequência,
+            citada em `detail`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /reservations:
+    get:
+      tags: [reservations]
+      operationId: listReservations
+      summary: Consulta reservas com filtros combináveis (FR-020)
+      parameters:
+        - name: executionId
+          in: query
+          description: Somente reservas observadas nesta execução
+          schema: { type: string, format: uuid }
+        - name: hotelCode
+          in: query
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+        - name: classification
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/Classification' } }
+          style: form
+          explode: true
+        - name: reservationStatus
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationStatus' } }
+          style: form
+          explode: true
+        - name: notFound
+          in: query
+          description: true = somente marcadas como "não encontrada na última verificação"
+          schema: { type: boolean }
+        - name: checkInFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: checkInTo
+          in: query
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          description: |
+            Busca livre (feature 002). Encontra a reserva se o número da reserva, a transação, o
+            código de autorização ou a referência da operadora forem iguais ao texto (sem
+            diferenciar maiúsculas), ou se o nome do hóspede contiver o texto (sem diferenciar
+            maiúsculas e acentos). Espaços nas pontas são ignorados. Reservas anonimizadas não são
+            encontradas pelo nome.
+          schema: { type: string, minLength: 2, maxLength: 100 }
+        - name: channel
+          in: query
+          description: Canal exatamente como em Reservation.channel (ver GET /channels)
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: amount
+          in: query
+          description: Valor em BRL; encontra reservas cujo valor total OU valor cobrado seja igual
+          schema: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Página de reservas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Reservation' }
+                  nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reservations/{hotelCode}/{reservationNumber}:
+    parameters:
+      - name: hotelCode
+        in: path
+        required: true
+        schema: { type: string }
+      - name: reservationNumber
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [reservations]
+      operationId: getReservation
+      summary: Detalhe de uma reserva
+      responses:
+        '200':
+          description: Reserva
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /channels:
+    get:
+      tags: [reservations]
+      operationId: listChannels
+      summary: Canais presentes nas reservas gravadas, em ordem alfabética (feature 002)
+      responses:
+        '200':
+          description: Lista de canais
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /evidence/{evidenceId}/{file}:
+    parameters:
+      - name: evidenceId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: file
+        in: path
+        required: true
+        schema: { type: string, enum: [screenshot, html, response] }
+    get:
+      tags: [evidence]
+      operationId: getEvidenceFile
+      summary: Baixa a captura de tela, o HTML sanitizado ou a resposta JSON de uma evidência (FR-024)
+      responses:
+        '200':
+          description: Arquivo
+          content:
+            image/png: {}
+            text/html: {}
+            application/json: {}
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410':
+          description: Evidência expirada (retenção de 30 dias — FR-025)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      description: Chave de API do cliente autorizado (nível operator ou reader — FR-007)
+
+  parameters:
+    ExecutionId:
+      name: executionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Requisição inválida (parâmetro, corpo ou formato fora do contrato)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Chave de API ausente, inválida ou revogada
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: "Ação não permitida para o nível do cliente (ex.: reader tentando iniciar)"
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 (problem details)
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          description: Código estável para tratamento pelos clientes
+          enum:
+            - validation_error
+            - unauthorized
+            - forbidden_for_role
+            - not_found
+            - execution_already_active
+            - not_awaiting_two_factor
+            - execution_already_finished
+            - nothing_to_resume
+            - execution_already_resumed
+            - evidence_expired
+            - internal_error
+
+    HunitCredentials:
+      type: object
+      required: [username, password]
+      additionalProperties: false
+      writeOnly: true
+      properties:
+        username: { type: string, minLength: 1, writeOnly: true }
+        password: { type: string, minLength: 1, writeOnly: true }
+
+    Period:
+      type: object
+      required: [from, to]
+      description: Período de check-in; qualquer intervalo, inclusive retroativo (FR-010a). from <= to.
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+
+    StartExecutionRequest:
+      type: object
+      required: [credentials, period]
+      additionalProperties: false
+      properties:
+        credentials: { $ref: '#/components/schemas/HunitCredentials' }
+        period: { $ref: '#/components/schemas/Period' }
+        hotelCodes:
+          type: [array, 'null']
+          description: Omitido ou null = todos os hotéis do catálogo (FR-009)
+          items: { type: string }
+          minItems: 1
+
+    ExecutionStatus:
+      type: string
+      enum: [queued, running, awaiting_2fa, completed, failed, cancelled]
+
+    ExecutionEndReason:
+      type: string
+      enum:
+        - invalid_credentials
+        - invalid_token
+        - two_factor_timeout
+        - hunit_unavailable
+        - hunit_screen_not_recognized
+        - session_expired
+        - server_restarted
+        - cancelled_by_client
+        - internal_error
+
+    HotelRunStatus:
+      type: string
+      enum: [pending, running, completed, failed, cancelled]
+
+    Classification:
+      type: string
+      description: |
+        Situação de cobrança da reserva (FR-013). Reserva sem pré-pagamento: `invoiced` (faturada,
+        sem ação) ou `charge_at_terminal` (forma cartão de crédito: cobrar na maquininha), conforme
+        a forma de pagamento informada pelo Hunit; sem forma informada, `cancelled_no_charge` se a
+        reserva está cancelada (cancelamento antecipado ou no-show isento, desde a versão 1.3.0) ou
+        `analysis_error` se está ativa; forma desconhecida → `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
+        só aparece em registros gravados antes; a reserva muda de situação na próxima verificação.
+      enum:
+        - ignored_hotelbeds_258
+        - invoiced
+        - charge_at_terminal
+        - cancelled_no_charge
+        - not_virtual_card
+        - virtual_card_charge_error
+        - virtual_card_already_charged
+        - virtual_card_validated_only
+        - virtual_card_pending_charge
+        - analysis_error
+
+    ReservationStatus:
+      type: string
+      enum: [active, cancelled, unknown]
+
+    ClassificationCounts:
+      type: object
+      additionalProperties: false
+      properties:
+        ignored_hotelbeds_258: { type: integer }
+        invoiced: { type: integer }
+        charge_at_terminal: { type: integer }
+        cancelled_no_charge: { type: integer }
+        not_virtual_card: { type: integer, description: Obsoleta (ver Classification) }
+        virtual_card_charge_error: { type: integer }
+        virtual_card_already_charged: { type: integer }
+        virtual_card_validated_only: { type: integer }
+        virtual_card_pending_charge: { type: integer }
+        analysis_error: { type: integer }
+
+    Hotel:
+      type: object
+      required: [code, name, available, lastSeenAt]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        available:
+          type: boolean
+          description: true enquanto alguma conta do Hunit acessar o hotel (FR-008)
+        lastSeenAt: { type: string, format: date-time }
+
+    ExecutionSummary:
+      type: object
+      required: [id, status, period, createdAt, requestedClient]
+      properties:
+        id: { type: string, format: uuid }
+        requestedClient: { type: string, description: Nome do cliente que iniciou (ou retomou) }
+        parentExecutionId: { type: [string, 'null'], format: uuid }
+        status: { $ref: '#/components/schemas/ExecutionStatus' }
+        endReason:
+          oneOf:
+            - $ref: '#/components/schemas/ExecutionEndReason'
+            - type: 'null'
+        period: { $ref: '#/components/schemas/Period' }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+
+    Execution:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionSummary'
+        - type: object
+          required: [hotels, counts, recentEvents, warnings]
+          properties:
+            twoFactorDeadline:
+              type: [string, 'null']
+              format: date-time
+              description: Prazo para envio do token quando status = awaiting_2fa
+            current:
+              type: [object, 'null']
+              properties:
+                hotelCode: { type: string }
+                page: { type: integer }
+                pagesTotal: { type: [integer, 'null'] }
+                reservationNumber: { type: [string, 'null'] }
+            hotels:
+              type: array
+              items:
+                type: object
+                required: [hotelCode, status]
+                properties:
+                  hotelCode: { type: string }
+                  hotelName: { type: string }
+                  status: { $ref: '#/components/schemas/HotelRunStatus' }
+                  pagesDone: { type: [integer, 'null'] }
+                  pagesTotal: { type: [integer, 'null'] }
+                  reservationsSeen: { type: integer }
+                  durationSeconds: { type: [integer, 'null'] }
+                  counts: { $ref: '#/components/schemas/ClassificationCounts' }
+                  failureReason: { type: [string, 'null'] }
+            counts: { $ref: '#/components/schemas/ClassificationCounts' }
+            timing:
+              type: object
+              description: Medição e estimativa (FR-021a)
+              properties:
+                avgSecondsPerReservation: { type: [number, 'null'] }
+                avgSecondsPerHotel: { type: [number, 'null'] }
+                estimatedRemainingSeconds: { type: [integer, 'null'] }
+            recentEvents:
+              type: array
+              maxItems: 50
+              items: { $ref: '#/components/schemas/ExecutionEvent' }
+            warnings:
+              type: array
+              maxItems: 20
+              description: |
+                Os 20 eventos `warning` mais recentes da execução, mais recentes primeiro (feature
+                002). Inclui as novas tentativas por erro passageiro do Hunit e o hotel que a conta
+                não acessa.
+              items: { $ref: '#/components/schemas/ExecutionEvent' }
+
+    ExecutionEvent:
+      type: object
+      required: [id, at, type, message]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        type:
+          type: string
+          enum:
+            - status_changed
+            - catalog_updated
+            - hotel_started
+            - page_done
+            - reservation_classified
+            - hotel_completed
+            - hotel_failed
+            - evidence_recorded
+            - warning
+        status: { $ref: '#/components/schemas/ExecutionStatus' }
+        hotelCode: { type: [string, 'null'] }
+        reservationNumber: { type: [string, 'null'] }
+        message: { type: string }
+
+    Money:
+      type: [string, 'null']
+      pattern: '^-?[0-9]+\.[0-9]{2}$'
+      description: Valor decimal em BRL
+
+    Reservation:
+      type: object
+      required:
+        - hotelCode
+        - reservationNumber
+        - reservationStatus
+        - classification
+        - reason
+        - firstVerifiedAt
+        - lastVerifiedAt
+        - verificationCount
+      properties:
+        hotelCode: { type: string }
+        reservationNumber: { type: string }
+        guestName: { type: [string, 'null'], description: null após anonimização (FR-026) }
+        channel: { type: [string, 'null'] }
+        checkIn: { type: [string, 'null'], format: date }
+        checkOut: { type: [string, 'null'], format: date }
+        stayPeriod: { type: [string, 'null'] }
+        totalAmount: { $ref: '#/components/schemas/Money' }
+        reservationStatus: { $ref: '#/components/schemas/ReservationStatus' }
+        classification: { $ref: '#/components/schemas/Classification' }
+        reason: { type: string }
+        paymentForm:
+          type: [string, 'null']
+          description: >-
+            Forma de pagamento como o Hunit informa (ex.: "cartão de crédito"); null = não
+            informada. Decide a situação das reservas sem pré-pagamento (FR-013, regra 2).
+        payment:
+          type: object
+          properties:
+            prePaymentFound: { type: boolean }
+            chargedAt: { type: [string, 'null'], format: date-time }
+            chargedBy: { type: [string, 'null'] }
+            chargedAmount: { $ref: '#/components/schemas/Money' }
+            transactionId: { type: [string, 'null'] }
+            authorizationCode: { type: [string, 'null'] }
+            processorReference: { type: [string, 'null'] }
+            isInstallment: { type: [boolean, 'null'] }
+            installmentCount: { type: [integer, 'null'] }
+            installmentAmount: { $ref: '#/components/schemas/Money' }
+            prePaymentState: { type: [string, 'null'] }
+            prePaymentMessage: { type: [string, 'null'] }
+            chargeActionVisible: { type: boolean }
+        tracking:
+          type: object
+          properties:
+            changedFields: { type: array, items: { type: string } }
+            statusChanged: { type: boolean }
+            previousClassification:
+              oneOf:
+                - $ref: '#/components/schemas/Classification'
+                - type: 'null'
+            previousReservationStatus:
+              oneOf:
+                - $ref: '#/components/schemas/ReservationStatus'
+                - type: 'null'
+            statusChangedAt: { type: [string, 'null'], format: date-time }
+            notFoundSince:
+              type: [string, 'null']
+              format: date-time
+              description: Preenchido = "não encontrada na última verificação" (FR-018a)
+        firstVerifiedAt: { type: string, format: date-time }
+        lastVerifiedAt: { type: string, format: date-time }
+        verificationCount: { type: integer, minimum: 1 }
+        lastExecutionId: { type: string, format: uuid }
+        anonymized: { type: boolean }
+
+    ClientRole:
+      type: string
+      enum: [operator, reader]
+
+    ClientIdentity:
+      type: object
+      required: [name, role]
+      properties:
+        name:
+          type: string
+          description: Mesmo valor de Execution.requestedClient para as execuções iniciadas por este cliente
+        role: { $ref: '#/components/schemas/ClientRole' }
+
+    EvidenceSummary:
+      type: object
+      required: [id, kind, reason, files, createdAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        hotelCode: { type: [string, 'null'] }
+        reservationNumber: { type: [string, 'null'] }
+        kind:
+          type: string
+          enum: [navigation_failure, classification_failure, screen_not_recognized, reservation_status_unknown]
+        reason: { type: string }
+        files:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [screenshot, html, response] }
+          description: Arquivos disponíveis para GET /evidence/{evidenceId}/{file}
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }

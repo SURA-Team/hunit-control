@@ -149,8 +149,10 @@ Regras ao mexer em dependências e no contrato:
 - A versão do pacote `playwright` e a da imagem em `apps/server/Dockerfile` têm de ser iguais
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
-  `generate` e copie o arquivo para `specs/001-consulta-reservas-hunit/contracts/openapi.yaml`
-  — as duas cópias devem ficar idênticas.
+  `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
+  `specs/002-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas. A cópia
+  de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua na 1.3.0
+  e não deve ser alterada (specs/002, research R-15).
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 - Mudou o `docker-compose.yml`? O teste `apps/server/test/unit/compose-config.test.ts` confere que
