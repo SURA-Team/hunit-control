@@ -103,6 +103,7 @@ interface TwoFactorRequest {
 | `executions.onChanged(cb)` | `{ executionId }` | chegou evento do servidor para uma execução acompanhada; a interface busca o estado de novo (R-06) |
 | `twoFactor.onRequested(cb)` | `TwoFactorRequest` | execução desta máquina passou a aguardar token, ou foi encontrada aguardando ao abrir/reconectar (FR-011, FR-019) |
 | `twoFactor.onClosed(cb)` | `{ executionId, reason: 'accepted' \| 'rejected' \| 'expired' \| 'finished' \| 'answered_elsewhere' }` | a execução saiu da espera do token |
+| `attention.onPlaySound(cb)` | — | o principal pede à interface que toque o som do aviso (pedido de token ou "Testar aviso"), só com o som ativado nas preferências (R-07). Acrescentado na implementação: o som é tocado pela interface, e o "Testar aviso" não passa por um pedido de token |
 
 ## O que o principal faz sozinho (sem pedido da interface)
 
