@@ -26,7 +26,7 @@ describe('loadConfig (T010)', () => {
       hunit: {
         webUrl: 'https://hunit.hsystem.com.br',
         apiUrl: 'https://hunit-api.hsystem.com.br',
-        twoFactorTimeoutSeconds: 120,
+        twoFactorTimeoutSeconds: 300,
         hotelConcurrency: 1,
         maxPeriodDays: null,
       },

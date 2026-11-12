@@ -26,7 +26,7 @@ services:
       ACCOUNT_KEY_SECRET: ${ACCOUNT_KEY_SECRET:?defina ACCOUNT_KEY_SECRET no arquivo .env}
       HUNIT_WEB_URL: ${HUNIT_WEB_URL:-https://hunit.hsystem.com.br}
       HUNIT_API_URL: ${HUNIT_API_URL:-https://hunit-api.hsystem.com.br}
-      TWO_FACTOR_TIMEOUT_SECONDS: ${TWO_FACTOR_TIMEOUT_SECONDS:-120}
+      TWO_FACTOR_TIMEOUT_SECONDS: ${TWO_FACTOR_TIMEOUT_SECONDS:-300}
       HOTEL_CONCURRENCY: ${HOTEL_CONCURRENCY:-1}
       MAX_PERIOD_DAYS: ${MAX_PERIOD_DAYS:-}
       EVIDENCE_DIR: /data/evidence

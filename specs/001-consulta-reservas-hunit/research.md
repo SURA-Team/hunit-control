@@ -252,6 +252,14 @@ até serem confirmados (ver R-13).
 - **Responsável**: operador com acesso ao Hunit e ao autenticador (usuário do projeto). As tasks de
   Page Objects dependem dessas fixtures.
 
+### Tempo que a tela do token aceita (2026-11-11, T022)
+
+Medido com `hunit:login-check --wait-token`, em duas rodadas: o token foi **aceito 246 s** e
+**491 s** (≈ 8 min) depois de a tela do token abrir. O limite real é maior e não foi encontrado; a tela de token expirado ainda
+não foi capturada (T020). Decisão: `TWO_FACTOR_TIMEOUT_SECONDS` passa de 120 para **300** s por
+padrão — tempo de sobra para o operador, com margem abaixo do que foi medido. O máximo aceito pela
+configuração continua 600 s; subir além de 491 s só depois de medir o limite.
+
 ### Resultado dos HARs de login (2026-11-11, analisados sem expor valores)
 
 Com a coleta pela rede (R-13a), a tela só é usada no login. O login **não é do Hunit**: é um

@@ -53,7 +53,7 @@ acessado por 2 máquinas da mesma rede via HTTPS (R-20); nuvem (AWS) em spec fut
 verificado no R-08 (≤ 1 h se for preciso voltar a um hotel por vez) (SC-009); aviso de token ≤ 5 s (SC-005); cancelamento ≤ 15 s (SC-008)
 
 **Constraints**: credenciais/token só em memória (FR-005); nenhuma ação de escrita no Hunit
-(FR-012); uma execução ativa por conta (FR-006); janela do token ~1–2 min (FR-004)
+(FR-012); uma execução ativa por conta (FR-006); espera do token de 5 min por padrão, dentro dos 491 s que o Hunit aceitou na medição (FR-004)
 
 **Scale/Scope**: dezenas de hotéis; centenas a poucos milhares de reservas por semana; consultas
 retroativas de meses; poucos clientes (desktop, Sura)
@@ -214,7 +214,7 @@ POST /resume ─► nova execução (parent_execution_id) só com os hotéis nã
 | Hunit muda a API interna (não é pública) | Coleta para | Validação de formato em cada resposta → `hunit_screen_not_recognized` + evidência JSON; correção restrita a `hunit/network/` |
 | Requisição perigosa por engano (cobrança, cartão) | Ação financeira indevida | `read-only-guard`: lista de permissão por rota + bloqueio explícito (R-13a); teste automatizado |
 | Limite de requisições simultâneas do Hunit (R-08) | Erros 429/5xx com muitos hotéis ao mesmo tempo | Paralelismo verificado com 2 hotéis; `HOTEL_CONCURRENCY` começa em 1 e sobe aos poucos na homologação (T062), observando os erros |
-| Janela curta do token (~1–2 min) | Execuções falham por tempo | SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
+| Operador demora a informar o token | Execuções falham por tempo | Espera padrão de 5 min (o Hunit aceitou 491 s, R-13); SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
 | Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita à camada do Hunit + fixtures |
 | Limite desconhecido de período no Hunit (R-09) | Consultas retroativas falham | Divisão automática configurável |
 | Código de "faturado" e preenchimento da forma de pagamento sem cartão ainda não vistos (R-22) | Reservas faturadas caem em erro de análise | Rótulo "faturad…" já reconhecido; forma vazia → erro de análise (lado seguro); confirmar na captura (T020) |

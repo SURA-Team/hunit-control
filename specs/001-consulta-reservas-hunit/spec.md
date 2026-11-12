@@ -39,7 +39,8 @@ comercial, relatórios e painéis, e exportação de planilhas.
   com token a cada execução e retomada; nenhuma sessão do Hunit é guardada após a execução. O servidor
   nunca guarda usuário e senha; o cliente (ex.: app desktop) pode mantê-los preenchidos apenas em
   memória enquanto estiver aberto. O token vem de um aplicativo autenticador e o Hunit aceita o token
-  por cerca de 1 a 2 minutos.
+  por cerca de 1 a 2 minutos. (Medido em 2026-11-11: a tela do token aceitou o token 491 s depois de
+  aberta; o limite real é maior que 8 minutos — ver FR-004.)
 - Q: Como tratar reservas canceladas? → A: A consulta usa "Status da reserva = Todas", porque
   reservas canceladas ainda podem ser cobradas. A situação da reserva (ativa/cancelada) é registrada
   separadamente da classificação de cobrança, permitindo distinguir, por exemplo, cancelada e cobrada
@@ -268,8 +269,9 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **FR-003**: O sistema MUST encerrar a execução com motivo distinto para: credenciais inválidas,
   token inválido, tempo de espera do token esgotado, Hunit indisponível e tela do Hunit não
   reconhecida (inclui telas e respostas do Hunit em formato inesperado).
-- **FR-004**: O tempo de espera do token MUST acompanhar o limite da tela de verificação do Hunit
-  (cerca de 1 a 2 minutos; valor exato a confirmar no mapeamento da tela). Se o Hunit expirar a tela
+- **FR-004**: O tempo de espera do token MUST ficar dentro do limite da tela de verificação do Hunit
+  (medido em 2026-11-11: o token foi aceito 491 s depois de a tela abrir; o limite exato é maior e
+  ainda desconhecido) e é configurável, com padrão de 5 minutos. Se o Hunit expirar a tela
   de verificação, ou se esse limite for atingido sem token, a execução MUST encerrar com o motivo
   "tempo de espera do token esgotado".
 - **FR-005**: Credenciais e token MUST ser usados apenas durante a execução e MUST NOT ser
@@ -475,8 +477,8 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - **SC-004**: Zero ocorrências de senha ou token em registros e evidências, verificadas por busca
   em todos os artefatos gerados nas execuções de homologação.
 - **SC-005**: O operador vê que a execução está aguardando token em até 5 segundos após o Hunit
-  solicitá-lo, garantindo que quase toda a janela de 1 a 2 minutos fique disponível para digitar o
-  token.
+  solicitá-lo, garantindo que quase todo o tempo de espera do token (FR-004) fique disponível para
+  digitar o token.
 - **SC-006**: Quando o Hunit mudar uma tela usada pelo sistema, 100% das execuções afetadas
   encerram ou marcam o hotel com o motivo "tela do Hunit não reconhecida" e evidência, em vez de
   produzir classificações incorretas.

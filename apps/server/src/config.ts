@@ -35,7 +35,8 @@ const environmentSchema = z.object({
 
   HUNIT_WEB_URL: httpsUrl.default('https://hunit.hsystem.com.br'),
   HUNIT_API_URL: httpsUrl.default('https://hunit-api.hsystem.com.br'),
-  TWO_FACTOR_TIMEOUT_SECONDS: integer(10, 600).default(120),
+  // Padrão de 5 min: o Hunit aceitou o token 491 s depois de a tela abrir (research R-13).
+  TWO_FACTOR_TIMEOUT_SECONDS: integer(10, 600).default(300),
   HOTEL_CONCURRENCY: integer(1).default(1),
   MAX_PERIOD_DAYS: integer(1).optional(),
 
