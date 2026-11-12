@@ -58,6 +58,8 @@ node_modules/
 dist/
 build/
 out/
+# Instaladores gerados pelo electron-builder (app desktop, specs/002)
+apps/desktop/release/
 coverage/
 .vitest/
 *.tsbuildinfo

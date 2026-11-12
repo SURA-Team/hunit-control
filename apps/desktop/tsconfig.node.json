@@ -1,0 +1,18 @@
+{
+  // Processo principal, preload e código compartilhado (Node do Electron 45: linha 24).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@hunit/contracts": ["../../packages/contracts/src/index.ts"]
+    }
+  },
+  "include": [
+    "src/main",
+    "src/preload",
+    "src/shared",
+    "electron.vite.config.ts",
+    "test/main",
+    "test/e2e",
+    "test/helpers"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  // Usado só pelo editor e pelo ESLint (projectService), que precisam de um tsconfig que
+  // alcance todos os arquivos do app. A checagem de tipos de verdade usa tsconfig.node.json
+  // (processo principal) e tsconfig.web.json (interface): `pnpm --filter @hunit/desktop typecheck`.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@hunit/contracts": ["../../packages/contracts/src/index.ts"]
+    }
+  },
+  "include": ["src", "test", "electron.vite.config.ts"]
+}

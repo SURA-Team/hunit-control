@@ -1,0 +1,16 @@
+{
+  // Interface (renderer): roda no Chromium, sem Node (research R-02). Só os tipos do Vite
+  // (importações `?raw`, CSS) e do DOM; nada de `node`.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@hunit/contracts": ["../../packages/contracts/src/index.ts"]
+    }
+  },
+  "include": ["src/renderer", "src/shared", "test/renderer"]
+}

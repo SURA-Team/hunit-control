@@ -1,0 +1,32 @@
+# Instalador do app desktop (specs/002, research R-11).
+#
+# NSIS por usuário: instala em %LOCALAPPDATA% sem pedir administrador e cria o atalho no Menu
+# Iniciar com a identidade do app (appId = AppUserModelID, usado pelas notificações, R-07).
+# Sem assinatura de código e sem atualização automática (entrega manual do instalador).
+appId: io.github.sura-team.hunit-control
+productName: HUNIT Control
+directories:
+  output: release
+# Só o código gerado pelo electron-vite: todas as bibliotecas já estão dentro dele.
+files:
+  - out/**
+asar: true
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+nsis:
+  oneClick: true
+  perMachine: false
+publish: null
+# Fuses do Electron: fecham caminhos de abuso do binário que guarda a senha em memória (R-02, R-11).
+# Conferidas pelo teste test/main/builder-config.test.ts (T075).
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true

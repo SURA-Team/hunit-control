@@ -12,6 +12,11 @@ minimumReleaseAge: 4320
 # (drizzle-kit, vite, testcontainers) e funcionam sem o script de instalação.
 allowBuilds:
   cpu-features: false # binário nativo opcional do ssh2 (testcontainers)
+  # Baixa o binário oficial do Electron e confere o checksum; sem ele o app não abre
+  # (specs/002, research R-11).
+  electron: true
+  # Só escolhe o 7-Zip do instalador Squirrel; o app usa o instalador NSIS (specs/002, R-11).
+  electron-winstaller: false
   esbuild: false # só otimiza o binário; a API usada por drizzle-kit/tsx funciona sem ele
   protobufjs: false # apenas imprime um aviso de versão (testcontainers)
   ssh2: false # aceleração nativa opcional (testcontainers)

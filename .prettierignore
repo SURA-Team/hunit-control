@@ -1,6 +1,8 @@
 # Gerados e dependências
 node_modules/
 dist/
+out/
+apps/desktop/release/
 coverage/
 .vitest/
 pnpm-lock.yaml
