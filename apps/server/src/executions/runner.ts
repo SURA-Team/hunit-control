@@ -11,6 +11,7 @@ import type {
   HunitCredentials,
   HunitGateway,
   HunitHotel,
+  HunitRetryNotice,
 } from '../hunit/gateway.js';
 import type { Logger } from '../logging.js';
 import type { Database } from '../persistence/db.js';
@@ -27,7 +28,7 @@ import type { ExecutionEndReason } from '../persistence/schema.js';
 import type { SecretRegistry } from '../secrets.js';
 import { accountKeyFor } from './account-key.js';
 import type { ExecutionEventBus } from './events.js';
-import { CANCELLED_HOTEL_REASON, collectHotels } from './hotel-collection.js';
+import { CANCELLED_HOTEL_REASON, collectHotels, hotelLabel } from './hotel-collection.js';
 import { StopRequestedError } from './stop.js';
 
 export interface StartExecutionInput {
@@ -112,6 +113,8 @@ interface ActiveRun {
   hotelCodes: string[] | null;
   logger: Logger;
   gateway: HunitGateway | null;
+  /** Nome de cada hotel do catálogo lido nesta execução, para as mensagens ao operador. */
+  hotelNames: Map<string, string>;
   /** Preenchido enquanto a execução espera o token (estado `awaiting_2fa`). */
   tokenWaiter: TokenWaiter | null;
   /** Preenchido quando alguém pede a parada; vira o motivo de encerramento. */
@@ -207,6 +210,7 @@ export class ExecutionRunner {
       hotelCodes: input.hotelCodes,
       logger: this.options.logger.child({ executionId: execution.id }),
       gateway: null,
+      hotelNames: new Map(),
       tokenWaiter: null,
       stopReason: null,
       cancelledByClientId: null,
@@ -428,7 +432,10 @@ export class ExecutionRunner {
 
   private async openGateway(run: ActiveRun): Promise<HunitGateway> {
     this.throwIfStopping(run);
-    const gateway = await this.options.createGateway({ executionId: run.executionId });
+    const gateway = await this.options.createGateway({
+      executionId: run.executionId,
+      onRetry: (notice) => this.announceRetry(run, notice),
+    });
     run.gateway = gateway;
     // A parada pode ter sido pedida enquanto o navegador abria.
     this.throwIfStopping(run);
@@ -486,8 +493,35 @@ export class ExecutionRunner {
     });
   }
 
+  /**
+   * Avisa que uma leitura do Hunit falhou por indisponibilidade passageira e vai ser repetida
+   * (FR-011a, research R-23). O aviso é só informativo: uma falha ao publicá-lo fica no log e não
+   * interrompe a leitura.
+   */
+  private async announceRetry(run: ActiveRun, notice: HunitRetryNotice): Promise<void> {
+    const { attempt, maxAttempts, delayMs, hotelCode, reason } = notice;
+    const hotel =
+      hotelCode === null ? '' : `${hotelLabel(hotelCode, run.hotelNames.get(hotelCode))}: `;
+    const seconds = Math.ceil(delayMs / 1_000);
+    run.logger.warn(
+      { hotelCode, attempt, maxAttempts, delayMs, reason },
+      'erro passageiro do Hunit; nova tentativa',
+    );
+    try {
+      await this.options.events.publish({
+        executionId: run.executionId,
+        type: 'warning',
+        hotelCode,
+        message: `${hotel}${reason}. Nova tentativa ${attempt} de ${maxAttempts} em ${seconds} s.`,
+      });
+    } catch (error) {
+      run.logger.error({ err: error }, 'não foi possível publicar o aviso de nova tentativa');
+    }
+  }
+
   private async updateCatalog(run: ActiveRun, gateway: HunitGateway): Promise<HunitHotel[]> {
     const catalog = await gateway.listHotels();
+    run.hotelNames = new Map(catalog.map((hotel) => [hotel.code, hotel.name]));
     await saveCatalog(this.options.db, run.accountKey, catalog, this.now());
     await this.options.events.publish({
       executionId: run.executionId,

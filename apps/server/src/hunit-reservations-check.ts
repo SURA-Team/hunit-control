@@ -34,7 +34,7 @@ import {
 import { ask, askHidden, commandArgs } from './cli-prompt.js';
 import { CLASSIFICATION_LABELS } from './executions/hotel-collection.js';
 import { HunitError } from './hunit/errors.js';
-import type { HunitHotel, ReservationListItem } from './hunit/gateway.js';
+import type { HunitHotel, HunitRetryNotice, ReservationListItem } from './hunit/gateway.js';
 import { HUNIT_API_ROUTES, type HunitApiRoute } from './hunit/network/api-client.js';
 import { BOOKINGS_PAGE_SIZE } from './hunit/network/bookings.js';
 import { PlaywrightHunitGateway } from './hunit/playwright-gateway.js';
@@ -139,8 +139,14 @@ async function main(): Promise<number> {
   const password = await askHidden('Senha (não aparece): ');
   secrets.register(username, password);
 
+  // Erro passageiro do Hunit: a leitura é repetida (FR-011a, research R-23); o operador vê.
+  const onRetry = ({ attempt, maxAttempts, delayMs, reason }: HunitRetryNotice) => {
+    out(
+      `  ${reason}. Nova tentativa ${attempt} de ${maxAttempts} em ${Math.ceil(delayMs / 1_000)} s.`,
+    );
+  };
   const gateway = await PlaywrightHunitGateway.open(
-    { webUrl, apiUrl, logger, onApiResponse },
+    { webUrl, apiUrl, logger, onApiResponse, onRetry },
     logger,
   );
 

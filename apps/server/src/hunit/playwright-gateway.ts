@@ -16,6 +16,7 @@ import type {
   HunitCredentials,
   HunitGateway,
   HunitHotel,
+  HunitRetryListener,
   LoginOutcome,
   ReservationDetail,
   ReservationListItem,
@@ -53,6 +54,10 @@ export interface PlaywrightGatewayOptions {
    * (`hunit-reservations-check`) para guardar as respostas reais (T020).
    */
   onApiResponse?: HunitApiClientOptions['onResponse'];
+  /** Chamado antes de cada nova tentativa de uma leitura da API (FR-011a, research R-23). */
+  onRetry?: HunitRetryListener;
+  /** Esperas entre as novas tentativas. Padrão: `DEFAULT_RETRY_DELAYS_MS` do leitor. */
+  retryDelaysMs?: readonly number[];
 }
 
 const DEFAULT_STEP_TIMEOUT_MS = 30_000;
@@ -67,8 +72,11 @@ type Probe<T> = readonly [outcome: T, test: () => Promise<boolean>];
 export function createPlaywrightGatewayFactory(
   options: PlaywrightGatewayOptions,
 ): CreateHunitGateway {
-  return async ({ executionId }) =>
-    PlaywrightHunitGateway.open(options, options.logger.child({ executionId }));
+  return async ({ executionId, onRetry }) =>
+    PlaywrightHunitGateway.open(
+      onRetry ? { ...options, onRetry } : options,
+      options.logger.child({ executionId }),
+    );
 }
 
 export class PlaywrightHunitGateway implements HunitGateway {
@@ -80,6 +88,8 @@ export class PlaywrightHunitGateway implements HunitGateway {
   /** Mostrado por extenso na tela do token; coberto nas capturas de tela. */
   private username: string | null = null;
   private closed = false;
+  /** Abortado no `close()`: interrompe a espera de uma nova tentativa de leitura (SC-008). */
+  private readonly closing = new AbortController();
 
   private constructor(
     private readonly options: PlaywrightGatewayOptions,
@@ -98,7 +108,10 @@ export class PlaywrightHunitGateway implements HunitGateway {
       apiUrl: options.apiUrl,
       webUrl: options.webUrl,
       timeoutMs: this.stepTimeoutMs,
+      signal: this.closing.signal,
       ...(options.onApiResponse && { onResponse: options.onApiResponse }),
+      ...(options.onRetry && { onRetry: options.onRetry }),
+      ...(options.retryDelaysMs && { retryDelaysMs: options.retryDelaysMs }),
     });
   }
 
@@ -207,6 +220,8 @@ export class PlaywrightHunitGateway implements HunitGateway {
     if (this.closed) return;
     this.closed = true;
     this.username = null;
+    // Antes de fechar o navegador: uma leitura esperando nova tentativa desiste na hora.
+    this.closing.abort();
     try {
       await this.context.close();
     } finally {

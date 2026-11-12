@@ -47,6 +47,8 @@ beforeAll(async () => {
     apiUrl,
     webUrl: 'https://hunit.test',
     timeoutMs: 5_000,
+    // As novas tentativas têm teste próprio (api-client-retry.test.ts).
+    retryDelaysMs: [],
   });
 });
 
@@ -106,6 +108,7 @@ describe('HunitApiClient', () => {
       apiUrl: 'http://127.0.0.1:1',
       webUrl: 'https://hunit.test',
       timeoutMs: 2_000,
+      retryDelaysMs: [],
     });
     await expect(offline.get(HUNIT_API_ROUTES.currentUser)).rejects.toBeInstanceOf(
       HunitUnavailableError,

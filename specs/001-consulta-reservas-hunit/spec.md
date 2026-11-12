@@ -103,6 +103,17 @@ comercial, relatórios e painéis, e exportação de planilhas.
   por conexão cifrada, porque usuário, senha e token do Hunit trafegam das máquinas dos operadores
   até o servidor.
 
+### Session 2026-11-12 (homologação)
+
+- Q: Um erro passageiro do Hunit no meio de um hotel (ex.: o Hunit fica indisponível por um
+  instante) deve descartar o hotel inteiro? → A: Não. Na homologação, um único erro desses, depois
+  de poucas dezenas de leituras, descartou um hotel; a retomada leu as mesmas 220 reservas sem
+  erro. A leitura que falhar assim é repetida algumas vezes, com espera crescente, antes de o hotel
+  ser dado como falho (FR-011a); o operador vê cada nova tentativa no acompanhamento.
+- Q: Quantas novas tentativas? → A: 5. Nas rotinas completas da homologação, cada
+  indisponibilidade do Hunit durou de 7 a 17 s, às vezes mais, e atingiu todos os hotéis em
+  andamento ao mesmo tempo. Com 3 tentativas, 4 hotéis falharam num episódio mais longo.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Acesso ao Hunit com token 2FA (Priority: P1)
@@ -248,8 +259,10 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   retomada.
 - Falha ao abrir uma reserva específica: a reserva é classificada como "erro de análise" com
   evidência, e a execução segue para a próxima.
-- Falha repetida em um hotel inteiro: o hotel é marcado como falho e a execução segue para o
-  próximo hotel; o resultado final aponta os hotéis falhos.
+- O Hunit fica indisponível por um instante (não responde, recusa por excesso de pedidos ou
+  responde com erro do servidor): a leitura é repetida (FR-011a). Se o erro continuar depois das
+  novas tentativas, o hotel é marcado como falho e a execução segue para o próximo hotel; o
+  resultado final aponta os hotéis falhos, que podem ser retomados (FR-023).
 - Um hotel pedido não está no catálogo da conta usada: se outra conta já o acessou, ele fica
   pendente para retomar com outra conta (FR-009a); se nenhuma conta conhecida o acessa (ex.: código
   digitado errado), é marcado como falho.
@@ -339,6 +352,13 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   transparente para o operador.
 - **FR-011**: O sistema MUST percorrer todas as páginas de resultados de cada hotel, descobrindo o
   total de páginas a partir do próprio resultado.
+- **FR-011a**: Uma leitura do Hunit que falhar por indisponibilidade passageira (sem resposta,
+  recusa por excesso de pedidos ou erro do servidor do Hunit) MUST ser repetida até 5 vezes, com
+  espera crescente entre as tentativas (ou a espera pedida pelo próprio Hunit, com um limite),
+  antes de o hotel ser dado como falho. Cada nova tentativa MUST aparecer no acompanhamento como
+  aviso. A espera MUST NOT atrasar o cancelamento além do prazo da SC-008, e uma leitura repetida
+  continua sendo somente leitura (FR-012). Outras falhas (sessão expirada, resposta não
+  reconhecida) não são repetidas.
 - **FR-012**: O sistema MUST abrir as reservas somente para leitura e MUST NOT acionar cobranças,
   nem alterar reservas, observações ou dados financeiros no Hunit.
 

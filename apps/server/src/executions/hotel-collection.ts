@@ -43,6 +43,13 @@ export const CLASSIFICATION_LABELS: Readonly<Record<Classification, string>> = {
   analysis_error: 'erro de análise',
 };
 
+/** Como o hotel aparece nas mensagens ao operador: "Nome (código)", ou "Hotel código" sem nome. */
+export function hotelLabel(hotelCode: string, hotelName: string | undefined): string {
+  return hotelName === undefined || hotelName === hotelCode
+    ? `Hotel ${hotelCode}`
+    : `${hotelName} (${hotelCode})`;
+}
+
 /** Motivo gravado no hotel que estava em andamento quando a execução foi cancelada. */
 export const CANCELLED_HOTEL_REASON =
   'A execução foi cancelada no meio do hotel; nada foi gravado.';
@@ -213,7 +220,7 @@ class HotelRun {
     private readonly hotelCode: string,
     hotelName: string,
   ) {
-    this.label = hotelName === hotelCode ? `Hotel ${hotelCode}` : `${hotelName} (${hotelCode})`;
+    this.label = hotelLabel(hotelCode, hotelName);
   }
 
   /** @returns quantidade de reservas gravadas, ou `null` se o hotel falhou. */

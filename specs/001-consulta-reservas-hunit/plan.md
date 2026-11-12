@@ -197,6 +197,7 @@ POST /executions ─► valida, cria execução (queued), guarda credenciais SÓ
                  X-Company-Id = hotel ─► para cada bloco do período (R-09):
                     GetBookings (filtros FR-010) página a página ─► "258-"? ignora
                        : BookingDetail(id) ─► snapshot
+                    (cada leitura: sem resposta/429/5xx ─► até 5 novas tentativas + aviso, R-23)
                        ─► classifyReservation ─► buffer em memória ─► eventos
                  hotel ok ─► transação única: reservas + observações + "não encontradas"
                  hotel falhou ─► evidência + failed, segue para o próximo
@@ -215,7 +216,8 @@ POST /resume ─► nova execução (parent_execution_id) só com os hotéis nã
 | Telas de login/2FA ainda não mapeadas (R-13) | Login não pode ser implementado | Tasks ⛔ HUNIT dependem das fixtures; domínio, banco, API, runner e leitores da API avançam com o Hunit simulado |
 | Hunit muda a API interna (não é pública) | Coleta para | Validação de formato em cada resposta → `hunit_screen_not_recognized` + evidência JSON; correção restrita a `hunit/network/` |
 | Requisição perigosa por engano (cobrança, cartão) | Ação financeira indevida | `read-only-guard`: lista de permissão por rota + bloqueio explícito (R-13a); teste automatizado |
-| Limite de requisições simultâneas do Hunit (R-08) | Erros 429/5xx com muitos hotéis ao mesmo tempo | Paralelismo verificado com 2 hotéis; `HOTEL_CONCURRENCY` começa em 1 e sobe aos poucos na homologação (T062), observando os erros |
+| Limite de requisições simultâneas do Hunit (R-08) | Erros 429/5xx com muitos hotéis ao mesmo tempo | Medido na homologação (T062): com 5 hotéis, a frequência de 503 por leitura foi parecida com a do modo sequencial; `HOTEL_CONCURRENCY=5` em produção, voltando para 1 no `.env` se o Hunit recusar muito |
+| Indisponibilidade passageira do Hunit (homologação: 503 que atinge todos os hotéis em andamento por 7 a 17 s, às vezes mais) | Um único erro descarta o hotel inteiro | Até 5 novas tentativas (2 a 30 s, cobrindo ~67 s) ou `Retry-After`, com aviso ao operador; a espera é interrompida pelo cancelamento (R-23, FR-011a) |
 | Operador demora a informar o token | Execuções falham por tempo | Espera padrão de 5 min (o Hunit aceitou 491 s, R-13); SSE ≤ 5 s; Electron futuro deve alertar o operador (notificação) |
 | Hunit muda de novo | Falhas em produção | Erro explícito + evidência (SC-006); correção restrita à camada do Hunit + fixtures |
 | Limite desconhecido de período no Hunit (R-09) | Consultas retroativas falham | Divisão automática configurável |
