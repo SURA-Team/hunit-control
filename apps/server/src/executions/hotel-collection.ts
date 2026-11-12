@@ -32,7 +32,9 @@ import { StopRequestedError } from './stop.js';
 /** Nome de cada classificação nas mensagens ao operador. */
 export const CLASSIFICATION_LABELS: Readonly<Record<Classification, string>> = {
   ignored_hotelbeds_258: 'ignorada (Hotelbeds 258)',
-  not_virtual_card: 'não é cartão virtual',
+  invoiced: 'faturada',
+  charge_at_terminal: 'cobrar na maquininha',
+  not_virtual_card: 'não é cartão virtual (obsoleta)',
   virtual_card_charge_error: 'erro na cobrança',
   virtual_card_already_charged: 'já cobrada',
   virtual_card_validated_only: 'cartão validado (não cobrado)',

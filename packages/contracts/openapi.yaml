@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.1.1
+  version: 1.2.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -491,8 +491,16 @@ components:
 
     Classification:
       type: string
+      description: |
+        Situação de cobrança da reserva (FR-013). Reserva sem pré-pagamento: `invoiced` (faturada,
+        sem ação) ou `charge_at_terminal` (forma cartão de crédito: cobrar na maquininha), conforme
+        a forma de pagamento informada pelo Hunit; forma não informada ou desconhecida →
+        `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
+        só aparece em registros gravados antes; a reserva muda de situação na próxima verificação.
       enum:
         - ignored_hotelbeds_258
+        - invoiced
+        - charge_at_terminal
         - not_virtual_card
         - virtual_card_charge_error
         - virtual_card_already_charged
@@ -509,7 +517,9 @@ components:
       additionalProperties: false
       properties:
         ignored_hotelbeds_258: { type: integer }
-        not_virtual_card: { type: integer }
+        invoiced: { type: integer }
+        charge_at_terminal: { type: integer }
+        not_virtual_card: { type: integer, description: Obsoleta (ver Classification) }
         virtual_card_charge_error: { type: integer }
         virtual_card_already_charged: { type: integer }
         virtual_card_validated_only: { type: integer }
@@ -639,6 +649,11 @@ components:
         reservationStatus: { $ref: '#/components/schemas/ReservationStatus' }
         classification: { $ref: '#/components/schemas/Classification' }
         reason: { type: string }
+        paymentForm:
+          type: [string, 'null']
+          description: >-
+            Forma de pagamento como o Hunit informa (ex.: "cartão de crédito"); null = não
+            informada. Decide a situação das reservas sem pré-pagamento (FR-013, regra 2).
         payment:
           type: object
           properties:

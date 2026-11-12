@@ -75,9 +75,14 @@ export const hotelRunStatusEnum = pgEnum('hotel_run_status', [
   'cancelled',
 ]);
 
-/** Situação de cobrança de uma reserva (FR-013). */
+/**
+ * Situação de cobrança de uma reserva (FR-013). `not_virtual_card` é obsoleta (research R-22): não
+ * é mais gravada, mas fica no tipo para os registros anteriores.
+ */
 export const classificationEnum = pgEnum('classification', [
   'ignored_hotelbeds_258',
+  'invoiced',
+  'charge_at_terminal',
   'not_virtual_card',
   'virtual_card_charge_error',
   'virtual_card_already_charged',
@@ -297,6 +302,8 @@ export const reservations = pgTable(
     prePaymentMessage: text('pre_payment_message'),
     /** Apenas um sinal para a classificação; a ação nunca é acionada (FR-012). */
     chargeActionVisible: boolean('charge_action_visible').notNull(),
+    /** Forma de pagamento como o Hunit informa; `null` = não informada (FR-016, research R-22). */
+    paymentForm: text('payment_form'),
     firstVerifiedAt: timestamptz('first_verified_at').notNull(),
     lastVerifiedAt: timestamptz('last_verified_at').notNull(),
     verificationCount: integer('verification_count').notNull().default(1),

@@ -810,10 +810,14 @@ anexa o comprovante, na spec das tratativas); não informada ou desconhecida →
 
      | `paymentForm` | Condição na resposta |
      |---|---|
-     | `credit_card` | `paymentTypeId = 1` ou rótulo "cartão de crédito" |
-     | `invoiced` | rótulo começando com "faturad" (código numérico a confirmar) |
-     | `unrecognized` | código ou rótulo preenchidos, mas fora dos casos acima, ou código e rótulo contraditórios |
+     | `credit_card` | rótulo "cartão de crédito", ou `paymentTypeId = 1` sem rótulo |
+     | `invoiced` | rótulo começando com "faturad", com qualquer código (o de "faturado" ainda não foi visto) |
+     | `unrecognized` | rótulo de outra forma; código diferente de 1 sem rótulo; ou código 1 com rótulo de outra forma (contraditório) |
      | `null` | código e rótulo vazios |
+
+     O rótulo decide quando vem preenchido; um código desconhecido não contradiz o rótulo, só não
+     confirma nada (correção da implementação: com código desconhecido contando como contradição,
+     toda reserva faturada real cairia em erro de análise até a captura).
 
      O rótulo é comparado sem acentos, sem diferença de maiúsculas e sem espaços extras. O texto
      como o Hunit mostra (o rótulo; ou o código, se o rótulo vier vazio) é gravado em

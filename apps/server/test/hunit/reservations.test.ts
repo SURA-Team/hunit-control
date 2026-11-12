@@ -240,7 +240,9 @@ describe('readBookingDetail (BookingDetail → ReservationSnapshot)', () => {
 
   // Uma linha por linha da tabela de mapeamento do research R-13a.
   it.each([
-    ['not-virtual-card', {}, 'not_virtual_card', 'active'],
+    ['invoiced', {}, 'invoiced', 'active'],
+    ['charge-at-terminal', {}, 'charge_at_terminal', 'active'],
+    ['no-card-no-form', {}, 'analysis_error', 'active'],
     ['charge-error', {}, 'virtual_card_charge_error', 'active'],
     ['charged', {}, 'virtual_card_already_charged', 'active'],
     ['validated', {}, 'virtual_card_validated_only', 'active'],
@@ -250,7 +252,7 @@ describe('readBookingDetail (BookingDetail → ReservationSnapshot)', () => {
     ['pending', { canCharge: false }, 'analysis_error', 'active'],
     ['pending', { prePaymentStatus: 'Desconhecido' }, 'analysis_error', 'active'],
     ['pending', { prePaymentStatus: null }, 'analysis_error', 'active'],
-    ['not-virtual-card', { prePaymentStatus: 'Desconhecido' }, 'not_virtual_card', 'active'],
+    ['charge-at-terminal', { prePaymentStatus: 'Desconhecido' }, 'charge_at_terminal', 'active'],
     ['pending', { statusId: 7 }, 'virtual_card_pending_charge', 'unknown'],
   ] as const)('%s %o → %s / %s', async (fixture, changes, classification, reservationStatus) => {
     respondWith(detailFixture(fixture, changes));
@@ -261,6 +263,68 @@ describe('readBookingDetail (BookingDetail → ReservationSnapshot)', () => {
       classification,
       reservationStatus,
     });
+  });
+
+  // Forma de pagamento (research R-22): código e rótulo do Hunit → valor neutro do domínio.
+  it.each([
+    ['código 1', { paymentTypeId: 1 }, { kind: 'credit_card', label: '1' }],
+    [
+      'código 1 e rótulo',
+      { paymentTypeId: 1, totals: { paymentTypeLabel: 'cartão de crédito' } },
+      { kind: 'credit_card', label: 'cartão de crédito' },
+    ],
+    [
+      'rótulo "Cartão de Crédito" sem código',
+      { totals: { paymentTypeLabel: 'Cartão de Crédito' } },
+      { kind: 'credit_card', label: 'Cartão de Crédito' },
+    ],
+    [
+      'rótulo "Faturado"',
+      { totals: { paymentTypeLabel: 'Faturado' } },
+      { kind: 'invoiced', label: 'Faturado' },
+    ],
+    [
+      'rótulo "FATURADA " (maiúsculas e espaço)',
+      { totals: { paymentTypeLabel: 'FATURADA ' } },
+      { kind: 'invoiced', label: 'FATURADA' },
+    ],
+    [
+      'código 1 com rótulo "faturado" (contraditório)',
+      { paymentTypeId: 1, totals: { paymentTypeLabel: 'faturado' } },
+      { kind: 'unrecognized', label: 'faturado' },
+    ],
+    [
+      'rótulo "Faturado" com código ainda desconhecido (o rótulo decide)',
+      { paymentTypeId: 3, totals: { paymentTypeLabel: 'Faturado' } },
+      { kind: 'invoiced', label: 'Faturado' },
+    ],
+    [
+      'código 1 com rótulo de outra forma (contraditório)',
+      { paymentTypeId: 1, totals: { paymentTypeLabel: 'Pix' } },
+      { kind: 'unrecognized', label: 'Pix' },
+    ],
+    ['código desconhecido sem rótulo', { paymentTypeId: 7 }, { kind: 'unrecognized', label: '7' }],
+    [
+      'rótulo desconhecido',
+      { totals: { paymentTypeLabel: 'Pix' } },
+      { kind: 'unrecognized', label: 'Pix' },
+    ],
+    ['código e rótulo vazios', { paymentTypeId: null, totals: { paymentTypeLabel: '  ' } }, null],
+    ['sem os campos', { paymentTypeId: undefined, totals: undefined }, null],
+  ] as const)('forma de pagamento: %s → %o', async (_, changes, expected) => {
+    respondWith(detailFixture('no-card-no-form', changes));
+
+    const { snapshot } = await readBookingDetail(api, '101', item);
+
+    expect(snapshot.paymentForm).toEqual(expected);
+  });
+
+  it('forma de pagamento com tipo errado → resposta não reconhecida', async () => {
+    respondWith(detailFixture('no-card-no-form', { paymentTypeId: 'um' }));
+
+    await expect(readBookingDetail(api, '101', item)).rejects.toBeInstanceOf(
+      ScreenNotRecognizedError,
+    );
   });
 
   it('preenche os dados do último evento de pagamento (FR-016)', async () => {
@@ -325,7 +389,7 @@ describe('readBookingDetail (BookingDetail → ReservationSnapshot)', () => {
   });
 
   it('sem pré-pagamento e sem evento: pagamento vazio', async () => {
-    respondWith(detailFixture('not-virtual-card'));
+    respondWith(detailFixture('charge-at-terminal'));
     const { snapshot } = await readBookingDetail(api, '101', item);
     expect(snapshot.payment).toEqual({
       chargedAt: null,

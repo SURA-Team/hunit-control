@@ -1,0 +1,21 @@
+{
+  "_fixture": "SINTÉTICA, no formato observado nas respostas reais (research R-13a e R-22): reserva sem pré-pagamento. Código e rótulo de \"faturado\" a confirmar na captura (T020).",
+  "id": 900001,
+  "channelIdentifier": "BK-1001",
+  "statusId": 1,
+  "cancellationDate": null,
+  "hasCreditCardInfo": false,
+  "prePaymentStatus": null,
+  "canCharge": false,
+  "collectTypeId": 2,
+  "collectTypeLabel": "Canal",
+  "totals": {
+    "total": 500.0,
+    "paymentTypeLabel": null
+  },
+  "guest": {
+    "fullName": "Hóspede Exemplo Um"
+  },
+  "lastPaymentEvent": null,
+  "paymentTypeId": null
+}

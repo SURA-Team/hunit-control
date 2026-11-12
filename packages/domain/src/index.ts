@@ -33,6 +33,7 @@ export type {
   IsoDate,
   IsoDateTime,
   Money,
+  PaymentForm,
   Period,
   ReservationListing,
   ReservationPayment,

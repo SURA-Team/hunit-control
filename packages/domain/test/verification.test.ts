@@ -44,6 +44,7 @@ function data(overrides: Partial<ReservationData> = {}): ReservationData {
     prePaymentState: 'Unprocessed',
     prePaymentMessage: null,
     chargeActionVisible: true,
+    paymentForm: null,
     ...overrides,
   };
 }
@@ -58,6 +59,54 @@ function charged(): Partial<ReservationData> {
     chargeActionVisible: false,
   };
 }
+
+describe('FR-018b — "cobrar na maquininha" que ganha pré-pagamento depois', () => {
+  const atTerminal = data({
+    classification: 'charge_at_terminal',
+    reason: 'cobrar na maquininha',
+    prePaymentFound: false,
+    prePaymentState: null,
+    chargeActionVisible: false,
+    paymentForm: 'cartão de crédito',
+  });
+
+  it('muda de situação, guarda a anterior e mantém a reserva e o histórico', () => {
+    const first = mergeVerification(null, atTerminal, T1);
+    const second = mergeVerification(first, data({ paymentForm: null }), T2);
+
+    expect(second).toMatchObject({
+      hotelCode: '101',
+      reservationNumber: '1001',
+      classification: 'virtual_card_pending_charge',
+      statusChanged: true,
+      previousClassification: 'charge_at_terminal',
+      statusChangedAt: T2,
+      firstVerifiedAt: T1,
+      lastVerifiedAt: T2,
+      verificationCount: 2,
+    });
+    expect(second.changedFields).toEqual(
+      expect.arrayContaining(['classification', 'prePaymentFound', 'paymentForm']),
+    );
+  });
+
+  it('a situação anterior continua registrada nas verificações seguintes sem mudança', () => {
+    const first = mergeVerification(null, atTerminal, T1);
+    const second = mergeVerification(first, data(), T2);
+    const third = mergeVerification(second, data(), T3);
+
+    expect(third).toMatchObject({
+      statusChanged: false,
+      previousClassification: 'charge_at_terminal',
+      statusChangedAt: T2,
+      verificationCount: 3,
+    });
+  });
+
+  it('a forma de pagamento informada entra no registro', () => {
+    expect(mergeVerification(null, atTerminal, T1).paymentForm).toBe('cartão de crédito');
+  });
+});
 
 describe('mergeVerification — reserva nova', () => {
   it('primeira verificação = última = agora, contagem 1, sem mudanças', () => {
@@ -239,6 +288,7 @@ describe('buildReservationData', () => {
       chargeFailed: false,
       validationOnly: false,
       reservationStatus: 'cancelled',
+      paymentForm: { kind: 'credit_card', label: 'cartão de crédito' },
       payment: {
         chargedAt: '2026-11-02T14:30:00.000Z',
         chargedBy: 'Operador',
@@ -270,6 +320,7 @@ describe('buildReservationData', () => {
       hotelCode: '101',
       reservationNumber: '1001',
       reservationStatus: 'cancelled',
+      paymentForm: 'cartão de crédito',
       classification: 'virtual_card_already_charged',
       reason: result.reason,
       prePaymentFound: true,

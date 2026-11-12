@@ -38,6 +38,8 @@ export interface ReservationData {
   prePaymentMessage: string | null;
   /** Apenas um sinal; a ação de cobrar nunca é acionada (FR-012). */
   chargeActionVisible: boolean;
+  /** Forma de pagamento como o Hunit informa; `null` = não informada (FR-016, R-22). */
+  paymentForm: string | null;
 }
 
 /** Histórico de verificação de uma reserva (FR-018, FR-018a, FR-026). */
@@ -86,6 +88,7 @@ const TRACKED_FIELDS = [
   'prePaymentState',
   'prePaymentMessage',
   'chargeActionVisible',
+  'paymentForm',
 ] as const satisfies ReadonlyArray<keyof ReservationData>;
 
 export interface ReservationObservation {
@@ -126,6 +129,7 @@ export function buildReservationData(observation: ReservationObservation): Reser
     prePaymentState: snapshot?.payment.prePaymentState ?? null,
     prePaymentMessage: snapshot?.payment.prePaymentMessage ?? null,
     chargeActionVisible: snapshot?.chargeActionVisible === true,
+    paymentForm: snapshot?.paymentForm?.label ?? null,
   };
 }
 

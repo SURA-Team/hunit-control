@@ -255,12 +255,22 @@ export interface components {
         ExecutionEndReason: "invalid_credentials" | "invalid_token" | "two_factor_timeout" | "hunit_unavailable" | "hunit_screen_not_recognized" | "session_expired" | "server_restarted" | "cancelled_by_client" | "internal_error";
         /** @enum {string} */
         HotelRunStatus: "pending" | "running" | "completed" | "failed" | "cancelled";
-        /** @enum {string} */
-        Classification: "ignored_hotelbeds_258" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
+        /**
+         * @description Situação de cobrança da reserva (FR-013). Reserva sem pré-pagamento: `invoiced` (faturada,
+         *     sem ação) ou `charge_at_terminal` (forma cartão de crédito: cobrar na maquininha), conforme
+         *     a forma de pagamento informada pelo Hunit; forma não informada ou desconhecida →
+         *     `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
+         *     só aparece em registros gravados antes; a reserva muda de situação na próxima verificação.
+         * @enum {string}
+         */
+        Classification: "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
         /** @enum {string} */
         ReservationStatus: "active" | "cancelled" | "unknown";
         ClassificationCounts: {
             ignored_hotelbeds_258?: number;
+            invoiced?: number;
+            charge_at_terminal?: number;
+            /** @description Obsoleta (ver Classification) */
             not_virtual_card?: number;
             virtual_card_charge_error?: number;
             virtual_card_already_charged?: number;
@@ -351,6 +361,8 @@ export interface components {
             reservationStatus: components["schemas"]["ReservationStatus"];
             classification: components["schemas"]["Classification"];
             reason: string;
+            /** @description Forma de pagamento como o Hunit informa (ex.: "cartão de crédito"); null = não informada. Decide a situação das reservas sem pré-pagamento (FR-013, regra 2). */
+            paymentForm?: string | null;
             payment?: {
                 prePaymentFound?: boolean;
                 /** Format: date-time */

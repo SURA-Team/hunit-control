@@ -1,4 +1,4 @@
-import type { ReservationPayment, ReservationSnapshot } from '@hunit/domain';
+import type { PaymentForm, ReservationPayment, ReservationSnapshot } from '@hunit/domain';
 import { z } from 'zod';
 import { ScreenNotRecognizedError } from '../errors.js';
 import type { ReservationDetail, ReservationListItem } from '../gateway.js';
@@ -44,9 +44,58 @@ const bookingDetailSchema = z.object({
   prePaymentStatus: z.string().nullish(),
   canCharge: z.boolean(),
   lastPaymentEvent: lastPaymentEventSchema.nullable(),
+  // Forma de pagamento (research R-22). Opcionais: a ausência não recusa a resposta.
+  paymentTypeId: z.number().int().nullish(),
+  totals: z.object({ paymentTypeLabel: z.string().nullish() }).nullish(),
 });
 
 type BookingDetail = z.infer<typeof bookingDetailSchema>;
+
+/** Código de "cartão de crédito" em `paymentTypeId`, visto nas respostas reais (research R-22). */
+const PAYMENT_TYPE_CREDIT_CARD_ID = 1;
+
+/** Rótulo sem acentos, em minúsculas e com espaços colapsados, para comparar. */
+function normalizeLabel(label: string): string {
+  return label
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // acentos separados pelo NFD
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function kindOfLabel(label: string): PaymentForm['kind'] {
+  const normalized = normalizeLabel(label);
+  if (normalized === 'cartao de credito') return 'credit_card';
+  if (normalized.startsWith('faturad')) return 'invoiced';
+  return 'unrecognized';
+}
+
+/**
+ * Forma de pagamento da reserva (research R-22):
+ * - o rótulo decide quando vem preenchido: "cartão de crédito" → `credit_card`;
+ *   "faturado"/"faturada" → `invoiced` (o código de "faturado" ainda não foi visto); outro →
+ *   `unrecognized`;
+ * - sem rótulo, só o código conhecido decide: 1 → `credit_card`; outro código → `unrecognized`;
+ * - código conhecido que discorda do rótulo → `unrecognized` (contraditório);
+ * - os dois vazios → `null` (não informada).
+ */
+export function paymentFormOf(
+  detail: Pick<BookingDetail, 'paymentTypeId' | 'totals'>,
+): PaymentForm | null {
+  const label = detail.totals?.paymentTypeLabel?.trim() || null;
+  const id = detail.paymentTypeId ?? null;
+  if (label === null && id === null) return null;
+
+  // Código desconhecido não contradiz o rótulo: só não confirma nada.
+  const fromKnownId: PaymentForm['kind'] | null =
+    id === PAYMENT_TYPE_CREDIT_CARD_ID ? 'credit_card' : null;
+  const fromLabel = label === null ? null : kindOfLabel(label);
+  const contradictory = fromKnownId !== null && fromLabel !== null && fromLabel !== fromKnownId;
+  const kind = contradictory ? 'unrecognized' : (fromLabel ?? fromKnownId ?? 'unrecognized');
+
+  return { kind, label: label ?? String(id) };
+}
 
 function isKnownStatus(value: string | null | undefined): value is PrePaymentStatus {
   return (PRE_PAYMENT_STATUSES as readonly string[]).includes(value ?? '');
@@ -82,7 +131,9 @@ function paymentOf(detail: BookingDetail): ReservationPayment {
  * | registro de cobrança  | `Success` e `lastPaymentEvent.justValidate = false`          |
  * | só validação          | `Success` e `lastPaymentEvent.justValidate = true`           |
  * | ação de cobrar        | `prePaymentStatus ∈ {Unprocessed, Fail}` e `canCharge`       |
+ * | forma de pagamento    | `paymentTypeId` e `totals.paymentTypeLabel` (`paymentFormOf`) |
  *
+ * Sem pré-pagamento, a forma de pagamento decide a situação no domínio (FR-013, regra 2).
  * Situação indeterminada (estado desconhecido, `Success` sem evento) fica `null` → erro de
  * análise no domínio (FR-015). A situação da reserva vem de `statusId` (FR-014a).
  */
@@ -109,6 +160,7 @@ export function toReservationSnapshot(
     validationOnly: successSignal((justValidate) => justValidate),
     chargeActionVisible: known ? CHARGEABLE_STATUSES.has(status) && detail.canCharge : null,
     reservationStatus: reservationStatusOf(detail.statusId),
+    paymentForm: paymentFormOf(detail),
     payment: paymentOf(detail),
     listing: item.listing,
   };

@@ -29,6 +29,13 @@
       "when": 1794437154921,
       "tag": "0003_account_hotels",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794442268376,
+      "tag": "0004_payment_form",
+      "breakpoints": true
     }
   ]
 }

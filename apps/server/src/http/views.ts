@@ -159,6 +159,7 @@ export function toReservationView(row: ReservationRow): ReservationView {
     reservationStatus: row.reservationStatus,
     classification: row.classification,
     reason: row.reason,
+    paymentForm: row.paymentForm,
     payment: {
       prePaymentFound: row.prePaymentFound,
       chargedAt: iso(row.chargedAt),

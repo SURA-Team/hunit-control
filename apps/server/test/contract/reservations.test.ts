@@ -27,6 +27,7 @@ interface ReservationBody {
   guestName: string | null;
   classification: string;
   reservationStatus: string;
+  paymentForm: string | null;
   totalAmount: string | null;
   payment: Record<string, unknown>;
   tracking: { notFoundSince: string | null; changedFields: string[] };
@@ -65,6 +66,9 @@ const hotelR2: FakeHotel = {
       listing: { checkIn: '2026-11-06' },
       detail: reservationDetails.alreadyCharged({ chargedAmount: '1234.50' }),
     }),
+    // Sem pré-pagamento (research R-22): faturada e cobrar na maquininha.
+    reservation('F1', { detail: reservationDetails.invoiced() }),
+    reservation('M1', { detail: reservationDetails.chargeAtTerminal() }),
   ],
 };
 
@@ -114,7 +118,16 @@ async function numbers(query: string): Promise<string[]> {
 
 describe('GET /v1/reservations (FR-020)', () => {
   it('lista todas as reservas, em ordem de hotel e número, no formato do contrato', async () => {
-    expect(await numbers('')).toEqual(['R1/258-1', 'R1/C1', 'R1/P1', 'R1/P2', 'R1/X1', 'R2/C2']);
+    expect(await numbers('')).toEqual([
+      'R1/258-1',
+      'R1/C1',
+      'R1/P1',
+      'R1/P2',
+      'R1/X1',
+      'R2/C2',
+      'R2/F1',
+      'R2/M1',
+    ]);
   });
 
   it('nível consulta (reader) também lista', async () => {
@@ -149,6 +162,11 @@ describe('GET /v1/reservations (FR-020)', () => {
     ).toEqual(['R1/258-1', 'R1/X1']);
   });
 
+  it('faturadas e a cobrar na maquininha (research R-22)', async () => {
+    expect(await numbers('?classification=invoiced')).toEqual(['R2/F1']);
+    expect(await numbers('?classification=charge_at_terminal')).toEqual(['R2/M1']);
+  });
+
   it('"não encontrada na última verificação" (notFound)', async () => {
     expect(await numbers('?notFound=true')).toEqual(['R1/X1']);
     expect(await numbers('?notFound=false&hotelCode=R1')).toEqual([
@@ -160,7 +178,7 @@ describe('GET /v1/reservations (FR-020)', () => {
   });
 
   it('por execução: só o que ela observou', async () => {
-    expect(await numbers(`?executionId=${firstExecutionId}`)).toHaveLength(6);
+    expect(await numbers(`?executionId=${firstExecutionId}`)).toHaveLength(8);
     expect(await numbers(`?executionId=${secondExecutionId}`)).toEqual([
       'R1/258-1',
       'R1/C1',
@@ -183,7 +201,7 @@ describe('GET /v1/reservations (FR-020)', () => {
     let cursor: string | null = null;
     let pages = 0;
     do {
-      const query: string = `?limit=4${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const query: string = `?limit=5${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
       const body: ListBody = (await list(query)).json<ListBody>();
       seen.push(...body.items.map((item) => `${item.hotelCode}/${item.reservationNumber}`));
       cursor = body.nextCursor;
@@ -257,6 +275,31 @@ describe('GET /v1/reservations/{hotelCode}/{reservationNumber}', () => {
   it('reserva inexistente → 404', async () => {
     const response = await get('R1', 'NAO-EXISTE');
     expect(response.statusCode).toBe(404);
+  });
+
+  it('devolve a forma de pagamento informada pelo Hunit (FR-016, R-22)', async () => {
+    expect((await get('R2', 'M1')).json()).toMatchObject({
+      classification: 'charge_at_terminal',
+      paymentForm: 'cartão de crédito',
+      payment: { prePaymentFound: false },
+    });
+    expect((await get('R2', 'F1')).json()).toMatchObject({
+      classification: 'invoiced',
+      paymentForm: 'Faturado',
+    });
+    expect((await get('R2', 'C2')).json<ReservationBody>().paymentForm).toBeNull();
+  });
+
+  it('reserva gravada antes com "não é cartão virtual" (obsoleta) continua no contrato', async () => {
+    await test.database.db
+      .update(reservations)
+      .set({ classification: 'not_virtual_card' })
+      .where(eq(reservations.reservationNumber, 'F1'));
+
+    const response = await get('R2', 'F1');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<ReservationBody>().classification).toBe('not_virtual_card');
   });
 });
 

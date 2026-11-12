@@ -123,6 +123,15 @@ const EMPTY_PAYMENT: ReservationPayment = {
   prePaymentMessage: null,
 };
 
+/** Sinais de uma reserva sem pré-pagamento; a forma de pagamento decide (FR-013, regra 2). */
+const noPrePayment = {
+  prePaymentPresent: false,
+  chargeRecordPresent: false,
+  chargeActionVisible: false,
+  chargeFailed: false,
+  validationOnly: false,
+} as const;
+
 /** Detalhes prontos para as situações de cobrança mais comuns (FR-013). */
 export const reservationDetails = {
   /** Pré-pagamento sem cobrança e com a ação de cobrar disponível (é o padrão). */
@@ -179,14 +188,18 @@ export const reservationDetails = {
     validationOnly: false,
     payment: { prePaymentState: 'Fail', prePaymentMessage: message },
   }),
-  /** Reserva sem indicação de pré-pagamento. */
-  notVirtualCard: (): FakeDetail => ({
-    prePaymentPresent: false,
-    chargeRecordPresent: false,
-    chargeActionVisible: false,
-    chargeFailed: false,
-    validationOnly: false,
+  /** Sem pré-pagamento e forma "faturado" (research R-22). */
+  invoiced: (): FakeDetail => ({
+    ...noPrePayment,
+    paymentForm: { kind: 'invoiced', label: 'Faturado' },
   }),
+  /** Sem pré-pagamento e forma "cartão de crédito": cobrar na maquininha (research R-22). */
+  chargeAtTerminal: (): FakeDetail => ({
+    ...noPrePayment,
+    paymentForm: { kind: 'credit_card', label: 'cartão de crédito' },
+  }),
+  /** Sem pré-pagamento e sem forma de pagamento informada (research R-22). */
+  noCardNoForm: (): FakeDetail => ({ ...noPrePayment, paymentForm: null }),
   /** Detalhe em formato não reconhecido: nada pôde ser determinado. */
   unrecognized: (): FakeDetail => ({
     structureRecognized: false,
@@ -223,6 +236,7 @@ function toSnapshot(reservation: FakeReservation, detail: FakeDetail): Reservati
     chargeFailed: null,
     validationOnly: null,
     reservationStatus: reservation.reservationStatus ?? 'active',
+    paymentForm: null,
     ...flags,
     payment: { ...EMPTY_PAYMENT, ...payment },
     listing: fakeListing(reservation.listing),

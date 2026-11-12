@@ -201,12 +201,15 @@ async function main(): Promise<number> {
         classification = classifyReservation(item.reservationNumber, null, status).classification;
       } else if (toOpen.includes(item)) {
         try {
-          const { snapshot } = await gateway.readReservation(hotel.code, item);
+          const { snapshot, evidence } = await gateway.readReservation(hotel.code, item);
           const result = classifyReservation(item.reservationNumber, snapshot, status);
           classification = result.classification;
           status = result.reservationStatus;
+          // Sem pré-pagamento, a forma de pagamento decide (research R-22): mostra como veio.
+          const form =
+            snapshot.prePaymentPresent === false ? ` — forma: ${rawPaymentForm(evidence)}` : '';
           out(
-            `  ${item.reservationNumber} — ${STATUS_LABELS[status]} — ${CLASSIFICATION_LABELS[classification]}`,
+            `  ${item.reservationNumber} — ${STATUS_LABELS[status]} — ${CLASSIFICATION_LABELS[classification]}${form}`,
           );
         } catch (error) {
           if (!(error instanceof HunitError) || error.code !== 'screen_not_recognized') throw error;
@@ -252,6 +255,24 @@ async function main(): Promise<number> {
 
   if (saveDir) out(`\nRespostas salvas em: ${saveDir} (têm dados de hóspedes; não versionar).`);
   return exitCode;
+}
+
+/**
+ * Forma de pagamento como veio na resposta do detalhe — rótulo e código —, para conferir na
+ * captura o código de "faturado" (research R-22, "A verificar"). Não mostra dados do hóspede.
+ */
+function rawPaymentForm(evidence: { response?: string } | null | undefined): string {
+  try {
+    const body = JSON.parse(evidence?.response ?? 'null') as {
+      paymentTypeId?: unknown;
+      totals?: { paymentTypeLabel?: unknown } | null;
+    } | null;
+    const label = body?.totals?.paymentTypeLabel;
+    const id = body?.paymentTypeId;
+    return `rótulo ${typeof label === 'string' ? `"${label}"` : 'vazio'}, código ${typeof id === 'number' ? id : 'vazio'}`;
+  } catch {
+    return 'não foi possível ler';
+  }
 }
 
 async function chooseHotel(hotels: readonly HunitHotel[], code: string | undefined) {

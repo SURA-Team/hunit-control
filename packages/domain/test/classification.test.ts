@@ -2,7 +2,11 @@
  * Regras de classificação (FR-013, FR-014, FR-014a, FR-015) — tasks.md, T036.
  */
 import { describe, expect, it } from 'vitest';
-import { classifyReservation, isHotelbeds258 } from '../src/classification.js';
+import {
+  CLASSIFICATION_REASONS,
+  classifyReservation,
+  isHotelbeds258,
+} from '../src/classification.js';
 import type { ReservationSnapshot } from '../src/types.js';
 
 /** Detalhe de uma reserva pendente de cobrança; cada teste muda só o que importa. */
@@ -16,6 +20,7 @@ function snapshot(overrides: Partial<ReservationSnapshot> = {}): ReservationSnap
     chargeFailed: false,
     validationOnly: false,
     reservationStatus: 'active',
+    paymentForm: null,
     payment: {
       chargedAt: null,
       chargedBy: null,
@@ -42,6 +47,8 @@ function snapshot(overrides: Partial<ReservationSnapshot> = {}): ReservationSnap
 }
 
 const charged = { chargeRecordPresent: true, chargeActionVisible: false } as const;
+const invoicedForm = { kind: 'invoiced', label: 'Faturado' } as const;
+const creditCardForm = { kind: 'credit_card', label: 'cartão de crédito' } as const;
 const validated = { validationOnly: true, chargeActionVisible: false } as const;
 
 describe('regra 1 — Hotelbeds "258-"', () => {
@@ -65,12 +72,17 @@ describe('regra 1 — Hotelbeds "258-"', () => {
 });
 
 describe('ordem das regras 2 a 7', () => {
-  it('2 — sem pré-pagamento → não é cartão virtual, mesmo com os outros sinais', () => {
+  it('2 — sem pré-pagamento, a forma de pagamento decide, mesmo com os outros sinais', () => {
     const result = classifyReservation(
       '1001',
-      snapshot({ prePaymentPresent: false, chargeFailed: true, chargeRecordPresent: true }),
+      snapshot({
+        prePaymentPresent: false,
+        chargeFailed: true,
+        chargeRecordPresent: true,
+        paymentForm: creditCardForm,
+      }),
     );
-    expect(result.classification).toBe('not_virtual_card');
+    expect(result.classification).toBe('charge_at_terminal');
   });
 
   it('3 — falha de cobrança vence o registro de cobrança e a ação de cobrar', () => {
@@ -150,9 +162,79 @@ describe('FR-015 — null em campo decisivo nunca presume cobrança', () => {
   it('null num campo que a regra aplicada não usa não muda o resultado', () => {
     const result = classifyReservation(
       '1001',
-      snapshot({ prePaymentPresent: false, chargeFailed: null, chargeActionVisible: null }),
+      snapshot({
+        prePaymentPresent: false,
+        chargeFailed: null,
+        chargeActionVisible: null,
+        paymentForm: invoicedForm,
+      }),
     );
-    expect(result.classification).toBe('not_virtual_card');
+    expect(result.classification).toBe('invoiced');
+  });
+});
+
+describe('regra 2 — reserva sem pré-pagamento, pela forma de pagamento (research R-22)', () => {
+  const noCard = (paymentForm: ReservationSnapshot['paymentForm']) =>
+    classifyReservation('1001', snapshot({ prePaymentPresent: false, paymentForm }));
+
+  it('"faturado" → faturada, sem exigir ação', () => {
+    expect(noCard(invoicedForm)).toMatchObject({
+      classification: 'invoiced',
+      reason: CLASSIFICATION_REASONS.invoiced,
+    });
+  });
+
+  it('"cartão de crédito" → cobrar na maquininha', () => {
+    expect(noCard(creditCardForm)).toMatchObject({
+      classification: 'charge_at_terminal',
+      reason: CLASSIFICATION_REASONS.chargeAtTerminal,
+    });
+  });
+
+  it('forma não informada → erro de análise (FR-015)', () => {
+    expect(noCard(null)).toMatchObject({
+      classification: 'analysis_error',
+      reason: CLASSIFICATION_REASONS.paymentFormMissing,
+    });
+  });
+
+  it('forma desconhecida → erro de análise citando a forma', () => {
+    const result = noCard({ kind: 'unrecognized', label: 'Pix' });
+
+    expect(result.classification).toBe('analysis_error');
+    expect(result.reason).toBe(`${CLASSIFICATION_REASONS.paymentFormUnknown} Pix.`);
+  });
+
+  it.each([invoicedForm, creditCardForm, null])(
+    'com pré-pagamento, a forma de pagamento não muda nada (%j)',
+    (paymentForm) => {
+      expect(classifyReservation('1001', snapshot({ paymentForm })).classification).toBe(
+        'virtual_card_pending_charge',
+      );
+      expect(
+        classifyReservation('1001', snapshot({ ...charged, paymentForm })).classification,
+      ).toBe('virtual_card_already_charged');
+    },
+  );
+
+  it.each([
+    ['faturada', invoicedForm, 'invoiced'],
+    ['a cobrar na maquininha', creditCardForm, 'charge_at_terminal'],
+  ] as const)(
+    'cancelada e %s recebe a mesma classificação da ativa (FR-014a)',
+    (_, form, expected) => {
+      const cancelled = classifyReservation(
+        '1001',
+        snapshot({ prePaymentPresent: false, paymentForm: form, reservationStatus: 'cancelled' }),
+      );
+      expect(cancelled).toMatchObject({ classification: expected, reservationStatus: 'cancelled' });
+    },
+  );
+
+  it('"não é cartão virtual" nunca é produzida', () => {
+    for (const paymentForm of [invoicedForm, creditCardForm, null] as const) {
+      expect(noCard(paymentForm).classification).not.toBe('not_virtual_card');
+    }
   });
 });
 
@@ -195,6 +277,12 @@ describe('FR-014 — motivo sempre preenchido', () => {
     ['1001', null],
     ['1001', snapshot({ structureRecognized: false })],
     ['1001', snapshot({ prePaymentPresent: false })],
+    ['1001', snapshot({ prePaymentPresent: false, paymentForm: invoicedForm })],
+    ['1001', snapshot({ prePaymentPresent: false, paymentForm: creditCardForm })],
+    [
+      '1001',
+      snapshot({ prePaymentPresent: false, paymentForm: { kind: 'unrecognized', label: 'Pix' } }),
+    ],
     ['1001', snapshot({ chargeFailed: true })],
     ['1001', snapshot(charged)],
     ['1001', snapshot(validated)],

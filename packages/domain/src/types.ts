@@ -10,7 +10,10 @@
  * Situação de cobrança de uma reserva (FR-013), na ordem em que as regras são aplicadas.
  *
  * - `ignored_hotelbeds_258`: número começa com "258-"; a reserva não é aberta.
- * - `not_virtual_card`: sem indicação de pré-pagamento.
+ * - `invoiced`: sem pré-pagamento e forma de pagamento "faturado": não exige ação (R-22).
+ * - `charge_at_terminal`: sem pré-pagamento e forma "cartão de crédito": cobrar na maquininha.
+ * - `not_virtual_card`: **obsoleta** — não é mais produzida; só aparece em registros gravados antes
+ *   da R-22 (o banco e o contrato a mantêm para esse histórico).
  * - `virtual_card_charge_error`: o estado atual do pré-pagamento indica falha de cobrança.
  * - `virtual_card_already_charged`: há registro de cobrança ("Cobrado em").
  * - `virtual_card_validated_only`: o cartão foi apenas validado ("Validado em"), sem cobrança.
@@ -19,6 +22,8 @@
  */
 export const CLASSIFICATIONS = [
   'ignored_hotelbeds_258',
+  'invoiced',
+  'charge_at_terminal',
   'not_virtual_card',
   'virtual_card_charge_error',
   'virtual_card_already_charged',
@@ -72,6 +77,20 @@ export interface ReservationPayment {
   prePaymentMessage: string | null;
 }
 
+/**
+ * Forma de pagamento informada pelo Hunit (research R-22). Decide a situação das reservas sem
+ * pré-pagamento (FR-013, regra 2).
+ *
+ * - `invoiced`: "faturado" — o canal paga por fatura.
+ * - `credit_card`: "cartão de crédito" — o comercial cobra na maquininha.
+ * - `unrecognized`: informada, mas fora das conhecidas (ou contraditória).
+ */
+export interface PaymentForm {
+  kind: 'invoiced' | 'credit_card' | 'unrecognized';
+  /** Como o Hunit informa (o rótulo, ou o código se o rótulo vier vazio). */
+  label: string;
+}
+
 /** Dados de uma reserva como aparecem na listagem do Hunit (FR-016). */
 export interface ReservationListing {
   guestName: string | null;
@@ -106,6 +125,8 @@ export interface ReservationSnapshot {
   /** O último evento foi só a validação do cartão ("Validado em"), sem cobrança. */
   validationOnly: boolean | null;
   reservationStatus: ReservationStatus;
+  /** Forma de pagamento; `null` = não informada pelo Hunit. */
+  paymentForm: PaymentForm | null;
   payment: ReservationPayment;
   listing: ReservationListing;
 }

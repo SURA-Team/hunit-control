@@ -98,7 +98,7 @@ describe('hotel concluído (FR-011 a FR-019)', () => {
         reservation('1002', { detail: reservationDetails.alreadyCharged() }),
         reservation('1003', { detail: reservationDetails.validatedOnly() }),
         reservation('1004', { detail: reservationDetails.chargeError() }),
-        reservation('1005', { detail: reservationDetails.notVirtualCard() }),
+        reservation('1005', { detail: reservationDetails.invoiced() }),
         reservation('1006', {
           reservationStatus: 'cancelled',
           detail: reservationDetails.alreadyCharged(),
@@ -127,7 +127,7 @@ describe('hotel concluído (FR-011 a FR-019)', () => {
       ['1002', 'virtual_card_already_charged', 'active'],
       ['1003', 'virtual_card_validated_only', 'active'],
       ['1004', 'virtual_card_charge_error', 'active'],
-      ['1005', 'not_virtual_card', 'active'],
+      ['1005', 'invoiced', 'active'],
       ['1006', 'virtual_card_already_charged', 'cancelled'],
       ['1008', 'analysis_error', 'active'], // detalhe sem situação: vale a da listagem
       ['258-7', 'ignored_hotelbeds_258', 'cancelled'],
@@ -174,7 +174,7 @@ describe('hotel concluído (FR-011 a FR-019)', () => {
         virtual_card_already_charged: 2,
         virtual_card_validated_only: 1,
         virtual_card_charge_error: 1,
-        not_virtual_card: 1,
+        invoiced: 1,
         analysis_error: 1,
         ignored_hotelbeds_258: 1,
       },
@@ -201,6 +201,50 @@ describe('hotel concluído (FR-011 a FR-019)', () => {
     expect(types).toContain('hotel_completed');
     // Nome do hóspede nunca vai para os eventos.
     expect(events.some((event) => event.message.includes('Hóspede de Teste'))).toBe(false);
+  });
+
+  it('reserva sem pré-pagamento: faturada, cobrar na maquininha ou erro de análise, pela forma de pagamento (R-22)', async () => {
+    const h = await harness({
+      scenario: {
+        hotels: [
+          {
+            code: 'A9',
+            reservations: [
+              reservation('901', { detail: reservationDetails.invoiced() }),
+              reservation('902', { detail: reservationDetails.chargeAtTerminal() }),
+              reservation('903', { detail: reservationDetails.noCardNoForm() }),
+            ],
+          },
+        ],
+      },
+    });
+
+    const execution = await run(h);
+
+    expect(
+      (await reservationsOf('A9')).map((row) => [
+        row.reservationNumber,
+        row.classification,
+        row.paymentForm,
+        row.prePaymentFound,
+      ]),
+    ).toEqual([
+      ['901', 'invoiced', 'Faturado', false],
+      ['902', 'charge_at_terminal', 'cartão de crédito', false],
+      ['903', 'analysis_error', null, false],
+    ]);
+    expect(await hotelRun(execution.id, 'A9')).toMatchObject({
+      status: 'completed',
+      counts: { invoiced: 1, charge_at_terminal: 1, analysis_error: 1 },
+    });
+    // A reserva sem forma de pagamento vai para revisão com evidência (spec, US2 cenário 13).
+    const proofs = await database.db
+      .select()
+      .from(evidence)
+      .where(eq(evidence.executionId, execution.id));
+    expect(proofs).toEqual([
+      expect.objectContaining({ reservationNumber: '903', kind: 'classification_failure' }),
+    ]);
   });
 
   it('situação não identificada: classifica a cobrança e registra evidência (FR-014a)', async () => {
@@ -549,6 +593,48 @@ describe('verificações seguintes (FR-018, FR-018a)', () => {
     await run(h);
     const [third] = (await reservationsOf('K1')).filter((row) => row.reservationNumber === '3');
     expect(third).toMatchObject({ notFoundSince: null, verificationCount: 2 });
+  });
+
+  it('"cobrar na maquininha" que ganha pré-pagamento depois: muda de situação e guarda a anterior (FR-018b)', async () => {
+    const hotel: FakeHotel = {
+      code: 'K9',
+      reservations: [reservation('91', { detail: reservationDetails.chargeAtTerminal() })],
+    };
+    const h = await harness({ scenario: { hotels: [hotel] } });
+    const first = await run(h);
+
+    // A reserva foi migrada (ou as credenciais da adquirente cadastradas): agora tem pré-pagamento.
+    hotel.reservations = [reservation('91')];
+    const second = await run(h);
+
+    const [row] = await reservationsOf('K9');
+    expect(row).toMatchObject({
+      classification: 'virtual_card_pending_charge',
+      statusChanged: true,
+      previousClassification: 'charge_at_terminal',
+      verificationCount: 2,
+      lastExecutionId: second.id,
+      paymentForm: null,
+    });
+    expect(row?.changedFields).toEqual(
+      expect.arrayContaining(['classification', 'prePaymentFound', 'paymentForm']),
+    );
+    expect(row?.firstVerifiedAt.getTime()).toBeLessThan(row?.lastVerifiedAt.getTime() ?? 0);
+    // O que a primeira execução observou continua registrado.
+    const observations = await database.db
+      .select()
+      .from(reservationObservations)
+      .where(eq(reservationObservations.reservationNumber, '91'));
+    expect(
+      observations
+        .map((observation) => [observation.executionId, observation.classification])
+        .sort(),
+    ).toEqual(
+      [
+        [first.id, 'charge_at_terminal'],
+        [second.id, 'virtual_card_pending_charge'],
+      ].sort(),
+    );
   });
 
   it('hotel que falha não marca reservas como não encontradas', async () => {

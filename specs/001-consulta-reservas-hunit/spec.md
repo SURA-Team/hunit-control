@@ -184,8 +184,8 @@ Hunit.
     com motivo e evidência.
 14. **Given** uma reserva classificada como "cobrar na maquininha", **When** uma verificação
     seguinte encontra pré-pagamento nela, **Then** ela passa para a situação correspondente (ex.:
-    "pendente de cobrança"), a mudança fica no histórico com a classificação anterior e nenhum
-    outro dado da reserva é apagado.
+    "pendente de cobrança"), a mudança fica no histórico com a classificação anterior e a reserva
+    e o seu histórico continuam gravados (FR-018b).
 
 ---
 
@@ -372,9 +372,11 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
   MUST ser registrada como mudança, com o momento em que foi detectada.
 - **FR-018b**: Uma mudança de classificação (ex.: de "cobrar na maquininha" para "pendente de
   cobrança", quando o pré-pagamento aparece depois) MUST ser registrada no histórico (FR-018), com a
-  classificação anterior, sem apagar nem substituir os demais dados da reserva, que continua
-  identificada por hotel + número (FR-017). Assim, registros feitos fora do Hunit e ligados à
-  reserva (ex.: comprovante de cobrança, spec das tratativas) continuam valendo.
+  classificação anterior, sem apagar a reserva nem o seu histórico (primeira verificação, contagem,
+  classificação anterior e momento da mudança); os dados lidos do Hunit passam a refletir a última
+  verificação. A reserva continua identificada por hotel + número (FR-017). Assim, registros feitos
+  fora do Hunit e ligados à reserva (ex.: comprovante de cobrança, spec das tratativas) continuam
+  valendo.
 - **FR-018a**: Quando um hotel for concluído com sucesso e uma reserva já gravada desse hotel, com
   check-in dentro do período consultado, não aparecer no resultado, o sistema MUST marcá-la como
   "não encontrada na última verificação", com o momento da marcação, mantendo inalterados sua
