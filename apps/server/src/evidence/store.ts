@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { and, desc, eq, gt } from 'drizzle-orm';
 import type { Database } from '../persistence/db.js';
 import { evidence, type EvidenceKind } from '../persistence/schema.js';
 import type { SecretRegistry } from '../secrets.js';
@@ -8,6 +9,8 @@ import { hasEvidenceMaterial, type EvidenceMaterial } from './material.js';
 import { sanitizeHtml } from './sanitize.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type EvidenceRow = typeof evidence.$inferSelect;
 
 export interface NewEvidence {
   executionId: string;
@@ -112,6 +115,19 @@ export class EvidenceStore {
     }
 
     return stored;
+  }
+
+  /**
+   * Evidências de uma execução ainda dentro do prazo de retenção, das mais recentes para as mais
+   * antigas (specs/002, FR-024). As vencidas não aparecem, mesmo antes de a rotina diária
+   * removê-las.
+   */
+  async listByExecution(executionId: string): Promise<EvidenceRow[]> {
+    return this.options.db
+      .select()
+      .from(evidence)
+      .where(and(eq(evidence.executionId, executionId), gt(evidence.expiresAt, this.now())))
+      .orderBy(desc(evidence.createdAt), desc(evidence.id));
   }
 
   /**

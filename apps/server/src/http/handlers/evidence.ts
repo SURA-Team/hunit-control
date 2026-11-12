@@ -1,14 +1,17 @@
 import { readFile } from 'node:fs/promises';
-import type { operations } from '@hunit/contracts';
+import type { components, operations } from '@hunit/contracts';
 import { eq } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { EvidenceStore } from '../../evidence/store.js';
+import type { EvidenceRow, EvidenceStore } from '../../evidence/store.js';
 import type { Database } from '../../persistence/db.js';
+import { findExecution } from '../../persistence/executions-repo.js';
 import { evidence } from '../../persistence/schema.js';
 import { ProblemError } from '../problem.js';
 
 type EvidenceParams = operations['getEvidenceFile']['parameters']['path'];
 type EvidenceFile = EvidenceParams['file'];
+type ExecutionParams = operations['listExecutionEvidence']['parameters']['path'];
+type EvidenceSummaryView = components['schemas']['EvidenceSummary'];
 
 /** Coluna e tipo de conteúdo de cada arquivo de uma evidência. */
 const FILES: Readonly<
@@ -30,10 +33,40 @@ function isMissingFile(error: unknown): boolean {
   return (error as { code?: unknown } | null)?.code === 'ENOENT';
 }
 
+/** Evidência no formato do contrato, com os arquivos que ela tem (specs/002, FR-024). */
+function toEvidenceSummary(row: EvidenceRow): EvidenceSummaryView {
+  const files = (Object.keys(FILES) as EvidenceFile[]).filter(
+    (file) => row[FILES[file].column] !== null,
+  );
+  return {
+    id: row.id,
+    hotelCode: row.hotelCode,
+    reservationNumber: row.reservationNumber,
+    kind: row.kind,
+    reason: row.reason,
+    files,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
+  };
+}
+
 export function createEvidenceHandlers(dependencies: EvidenceHandlerDependencies) {
   const now = dependencies.now ?? (() => new Date());
 
   return {
+    /**
+     * GET /v1/executions/{executionId}/evidence — evidências de falha da execução, das mais
+     * recentes para as mais antigas (specs/002, FR-024). Disponível para os dois perfis.
+     */
+    async listExecutionEvidence(request: FastifyRequest) {
+      const { executionId } = request.params as ExecutionParams;
+      if (!(await findExecution(dependencies.db, executionId))) {
+        throw new ProblemError('not_found', 'Execução não encontrada.');
+      }
+      const rows = await dependencies.evidence.listByExecution(executionId);
+      return { items: rows.map(toEvidenceSummary) };
+    },
+
     /** GET /v1/evidence/{evidenceId}/{file} — baixa um arquivo de evidência (FR-024, FR-025). */
     async getEvidenceFile(request: FastifyRequest, reply: FastifyReply) {
       const { evidenceId, file } = request.params as EvidenceParams;

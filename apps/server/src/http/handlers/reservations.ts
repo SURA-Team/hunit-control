@@ -2,7 +2,11 @@ import type { operations } from '@hunit/contracts';
 import type { FastifyRequest } from 'fastify';
 import type { Database } from '../../persistence/db.js';
 import { InvalidCursorError } from '../../persistence/executions-repo.js';
-import { findReservation, listReservations } from '../../persistence/reservations-repo.js';
+import {
+  findReservation,
+  listChannels,
+  listReservations,
+} from '../../persistence/reservations-repo.js';
 import { ProblemError } from '../problem.js';
 import { toReservationView } from '../views.js';
 
@@ -10,6 +14,21 @@ type ListReservationsQuery = NonNullable<operations['listReservations']['paramet
 type ReservationParams = operations['getReservation']['parameters']['path'];
 
 const DEFAULT_PAGE_SIZE = 50;
+/** Tamanho mínimo da busca livre depois de tirar os espaços das pontas (contrato: `q`). */
+const MIN_FREE_TEXT = 2;
+
+/** Busca livre sem espaços nas pontas; curta demais depois disso é recusada. */
+function freeText(q: string | undefined): string | undefined {
+  if (q === undefined) return undefined;
+  const text = q.trim();
+  if (text.length < MIN_FREE_TEXT) {
+    throw new ProblemError(
+      'validation_error',
+      `A busca (q) precisa de pelo menos ${MIN_FREE_TEXT} caracteres além dos espaços.`,
+    );
+  }
+  return text;
+}
 
 export function createReservationHandlers(dependencies: { db: Database }) {
   const { db } = dependencies;
@@ -25,6 +44,7 @@ export function createReservationHandlers(dependencies: { db: Database }) {
         );
       }
 
+      const q = freeText(query.q);
       try {
         const page = await listReservations(db, {
           executionId: query.executionId,
@@ -34,6 +54,9 @@ export function createReservationHandlers(dependencies: { db: Database }) {
           notFound: query.notFound,
           checkInFrom: query.checkInFrom,
           checkInTo: query.checkInTo,
+          q,
+          channel: query.channel,
+          amount: query.amount,
           limit: query.limit ?? DEFAULT_PAGE_SIZE,
           cursor: query.cursor,
         });
@@ -44,6 +67,11 @@ export function createReservationHandlers(dependencies: { db: Database }) {
         }
         throw error;
       }
+    },
+
+    /** GET /v1/channels — canais das reservas gravadas, para o filtro (specs/002, FR-020). */
+    async listChannels() {
+      return { items: await listChannels(db) };
     },
 
     /** GET /v1/reservations/{hotelCode}/{reservationNumber} — uma reserva (FR-016 a FR-018a). */

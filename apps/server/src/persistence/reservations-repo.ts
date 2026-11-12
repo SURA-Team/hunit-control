@@ -208,6 +208,16 @@ export interface ReservationFilters {
   notFound?: boolean | undefined;
   checkInFrom?: string | undefined;
   checkInTo?: string | undefined;
+  /**
+   * Busca livre (specs/002, FR-020a), já sem espaços nas pontas: número da reserva, transação,
+   * código de autorização ou referência da operadora iguais ao texto, sem diferenciar
+   * maiúsculas; ou o nome do hóspede contendo o texto, sem diferenciar maiúsculas e acentos.
+   */
+  q?: string | undefined;
+  /** Canal exatamente igual (specs/002, FR-020). */
+  channel?: string | undefined;
+  /** Valor total ou valor cobrado iguais, no formato da API: "1234.56" (specs/002, FR-020b). */
+  amount?: string | undefined;
 }
 
 export interface ListReservationsOptions extends ReservationFilters {
@@ -241,6 +251,20 @@ function decodeCursor(cursor: string): [string, string] {
     // Cai no erro abaixo.
   }
   throw new InvalidCursorError();
+}
+
+/**
+ * Condição da busca livre (specs/002, FR-020a). Os códigos comparam o texto inteiro, sem
+ * diferenciar maiúsculas. O nome usa `strpos` em vez de `like`: assim `%` e `_` digitados são
+ * texto, não curinga. Nome nulo (anonimizado, FR-026 da 001) nunca coincide.
+ */
+function freeTextCondition(text: string): SQL {
+  return sql`(lower(${reservations.reservationNumber}) = lower(${text})
+    or lower(${reservations.transactionId}) = lower(${text})
+    or lower(${reservations.authorizationCode}) = lower(${text})
+    or lower(${reservations.processorReference}) = lower(${text})
+    or (${reservations.anonymizedAt} is null
+      and strpos(unaccent(lower(${reservations.guestName})), unaccent(lower(${text}))) > 0))`;
 }
 
 /**
@@ -278,6 +302,15 @@ export async function listReservations(
   if (options.checkInTo !== undefined) {
     conditions.push(sql`${reservations.checkIn} <= ${options.checkInTo}`);
   }
+  if (options.q !== undefined) conditions.push(freeTextCondition(options.q));
+  if (options.channel !== undefined) conditions.push(eq(reservations.channel, options.channel));
+  if (options.amount !== undefined) {
+    const amountCondition = or(
+      eq(reservations.totalAmount, options.amount),
+      eq(reservations.chargedAmount, options.amount),
+    );
+    if (amountCondition) conditions.push(amountCondition);
+  }
   if (options.cursor !== undefined) {
     const [hotelCode, reservationNumber] = decodeCursor(options.cursor);
     conditions.push(
@@ -299,6 +332,15 @@ export async function listReservations(
     items,
     nextCursor: rows.length > options.limit && last ? encodeCursor(last) : null,
   };
+}
+
+/** Canais presentes nas reservas gravadas, em ordem alfabética (specs/002, filtro da FR-020). */
+export async function listChannels(db: Database): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ channel: reservations.channel })
+    .from(reservations)
+    .orderBy(asc(reservations.channel));
+  return rows.map((row) => row.channel);
 }
 
 export async function findReservation(
