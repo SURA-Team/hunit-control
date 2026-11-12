@@ -21,7 +21,7 @@ export default defineConfig({
           // Com `sandbox: true`, o preload precisa ser CommonJS num arquivo único (R-02).
           format: 'cjs',
           entryFileNames: '[name].cjs',
-          inlineDynamicImports: true,
+          codeSplitting: false,
         },
       },
     },

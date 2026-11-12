@@ -134,6 +134,7 @@ function toPublicConfig(config: StoredConfig): PublicConfig {
   };
   return {
     serverUrl: config.serverUrl,
+    certificatePem: config.certificatePem,
     certificate,
     hasApiKey: config.apiKeyCiphertext.length > 0,
     preferences: config.preferences,

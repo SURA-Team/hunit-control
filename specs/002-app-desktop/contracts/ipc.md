@@ -40,6 +40,7 @@ interface ConnectionState {
 
 interface PublicConfig {                // o que a interface pode ver da configuração
   serverUrl: string;
+  certificatePem: string;               // o certificado raiz é público; permite testar de novo sem escolher o arquivo
   certificate: CertificateInfo;
   hasApiKey: boolean;                   // a chave em si nunca sai do principal
   preferences: { soundEnabled: boolean; idleHours: number };

@@ -83,6 +83,8 @@ export interface Preferences {
 /** O que a interface pode ver da configuração: a chave nunca sai do principal. */
 export interface PublicConfig {
   serverUrl: string;
+  /** Certificado raiz guardado (público): permite testar de novo sem escolher o arquivo. */
+  certificatePem: string;
   certificate: CertificateInfo;
   hasApiKey: boolean;
   preferences: Preferences;
@@ -206,45 +208,45 @@ export interface EvidenceSaveInput {
 
 export interface HunitApi {
   app: {
-    info(): Promise<Result<{ version: string }>>;
+    info: () => Promise<Result<{ version: string }>>;
   };
   connection: {
-    getState(): Promise<Result<ConnectionState>>;
-    getConfig(): Promise<Result<PublicConfig | null>>;
-    pickCertificate(): Promise<Result<PickedCertificate | null>>;
-    test(input: ConnectionInput): Promise<Result<ClientIdentity>>;
-    save(input: ConnectionInput): Promise<Result<PublicConfig>>;
-    remove(): Promise<Result<void>>;
+    getState: () => Promise<Result<ConnectionState>>;
+    getConfig: () => Promise<Result<PublicConfig | null>>;
+    pickCertificate: () => Promise<Result<PickedCertificate | null>>;
+    test: (input: ConnectionInput) => Promise<Result<ClientIdentity>>;
+    save: (input: ConnectionInput) => Promise<Result<PublicConfig>>;
+    remove: () => Promise<Result<void>>;
     onState(callback: (state: ConnectionState) => void): Unsubscribe;
   };
   preferences: {
-    set(input: PreferencesInput): Promise<Result<Preferences>>;
+    set: (input: PreferencesInput) => Promise<Result<Preferences>>;
   };
   attention: {
-    test(): Promise<Result<void>>;
+    test: () => Promise<Result<void>>;
     onPlaySound(callback: () => void): Unsubscribe;
   };
   credentials: {
-    status(): Promise<Result<CredentialsStatus>>;
-    set(input: CredentialsInput): Promise<Result<CredentialsStatus>>;
-    clear(): Promise<Result<CredentialsStatus>>;
+    status: () => Promise<Result<CredentialsStatus>>;
+    set: (input: CredentialsInput) => Promise<Result<CredentialsStatus>>;
+    clear: () => Promise<Result<CredentialsStatus>>;
     onCleared(callback: (event: { reason: CredentialsClearReason }) => void): Unsubscribe;
   };
   activity: {
-    ping(): void;
+    ping: () => void;
   };
   hotels: {
-    list(): Promise<Result<Hotel[]>>;
+    list: () => Promise<Result<Hotel[]>>;
   };
   executions: {
-    list(input: ExecutionListInput): Promise<Result<Page<ExecutionSummary>>>;
-    get(executionId: string): Promise<Result<Execution>>;
-    start(input: StartExecutionInput): Promise<Result<Execution>>;
-    resume(executionId: string): Promise<Result<Execution>>;
-    cancel(executionId: string): Promise<Result<Execution>>;
-    sendToken(input: SendTokenInput): Promise<Result<void>>;
-    watch(executionId: string): Promise<Result<void>>;
-    unwatch(executionId: string): Promise<Result<void>>;
+    list: (input: ExecutionListInput) => Promise<Result<Page<ExecutionSummary>>>;
+    get: (executionId: string) => Promise<Result<Execution>>;
+    start: (input: StartExecutionInput) => Promise<Result<Execution>>;
+    resume: (executionId: string) => Promise<Result<Execution>>;
+    cancel: (executionId: string) => Promise<Result<Execution>>;
+    sendToken: (input: SendTokenInput) => Promise<Result<void>>;
+    watch: (executionId: string) => Promise<Result<void>>;
+    unwatch: (executionId: string) => Promise<Result<void>>;
     onChanged(callback: (event: ExecutionChanged) => void): Unsubscribe;
   };
   twoFactor: {
@@ -252,12 +254,12 @@ export interface HunitApi {
     onClosed(callback: (event: TwoFactorClosed) => void): Unsubscribe;
   };
   evidence: {
-    list(executionId: string): Promise<Result<EvidenceSummary[]>>;
-    save(input: EvidenceSaveInput): Promise<Result<{ savedTo: string } | null>>;
+    list: (executionId: string) => Promise<Result<EvidenceSummary[]>>;
+    save: (input: EvidenceSaveInput) => Promise<Result<{ savedTo: string } | null>>;
   };
   reservations: {
-    list(input: ReservationListInput): Promise<Result<Page<Reservation>>>;
-    get(input: ReservationKey): Promise<Result<Reservation>>;
-    channels(): Promise<Result<string[]>>;
+    list: (input: ReservationListInput) => Promise<Result<Page<Reservation>>>;
+    get: (input: ReservationKey) => Promise<Result<Reservation>>;
+    channels: () => Promise<Result<string[]>>;
   };
 }
