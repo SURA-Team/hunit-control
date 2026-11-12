@@ -25,7 +25,7 @@ executions 0..1───* executions   (retomada: parent_execution_id)
 | `execution_status` | `queued`, `running`, `awaiting_2fa`, `completed`, `failed`, `cancelled` | Constitution IV |
 | `execution_end_reason` | `invalid_credentials`, `invalid_token`, `two_factor_timeout`, `hunit_unavailable`, `hunit_screen_not_recognized`, `session_expired`, `server_restarted`, `cancelled_by_client`, `internal_error` | FR-003, edge cases |
 | `hotel_run_status` | `pending`, `running`, `completed`, `failed`, `cancelled` | FR-021 |
-| `classification` | `ignored_hotelbeds_258`, `invoiced`, `charge_at_terminal`, `virtual_card_charge_error`, `virtual_card_already_charged`, `virtual_card_validated_only`, `virtual_card_pending_charge`, `analysis_error`; e `not_virtual_card`, **obsoleta** (não é mais produzida; só em registros anteriores à R-22) | FR-013, R-22 |
+| `classification` | `ignored_hotelbeds_258`, `invoiced`, `charge_at_terminal`, `cancelled_no_charge`, `virtual_card_charge_error`, `virtual_card_already_charged`, `virtual_card_validated_only`, `virtual_card_pending_charge`, `analysis_error`; e `not_virtual_card`, **obsoleta** (não é mais produzida; só em registros anteriores à R-22) | FR-013, R-22 |
 | `reservation_status` | `active`, `cancelled`, `unknown` | FR-014a |
 | `evidence_kind` | `navigation_failure`, `classification_failure`, `screen_not_recognized`, `reservation_status_unknown` | FR-024 |
 

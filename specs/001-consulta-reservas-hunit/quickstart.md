@@ -111,7 +111,7 @@ estiverem errados (T022). Compare o total que ele mostra com a tela de reservas 
 | Execução de 1 hotel × 1 semana concluída | `GET /v1/reservations?executionId=<id>` lista todas as reservas da listagem do Hunit (SC-001) |
 | Conferência manual de 50 reservas no Hunit | ≥ 98% iguais; nenhuma pendente registrada como cobrada (SC-002) |
 | Reservas sem cartão na amostra (faturadas e de cartão de crédito) | faturada → `invoiced`; cartão de crédito → `charge_at_terminal`; nenhuma a cobrar na maquininha registrada como faturada (SC-002, R-22) |
-| Reserva sem cartão e sem forma de pagamento no Hunit | `analysis_error`, motivo "forma de pagamento não informada" |
+| Reserva sem cartão e sem forma de pagamento no Hunit | ativa: `analysis_error`, motivo "forma de pagamento não informada"; cancelada (cancelamento antecipado ou no-show isento): `cancelled_no_charge` |
 | Reserva "cobrar na maquininha" que ganha pré-pagamento depois | na verificação seguinte, nova situação com `tracking.previousClassification = charge_at_terminal` e o histórico preservado (FR-018b) |
 | Filtro combinado | `?reservationStatus=cancelled&classification=virtual_card_pending_charge` retorna canceladas pendentes |
 | Rodar a mesma execução de novo | `verificationCount` = 2; `firstVerifiedAt` preservado |

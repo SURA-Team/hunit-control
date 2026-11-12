@@ -197,6 +197,20 @@ cartão saem faturada, cobrar na maquininha ou erro de análise. ⛔ HUNIT: a ca
 código de "faturado" e se a forma vem preenchida nas reservas sem cartão; se o código for outro
 número, só a T079 muda (constante e teste).
 
+### Cancelada sem cobrança (esclarecimento 2026-11-12, FR-013 regra 2c/2d, research R-22)
+
+Reserva sem pré-pagamento, sem forma de pagamento e **cancelada** (cancelamento antecipado ou
+no-show isento) → `cancelled_no_charge` ("cancelada sem cobrança"); **ativa** ou situação não
+identificada → continua `analysis_error`. Contrato 1.3.0 (já editado; entra no commit da T086).
+
+**Independent Test**: as 8 reservas reais canceladas sem cartão e sem forma (fixtures da captura de
+2026-11-12) saem `cancelled_no_charge`; uma ativa nas mesmas condições sai `analysis_error`.
+
+- [ ] T083 [P] [US2] Testes em `packages/domain/test/classification.test.ts`: sem pré-pagamento, `paymentForm = null` e situação `cancelled` → `cancelled_no_charge` com motivo próprio (`CLASSIFICATION_REASONS.cancelledNoCharge`); situação `active` → `analysis_error` (`paymentFormMissing`); situação `unknown` no detalhe e `cancelled` na listagem → `cancelled_no_charge` (usa a situação resolvida); situação `unknown` nos dois → `analysis_error`; cancelada com forma "faturado" → `invoiced` e com "cartão de crédito" → `charge_at_terminal`; o caso entra na lista de "motivos diferentes" (FR-014)
+- [ ] T084 [P] [US2] Testes em `apps/server/test/integration/execution-hotels.test.ts` (reserva cancelada sem cartão e sem forma → `cancelled_no_charge` gravada, sem evidência de erro de análise, contagem `cancelled_no_charge: 1`) e em `apps/server/test/contract/reservations.test.ts` (`?classification=cancelled_no_charge` filtra e valida contra o contrato 1.3.0)
+- [ ] T085 [US2] Domínio: `cancelled_no_charge` em `CLASSIFICATIONS` (`packages/domain/src/types.ts`) logo depois de `charge_at_terminal`, na ordem do contrato; em `packages/domain/src/classification.ts`, `decide` recebe a situação resolvida e a regra 2 com forma `null` devolve `cancelled_no_charge` se ela for `cancelled`, senão `analysis_error`; motivo `cancelledNoCharge`: "Reserva cancelada sem pré-pagamento e sem forma de pagamento: cancelamento antecipado ou no-show isento, sem cobrança.". Depende de T083
+- [ ] T086 [US2] Banco, rótulo e fixtures: `cancelled_no_charge` em `classificationEnum` (`apps/server/src/persistence/schema.ts`) na mesma ordem; migration com `pnpm --filter @hunit/server db:generate --name=cancelled_no_charge`, conferindo que só tem `ALTER TYPE ... ADD VALUE 'cancelled_no_charge' BEFORE 'not_virtual_card'`; `CLASSIFICATION_LABELS` com `cancelled_no_charge: 'cancelada sem cobrança'` (`apps/server/src/executions/hotel-collection.ts`); gerar de novo as fixtures reais (`pnpm build` e `hunit:anonymize-fixtures`) para o manifesto esperar `cancelled_no_charge` nas 8 reservas; commit junto com o contrato 1.3.0. Depende de T084 e T085
+
 **Checkpoint**: US1 e US2 funcionam; a consulta de rotina é possível.
 
 ---
@@ -280,6 +294,7 @@ novo token e confirmar que o 1º não é reprocessado; chave `reader` recebe 403
 - **Forma de pagamento (T071–T082, US2)**: testes T071–T075 em paralelo; depois T076 → T077 e
   T078 (domínio), T079 (leitor), T080 (banco) → T081 (gravação, API e commit do contrato 1.2.0);
   T082 depois de T079. Independente da Phase 6; a T020 (captura) confirma o código de "faturado".
+- **Cancelada sem cobrança (T083–T086, US2)**: T083 e T084 em paralelo → T085 → T086.
 - **Polish (Phase 6)**: após as histórias desejadas; T062 exige o Hunit real. Implantação:
   T064 → T065 e T066 → T067 (testes antes); as duas trilhas são independentes entre si e das
   demais tarefas da fase. T060 documenta o que T065 e T067 criarem.

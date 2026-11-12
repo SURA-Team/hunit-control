@@ -28,6 +28,8 @@ forma de pagamento que o Hunit informa no detalhe — faturada (`invoiced`), cob
 (`charge_at_terminal`) ou erro de análise. A camada do Hunit converte `paymentTypeId` e o rótulo da
 forma num valor neutro do `ReservationSnapshot`; o domínio aplica a regra. `not_virtual_card` fica
 obsoleta (não é removida do banco nem do contrato) e o contrato vai a 1.2.0, só com acréscimos.
+Em 2026-11-12, a cancelada sem pré-pagamento e sem forma ganhou a situação "cancelada sem cobrança"
+(`cancelled_no_charge`, contrato 1.3.0); a ativa nessa condição continua erro de análise.
 
 ## Technical Context
 

@@ -862,3 +862,13 @@ anexa o comprovante, na spec das tratativas); não informada ou desconhecida →
   reserva é cancelada; hoje vão para erro de análise (decisão pendente com o usuário). Nenhuma
   reserva de cartão de crédito sem cartão virtual ("cobrar na maquininha") apareceu: o código 1 vem
   de reservas com cartão.
+- **Decisão de 2026-11-12 (cancelada sem cobrança)**: o usuário confirmou que as canceladas sem
+  pré-pagamento e sem forma são cancelamentos antecipados ou no-shows isentos. Nova classificação
+  `cancelled_no_charge` ("cancelada sem cobrança"), regra 2c da FR-013: sem pré-pagamento, forma
+  `null` e situação resolvida `cancelled` (a do detalhe, ou a da listagem quando o detalhe não a
+  identifica). Situação `active` ou `unknown` com forma `null` continua `analysis_error` (2d); forma
+  informada segue a forma, mesmo cancelada. No domínio, `decide` passa a receber a situação
+  resolvida. Banco: `ADD VALUE 'cancelled_no_charge' BEFORE 'not_virtual_card'` (migration só de
+  acréscimo). Contrato 1.2.0 → **1.3.0**, só acréscimo em `Classification` e
+  `ClassificationCounts`. As fixtures reais são geradas de novo: as 8 reservas do manifesto passam a
+  esperar `cancelled_no_charge`.
