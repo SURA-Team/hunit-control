@@ -78,9 +78,11 @@ comercial, relatórios e painéis, e exportação de planilhas.
 - Q: Anexar o comprovante da cobrança na maquininha entra nesta feature? → A: Não; fica na spec das
   tratativas manuais. Mas uma reserva de cartão virtual pode estar sem pré-pagamento só por um
   tempo (não foi migrada, ou as credenciais da adquirente não estavam cadastradas) e voltar a ter
-  pré-pagamento depois de já cobrada na maquininha. Esta feature garante que a mudança de
-  classificação só entra no histórico e não apaga nada da reserva, para o comprovante anexado
-  depois continuar valendo e a reserva não ser cobrada duas vezes (FR-018b).
+  pré-pagamento depois de já cobrada na maquininha. O que importa é esse caso: reserva **já cobrada
+  na maquininha, com comprovante**, que depois aparece como pendente no Hunit — o comprovante não
+  muda e a reserva continua cobrada (regra da spec das tratativas). Nesta feature, a reserva muda
+  de "cobrar na maquininha" para "pendente de cobrança" normalmente, o que é útil para análise; a
+  mudança só entra no histórico, sem apagar a reserva (FR-018b). (Esclarecimento de 2026-11-11.)
 
 ### Session 2026-11-11 (implantação)
 
@@ -250,8 +252,10 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
 - Uma reserva de cartão virtual aparece sem pré-pagamento (não migrada, ou credenciais da
   adquirente não cadastradas) e é classificada como "cobrar na maquininha"; numa verificação
   seguinte o pré-pagamento aparece e ela muda de situação (ex.: "pendente de cobrança"). A mudança
-  fica no histórico (FR-018b); quem trata o comprovante (spec das tratativas) usa esse histórico
-  para não cobrar a reserva de novo.
+  fica no histórico (FR-018b) e é útil para análise. Se a reserva já tinha sido cobrada na
+  maquininha, com comprovante, o comprovante não muda e ela continua cobrada: isso é regra da spec
+  das tratativas, que também precisa evitar que a mudança apareça como "pendente" para o comercial
+  e gere confusão (ex.: cobrança em duplicidade).
 - Uma reserva gravada tem o check-in alterado para fora do período ou deixa de ser "Canal" no
   Hunit: na próxima consulta completa do hotel e período originais, ela é marcada como "não
   encontrada na última verificação" (FR-018a), sem perder a classificação anterior.
