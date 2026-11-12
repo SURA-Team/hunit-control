@@ -32,7 +32,7 @@ funcionar porque o Hunit mudou a UI.
 | `deploy/caddy/Caddyfile` | Proxy HTTPS com a autoridade certificadora interna do Caddy (research R-20) |
 | `deploy/backup/` | `backup.sh` (cópia cifrada do banco) e `restore.sh` (restauração), rodados no container `backup` (research R-21) |
 | `README.md` | Visão geral, implantação no PC de produção, cópia de segurança e restauração |
-| `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento |
+| `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento. **Não é versionado** (está no `.gitignore`): existe só na máquina de quem desenvolve |
 
 O monorepo (pnpm + TypeScript) foi criado pela feature 001; a estrutura detalhada está em
 `specs/001-consulta-reservas-hunit/plan.md`. O app desktop (`apps/desktop`, Electron) ainda não
@@ -68,8 +68,10 @@ Regras:
   (enviada/cobrada com comprovante).
 - `legacy/tests/`: casos de teste úteis como exemplos de regras de negócio.
 
-Não altere nada dentro de `legacy/`. O histórico completo está em
-`github.com/EduardoKipper/automacao-hunit`.
+Não altere nada dentro de `legacy/`. Este repositório é **público** e o legado não faz parte dele:
+a pasta vem de um clone do repositório privado do legado (`automacao-hunit`) dentro de `legacy/`.
+Nunca copie para fora de `legacy/` nomes de hotéis, da empresa ou trechos do legado que os
+contenham. Se a pasta não existir, peça ao usuário; sem ela, use as specs como referência.
 
 ## Segurança e dados (obrigatório)
 

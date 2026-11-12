@@ -27,20 +27,11 @@
 ~$*
 
 # ============================================================
-# Legado (sistema Python antigo — apenas referência)
-# Histórico completo em github.com/EduardoKipper/automacao-hunit
+# Legado (sistema Python antigo — apenas referência, nunca versionado aqui)
+# Fica só na máquina de quem desenvolve: clone o repositório privado do legado em legacy/.
+# Contém nomes de hotéis e da empresa, por isso não entra no repositório público.
 # ============================================================
-legacy/data/
-legacy/config/hotel_mappings.json
-legacy/exports/
-legacy/outputs/
-legacy/executions/
-legacy/screenshots/
-legacy/build/
-legacy/dist/
-legacy/.qa/
-legacy/.agents/
-legacy/.codex/
+legacy/
 
 # ============================================================
 # Logs, execuções e evidências

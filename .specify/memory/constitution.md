@@ -1,7 +1,8 @@
 # HUNIT Control Constitution
 
 Reescrita da automação HUNIT. O sistema legado (Python/PySide) em `legacy/` serve apenas como
-referência de comportamento; nenhum código novo pode depender dele.
+referência de comportamento; nenhum código novo pode depender dele. A pasta não é versionada
+neste repositório (que é público): existe só localmente, a partir do repositório privado do legado.
 
 ## Core Principles
 
@@ -141,4 +142,4 @@ de execução) que aumentaram o custo de manutenção.
 - Toda revisão de plan, tasks e código MUST verificar conformidade com estes princípios.
 - Orientações operacionais para agentes de código ficam em `AGENTS.md`.
 
-**Version**: 1.1.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-11
+**Version**: 1.1.1 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-12
