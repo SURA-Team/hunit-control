@@ -105,6 +105,10 @@ formatos que não interessam e não reconhece `.eml`; as cinco assinaturas acima
 - `treatmentStatus({ hasCurrentRequest, hasCurrentProof })` → `charged` | `sent` | `none` (FR-002).
 - `revertDeadline(endedAt)` = `endedAt` + 30 dias; `isRevertible(document, now)` (FR-013, FR-013a).
 - `effectiveChargedAmount(hunitAmount, manualAmount)` → o do Hunit prevalece quando existe (FR-005).
+- `isPendingCharge(classification, treatmentStatus)` → `acceptsTreatment(classification)` e sem
+  comprovante (`none` ou `sent`): é o filtro "Falta cobrar" (FR-002), aplicado pelo servidor no
+  parâmetro `pendingCharge` da consulta. O filtro por classificação e o resumo das execuções não
+  mudam: mostram o que o Hunit informou.
 
 O servidor usa essas funções ao registrar e ao montar as respostas; o app nunca as reimplementa —
 recebe do servidor o resultado (`treatmentStatus`, `revertibleUntil`, os desfechos do `check`)
@@ -165,8 +169,12 @@ interface recebe um modelo pronto para mostrar.
 
 - **Escolha e leitura**: `dialog.showOpenDialog` (filtros pelas extensões aceitas); o principal
   confere o tamanho antes de ler (arquivos acima de 25 MB são recusados sem serem lidos) e guarda os
-  bytes num mapa em memória, com um id de seleção. A entrada sai do mapa ao confirmar, ao cancelar
-  ou depois de 15 minutos sem uso. Nada é gravado no disco (FR-018a, SC-011) — o envio ao servidor
+  bytes num mapa em memória, com um id de seleção. A entrada sai do mapa quando o envio e o registro
+  terminam (mesmo com reservas ignoradas ou `failed`), ao cancelar ou depois de 15 minutos sem uso.
+  Se o envio do arquivo ou de alguma parte do registro falhar por conexão (servidor indisponível),
+  a entrada **fica** e o app oferece "Tentar de novo" sem escolher o arquivo outra vez (caso-limite
+  da spec); reenviar o mesmo arquivo não duplica nada (R-01) e as reservas já registradas voltam
+  como `ignored`/`same_file`. Nada é gravado no disco (FR-018a, SC-011) — o envio ao servidor
   usa os mesmos bytes.
 - **PDF**: `pdfjs-dist` na interface, desenhando as páginas em `canvas`, com o *worker* empacotado
   pelo Vite (CSP `worker-src 'self'`). O pdf.js não executa os scripts de um PDF por padrão
@@ -213,6 +221,9 @@ reservas no disco, FR-008a).
   "Limpar seleção".
 - Na confirmação, a elegibilidade e os valores vêm do `check` do servidor (R-02), não do que
   estava guardado: uma reserva que mudou depois de marcada aparece como ignorada (FR-006a).
+- Limite de 2 000 reservas (FR-006a): ao passar disso (inclusive pela caixa do cabeçalho), o app
+  marca até o limite e avisa "Selecione no máximo 2 000 reservas". O limite cobre com folga o uso
+  esperado e mantém o lote em no máximo 10 partes de 200 (R-05).
 
 **Causa do problema no sistema anterior**: a seleção ficava presa às linhas do resultado; uma nova
 pesquisa trocava as linhas e descartava as marcas. Separar a seleção do resultado resolve.
@@ -233,7 +244,7 @@ em [contracts/api-changes.md](./contracts/api-changes.md).
 | `PUT` e `DELETE /reservations/{hotel}/{número}/manual-amount` | FR-005 | operador |
 | `GET /reservations/{hotel}/{número}/treatment` (documentos e histórico) | FR-012, FR-015 | os dois |
 | `Reservation.treatment` (situação, documentos atuais, valor manual) | FR-002, FR-015 | os dois |
-| filtro `treatmentStatus` em `GET /reservations`; `amount` passa a achar o valor manual | FR-015 | os dois |
+| filtros `treatmentStatus` e `pendingCharge` ("Falta cobrar") em `GET /reservations`; `amount` passa a achar o valor manual | FR-002, FR-015 | os dois |
 
 As operações que não são `GET` entram em `OPERATOR_ONLY_OPERATIONS` (FR-014, SC-006); o teste que
 já existe confere que nenhuma ficou de fora. O `check` é `POST` por receber uma lista de reservas
@@ -262,3 +273,22 @@ Fixtures de e-mail e PDF são **geradas no teste**, sem dados de hóspedes nem d
 Segue a regra da 002 (R-15): o `packages/contracts/openapi.yaml` passa para a 1.5.0 e é copiado
 para `specs/003-tratativas-manuais/contracts/openapi.yaml` na implementação; a cópia da 002 fica
 congelada na 1.4.0.
+
+## R-13 — Nomes de arquivo e buscas fora dos logs (constitution, "Observabilidade")
+
+**Problema**: o Fastify registra cada requisição com a URL completa, inclusive a query. O nome do
+arquivo vai em `?name=` no envio (R-02) e pode conter o nome do hóspede (FR-016); a busca livre da
+002 (`GET /reservations?q=`) já leva nomes de hóspedes para o log do servidor pelo mesmo caminho.
+A constitution exige logs "sem dados sensíveis".
+
+**Decisão**: o logger do servidor (`apps/server/src/logging.ts`) ganha um serializador de `req` que
+registra método, **caminho sem a query**, id da requisição e o cliente — nunca a query, os
+cabeçalhos nem o corpo. Corrige o envio e a busca de uma vez, sem mudar o contrato. Um teste de
+segurança (`apps/server/test/security/`) faz um envio com nome marcado e uma busca por um nome de
+hóspede fictício e confere que nenhum dos dois aparece no log.
+
+Os números de reserva continuam no caminho de algumas rotas (`/reservations/{hotel}/{número}`):
+não são dados pessoais do hóspede e já eram registrados desde a 001.
+
+**Alternativa considerada**: mandar o nome num cabeçalho (`X-File-Name`) — resolveria só o envio,
+e a busca continuaria vazando.

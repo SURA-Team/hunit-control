@@ -29,6 +29,11 @@ Abordagem técnica (detalhes em [research.md](./research.md)):
 - **App**: pré-visualização montada em memória no processo principal (pdf.js, `postal-mime`,
   `@kenjiuno/msgreader`), sem rede nem cópia em disco; seleção do lote guardada fora do resultado
   da pesquisa, para não se perder ao pesquisar de novo (R-08, R-09).
+- **"Falta cobrar"**: filtro do servidor (`pendingCharge`) com as reservas que exigem cobrança e
+  ainda não têm comprovante; o filtro por classificação continua mostrando o que o Hunit informou
+  (FR-002).
+- **Logs sem a query das requisições**: o nome do arquivo e a busca livre (que pode ter o nome do
+  hóspede, desde a 002) deixam de ir para o log do servidor (R-13).
 - **Contrato 1.4.0 → 1.5.0**, só acréscimos ([contracts/api-changes.md](./contracts/api-changes.md)).
 
 ## Technical Context
@@ -121,7 +126,7 @@ apps/server/src/
 │   ├── schema.ts                   # 4 tabelas e 3 enums novos (data-model §1)
 │   ├── treatments-repo.ts          # NOVO — registrar (transação por reserva), desfazer, reverter, valor, histórico
 │   ├── treatment-files-repo.ts     # NOVO — gravar com deduplicação, ler conteúdo
-│   ├── reservations-repo.ts        # filtro treatmentStatus; amount também no valor manual; resumo da tratativa
+│   ├── reservations-repo.ts        # filtros treatmentStatus e pendingCharge; amount também no valor manual; resumo da tratativa
 │   └── migrations/                 # 0007 gerada pelo db:generate
 ├── http/
 │   ├── app.ts                      # leitor de application/octet-stream só na rota de envio, limite de 25 MiB (R-03)
@@ -129,7 +134,8 @@ apps/server/src/
 │   ├── problem.ts                  # códigos novos (api-changes §1)
 │   ├── views.ts                    # Reservation.treatment, TreatmentDocument, TreatmentEvent
 │   └── handlers/treatments.ts      # NOVO — as 9 operações
-└── maintenance/retention.ts        # purga de 30 dias, purga na anonimização, órfãos (R-07)
+├── maintenance/retention.ts        # purga de 30 dias, purga na anonimização, órfãos (R-07)
+└── logging.ts                      # requisições registradas sem a query: nome do arquivo e busca fora do log (R-13)
 apps/server/test/
 ├── contract/treatments.test.ts     # NOVO
 ├── integration/                    # retenção, concorrência, coletor não toca as tratativas

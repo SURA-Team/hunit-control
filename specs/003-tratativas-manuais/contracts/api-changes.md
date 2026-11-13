@@ -157,7 +157,8 @@ ReservationOutcome:
       '415': # unsupported_file_type
 ```
 
-Enviar de novo um arquivo idêntico devolve o mesmo `fileId` (201), sem gravar outra cópia.
+Enviar de novo um arquivo idêntico devolve o mesmo `fileId` (201), sem gravar outra cópia. O nome
+(`name`) não aparece no log do servidor (research R-13).
 
 ## 4. `POST /v1/treatment-documents/check` — quem aceita, sem gravar (FR-006, FR-006a)
 
@@ -300,7 +301,7 @@ responses:
           items: { $ref: '#/components/schemas/TreatmentEvent' }
 ```
 
-## 11. `GET /v1/reservations` — filtro e busca por valor (FR-015)
+## 11. `GET /v1/reservations` — filtros e busca por valor (FR-002, FR-015)
 
 ```yaml
 - name: treatmentStatus
@@ -309,7 +310,16 @@ responses:
   schema: { type: array, items: { $ref: '#/components/schemas/TreatmentStatus' } }
   style: form
   explode: true
+- name: pendingCharge
+  in: query
+  description: |
+    true = "Falta cobrar": classificação que exige cobrança (FR-003) e sem comprovante
+    (treatmentStatus none ou sent). false = o contrário. Omitido = sem esse filtro. Combinável com
+    os demais (FR-002, data-model §3).
+  schema: { type: boolean }
 ```
+
+Nenhum parâmetro de consulta é registrado no log do servidor (research R-13).
 
 O parâmetro `amount` passa a achar também o valor manual (descrição atualizada: "valor total, valor
 cobrado ou valor cobrado informado à mão").

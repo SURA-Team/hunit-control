@@ -45,6 +45,8 @@ type DocumentPreview =
 interface ApplyResult {
   items: Api.ReservationOutcome[];                           // todas as partes de 200 juntas (R-05)
   failedKeys: Api.ReservationKey[];                          // continuam selecionadas (FR-006a)
+  retryable: boolean;                                        // true = envio interrompido por conexão; o arquivo continua
+                                                             // em memória (mesmo selectionId) para "Tentar de novo" (R-08)
 }
 ```
 
@@ -55,16 +57,17 @@ interface ApplyResult {
 | `treatments.pickFile(input)` | `{ kind }` | `PickedFile \| null` | abre o diálogo com as extensões aceitas; recusa acima de 25 MB **sem ler** (`file_too_large`) e extensões fora da lista (`unsupported_file_type`); `null` = cancelado |
 | `treatments.discardFile(input)` | `{ selectionId }` | `null` | cancelar na pré-visualização: libera a memória, nada é enviado (FR-018) |
 | `treatments.check(input)` | `{ kind, reservations: ReservationKey[] }` (1 a 2 000) | `Api` resposta do `check`, somada entre as partes | `POST /treatment-documents/check` em partes de 200 |
-| `treatments.apply(input)` | `{ selectionId, kind, reservations: ReservationKey[] }` (1 a 2 000) | `ApplyResult` | envia o arquivo (`POST /treatment-files`) e registra em partes de 200; libera a memória no fim, com ou sem falhas |
+| `treatments.apply(input)` | `{ selectionId, kind, reservations: ReservationKey[] }` (1 a 2 000) | `ApplyResult` | envia o arquivo (`POST /treatment-files`) e registra em partes de 200; libera a memória quando tudo foi processado (mesmo com `ignored`/`failed`); se o envio ou uma parte falhar por conexão, **mantém** o arquivo e devolve `retryable: true` — chamar de novo com o mesmo `selectionId` e as reservas que faltaram |
 | `treatments.get(input)` | `{ hotelCode, reservationNumber }` | resposta de `GET …/treatment` | documentos e histórico |
 | `treatments.remove(input)` | `{ documentId }` | `null` | desfazer (a interface pede confirmação antes) |
 | `treatments.revert(input)` | `{ documentId }` | `Api.ReservationTreatment` | |
 | `treatments.setManualAmount(input)` | `{ hotelCode, reservationNumber, amount }` (`"1234.56"`) | `Api.ReservationTreatment` | |
 | `treatments.clearManualAmount(input)` | `{ hotelCode, reservationNumber }` | `Api.ReservationTreatment` | |
 | `treatments.saveDocument(input)` | `{ documentId }` | `{ savedTo: string } \| null` | baixa e abre "Salvar como" com o nome original (FR-009), como `evidence.save` da 002; a interface não recebe o conteúdo |
-| `reservations.list(input)` | filtros da 002 + `treatmentStatus: TreatmentStatus[]` | sem mudança | |
+| `reservations.list(input)` | filtros da 002 + `treatmentStatus: TreatmentStatus[]` + `pendingCharge: boolean` ("Falta cobrar") | sem mudança | |
 
-Limites da entrada: `selectionId` é um UUID que o principal emitiu e ainda guarda (senão
+Limites da entrada: no máximo 2 000 reservas por pedido, o mesmo limite da seleção na tela
+(FR-006a); `selectionId` é um UUID que o principal emitiu e ainda guarda (senão
 `invalid_input`); `fileName` não é aceito da interface — o principal usa o nome que leu do disco.
 
 ## Sem eventos novos

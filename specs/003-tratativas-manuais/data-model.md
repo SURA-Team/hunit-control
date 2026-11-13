@@ -112,8 +112,11 @@ Calculadas pelo servidor com as funções do domínio (R-04) e devolvidas pronta
 
 - A classificação calculada continua no campo `classification`, sem mudança; o app mostra
   "Cobrada" ou "Enviada" junto dela.
-- O filtro `classification` continua comparando a classificação calculada. A lista "o que falta
-  cobrar" é `classification` ∈ {pendentes} **e** `treatmentStatus` ∈ {`none`, `sent`}.
+- O filtro `classification` continua comparando a classificação calculada, e o resumo por
+  classificação das execuções (spec 002) continua mostrando o que o Hunit informou.
+- **"Falta cobrar"** (FR-002) é um filtro do servidor, `pendingCharge=true`:
+  `acceptsTreatment(classification)` (§4) **e** `treatmentStatus` ∈ {`none`, `sent`}. A regra fica
+  no domínio (`isPendingCharge`, R-04); o app só envia o parâmetro.
 - Uma reserva com documentos que passou a uma classificação que não aceita registros (ex.:
   "já cobrada" pelo Hunit) mantém os documentos e o `treatmentStatus` (caso-limite da spec).
 - Valor cobrado: `payment.chargedAmount` (Hunit) e `treatment.manualChargedAmount` (à mão) vêm
@@ -149,8 +152,8 @@ dos motivos acima) e `failed` (erro inesperado; a reserva fica como estava e pod
 
 | Estado | Onde | Ciclo de vida |
 |---|---|---|
-| Seleção do lote: chave + dados para a lista (número, hotel, hóspede, valor, situação) | interface (provider no `App.tsx`) | até aplicar (ficam só as `failed`), limpar ou fechar o app (FR-006a, R-09) |
-| Arquivo escolhido: bytes, nome, tamanho, tipo, modelo de pré-visualização | processo principal | até confirmar, cancelar ou 15 min sem uso (R-08) |
+| Seleção do lote: chave + dados para a lista (número, hotel, hóspede, valor, situação); no máximo 2 000 | interface (provider no `App.tsx`) | até aplicar (ficam só as `failed`), limpar ou fechar o app (FR-006a, R-09) |
+| Arquivo escolhido: bytes, nome, tamanho, tipo, modelo de pré-visualização | processo principal | até o envio e o registro terminarem, cancelar ou 15 min sem uso; se o envio falhar por conexão, fica para "Tentar de novo" (R-08) |
 
 Nenhum dos dois vai para o disco (FR-018a; specs/002, FR-008a).
 
@@ -163,6 +166,7 @@ Nenhum dos dois vai para o disco (FR-018a; specs/002, FR-008a).
 | `treatmentStatus: sent` | Enviada |
 | `treatmentStatus: charged` | Cobrada |
 | `treatmentStatus: none` (filtro) | Sem tratativa |
+| `pendingCharge` (filtro rápido) | Falta cobrar |
 | `state: replaced` | Substituído |
 | `state: removed` | Desfeito |
 | `state: purged` | Arquivo apagado pelo prazo de retenção |

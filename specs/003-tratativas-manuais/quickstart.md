@@ -77,7 +77,8 @@ pnpm --filter @hunit/desktop dist
 ## 6. Consulta e perfil consulta (US4) — máquina da Controladoria
 
 1. Filtre "pendente de cobrança" + "Sem tratativa": só aparecem as pendentes sem registro, em até
-   5 s (SC-008). Filtre "Cobrada": aparecem as do passo 3 e 5.
+   5 s (SC-008). Filtre "Cobrada": aparecem as do passo 3 e 5. Use "Falta cobrar": aparecem as
+   pendentes, inclusive as "Enviadas", e nenhuma "Cobrada".
 2. Abra uma reserva Cobrada: vê os documentos e o histórico e consegue baixar o arquivo.
 3. Confira que nenhuma ação de registro aparece (anexar, substituir, desfazer, reverter, valor).
 4. No PC do servidor, com uma chave de perfil consulta, tente

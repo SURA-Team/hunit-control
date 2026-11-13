@@ -57,6 +57,9 @@ relatórios e painéis, e exportação de planilhas.
 - Q: A seleção do lote se perde ao pesquisar de novo, como no sistema anterior? → A: Não. A seleção
   se mantém entre pesquisas, filtros e páginas até ser aplicada, limpa ou o app ser fechado
   (FR-006a).
+- Q: Como a reserva "Cobrada" deixa de aparecer como pendência nos filtros? → A: Com o filtro
+  "Falta cobrar" (classificação que exige cobrança e sem comprovante); o filtro por classificação e o
+  resumo das execuções continuam mostrando o que o Hunit informou (FR-002).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -191,7 +194,9 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 **Acceptance Scenarios**:
 
 1. **Given** reservas pendentes com e sem tratativa, **When** o operador filtra "pendente de cobrança"
-   + "sem tratativa", **Then** vê só as pendentes em que ninguém agiu ainda.
+   + "sem tratativa", **Then** vê só as pendentes em que ninguém agiu ainda; **When** usa "Falta
+   cobrar", **Then** vê todas as reservas que exigem cobrança e ainda não têm comprovante, inclusive as
+   "Enviadas", e nenhuma "Cobrada".
 2. **Given** reservas cobradas manualmente, **When** se filtra "cobrada manualmente", **Then** elas
    aparecem, cada uma com o comprovante disponível.
 3. **Given** uma chave de perfil consulta, **When** ela tenta registrar, substituir ou desfazer um
@@ -225,7 +230,8 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   pré-visualização não carrega nada da internet, não executa nada e só lista os anexos do e-mail,
   sem abri-los.
 - **Servidor indisponível durante o envio**: nada é gravado pela metade; o operador vê o erro e pode
-  tentar de novo.
+  tentar de novo sem escolher o arquivo outra vez (enquanto o app estiver aberto e a escolha não
+  tiver expirado).
 - **Valor manual informado com a reserva sem comprovante**: o sistema recusa; o valor manual só faz
   sentido com o comprovante.
 - **Valor manual quando o Hunit passa a trazer o valor cobrado**: os dois ficam visíveis,
@@ -250,8 +256,11 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   - com comprovante → **Cobrada** (cobrada manualmente);
   - só com tratativa → **Enviada**;
   - sem nenhum dos dois → a classificação do servidor, sem marcação.
-  "Enviada" MUST continuar sendo tratada como pendência em filtros e totais; "Cobrada" MUST deixar de
-  ser.
+  "Enviada" MUST continuar sendo tratada como pendência; "Cobrada" MUST deixar de ser. Para isso, a
+  consulta MUST oferecer o filtro **"Falta cobrar"**: reservas cuja classificação exige cobrança
+  (FR-003) e que não têm comprovante (sem tratativa ou "Enviada"). O filtro por classificação continua
+  mostrando a classificação calculada a partir do Hunit, e o resumo por situação de cada execução
+  (spec 002) continua mostrando o que o Hunit informou naquela execução.
 - **FR-003**: Só aceitam novos registros (tratativa e comprovante) as reservas cuja classificação
   exige uma cobrança ainda não registrada no Hunit: pendente de cobrança, erro na cobrança, cartão
   validado (não cobrado), erro de análise e cobrar na maquininha. As demais (ignorada, faturada,
@@ -270,7 +279,8 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   filtro e de página, até o operador desmarcar, limpar a seleção, aplicar o lote (FR-006; as que
   falharam por erro continuam selecionadas) ou fechar o app. O app MUST mostrar a quantidade e o
   total dos valores selecionados e permitir ver a lista completa da seleção, inclusive das reservas
-  fora do resultado atual, e desmarcar cada uma. A elegibilidade (FR-003) MUST ser conferida no
+  fora do resultado atual, e desmarcar cada uma. A seleção vai até 2 000 reservas; acima disso, o app
+  MUST avisar e não marcar mais. A elegibilidade (FR-003) MUST ser conferida no
   momento da confirmação: uma reserva que mudou de classificação depois de selecionada aparece entre
   as ignoradas, com o motivo.
 - **FR-007**: Os registros MUST NOT gerar nenhuma requisição ao Hunit nem alterar dado lido dele; uma
@@ -308,8 +318,8 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 **Consulta**
 
 - **FR-015**: A consulta de reservas (API e app) MUST permitir filtrar pela situação da tratativa —
-  sem tratativa, enviada, cobrada manualmente — combinando com os filtros existentes (hotel, período,
-  classificação, situação da reserva etc.), e MUST mostrar, para cada reserva, a situação exibida, os
+  sem tratativa, enviada, cobrada manualmente — e pelo atalho "Falta cobrar" (FR-002), combinando com
+  os filtros existentes (hotel, período, classificação, situação da reserva etc.), e MUST mostrar, para cada reserva, a situação exibida, os
   documentos atuais (nome, tamanho, autor, momento), o valor manual e o histórico.
 
 **Retenção**
