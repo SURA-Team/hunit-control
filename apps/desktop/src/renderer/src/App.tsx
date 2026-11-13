@@ -9,6 +9,7 @@ import alertSound from '../../../resources/sounds/token-alert.wav';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { TwoFactorDialog } from './components/TwoFactorDialog';
 import { useHunit } from './hunit';
+import { ExecutionsScreen } from './screens/executions/ExecutionsScreen';
 import { RunScreen } from './screens/run/RunScreen';
 import { SetupScreen } from './screens/setup/SetupScreen';
 import { useConnection } from './state/connection';
@@ -77,7 +78,9 @@ export function App() {
 
   const content: Record<Area, ReactNode> = {
     run: <RunScreen onOpenExecution={openExecution} />,
-    executions: <Text c="dimmed">{openExecutionId ? `Execução ${openExecutionId}` : null}</Text>,
+    executions: (
+      <ExecutionsScreen key={openExecutionId ?? 'lista'} initialExecutionId={openExecutionId} />
+    ),
     reservations: null,
     setup: <SetupScreen />,
   };
@@ -103,7 +106,10 @@ export function App() {
             key={item}
             label={AREA_TITLES[item]}
             active={area === item}
-            onClick={() => setChosen(item)}
+            onClick={() => {
+              if (item === 'executions') setOpenExecutionId(null);
+              setChosen(item);
+            }}
           />
         ))}
       </AppShell.Navbar>

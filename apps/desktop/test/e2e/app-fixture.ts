@@ -54,6 +54,8 @@ export async function launchApp(options: { userDataDir?: string } = {}): Promise
     window,
     userDataDir,
     async close() {
+      // Com execução ativa desta máquina, fechar pede confirmação (FR-026): responde "fechar".
+      await stubMessageBox(app, 0).catch(() => undefined);
       await app.close().catch(() => undefined);
       if (!options.userDataDir) await rm(userDataDir, { recursive: true, force: true });
     },

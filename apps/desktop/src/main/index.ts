@@ -99,7 +99,12 @@ async function start(): Promise<void> {
       };
     },
     createApi: (config) => new ApiClient(config),
-    onState: (state) => send(EVENTS.connectionState, state),
+    onState: (state) => {
+      send(EVENTS.connectionState, state);
+      // Ao conectar ou reconectar, volta a acompanhar as execuções ativas desta máquina,
+      // inclusive um pedido de token ainda no prazo (FR-019).
+      if (state.status === 'online' && state.client) void watcher.resumeOwn(state.client.name);
+    },
   });
 
   const attention = new Attention({
@@ -185,6 +190,33 @@ async function start(): Promise<void> {
   mainWindow = createMainWindow(location);
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // FR-026: fechar a janela encerra o app; com execução ativa desta máquina, avisa antes que o
+  // pedido de token não será recebido enquanto o app estiver fechado.
+  let closeConfirmed = false;
+  mainWindow.on('close', (event) => {
+    const window = mainWindow;
+    if (closeConfirmed || !window || watcher.ownActive().length === 0) return;
+    event.preventDefault();
+    void dialog
+      .showMessageBox(window, {
+        type: 'warning',
+        title: 'Execução em andamento',
+        message:
+          'A execução continua no servidor, mas o pedido de token não será recebido enquanto o app estiver fechado.',
+        detail:
+          'Abra o app de novo antes de o Hunit pedir o token, ou informe o token por outra máquina.',
+        buttons: ['Fechar o app', 'Continuar com o app aberto'],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+      })
+      .then(({ response }) => {
+        if (response !== 0) return;
+        closeConfirmed = true;
+        window.close();
+      });
   });
 
   app.on('window-all-closed', () => app.quit());

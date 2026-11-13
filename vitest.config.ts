@@ -88,6 +88,8 @@ export default defineConfig({
           include: ['test/renderer/**/*.test.{ts,tsx}'],
           environment: 'jsdom',
           setupFiles: ['test/renderer/setup.ts'],
+          // Digitar com o user-event é lento; com a suíte inteira em paralelo, passava dos 5 s.
+          testTimeout: 15_000,
         },
       },
       {

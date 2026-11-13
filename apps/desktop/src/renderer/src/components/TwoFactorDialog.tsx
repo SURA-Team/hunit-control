@@ -122,6 +122,8 @@ export function TwoFactorDialog() {
       closeOnEscape={closed !== null}
       centered
       size="md"
+      // Acima de qualquer painel ou diálogo aberto: o pedido de token tem prazo curto.
+      zIndex={1000}
       title={<Title order={3}>O Hunit pediu o token</Title>}
       transitionProps={{ duration: 0 }}
     >
