@@ -12,24 +12,30 @@
 
 O servidor (feature 001) consulta o Hunit, classifica cada reserva de cartão virtual quanto à
 cobrança e grava o resultado; o app desktop (feature 002) permite operar e consultar tudo isso. Mas
-uma parte das reservas não se resolve sozinha: ficam pendentes de cobrança, dão erro na cobrança ou
-não têm como ser analisadas. Para essas, o Financeiro age fora do sistema — cobra o hotel por
-e-mail, recebe um comprovante, cobra por outro meio — e precisa registrar o que fez, para saber o
-que ainda falta e provar o que já foi feito. O sistema anterior tinha esse registro (as
-"tratativas"); sem ele, a operação volta a depender de controles paralelos.
+uma parte das reservas não se resolve sozinha: ficam pendentes de cobrança, dão erro na cobrança,
+precisam ser cobradas na maquininha ou não têm como ser analisadas.
+
+A divisão do trabalho é esta: todas as cobranças são feitas pelo **Comercial**. O **Financeiro**
+verifica as inconsistências que o sistema aponta e pede ao Comercial que cobre. A
+**Controladoria** controla os pagamentos, principalmente conferindo com o adquirente. Cada um
+precisa registrar o que fez, para saber o que ainda falta e provar o que já foi feito. O sistema
+anterior tinha esse registro (as "tratativas"); sem ele, a operação volta a depender de controles
+paralelos.
 
 Esta feature acrescenta as **tratativas manuais**: uma camada de registro feita por pessoas, ligada à
 reserva, que nunca altera nada no Hunit nem a classificação calculada pelo servidor. Uma reserva
 pode receber dois documentos independentes:
 
-- a **tratativa** (prova de que o Financeiro agiu — por exemplo, o e-mail enviado ao hotel), que faz
-  a reserva aparecer como **Enviada**, mas continua contando como pendência;
-- o **comprovante de cobrança** (prova de que o valor foi recebido), que faz a reserva aparecer como
-  **Cobrada** em todas as consultas.
+- a **tratativa** (prova de que o pedido de cobrança foi feito — por exemplo, o e-mail do Financeiro
+  ao Comercial), que faz a reserva aparecer como **Enviada**, mas continua contando como pendência;
+- o **comprovante de cobrança** (prova de que o valor foi cobrado — por exemplo, o comprovante do
+  Comercial ou a confirmação do adquirente obtida pela Controladoria), que faz a reserva aparecer
+  como **Cobrada** em todas as consultas.
 
 Ficam **fora do escopo** e serão tratados em specs próprias: envio de e-mail pelo sistema, inclusão
-das reservas enviadas na planilha do comercial (sincronização com o Sheets), importação das
-tratativas registradas no sistema anterior, relatórios e painéis, e exportação de planilhas.
+das reservas enviadas na planilha do comercial (sincronização com o Sheets), conciliação automática
+com os relatórios do adquirente, importação das tratativas registradas no sistema anterior,
+relatórios e painéis, e exportação de planilhas.
 
 ## Clarifications
 
@@ -38,21 +44,26 @@ tratativas registradas no sistema anterior, relatórios e painéis, e exportaç�
 - Q: O que fazer com documentos substituídos ou desfeitos? → A: Guardar por 30 dias e depois apagar
   (FR-013); enquanto guardados, o operador pode revertê-los, voltando-os a documento atual (FR-013a).
 - Q: Quais classificações aceitam tratativa? → A: Pendente de cobrança, erro na cobrança, cartão
-  validado (não cobrado) e erro de análise aceitam tratativa e comprovante; "cobrar na maquininha"
-  aceita o comprovante, mesmo depois que existir a planilha do comercial (FR-003).
+  validado (não cobrado), erro de análise e cobrar na maquininha aceitam tratativa e comprovante,
+  mesmo depois que existir a planilha do comercial (FR-003).
+- Q: Quem cobra e quem registra? → A: Todas as cobranças são feitas pelo Comercial. O Financeiro
+  verifica as inconsistências e pede ao Comercial que cobre (tratativa); a Controladoria controla os
+  pagamentos, principalmente com o adquirente (comprovante). Os dois usam o perfil operador; o
+  Comercial ainda não usa o sistema.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Registrar o comprovante de cobrança de uma reserva (Priority: P1)
 
-O operador encontra, na consulta de reservas, uma reserva pendente de cobrança (ou com erro na
-cobrança) que já foi cobrada por fora do Hunit. Ele anexa o comprovante e, se o Hunit não traz o
-valor cobrado, informa o valor. A partir daí a reserva aparece como **Cobrada** para todos, com o
-comprovante disponível para abrir ou baixar, e com o registro de quem anexou e quando.
+O operador (em geral da Controladoria) confirma que uma reserva pendente — de cobrança, com erro na
+cobrança ou a cobrar na maquininha — foi cobrada pelo Comercial, por exemplo conferindo com o
+adquirente. Ele anexa o comprovante e, se o Hunit não traz o valor cobrado, informa o valor. A
+partir daí a reserva aparece como **Cobrada** para todos, com o comprovante disponível para abrir ou
+baixar, e com o registro de quem anexou e quando.
 
 **Why this priority**: é o registro que tira a reserva da lista do que falta cobrar. Sem ele, o
-Financeiro não consegue distinguir o que está de fato pendente do que já foi resolvido, que é o
-motivo de o sistema existir.
+Financeiro e a Controladoria não conseguem distinguir o que está de fato pendente do que já foi
+resolvido, que é o motivo de o sistema existir.
 
 **Independent Test**: com reservas pendentes gravadas, anexar um comprovante a uma delas e conferir
 que ela passa a aparecer como "Cobrada" na consulta (pela API e pelo app), que o arquivo pode ser
@@ -69,10 +80,9 @@ baixado idêntico ao enviado e que o registro mostra o cliente e o momento.
    informa o valor cobrado, **Then** esse valor passa a ser exibido como valor cobrado, identificado
    como informado manualmente; **When** ele volta ao valor do Hunit, **Then** o valor manual é
    removido.
-4. **Given** uma reserva "cobrar na maquininha" cobrada na maquininha, **When** o operador anexa o
-   comprovante, **Then** ela passa a "Cobrada"; **When** ele tenta anexar uma tratativa, **Then** o
-   sistema recusa e explica por quê (FR-003).
-5. **Given** uma reserva "já cobrada", "faturada" ou outra que não exige ação do Financeiro (FR-003),
+4. **Given** uma reserva "cobrar na maquininha" que o Comercial cobrou na maquininha, **When** o
+   operador anexa o comprovante, **Then** ela passa a "Cobrada".
+5. **Given** uma reserva "já cobrada", "faturada" ou outra que não exige cobrança (FR-003),
    **When** o operador tenta anexar um comprovante, **Then** o sistema recusa e explica por quê.
 6. **Given** um arquivo de tipo não aceito ou maior que o limite (FR-008), **When** o operador tenta
    anexá-lo, **Then** o sistema recusa com uma mensagem que diz o motivo e os limites, e nada é
@@ -88,12 +98,13 @@ baixado idêntico ao enviado e que o registro mostra o cliente e o momento.
 
 ### User Story 2 - Registrar a tratativa (reserva "Enviada") (Priority: P2)
 
-O operador cobrou o hotel por e-mail (ou outro meio) e ainda não recebeu o pagamento. Ele anexa o
-documento da tratativa à reserva, que passa a aparecer como **Enviada**: todos sabem que alguém já
-agiu, mas a reserva continua contando como pendente até chegar o comprovante.
+O operador do Financeiro verificou uma inconsistência e pediu ao Comercial, por e-mail (ou outro
+meio), que cobre a reserva. Ele anexa o documento do pedido à reserva, que passa a aparecer como
+**Enviada**: todos sabem que a cobrança já foi pedida, mas a reserva continua contando como pendente
+até chegar o comprovante.
 
-**Why this priority**: evita cobrar o mesmo hotel duas vezes e mostra o que está em andamento; mas a
-reserva ainda está pendente, então vem depois do comprovante.
+**Why this priority**: evita pedir a mesma cobrança duas vezes e mostra o que está com o Comercial;
+mas a reserva ainda está pendente, então vem depois do comprovante.
 
 **Independent Test**: anexar uma tratativa a uma reserva pendente e conferir que ela aparece como
 "Enviada", que continua sendo contada entre as pendências nos filtros e que, ao anexar depois o
@@ -211,13 +222,10 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   - sem nenhum dos dois → a classificação do servidor, sem marcação.
   "Enviada" MUST continuar sendo tratada como pendência em filtros e totais; "Cobrada" MUST deixar de
   ser.
-- **FR-003**: Só aceitam novos registros as reservas cuja classificação exige uma cobrança ainda não
-  registrada no Hunit:
-  - pendente de cobrança, erro na cobrança, cartão validado (não cobrado) e erro de análise aceitam
-    tratativa e comprovante;
-  - cobrar na maquininha aceita só o comprovante (a cobrança é feita na maquininha, sem tratativa
-    com o hotel), e com ele passa a "Cobrada" (FR-002).
-  As demais (ignorada, faturada, cancelada sem cobrança, já cobrada) MUST ser recusadas com o motivo.
+- **FR-003**: Só aceitam novos registros (tratativa e comprovante) as reservas cuja classificação
+  exige uma cobrança ainda não registrada no Hunit: pendente de cobrança, erro na cobrança, cartão
+  validado (não cobrado), erro de análise e cobrar na maquininha. As demais (ignorada, faturada,
+  cancelada sem cobrança, já cobrada) MUST ser recusadas com o motivo.
 - **FR-004**: Cada documento MUST poder ser substituído por outro do mesmo tipo e desfeito
   (removido). A situação exibida MUST refletir o que restou (FR-002).
 - **FR-005**: O operador MUST poder informar manualmente o valor cobrado de uma reserva que tenha
@@ -323,10 +331,16 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   independentemente da máquina exigiria login por usuário, fora do escopo.
 - Os tipos aceitos (FR-008) são os usados no sistema anterior; o limite de 25 MB cobre e-mails com
   anexos comuns. Os dois podem ser ajustados no plano se a homologação mostrar necessidade.
-- "Cobrar na maquininha" é cobrada fora do Hunit, na maquininha; o comprovante dessa cobrança é
-  registrado no sistema por quem tiver acesso de operador (hoje o Financeiro e a Controladoria). A
-  futura planilha do comercial não substitui esse registro: o sistema continua sendo a fonte da
-  verdade (constitution, princípio VI), e a planilha será uma projeção dele.
+- Todas as cobranças são feitas pelo Comercial, que ainda não usa o sistema. A tratativa (pedido
+  de cobrança) e o comprovante são registrados por quem tem perfil operador — hoje o Financeiro e a
+  Controladoria. O sistema não distingue os dois setores: o registro de quem fez é o cliente da API
+  (a máquina). Se o Comercial passar a usar o sistema, poderá registrar comprovantes com o mesmo
+  perfil, sem mudar esta spec.
+- A futura planilha do comercial não substitui esses registros: o sistema continua sendo a fonte da
+  verdade (constitution, princípio VI), e a planilha será uma projeção dele. Quando ela existir, o
+  pedido ao Comercial poderá passar a ser a inclusão na planilha, em vez do e-mail.
+- A Controladoria confere os pagamentos com o adquirente fora do sistema e registra o comprovante
+  manualmente; importar os relatórios do adquirente e conciliar sozinho fica para uma spec futura.
 - O volume é pequeno: dezenas de documentos por semana, de 4 operadores.
 - As tratativas registradas no sistema anterior não entram nesta feature: virão com a importação do
   histórico (spec futura). Até lá, quem precisar consulta o sistema anterior.
