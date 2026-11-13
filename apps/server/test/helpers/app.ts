@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../../src/http/app.js';
+import { buildApp, type AppDependencies } from '../../src/http/app.js';
 import { generateApiKey, hashApiKey } from '../../src/http/auth.js';
 import { createClient } from '../../src/persistence/clients-repo.js';
 import type { ClientRole } from '../../src/persistence/schema.js';
@@ -35,6 +35,8 @@ export interface TestAppOptions {
   /** Roteiro do Hunit simulado. */
   scenario?: FakeScenario;
   twoFactorTimeoutMs?: number;
+  /** Relógio da API (prazos das tratativas, specs/003). */
+  now?: AppDependencies['now'];
 }
 
 /**
@@ -52,6 +54,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     events: harness.events,
     runner: harness.runner,
     evidence: harness.evidence,
+    ...(options.now && { now: options.now }),
   });
   await app.ready();
 

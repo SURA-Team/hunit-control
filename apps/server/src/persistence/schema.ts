@@ -16,6 +16,7 @@ import {
   bigserial,
   boolean,
   check,
+  customType,
   date,
   foreignKey,
   index,
@@ -35,6 +36,10 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode
 const isoDate = (name: string) => date(name, { mode: 'string' });
 /** Valores monetários em BRL: `numeric(12,2)`, lidos como string decimal (research R-17). */
 const money = (name: string) => numeric(name, { precision: 12, scale: 2 });
+/** Conteúdo binário (`bytea`), lido e gravado como `Buffer` (specs/003, research R-01). */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => 'bytea',
+});
 
 // ---------------------------------------------------------------------------
 // Enumerações
@@ -105,6 +110,33 @@ export const evidenceKindEnum = pgEnum('evidence_kind', [
   'classification_failure',
   'screen_not_recognized',
   'reservation_status_unknown',
+]);
+
+/**
+ * Tipo de documento de uma tratativa (specs/003): `request` = tratativa (pedido de cobrança),
+ * `proof` = comprovante de cobrança. Repete `TREATMENT_DOCUMENT_KINDS` de `@hunit/domain`.
+ */
+export const treatmentDocumentKindEnum = pgEnum('treatment_document_kind', ['request', 'proof']);
+
+/**
+ * Estado de um documento (specs/003, data-model §2): atual, substituído, desfeito ou purgado
+ * (arquivo apagado pela retenção; o registro fica).
+ */
+export const treatmentDocumentStateEnum = pgEnum('treatment_document_state', [
+  'current',
+  'replaced',
+  'removed',
+  'purged',
+]);
+
+/** Tipo de evento do histórico das tratativas (specs/003, FR-012). */
+export const treatmentEventTypeEnum = pgEnum('treatment_event_type', [
+  'attached',
+  'replaced',
+  'removed',
+  'reverted',
+  'amount_set',
+  'amount_cleared',
 ]);
 
 export type ClientRole = (typeof clientRoleEnum.enumValues)[number];
@@ -391,5 +423,168 @@ export const evidence = pgTable(
       sql`num_nonnulls(${table.screenshotPath}, ${table.htmlPath}, ${table.responsePath}) >= 1`,
     ),
     index('evidence_expires_at_idx').on(table.expiresAt),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Tratativas manuais (specs/003, data-model.md) — camada ao lado da reserva: o coletor do Hunit
+// não lê nem grava nenhuma destas tabelas (FR-007).
+// ---------------------------------------------------------------------------
+
+/**
+ * Conteúdo dos arquivos das tratativas (research R-01). A chave é o SHA-256 do conteúdo: o mesmo
+ * arquivo aplicado a várias reservas é guardado uma vez só. Fica no banco para entrar nas cópias
+ * de segurança e ser gravado na mesma transação do registro (FR-010, FR-011).
+ */
+export const treatmentFiles = pgTable(
+  'treatment_files',
+  {
+    /** SHA-256 do conteúdo, em hexadecimal minúsculo; é o `fileId` da API. */
+    sha256: text('sha256').primaryKey(),
+    content: bytea('content').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    /** Decidido pelo servidor a partir do conteúdo (research R-03), nunca pelo cliente. */
+    mediaType: text('media_type').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    /** Quem enviou esse conteúdo pela primeira vez. */
+    uploadedByClientId: uuid('uploaded_by_client_id')
+      .notNull()
+      .references(() => apiClients.id),
+  },
+  (table) => [
+    check('treatment_files_sha256_check', sql`${table.sha256} ~ '^[0-9a-f]{64}$'`),
+    // 1 byte a 25 MiB (FR-008).
+    check(
+      'treatment_files_size_check',
+      sql`${table.sizeBytes} = octet_length(${table.content}) and ${table.sizeBytes} between 1 and 26214400`,
+    ),
+  ],
+);
+
+/**
+ * Documento de uma reserva: a tratativa ou o comprovante (FR-001). "Vigente" = `ended_at` nulo:
+ * é o documento que define a situação exibida. Um documento vigente purgado pela retenção
+ * (reserva anonimizada, FR-016) continua vigente — fica o registro de que houve o documento.
+ */
+export const treatmentDocuments = pgTable(
+  'treatment_documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    kind: treatmentDocumentKindEnum('kind').notNull(),
+    state: treatmentDocumentStateEnum('state').notNull().default('current'),
+    /** `null` só depois da purga. */
+    fileSha256: text('file_sha256').references(() => treatmentFiles.sha256),
+    /** Nome como escolhido pelo operador; `null` só depois da purga (pode ter dados pessoais). */
+    originalName: text('original_name'),
+    // Copiados do arquivo para listar sem ler o conteúdo; mantidos depois da purga.
+    sizeBytes: integer('size_bytes').notNull(),
+    mediaType: text('media_type').notNull(),
+    attachedAt: timestamptz('attached_at').notNull().defaultNow(),
+    attachedByClientId: uuid('attached_by_client_id')
+      .notNull()
+      .references(() => apiClients.id),
+    /** Quando deixou de ser o vigente (substituído ou desfeito). */
+    endedAt: timestamptz('ended_at'),
+    endedByClientId: uuid('ended_by_client_id').references(() => apiClients.id),
+    purgedAt: timestamptz('purged_at'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'treatment_documents_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    check(
+      'treatment_documents_state_check',
+      sql`(${table.state} = 'current' and ${table.endedAt} is null)
+        or (${table.state} in ('replaced', 'removed') and ${table.endedAt} is not null)
+        or ${table.state} = 'purged'`,
+    ),
+    check(
+      'treatment_documents_purged_check',
+      sql`(${table.state} = 'purged') = (${table.fileSha256} is null)
+        and (${table.state} = 'purged') = (${table.originalName} is null)
+        and (${table.state} = 'purged') = (${table.purgedAt} is not null)`,
+    ),
+    check(
+      'treatment_documents_ended_by_check',
+      sql`(${table.endedAt} is null) = (${table.endedByClientId} is null)`,
+    ),
+    // No máximo um documento vigente por reserva e tipo (research R-05).
+    uniqueIndex('treatment_documents_one_current')
+      .on(table.hotelCode, table.reservationNumber, table.kind)
+      .where(sql`${table.endedAt} is null`),
+    index('treatment_documents_reservation_idx').on(table.hotelCode, table.reservationNumber),
+    // Usado pela purga diária dos substituídos e desfeitos (research R-07).
+    index('treatment_documents_ended_at_idx')
+      .on(table.endedAt)
+      .where(sql`${table.state} in ('replaced', 'removed')`),
+    index('treatment_documents_file_idx').on(table.fileSha256),
+  ],
+);
+
+/** Valor cobrado informado à mão (FR-005). Remover o valor apaga a linha; o histórico fica. */
+export const reservationManualAmounts = pgTable(
+  'reservation_manual_amounts',
+  {
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    amount: money('amount').notNull(),
+    setAt: timestamptz('set_at').notNull().defaultNow(),
+    setByClientId: uuid('set_by_client_id')
+      .notNull()
+      .references(() => apiClients.id),
+  },
+  (table) => [
+    primaryKey({ columns: [table.hotelCode, table.reservationNumber] }),
+    foreignKey({
+      name: 'reservation_manual_amounts_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    check('reservation_manual_amounts_amount_check', sql`${table.amount} > 0`),
+  ],
+);
+
+/**
+ * Histórico das tratativas (FR-012): só inclusão — nenhuma ação dos operadores altera ou apaga
+ * uma linha. Não guarda nome de arquivo, para a retenção apagar os nomes num lugar só (R-06).
+ */
+export const treatmentEvents = pgTable(
+  'treatment_events',
+  {
+    /** Ordem dos eventos. */
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    type: treatmentEventTypeEnum('type').notNull(),
+    /** Preenchido nos eventos de documento. */
+    kind: treatmentDocumentKindEnum('kind'),
+    /** Documento que ficou vigente (`attached`, `replaced`, `reverted`) ou que deixou de ser (`removed`). */
+    documentId: uuid('document_id').references(() => treatmentDocuments.id),
+    /** Documento que foi substituído (`replaced`, `reverted`). */
+    previousDocumentId: uuid('previous_document_id').references(() => treatmentDocuments.id),
+    /** Preenchido nos eventos de valor. */
+    amount: money('amount'),
+    /** Mesmo valor para tudo o que foi gravado no mesmo pedido em lote (research R-05). */
+    batchId: uuid('batch_id'),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => apiClients.id),
+    at: timestamptz('at').notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'treatment_events_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    index('treatment_events_reservation_idx').on(
+      table.hotelCode,
+      table.reservationNumber,
+      table.id,
+    ),
   ],
 );

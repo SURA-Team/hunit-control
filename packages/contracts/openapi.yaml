@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.4.0
+  version: 1.5.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -10,6 +10,10 @@ info:
     desktop) acrescenta, sem quebrar os clientes existentes: `/me`, quem iniciou e o filtro de
     ativas na lista de execuções, os avisos no estado da execução, a busca livre, o canal e o
     valor nas reservas, a lista de canais e a lista de evidências de uma execução.
+    A feature 003 (tratativas manuais) acrescenta, também sem quebrar os clientes existentes: o
+    envio de documentos, o registro da tratativa e do comprovante por reserva (uma ou várias de
+    uma vez), desfazer e reverter, o valor cobrado informado à mão, o resumo da tratativa em cada
+    reserva e os filtros `treatmentStatus` e `pendingCharge`. Nada disso acessa o Hunit.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -33,6 +37,8 @@ tags:
     description: Disponibilidade do serviço
   - name: clients
     description: O cliente da API dono da chave usada (feature 002)
+  - name: treatments
+    description: Tratativas manuais das reservas — documentos, valor informado à mão e histórico (feature 003)
 
 paths:
   /health:
@@ -361,8 +367,25 @@ paths:
           schema: { type: string, minLength: 1, maxLength: 100 }
         - name: amount
           in: query
-          description: Valor em BRL; encontra reservas cujo valor total OU valor cobrado seja igual
+          description: >-
+            Valor em BRL; encontra reservas cujo valor total, valor cobrado ou valor cobrado
+            informado à mão (feature 003) seja igual
           schema: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        - name: treatmentStatus
+          in: query
+          description: >-
+            Situação da tratativa (feature 003, FR-002): none = sem tratativa; sent = Enviada;
+            charged = Cobrada. Combinável com os demais filtros.
+          schema: { type: array, items: { $ref: '#/components/schemas/TreatmentStatus' } }
+          style: form
+          explode: true
+        - name: pendingCharge
+          in: query
+          description: |
+            true = "Falta cobrar" (feature 003, FR-002): classificação que exige cobrança e sem
+            comprovante (treatmentStatus none ou sent). false = o contrário. Omitido = sem esse
+            filtro. Combinável com os demais.
+          schema: { type: boolean }
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -404,6 +427,293 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservations/{hotelCode}/{reservationNumber}/treatment:
+    parameters:
+      - name: hotelCode
+        in: path
+        required: true
+        schema: { type: string }
+      - name: reservationNumber
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [treatments]
+      operationId: getReservationTreatment
+      summary: Tratativa de uma reserva — documentos (atuais e anteriores) e histórico (feature 003)
+      responses:
+        '200':
+          description: Tratativa da reserva
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [treatment, documents, events]
+                properties:
+                  treatment: { $ref: '#/components/schemas/ReservationTreatment' }
+                  documents:
+                    type: array
+                    description: Todos os documentos da reserva, do mais recente para o mais antigo
+                    items: { $ref: '#/components/schemas/TreatmentDocument' }
+                  events:
+                    type: array
+                    description: Histórico completo, do mais recente para o mais antigo
+                    items: { $ref: '#/components/schemas/TreatmentEvent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservations/{hotelCode}/{reservationNumber}/manual-amount:
+    parameters:
+      - name: hotelCode
+        in: path
+        required: true
+        schema: { type: string }
+      - name: reservationNumber
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      tags: [treatments]
+      operationId: setManualChargedAmount
+      summary: Informa à mão o valor cobrado de uma reserva com comprovante (feature 003, FR-005)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              additionalProperties: false
+              properties:
+                amount:
+                  type: string
+                  pattern: '^[0-9]+\.[0-9]{2}$'
+                  description: Valor em BRL, maior que zero
+      responses:
+        '200':
+          description: Tratativa atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationTreatment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [treatments]
+      operationId: clearManualChargedAmount
+      summary: Remove o valor informado à mão; volta a valer o do Hunit (feature 003, FR-005)
+      responses:
+        '200':
+          description: Tratativa atualizada (sem mudança, se não havia valor)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationTreatment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /treatment-files:
+    post:
+      tags: [treatments]
+      operationId: uploadTreatmentFile
+      summary: Envia o arquivo de uma tratativa ou de um comprovante (feature 003, FR-008)
+      description: |
+        Corpo: o arquivo puro, com até 26 214 400 bytes (25 MiB). Tipos aceitos: e-mail (.eml,
+        .msg), PDF e imagem (.png, .jpg, .jpeg); o servidor confere o conteúdo contra a extensão.
+        Enviar de novo um arquivo idêntico devolve o mesmo `fileId`, sem gravar outra cópia. O
+        arquivo só passa a valer quando é registrado em `POST /treatment-documents`.
+      parameters:
+        - name: name
+          in: query
+          required: true
+          description: Nome original do arquivo, com a extensão
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream: {}
+      responses:
+        '201':
+          description: Arquivo recebido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TreatmentFile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413':
+          description: Arquivo acima de 25 MiB (`file_too_large`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '415':
+          description: Tipo não aceito ou conteúdo diferente da extensão (`unsupported_file_type`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /treatment-documents/check:
+    post:
+      tags: [treatments]
+      operationId: checkTreatmentDocuments
+      summary: Diz quais reservas aceitam o documento, sem gravar nada (feature 003, FR-006)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, reservations]
+              additionalProperties: false
+              properties:
+                kind: { $ref: '#/components/schemas/TreatmentDocumentKind' }
+                reservations:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { $ref: '#/components/schemas/ReservationKey' }
+      responses:
+        '200':
+          description: Desfecho previsto de cada reserva e os totais para a confirmação
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, acceptedCount, replacingCount, ignoredCount, acceptedTotalAmount]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReservationOutcome' }
+                  acceptedCount: { type: integer }
+                  replacingCount:
+                    type: integer
+                    description: Das aceitas, quantas já têm um documento atual desse tipo
+                  ignoredCount: { type: integer }
+                  acceptedTotalAmount:
+                    type: string
+                    pattern: '^[0-9]+\.[0-9]{2}$'
+                    description: Soma do valor total das reservas aceitas, em BRL
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /treatment-documents:
+    post:
+      tags: [treatments]
+      operationId: registerTreatmentDocuments
+      summary: Registra a tratativa ou o comprovante em uma ou várias reservas (feature 003, FR-001, FR-006)
+      description: |
+        Cada reserva é gravada por inteiro ou não é gravada (FR-011). A resposta é 200 mesmo com
+        reservas ignoradas ou com falha: o desfecho de cada uma está em `items`. Uma reserva que
+        já tem um documento atual desse tipo tem o documento substituído.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, fileId, fileName, reservations]
+              additionalProperties: false
+              properties:
+                kind: { $ref: '#/components/schemas/TreatmentDocumentKind' }
+                fileId: { type: string, pattern: '^[0-9a-f]{64}$' }
+                fileName: { type: string, minLength: 1, maxLength: 255 }
+                reservations:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { $ref: '#/components/schemas/ReservationKey' }
+      responses:
+        '200':
+          description: Desfecho de cada reserva
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batchId, items]
+                properties:
+                  batchId: { type: string, format: uuid }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReservationOutcome' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '415':
+          description: O nome informado não tem a extensão do tipo do arquivo (`unsupported_file_type`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: O servidor não tem o arquivo informado (`file_not_found`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /treatment-documents/{documentId}:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    delete:
+      tags: [treatments]
+      operationId: removeTreatmentDocument
+      summary: Desfaz o documento atual; pode ser revertido por 30 dias (feature 003, FR-004)
+      responses:
+        '204':
+          description: Documento desfeito
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /treatment-documents/{documentId}/revert:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    post:
+      tags: [treatments]
+      operationId: revertTreatmentDocument
+      summary: Volta um documento substituído ou desfeito a documento atual (feature 003, FR-013a)
+      responses:
+        '200':
+          description: Tratativa atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationTreatment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /treatment-documents/{documentId}/file:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      tags: [treatments]
+      operationId: getTreatmentDocumentFile
+      summary: Baixa o arquivo de um documento, idêntico ao enviado (feature 003, FR-009)
+      responses:
+        '200':
+          description: Arquivo, com o nome original em content-disposition
+          content:
+            application/pdf: {}
+            image/png: {}
+            image/jpeg: {}
+            message/rfc822: {}
+            application/vnd.ms-outlook: {}
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410':
+          description: Arquivo apagado pelo prazo de retenção (`document_purged`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /channels:
     get:
@@ -475,6 +785,11 @@ components:
       name: cursor
       in: query
       schema: { type: string }
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   responses:
     BadRequest:
@@ -494,6 +809,11 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
     NotFound:
       description: Recurso não encontrado
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: A ação não é possível na situação atual (o `code` diz o motivo)
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -522,6 +842,15 @@ components:
             - nothing_to_resume
             - execution_already_resumed
             - evidence_expired
+            - empty_file
+            - file_too_large
+            - unsupported_file_type
+            - file_not_found
+            - not_eligible_for_treatment
+            - document_not_current
+            - document_not_revertible
+            - proof_required
+            - document_purged
             - internal_error
 
     HunitCredentials:
@@ -734,6 +1063,7 @@ components:
         - firstVerifiedAt
         - lastVerifiedAt
         - verificationCount
+        - treatment
       properties:
         hotelCode: { type: string }
         reservationNumber: { type: string }
@@ -790,6 +1120,126 @@ components:
         verificationCount: { type: integer, minimum: 1 }
         lastExecutionId: { type: string, format: uuid }
         anonymized: { type: boolean }
+        treatment: { $ref: '#/components/schemas/ReservationTreatment' }
+
+    TreatmentDocumentKind:
+      type: string
+      description: request = tratativa (pedido de cobrança); proof = comprovante de cobrança
+      enum: [request, proof]
+
+    TreatmentStatus:
+      type: string
+      description: none = sem tratativa; sent = Enviada (só tratativa); charged = Cobrada (com comprovante)
+      enum: [none, sent, charged]
+
+    TreatmentDocumentState:
+      type: string
+      description: >-
+        current = documento atual; replaced = substituído; removed = desfeito; purged = arquivo
+        apagado pelo prazo de retenção (o registro fica)
+      enum: [current, replaced, removed, purged]
+
+    ReservationKey:
+      type: object
+      required: [hotelCode, reservationNumber]
+      additionalProperties: false
+      properties:
+        hotelCode: { type: string, minLength: 1 }
+        reservationNumber: { type: string, minLength: 1 }
+
+    TreatmentFile:
+      type: object
+      required: [fileId, sizeBytes, mediaType]
+      properties:
+        fileId:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 do conteúdo
+        sizeBytes: { type: integer }
+        mediaType: { type: string, description: Tipo decidido pelo servidor a partir do conteúdo }
+
+    TreatmentDocument:
+      type: object
+      required: [id, kind, state, sizeBytes, mediaType, attachedAt, attachedBy]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/TreatmentDocumentKind' }
+        state: { $ref: '#/components/schemas/TreatmentDocumentState' }
+        fileName: { type: [string, 'null'], description: null depois da purga }
+        sizeBytes: { type: integer }
+        mediaType: { type: string }
+        attachedAt: { type: string, format: date-time }
+        attachedBy: { type: string, description: Nome do cliente da API que anexou }
+        endedAt: { type: [string, 'null'], format: date-time }
+        endedBy: { type: [string, 'null'] }
+        revertibleUntil:
+          type: [string, 'null']
+          format: date-time
+          description: Preenchido só em documentos substituídos ou desfeitos ainda no prazo de 30 dias (FR-013a)
+
+    ReservationTreatment:
+      type: object
+      description: Resumo da tratativa manual de uma reserva (feature 003)
+      required: [status, request, proof, manualChargedAmount, effectiveChargedAmount, acceptsDocuments]
+      properties:
+        status: { $ref: '#/components/schemas/TreatmentStatus' }
+        request:
+          oneOf:
+            - $ref: '#/components/schemas/TreatmentDocument'
+            - type: 'null'
+        proof:
+          oneOf:
+            - $ref: '#/components/schemas/TreatmentDocument'
+            - type: 'null'
+        manualChargedAmount: { $ref: '#/components/schemas/Money' }
+        effectiveChargedAmount: { $ref: '#/components/schemas/Money' }
+        acceptsDocuments:
+          type: boolean
+          description: A classificação atual aceita registrar, substituir e reverter (FR-003)
+
+    TreatmentEvent:
+      type: object
+      required: [id, type, client, at]
+      properties:
+        id: { type: integer }
+        type:
+          type: string
+          enum: [attached, replaced, removed, reverted, amount_set, amount_cleared]
+        kind:
+          oneOf:
+            - $ref: '#/components/schemas/TreatmentDocumentKind'
+            - type: 'null'
+        documentId: { type: [string, 'null'], format: uuid }
+        previousDocumentId: { type: [string, 'null'], format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        batchId: { type: [string, 'null'], format: uuid }
+        client: { type: string, description: Nome do cliente da API que fez a ação }
+        at: { type: string, format: date-time }
+
+    ReservationOutcome:
+      type: object
+      required: [hotelCode, reservationNumber, outcome]
+      properties:
+        hotelCode: { type: string }
+        reservationNumber: { type: string }
+        outcome:
+          type: string
+          description: >-
+            registered = documento novo; replaced = substituiu o atual; ignored = ficou de fora
+            (ver reason); failed = erro inesperado, a reserva ficou como estava
+          enum: [registered, replaced, ignored, failed]
+        reason:
+          type: [string, 'null']
+          enum: [not_found, not_eligible, same_file, null]
+        classification:
+          oneOf:
+            - $ref: '#/components/schemas/Classification'
+            - type: 'null'
+        totalAmount: { $ref: '#/components/schemas/Money' }
+        documentId:
+          type: [string, 'null']
+          format: uuid
+          description: Preenchido em registered e replaced (ausente na conferência)
 
     ClientRole:
       type: string

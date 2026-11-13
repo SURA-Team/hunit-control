@@ -39,14 +39,23 @@ aponte para elas são apagadas pela manutenção depois de 24 h (R-07).
 | `ended_by_client_id` | `uuid` FK, anulável | |
 | `purged_at` | `timestamptz`, anulável | |
 
+**Documento vigente** = o que tem `ended_at` nulo: é ele que define a situação exibida (§3). Um
+documento atual purgado pela retenção de uma reserva anonimizada (FR-016) continua vigente, com
+`state = 'purged'` e `ended_at` nulo — assim fica o registro de que houve o documento, e a situação
+exibida não muda (ajuste feito na implementação).
+
 Restrições:
 
-- índice único parcial em (`hotel_code`, `reservation_number`, `kind`) onde `state = 'current'`:
-  no máximo um documento atual por reserva e tipo (FR-001, R-05);
-- `check`: `state = 'current'` ⇔ `ended_at is null`; `state = 'purged'` ⇔ `file_sha256 is null`
-  e `original_name is null`;
+- índice único parcial em (`hotel_code`, `reservation_number`, `kind`) onde `ended_at is null`:
+  no máximo um documento vigente por reserva e tipo (FR-001, R-05);
+- `check` do estado: `current` exige `ended_at` nulo; `replaced` e `removed` exigem `ended_at`
+  preenchido; `purged` aceita os dois;
+- `check` da purga: `state = 'purged'` ⇔ `file_sha256`, `original_name` nulos e `purged_at`
+  preenchido;
+- `check`: `ended_at` e `ended_by_client_id` preenchidos juntos;
 - índice em (`hotel_code`, `reservation_number`) para a consulta e o filtro (SC-008);
-- índice em `ended_at` onde `state in ('replaced', 'removed')`, para a purga diária.
+- índice em `ended_at` onde `state in ('replaced', 'removed')`, para a purga diária;
+- índice em `file_sha256`, para achar os arquivos sem documento (R-07).
 
 ### 1.3 `reservation_manual_amounts` — valor cobrado informado à mão (FR-005)
 

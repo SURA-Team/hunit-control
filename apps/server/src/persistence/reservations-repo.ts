@@ -1,4 +1,5 @@
 import {
+  CLASSIFICATIONS_ACCEPTING_TREATMENT,
   markNotFound,
   mergeVerification,
   selectNotFound,
@@ -7,6 +8,8 @@ import {
   type ReservationData,
   type ReservationRecord,
   type ReservationStatus,
+  type TreatmentDocumentKind,
+  type TreatmentStatus,
 } from '@hunit/domain';
 import {
   and,
@@ -17,6 +20,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  not,
   or,
   sql,
   type SQL,
@@ -24,7 +28,13 @@ import {
 import type { Database } from './db.js';
 import type { HotelProgress } from './execution-hotels-repo.js';
 import { InvalidCursorError } from './executions-repo.js';
-import { executionHotels, reservationObservations, reservations } from './schema.js';
+import {
+  executionHotels,
+  reservationManualAmounts,
+  reservationObservations,
+  reservations,
+  treatmentDocuments,
+} from './schema.js';
 
 export type ReservationRow = typeof reservations.$inferSelect;
 type ReservationInsert = typeof reservations.$inferInsert;
@@ -216,8 +226,18 @@ export interface ReservationFilters {
   q?: string | undefined;
   /** Canal exatamente igual (specs/002, FR-020). */
   channel?: string | undefined;
-  /** Valor total ou valor cobrado iguais, no formato da API: "1234.56" (specs/002, FR-020b). */
+  /**
+   * Valor total, valor cobrado ou valor cobrado informado à mão (specs/003) iguais, no formato da
+   * API: "1234.56" (specs/002, FR-020b).
+   */
   amount?: string | undefined;
+  /** Situação da tratativa (specs/003, FR-015): qualquer uma das informadas. */
+  treatmentStatuses?: readonly TreatmentStatus[] | undefined;
+  /**
+   * "Falta cobrar" (specs/003, FR-002): `true` = classificação que exige cobrança e sem
+   * comprovante; `false` = o contrário.
+   */
+  pendingCharge?: boolean | undefined;
 }
 
 export interface ListReservationsOptions extends ReservationFilters {
@@ -267,6 +287,28 @@ function freeTextCondition(text: string): SQL {
       and strpos(unaccent(lower(${reservations.guestName})), unaccent(lower(${text}))) > 0))`;
 }
 
+/** A reserva tem um documento vigente desse tipo? (specs/003: `ended_at` nulo = vigente.) */
+function hasVigenteDocument(kind: TreatmentDocumentKind): SQL {
+  return sql`exists (select 1 from ${treatmentDocuments} td where td.hotel_code = ${reservations.hotelCode} and td.reservation_number = ${reservations.reservationNumber} and td.kind = ${kind} and td.ended_at is null)`;
+}
+
+/** Condição de cada situação da tratativa (specs/003, FR-002; mesma regra de `treatmentStatus`). */
+function treatmentStatusCondition(status: TreatmentStatus): SQL {
+  const hasProof = hasVigenteDocument('proof');
+  const hasRequest = hasVigenteDocument('request');
+  if (status === 'charged') return hasProof;
+  if (status === 'sent') return sql`(${hasRequest} and not ${hasProof})`;
+  return sql`(not ${hasRequest} and not ${hasProof})`;
+}
+
+/**
+ * "Falta cobrar" (specs/003, FR-002; mesma regra de `isPendingCharge`): a classificação aceita
+ * tratativa — a lista vem do domínio — e a reserva não tem comprovante vigente.
+ */
+function pendingChargeCondition(): SQL {
+  return sql`(${inArray(reservations.classification, [...CLASSIFICATIONS_ACCEPTING_TREATMENT])} and not ${hasVigenteDocument('proof')})`;
+}
+
 /**
  * Reservas com filtros combináveis (FR-020), em ordem de hotel e número, paginadas por cursor.
  * Os filtros de classificação e situação valem para o estado atual da reserva.
@@ -308,9 +350,16 @@ export async function listReservations(
     const amountCondition = or(
       eq(reservations.totalAmount, options.amount),
       eq(reservations.chargedAmount, options.amount),
+      sql`exists (select 1 from ${reservationManualAmounts} ma where ma.hotel_code = ${reservations.hotelCode} and ma.reservation_number = ${reservations.reservationNumber} and ma.amount = ${options.amount})`,
     );
     if (amountCondition) conditions.push(amountCondition);
   }
+  if (has(options.treatmentStatuses)) {
+    const anyStatus = or(...options.treatmentStatuses.map(treatmentStatusCondition));
+    if (anyStatus) conditions.push(anyStatus);
+  }
+  if (options.pendingCharge === true) conditions.push(pendingChargeCondition());
+  if (options.pendingCharge === false) conditions.push(not(pendingChargeCondition()));
   if (options.cursor !== undefined) {
     const [hotelCode, reservationNumber] = decodeCursor(options.cursor);
     conditions.push(
