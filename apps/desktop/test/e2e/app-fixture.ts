@@ -130,3 +130,48 @@ export async function configureApp(
 }
 
 export type { ElectronApplication, Page };
+
+const MONTHS = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
+
+/** Data local a `days` dias de hoje (os testes usam datas relativas para não depender do mês). */
+export function daysFromToday(days: number): Date {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+/** Data no formato da API (AAAA-MM-DD), no horário local. */
+export function isoDate(date: Date): string {
+  const two = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
+}
+
+/** Rótulo de um dia no calendário do Mantine em pt-BR (ex.: "3 novembro 2026"). */
+function dayLabel(date: Date): string {
+  return `${date.getDate()} ${MONTHS[date.getMonth()] ?? ''} ${date.getFullYear()}`;
+}
+
+/** Escolhe o período no seletor de intervalo da tela, clicando nos dias. */
+export async function pickPeriod(window: Page, from: Date, to: Date): Promise<void> {
+  await window.getByLabel('Período de check-in').click();
+  for (const date of [from, to]) {
+    await window
+      .getByRole('button', { name: dayLabel(date), exact: true })
+      .first()
+      .click();
+  }
+}

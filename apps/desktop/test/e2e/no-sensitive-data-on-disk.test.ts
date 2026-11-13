@@ -12,7 +12,15 @@ import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e
 import type { FakeScenario } from '../../../server/test/helpers/fake-hunit-gateway.js';
 import { createTestCertificates } from '../helpers/certificates.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
-import { configureApp, launchApp, newUserDataDir, type LaunchedApp } from './app-fixture.js';
+import {
+  configureApp,
+  launchApp,
+  newUserDataDir,
+  type LaunchedApp,
+  daysFromToday,
+  isoDate,
+  pickPeriod,
+} from './app-fixture.js';
 
 const PASSWORD = 'SenhaMarcadorDisco7781';
 const WRONG_PASSWORD = 'SenhaErradaMarcador5530';
@@ -28,7 +36,7 @@ const SCENARIO: FakeScenario = {
     reservations: [
       {
         reservationNumber: `${code}01`,
-        listing: { checkIn: '2026-11-03', guestName: GUESTS[index] ?? 'x' },
+        listing: { checkIn: isoDate(daysFromToday(1)), guestName: GUESTS[index] ?? 'x' },
       },
     ],
   })),
@@ -95,9 +103,7 @@ async function start(password: string) {
   }
   await window.getByLabel('Usuário do Hunit').fill('operador@hotel.test');
   await window.getByLabel('Senha do Hunit').fill(password);
-  await window.getByLabel('Check-in de').fill('01/11/2026');
-  await window.getByLabel('Check-in até').fill('07/11/2026');
-  await window.getByLabel('Check-in até').press('Tab');
+  await pickPeriod(window, daysFromToday(0), daysFromToday(6));
   await window.getByRole('button', { name: 'Iniciar execução' }).click();
 }
 

@@ -10,7 +10,15 @@ import type { FakeScenario } from '../../../server/test/helpers/fake-hunit-gatew
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestCertificates } from '../helpers/certificates.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
-import { configureApp, launchApp, notifications, type LaunchedApp } from './app-fixture.js';
+import {
+  configureApp,
+  launchApp,
+  notifications,
+  type LaunchedApp,
+  daysFromToday,
+  isoDate,
+  pickPeriod,
+} from './app-fixture.js';
 
 const VALID_TOKEN = '246810';
 const PASSWORD = 'SENHA-MARCADOR-E2E-US1';
@@ -22,8 +30,8 @@ const SCENARIO: FakeScenario = {
       code: '31',
       name: 'Hotel Praia',
       reservations: [
-        { reservationNumber: '3101', listing: { checkIn: '2026-11-03' } },
-        { reservationNumber: '3102', listing: { checkIn: '2026-11-04' } },
+        { reservationNumber: '3101', listing: { checkIn: isoDate(daysFromToday(1)) } },
+        { reservationNumber: '3102', listing: { checkIn: isoDate(daysFromToday(2)) } },
       ],
     },
   ],
@@ -65,9 +73,7 @@ async function fillAccessAndPeriod(password = PASSWORD) {
     await username.fill('operador@hotel.test');
     await window.getByLabel('Senha do Hunit').fill(password);
   }
-  await window.getByLabel('Check-in de').fill('01/11/2026');
-  await window.getByLabel('Check-in até').fill('07/11/2026');
-  await window.getByLabel('Check-in até').press('Tab');
+  await pickPeriod(window, daysFromToday(0), daysFromToday(6));
 }
 
 async function waitForDialog() {
@@ -143,7 +149,7 @@ describe('US1 — executar e responder ao token', () => {
     await waitForDialog();
     await vi.waitFor(() => expect(server.hunit.sessions.length).toBe(before + 2));
     const searches = server.hunit.callsTo('searchReservations');
-    expect(searches.every((call) => call.period.from === '2026-11-01')).toBe(true);
+    expect(searches.every((call) => call.period.from === isoDate(daysFromToday(0)))).toBe(true);
     await window.getByLabel('Token do autenticador').fill(VALID_TOKEN);
     await window.getByRole('button', { name: 'Enviar token' }).click();
     await window.getByText(/token aceito/i).waitFor({ timeout: 10_000 });

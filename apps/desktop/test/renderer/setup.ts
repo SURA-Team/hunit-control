@@ -1,5 +1,7 @@
 // Preparação dos testes da interface (grupo desktop-ui, jsdom).
 import '@testing-library/jest-dom/vitest';
+// Mesmo idioma das datas do app (src/renderer/src/main.tsx): calendário em português.
+import 'dayjs/locale/pt-br';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 

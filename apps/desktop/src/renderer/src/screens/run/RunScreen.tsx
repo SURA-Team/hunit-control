@@ -126,12 +126,9 @@ function RunForm({ onOpenExecution }: { onOpenExecution: (executionId: string) =
   function submit() {
     setPeriodError(null);
     setHotelError(null);
+    // O seletor de intervalo já ordena as datas; falta só o caso de escolher apenas o início.
     if (!period.from || !period.to) {
-      setPeriodError('Informe o início e o fim do período de check-in.');
-      return;
-    }
-    if (period.to < period.from) {
-      setPeriodError('A data final não pode ser antes do início.');
+      setPeriodError('Escolha o início e o fim do período de check-in.');
       return;
     }
     const catalogEmpty = (hotels.data ?? []).length === 0;
@@ -168,8 +165,7 @@ function RunForm({ onOpenExecution }: { onOpenExecution: (executionId: string) =
         <Stack gap="md">
           <Title order={4}>Consulta</Title>
           <PeriodPicker
-            from={period.from}
-            to={period.to}
+            value={period}
             onChange={(next) => {
               setPeriod(next);
               setPeriodError(null);

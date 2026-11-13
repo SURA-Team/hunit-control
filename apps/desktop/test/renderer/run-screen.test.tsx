@@ -1,11 +1,12 @@
 /**
  * Tela Executar (specs/002, T043, US1, FR-006 a FR-010, FR-004): acesso ao Hunit guardado no cofre
- * do processo principal, período em DD/MM/AAAA validado, hotéis (todos ou uma seleção com busca),
+ * do processo principal, período escolhido no seletor de intervalo (DD/MM/AAAA), hotéis (todos ou
+ * uma seleção com busca),
  * mensagens dos erros e "Iniciar de novo" depois de prazo do token esgotado ou token recusado.
  */
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunScreen } from '../../src/renderer/src/screens/run/RunScreen';
 import type { Execution, Hotel } from '../../src/shared/ipc-types';
 import {
@@ -43,19 +44,28 @@ function execution(overrides: Partial<Execution> = {}): Execution {
 let hunit: FakeHunit;
 
 beforeEach(() => {
+  // Só a data é simulada: o calendário do seletor abre em novembro de 2026.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 12, 10, 0));
   hunit = fakeHunit();
   mocked(hunit.api.hotels.list).mockImplementation(() => okResult(HOTELS));
 });
 
-async function fillPeriod(from: string, to: string) {
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** Dia de novembro de 2026 no calendário (o Mantine rotula cada dia por extenso). */
+function day(dayOfMonth: number) {
+  return screen.getAllByRole('button', { name: `${dayOfMonth} novembro 2026` })[0] as HTMLElement;
+}
+
+/** Abre o seletor de intervalo e clica nos dias, na ordem dada. */
+async function pickPeriod(...days: number[]) {
   const user = userEvent.setup();
-  const start = await screen.findByLabelText(/check-in de/i);
-  const end = screen.getByLabelText(/check-in até/i);
-  await user.clear(start);
-  await user.type(start, from);
-  await user.clear(end);
-  await user.type(end, to);
-  await user.click(document.body);
+  await user.click(await screen.findByLabelText(/período de check-in/i));
+  await screen.findAllByRole('button', { name: `${days[0] ?? 1} novembro 2026` });
+  for (const dayOfMonth of days) await user.click(day(dayOfMonth));
   return user;
 }
 
@@ -108,29 +118,49 @@ describe('RunScreen — acesso ao Hunit (FR-006 a FR-008)', () => {
 });
 
 describe('RunScreen — período e hotéis (FR-009, FR-010)', () => {
-  it('período com fim antes do início não é enviado', async () => {
+  it('o seletor ordena o intervalo: clicar primeiro no dia maior não gera fim antes do início', async () => {
+    mocked(hunit.api.credentials.status).mockImplementation(() =>
+      okResult({ username: 'op@hotel.test', hasPassword: true }),
+    );
+    mocked(hunit.api.executions.start).mockImplementation(() => okResult(execution()));
+    renderWithApp(<RunScreen onOpenExecution={vi.fn()} />, hunit);
+    const user = await pickPeriod(10, 3);
+
+    await user.click(screen.getByRole('button', { name: /iniciar execução/i }));
+
+    await waitFor(() =>
+      expect(hunit.api.executions.start).toHaveBeenCalledWith(
+        expect.objectContaining({ period: { from: '2026-11-03', to: '2026-11-10' } }),
+      ),
+    );
+  });
+
+  it('intervalo incompleto (só o início) não é enviado', async () => {
     mocked(hunit.api.credentials.status).mockImplementation(() =>
       okResult({ username: 'op@hotel.test', hasPassword: true }),
     );
     renderWithApp(<RunScreen onOpenExecution={vi.fn()} />, hunit);
-    const user = await fillPeriod('10/11/2026', '03/11/2026');
+    const user = await pickPeriod(3);
+    await user.keyboard('{Escape}');
 
     await user.click(screen.getByRole('button', { name: /iniciar execução/i }));
 
-    expect(await screen.findByText(/não pode ser antes do início/i)).toBeInTheDocument();
+    expect(await screen.findByText(/escolha o início e o fim do período/i)).toBeInTheDocument();
     expect(hunit.api.executions.start).not.toHaveBeenCalled();
   });
 
-  it('as datas são digitadas e mostradas em DD/MM/AAAA e vão no formato da API', async () => {
+  it('o período aparece em DD/MM/AAAA no campo e vai no formato da API', async () => {
     mocked(hunit.api.credentials.status).mockImplementation(() =>
       okResult({ username: 'op@hotel.test', hasPassword: true }),
     );
     mocked(hunit.api.executions.start).mockImplementation(() => okResult(execution()));
     mocked(hunit.api.executions.get).mockImplementation(() => okResult(execution()));
     renderWithApp(<RunScreen onOpenExecution={vi.fn()} />, hunit);
-    const user = await fillPeriod('01/11/2026', '07/11/2026');
+    const user = await pickPeriod(1, 7);
 
-    expect(screen.getByDisplayValue('01/11/2026')).toBeInTheDocument();
+    expect(screen.getByLabelText(/período de check-in/i)).toHaveTextContent(
+      '01/11/2026 a 07/11/2026',
+    );
     await user.click(screen.getByRole('button', { name: /iniciar execução/i }));
 
     await waitFor(() =>
@@ -147,7 +177,7 @@ describe('RunScreen — período e hotéis (FR-009, FR-010)', () => {
     );
     mocked(hunit.api.executions.start).mockImplementation(() => okResult(execution()));
     renderWithApp(<RunScreen onOpenExecution={vi.fn()} />, hunit);
-    const user = await fillPeriod('01/11/2026', '07/11/2026');
+    const user = await pickPeriod(1, 7);
 
     await user.click(await screen.findByRole('radio', { name: /escolher hotéis/i }));
     const select = screen.getByPlaceholderText(/busque pelo nome/i);
@@ -252,7 +282,7 @@ describe('RunScreen — "Iniciar de novo" (US1, cenário 5)', () => {
         okResult(execution({ status: 'failed', endReason })),
       );
       renderWithApp(<RunScreen onOpenExecution={vi.fn()} />, hunit);
-      const user = await fillPeriod('01/11/2026', '07/11/2026');
+      const user = await pickPeriod(1, 7);
       await user.click(screen.getByRole('button', { name: /iniciar execução/i }));
 
       const result = await screen.findByTestId('execution-result');

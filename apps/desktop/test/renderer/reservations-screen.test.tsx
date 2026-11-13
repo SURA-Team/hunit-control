@@ -5,7 +5,7 @@
  */
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReservationsScreen } from '../../src/renderer/src/screens/reservations/ReservationsScreen';
 import type { Reservation, ReservationListInput } from '../../src/shared/ipc-types';
 import {
@@ -194,18 +194,28 @@ describe('filtros (FR-020 a FR-020b)', () => {
     );
   });
 
-  it('período de check-in em DD/MM/AAAA vai no formato da API', async () => {
-    renderWithApp(<ReservationsScreen />, hunit);
-    const user = userEvent.setup();
+  it('o período de check-in escolhido no seletor de intervalo vai no formato da API', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 12, 10, 0));
+    try {
+      renderWithApp(<ReservationsScreen />, hunit);
+      const user = userEvent.setup();
 
-    await user.type(await screen.findByLabelText(/check-in de/i), '01/11/2026');
-    await user.type(screen.getByLabelText(/check-in até/i), '07/11/2026');
-    await user.click(document.body);
-    await search();
+      await user.click(await screen.findByLabelText(/período de check-in/i));
+      for (const dayOfMonth of [1, 7]) {
+        const [button] = await screen.findAllByRole('button', {
+          name: `${dayOfMonth} novembro 2026`,
+        });
+        if (button) await user.click(button);
+      }
+      await search();
 
-    await waitFor(() =>
-      expect(lastQuery()).toMatchObject({ checkInFrom: '2026-11-01', checkInTo: '2026-11-07' }),
-    );
+      await waitFor(() =>
+        expect(lastQuery()).toMatchObject({ checkInFrom: '2026-11-01', checkInTo: '2026-11-07' }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('o filtro de execução vem da tela de execuções e pode ser tirado', async () => {

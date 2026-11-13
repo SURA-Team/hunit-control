@@ -85,8 +85,9 @@ export function ReservationsScreen({
       amount = parseAmountInput(draft.amount) ?? undefined;
       if (amount === undefined) next.amount = 'Valor inválido. Use, por exemplo, 1.234,56.';
     }
-    if (draft.checkInFrom && draft.checkInTo && draft.checkInTo < draft.checkInFrom) {
-      next.period = 'A data final não pode ser antes do início.';
+    // O seletor de intervalo já ordena as datas; falta só o caso de escolher apenas o início.
+    if (Boolean(draft.checkInFrom) !== Boolean(draft.checkInTo)) {
+      next.period = 'Escolha também o fim do período (ou limpe o período).';
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return;

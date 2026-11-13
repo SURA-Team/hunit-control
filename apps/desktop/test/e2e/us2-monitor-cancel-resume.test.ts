@@ -17,6 +17,9 @@ import {
   newUserDataDir,
   stubMessageBox,
   type LaunchedApp,
+  daysFromToday,
+  isoDate,
+  pickPeriod,
 } from './app-fixture.js';
 
 const VALID_TOKEN = '246810';
@@ -28,8 +31,8 @@ const SCENARIO: FakeScenario = {
     code,
     name: `Hotel ${code}`,
     reservations: [
-      { reservationNumber: `${code}01`, listing: { checkIn: '2026-11-03' } },
-      { reservationNumber: `${code}02`, listing: { checkIn: '2026-11-04' } },
+      { reservationNumber: `${code}01`, listing: { checkIn: isoDate(daysFromToday(1)) } },
+      { reservationNumber: `${code}02`, listing: { checkIn: isoDate(daysFromToday(2)) } },
     ],
   })),
 };
@@ -100,9 +103,7 @@ async function startFromRunScreen() {
     await username.fill(USERNAME);
     await window.getByLabel('Senha do Hunit').fill('SENHA-MARCADOR-E2E-US2');
   }
-  await window.getByLabel('Check-in de').fill('01/11/2026');
-  await window.getByLabel('Check-in até').fill('07/11/2026');
-  await window.getByLabel('Check-in até').press('Tab');
+  await pickPeriod(window, daysFromToday(0), daysFromToday(6));
   await window.getByRole('button', { name: 'Iniciar execução' }).click();
 }
 

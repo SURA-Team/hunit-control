@@ -16,14 +16,13 @@ import {
   Stack,
   TextInput,
 } from '@mantine/core';
-import { DateInput } from '@mantine/dates';
 import type { Hotel } from '../../../../shared/ipc-types';
 import {
   CLASSIFICATION_LABELS,
   CLASSIFICATION_ORDER,
   RESERVATION_STATUS_LABELS,
 } from '../../presentation/labels';
-import { parseBrazilianDate } from '../run/PeriodPicker';
+import { PeriodPicker } from '../run/PeriodPicker';
 
 export interface FilterDraft {
   q: string;
@@ -117,22 +116,10 @@ export function ReservationFilters({
               clearable
               hidePickedOptions
             />
-            <DateInput
-              label="Check-in de"
-              value={draft.checkInFrom}
-              onChange={(value) => set('checkInFrom', value)}
-              valueFormat="DD/MM/YYYY"
-              dateParser={parseBrazilianDate}
-              placeholder="DD/MM/AAAA"
-              clearable
-            />
-            <DateInput
-              label="Check-in até"
-              value={draft.checkInTo}
-              onChange={(value) => set('checkInTo', value)}
-              valueFormat="DD/MM/YYYY"
-              dateParser={parseBrazilianDate}
-              placeholder="DD/MM/AAAA"
+            <PeriodPicker
+              value={{ from: draft.checkInFrom, to: draft.checkInTo }}
+              onChange={({ from, to }) => onChange({ ...draft, checkInFrom: from, checkInTo: to })}
+              placeholder="Qualquer data"
               clearable
               error={errors.period}
             />

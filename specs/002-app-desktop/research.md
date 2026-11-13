@@ -215,11 +215,12 @@ cobertos pelo [quickstart.md](./quickstart.md).
   busca, componentes acessíveis por teclado) com uma dependência só, menos código próprio do que
   montar componente por componente (princípio VIII). Sem roteador porque não há links nem
   histórico a preservar.
-- **Ajuste na implementação (US1, T049)**: o período usa dois campos `DateInput` (início e fim)
-  em vez do `DatePickerInput` em modo intervalo. O operador digita as datas em DD/MM/AAAA (ou
-  escolhe no calendário), o que é mais rápido para quem já sabe o período; e a validação "data
-  final antes do início" (FR-010) passa a ter o que validar — no seletor de intervalo ela não
-  acontecia.
+- **Período (US1 e US3)**: um único campo seletor de intervalo (`DatePickerInput` em modo
+  intervalo, dois meses lado a lado, DD/MM/AAAA), na tela Executar e no filtro da tela Reservas. O
+  seletor sempre ordena as datas — clicar primeiro no dia maior não gera fim antes do início —, então
+  a validação da FR-010 cobre o intervalo incompleto (só o início escolhido). Na implementação da
+  US1 o período chegou a ser feito com dois campos digitáveis; voltou ao seletor de intervalo a
+  pedido do usuário (2026-11-13).
 - **Alternatives considered**: shadcn/ui com Tailwind (componentes copiados para o projeto e
   calendário montado à parte — mais arquivos para manter; boa opção se o visual personalizado
   virar prioridade); React Router (sem necessidade para quatro áreas fixas).
