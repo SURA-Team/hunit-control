@@ -19,8 +19,10 @@ const REFRESH_MS = 10_000;
 
 export function ExecutionsScreen({
   initialExecutionId = null,
+  onOpenReservations,
 }: {
   initialExecutionId?: string | null;
+  onOpenReservations?: (executionId: string) => void;
 }) {
   const hunit = useHunit();
   const { state, client } = useConnection();
@@ -123,7 +125,13 @@ export function ExecutionsScreen({
         closeButtonProps={{ 'aria-label': 'Fechar detalhe' }}
         transitionProps={{ duration: 0 }}
       >
-        {selected && <ExecutionDetail executionId={selected} onOpenExecution={setSelected} />}
+        {selected && (
+          <ExecutionDetail
+            executionId={selected}
+            onOpenExecution={setSelected}
+            onOpenReservations={onOpenReservations}
+          />
+        )}
       </Drawer>
     </Stack>
   );

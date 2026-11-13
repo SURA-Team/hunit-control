@@ -7,6 +7,7 @@
 import { Alert, Button, Group, Paper, Stack, Table, Text, Title } from '@mantine/core';
 import type { Execution, ExecutionEndReason } from '../../../../shared/ipc-types';
 import { ClassificationCountsGrid } from '../../components/ClassificationCountsGrid';
+import { EvidenceList } from '../../components/EvidenceList';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDate, formatDuration } from '../../presentation/format';
 import {
@@ -96,6 +97,7 @@ export function ExecutionResult({ execution, onRestart, restarting = false }: Pr
             </Table.Tbody>
           </Table>
         )}
+        <EvidenceList executionId={execution.id} />
       </Stack>
     </Paper>
   );

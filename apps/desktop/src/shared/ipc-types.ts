@@ -200,6 +200,8 @@ export type EvidenceFile = 'screenshot' | 'html' | 'response';
 export interface EvidenceSaveInput {
   evidenceId: string;
   file: EvidenceFile;
+  /** Hotel ou início do id da execução, para o nome padrão do arquivo. */
+  label?: string | undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import { ConnectionBanner } from './components/ConnectionBanner';
 import { TwoFactorDialog } from './components/TwoFactorDialog';
 import { useHunit } from './hunit';
 import { ExecutionsScreen } from './screens/executions/ExecutionsScreen';
+import { ReservationsScreen } from './screens/reservations/ReservationsScreen';
 import { RunScreen } from './screens/run/RunScreen';
 import { SetupScreen } from './screens/setup/SetupScreen';
 import { useConnection } from './state/connection';
@@ -32,6 +33,8 @@ export function App() {
   const [chosen, setChosen] = useState<Area>('run');
   /** Execução aberta na área Execuções (ex.: "Ver a execução ativa" na tela Executar). */
   const [openExecutionId, setOpenExecutionId] = useState<string | null>(null);
+  /** Execução usada como filtro ao abrir a área Reservas pelo detalhe de uma execução. */
+  const [reservationsExecutionId, setReservationsExecutionId] = useState<string | null>(null);
   const lastPing = useRef(0);
 
   // Sem conexão confirmada (não configurado, certificado ou chave recusados), só a configuração.
@@ -79,9 +82,21 @@ export function App() {
   const content: Record<Area, ReactNode> = {
     run: <RunScreen onOpenExecution={openExecution} />,
     executions: (
-      <ExecutionsScreen key={openExecutionId ?? 'lista'} initialExecutionId={openExecutionId} />
+      <ExecutionsScreen
+        key={openExecutionId ?? 'lista'}
+        initialExecutionId={openExecutionId}
+        onOpenReservations={(executionId) => {
+          setReservationsExecutionId(executionId);
+          setChosen('reservations');
+        }}
+      />
     ),
-    reservations: null,
+    reservations: (
+      <ReservationsScreen
+        key={reservationsExecutionId ?? 'todas'}
+        initialExecutionId={reservationsExecutionId}
+      />
+    ),
     setup: <SetupScreen />,
   };
 
@@ -108,6 +123,7 @@ export function App() {
             active={area === item}
             onClick={() => {
               if (item === 'executions') setOpenExecutionId(null);
+              if (item === 'reservations') setReservationsExecutionId(null);
               setChosen(item);
             }}
           />

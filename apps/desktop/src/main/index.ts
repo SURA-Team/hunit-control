@@ -25,6 +25,7 @@ import { Attention } from './attention.js';
 import { ConfigStore, DEFAULT_PREFERENCES } from './config-store.js';
 import { ConnectionManager } from './connection.js';
 import { CredentialsVault } from './credentials-vault.js';
+import { saveEvidence } from './evidence-download.js';
 import { ExecutionWatcher } from './execution-watcher.js';
 import { createInvokeHandlers, type InvokeHandlers } from './ipc-handlers.js';
 import { createStoryHandlers } from './story-handlers.js';
@@ -164,6 +165,15 @@ async function start(): Promise<void> {
       vault,
       watcher,
       reportFailure: (error) => connection.reportFailure(error),
+      saveEvidence: (input) =>
+        saveEvidence({
+          ...input,
+          defaultDirectory: app.getPath('downloads'),
+          showSaveDialog: (options) =>
+            mainWindow
+              ? dialog.showSaveDialog(mainWindow, options)
+              : dialog.showSaveDialog(options),
+        }),
     }),
   };
 

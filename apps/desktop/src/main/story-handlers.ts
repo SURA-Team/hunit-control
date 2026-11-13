@@ -34,6 +34,7 @@ export interface StoryServices {
     api: ApiClient;
     evidenceId: string;
     file: EvidenceFile;
+    label?: string | undefined;
   }) => Promise<Result<{ savedTo: string } | null>>;
 }
 

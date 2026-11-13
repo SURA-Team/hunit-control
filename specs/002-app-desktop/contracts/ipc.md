@@ -84,7 +84,7 @@ interface TwoFactorRequest {
 | `executions.sendToken(input)` | `{ executionId, token }` | `void` | token `^[0-9]{4,10}$`; resposta 202 = entregue; o resultado chega pelo estado da execução |
 | `executions.watch(id)` / `executions.unwatch(id)` | `executionId` | `void` | abre/fecha o fluxo de eventos de uma execução exibida na tela |
 | `evidence.list(id)` | `executionId` | `Api.EvidenceSummary[]` | |
-| `evidence.save(input)` | `{ evidenceId, file: 'screenshot' \| 'html' \| 'response' }` | `{ savedTo: string } \| null` | o principal baixa e abre "Salvar como"; `null` = cancelado; a interface nunca recebe o conteúdo |
+| `evidence.save(input)` | `{ evidenceId, file: 'screenshot' \| 'html' \| 'response', label? }` | `{ savedTo: string } \| null` | o principal baixa e abre "Salvar como" com o nome `evidencia-<label>-<id>.<png\|html\|json>`; `label` (acrescentado na implementação) é o código do hotel ou o início do id da execução, só letras, números, `-` e `_`; `null` = cancelado; a interface nunca recebe o conteúdo |
 | `reservations.list(input)` | filtros da FR-020 + `q`, `channel`, `amount` (formato da API), `cursor`, `limit` | `{ items: Api.Reservation[], nextCursor }` | |
 | `reservations.get(input)` | `{ hotelCode, reservationNumber }` | `Api.Reservation` | |
 | `reservations.channels()` | — | `string[]` | |

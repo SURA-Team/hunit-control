@@ -22,6 +22,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import type { Execution, ExecutionEvent } from '../../../../shared/ipc-types';
 import { ClassificationCountsGrid } from '../../components/ClassificationCountsGrid';
+import { EvidenceList } from '../../components/EvidenceList';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
 import { StatusBadge } from '../../components/StatusBadge';
 import { errorCode, messageOf, unwrap, useHunit } from '../../hunit';
@@ -40,9 +41,11 @@ const RESUMABLE = new Set(['failed', 'cancelled']);
 interface Props {
   executionId: string;
   onOpenExecution: (executionId: string) => void;
+  /** Abre a tela Reservas filtrada por esta execução (FR-020). */
+  onOpenReservations?: ((executionId: string) => void) | undefined;
 }
 
-export function ExecutionDetail({ executionId, onOpenExecution }: Props) {
+export function ExecutionDetail({ executionId, onOpenExecution, onOpenReservations }: Props) {
   const query = useExecution(executionId);
   const { state } = useConnection();
   const execution = query.data;
@@ -56,7 +59,12 @@ export function ExecutionDetail({ executionId, onOpenExecution }: Props) {
         </Alert>
       )}
       {execution && (
-        <DetailContent key={execution.id} execution={execution} onOpenExecution={onOpenExecution} />
+        <DetailContent
+          key={execution.id}
+          execution={execution}
+          onOpenExecution={onOpenExecution}
+          onOpenReservations={onOpenReservations}
+        />
       )}
     </Stack>
   );
@@ -71,9 +79,11 @@ function hotelName(execution: Execution, hotelCode: string | null | undefined): 
 function DetailContent({
   execution,
   onOpenExecution,
+  onOpenReservations,
 }: {
   execution: Execution;
   onOpenExecution: Props['onOpenExecution'];
+  onOpenReservations: Props['onOpenReservations'];
 }) {
   const { isOperator, isOnline, client } = useConnection();
   const { current, timing, warnings } = execution;
@@ -213,6 +223,16 @@ function DetailContent({
             ))}
           </Stack>
         </Paper>
+      )}
+
+      <EvidenceList executionId={execution.id} />
+
+      {onOpenReservations && (
+        <Group>
+          <Button variant="default" onClick={() => onOpenReservations(execution.id)}>
+            Ver as reservas desta execução
+          </Button>
+        </Group>
       )}
 
       {isOperator && (

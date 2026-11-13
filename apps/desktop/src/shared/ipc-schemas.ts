@@ -123,4 +123,8 @@ export const reservationKeySchema = z.strictObject({
 export const evidenceSaveInputSchema = z.strictObject({
   evidenceId: uuid,
   file: z.enum(['screenshot', 'html', 'response']),
+  label: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,40}$/, 'só letras, números, - e _')
+    .optional(),
 });
