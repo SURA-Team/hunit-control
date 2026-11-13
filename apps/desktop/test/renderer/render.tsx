@@ -166,7 +166,7 @@ export function renderWithApp(
     defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } },
   });
   const result = render(
-    <MantineProvider>
+    <MantineProvider env="test">
       <DatesProvider settings={{ locale: 'pt-br' }}>
         <QueryClientProvider client={queryClient}>
           <HunitContext.Provider value={hunit.api}>

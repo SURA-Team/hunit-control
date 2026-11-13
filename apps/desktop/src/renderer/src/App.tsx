@@ -7,7 +7,9 @@ import { AppShell, Badge, Group, NavLink, Stack, Text, Title } from '@mantine/co
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import alertSound from '../../../resources/sounds/token-alert.wav';
 import { ConnectionBanner } from './components/ConnectionBanner';
+import { TwoFactorDialog } from './components/TwoFactorDialog';
 import { useHunit } from './hunit';
+import { RunScreen } from './screens/run/RunScreen';
 import { SetupScreen } from './screens/setup/SetupScreen';
 import { useConnection } from './state/connection';
 
@@ -23,16 +25,12 @@ const AREA_TITLES: Record<Area, string> = {
   setup: 'Configuração',
 };
 
-export interface AppScreens {
-  run: ReactNode;
-  executions: ReactNode;
-  reservations: ReactNode;
-}
-
-export function App({ screens }: { screens?: Partial<AppScreens> }) {
+export function App() {
   const hunit = useHunit();
   const { state, client, isOnline, isOperator } = useConnection();
   const [chosen, setChosen] = useState<Area>('run');
+  /** Execução aberta na área Execuções (ex.: "Ver a execução ativa" na tela Executar). */
+  const [openExecutionId, setOpenExecutionId] = useState<string | null>(null);
   const lastPing = useRef(0);
 
   // Sem conexão confirmada (não configurado, certificado ou chave recusados), só a configuração.
@@ -72,10 +70,15 @@ export function App({ screens }: { screens?: Partial<AppScreens> }) {
     [hunit],
   );
 
+  const openExecution = (executionId: string) => {
+    setOpenExecutionId(executionId);
+    setChosen('executions');
+  };
+
   const content: Record<Area, ReactNode> = {
-    run: screens?.run ?? null,
-    executions: screens?.executions ?? null,
-    reservations: screens?.reservations ?? null,
+    run: <RunScreen onOpenExecution={openExecution} />,
+    executions: <Text c="dimmed">{openExecutionId ? `Execução ${openExecutionId}` : null}</Text>,
+    reservations: null,
     setup: <SetupScreen />,
   };
 
@@ -111,6 +114,7 @@ export function App({ screens }: { screens?: Partial<AppScreens> }) {
           {content[area]}
         </Stack>
       </AppShell.Main>
+      <TwoFactorDialog />
     </AppShell>
   );
 }

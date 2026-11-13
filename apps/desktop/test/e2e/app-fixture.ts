@@ -116,7 +116,7 @@ export async function configureApp(
 
   await window.getByLabel('Endereço do servidor').fill(settings.serverUrl);
   await window.getByRole('button', { name: /escolher certificado/i }).click();
-  await window.getByText(/impressão digital/i).waitFor();
+  await window.getByText('Impressão digital (SHA-256):', { exact: false }).waitFor();
   await window.getByLabel('Chave de acesso').fill(settings.apiKey);
   await window.getByRole('button', { name: 'Testar conexão' }).click();
   await window.getByText('Conexão confirmada').waitFor();

@@ -51,7 +51,9 @@ function makeExecution(status: ExecutionStatus, overrides: Partial<Execution> = 
     twoFactorDeadline: status === 'awaiting_2fa' ? DEADLINE : null,
     hotels: [],
     counts: {},
-    recentEvents: [{ id: '3', at: '2026-11-12T12:00:00.000Z', type: 'status_changed', status, message: '' }],
+    recentEvents: [
+      { id: '3', at: '2026-11-12T12:00:00.000Z', type: 'status_changed', status, message: '' },
+    ],
     warnings: [],
     ...overrides,
   };
@@ -95,7 +97,9 @@ beforeEach(() => {
   requests = [];
   closed = [];
   finished = [];
-  server.on('GET', `/v1/executions/${ID}`, (_request, response) => sendJson(response, 200, execution));
+  server.on('GET', `/v1/executions/${ID}`, (_request, response) =>
+    sendJson(response, 200, execution),
+  );
   server.on('GET', `/v1/executions/${ID}/events`, (request, response: ServerResponse) => {
     lastEventIds.push(request.headers['last-event-id'] as string | undefined);
     streams.push(openSse(response));
@@ -212,7 +216,7 @@ describe('pedido de token (FR-011, FR-012)', () => {
     await vi.waitFor(() => expect(requests).toHaveLength(1));
 
     if (tokenSentHere) watcher.noteTokenSent(ID);
-    emitStatus(status, overrides as Partial<Execution>);
+    emitStatus(status, overrides);
 
     await vi.waitFor(() => expect(closed).toEqual([{ executionId: ID, reason }]));
   });
