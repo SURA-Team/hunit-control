@@ -52,6 +52,8 @@ relatórios e painéis, e exportação de planilhas.
   verifica as inconsistências, pede ao Comercial que cobre (tratativa) e registra o comprovante; usa
   o perfil operador. A Controladoria controla os pagamentos, principalmente com o adquirente, e usa
   o perfil consulta: não registra nada nem roda execuções. O Comercial ainda não usa o sistema.
+- Q: O operador vê o documento antes de enviar? → A: Sim. O app mostra uma pré-visualização do
+  arquivo escolhido antes da confirmação do registro ou da substituição, também no lote (FR-018).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -90,7 +92,10 @@ baixado idêntico ao enviado e que o registro mostra o cliente e o momento.
    gravado.
 7. **Given** uma reserva com comprovante, **When** o operador anexa outro comprovante, **Then** o
    novo substitui o anterior como comprovante atual e a substituição fica no histórico da reserva.
-8. **Given** um comprovante substituído há menos de 30 dias, **When** o operador escolhe reverter,
+8. **Given** o operador escolheu o arquivo do comprovante, **When** o app pede a confirmação, **Then**
+   mostra a pré-visualização do arquivo (FR-018) e, numa substituição, qual documento será substituído
+   (nome, quem anexou e quando); **When** o operador cancela, **Then** nada é enviado nem gravado.
+9. **Given** um comprovante substituído há menos de 30 dias, **When** o operador escolhe reverter,
    **Then** o comprovante anterior volta a ser o atual, o que foi revertido passa a ser o substituído
    e o histórico registra a reversão; **Given** um substituído há mais de 30 dias, **Then** a opção de
    reverter não aparece e o arquivo não está mais disponível.
@@ -143,8 +148,8 @@ cada uma é o mesmo.
 **Acceptance Scenarios**:
 
 1. **Given** várias reservas selecionadas, **When** o operador escolhe aplicar um documento, **Then**
-   o sistema mostra quantas reservas aceitam, quantas serão ignoradas e o total dos valores, e pede
-   confirmação antes de gravar.
+   o sistema mostra a pré-visualização do documento (FR-018), quantas reservas aceitam, quantas serão
+   ignoradas e o total dos valores, e pede confirmação antes de gravar.
 2. **Given** a confirmação, **When** o documento é aplicado, **Then** todas as reservas que aceitam
    ficam com o documento e o resultado lista as ignoradas com o motivo de cada uma.
 3. **Given** uma falha no meio da aplicação em lote, **When** o operador vê o resultado, **Then** sabe
@@ -196,6 +201,12 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 - **Arquivo com extensão aceita mas conteúdo de outro tipo** (ex.: um executável renomeado para
   .pdf): é recusado.
 - **Arquivo vazio**: é recusado.
+- **Arquivo que não pode ser pré-visualizado** (ex.: corrompido ou num formato interno que o app não
+  consegue ler): o app avisa que não conseguiu mostrar o conteúdo e exibe nome, tipo e tamanho; o
+  operador pode confirmar mesmo assim, e o servidor continua conferindo o arquivo (FR-008).
+- **E-mail com conteúdo externo ou anexos** (imagens remotas, scripts, arquivos anexados): a
+  pré-visualização não carrega nada da internet, não executa nada e só lista os anexos do e-mail,
+  sem abri-los.
 - **Servidor indisponível durante o envio**: nada é gravado pela metade; o operador vê o erro e pode
   tentar de novo.
 - **Valor manual informado com a reserva sem comprovante**: o sistema recusa; o valor manual só faz
@@ -292,6 +303,15 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   (dentro do prazo de FR-013), informar e remover valor manual, abrir e
   baixar documentos, seleção de várias reservas para aplicação em lote e o filtro de FR-015. As ações
   de registro MUST ficar ocultas para o perfil consulta.
+- **FR-018**: Antes de confirmar o registro ou a substituição de um documento (individual ou em
+  lote), o app MUST mostrar uma pré-visualização do arquivo escolhido: PDF e imagens como são;
+  e-mails (.eml e .msg) com remetente, destinatários, assunto, data, o texto da mensagem e a lista de
+  anexos. Numa substituição, MUST mostrar também qual documento será substituído. Cancelar na
+  pré-visualização MUST NOT enviar nem gravar nada.
+- **FR-018a**: A pré-visualização MUST NOT carregar conteúdo da internet, executar scripts ou abrir
+  os anexos de um e-mail, e MUST NOT deixar cópias do arquivo no disco da máquina além do arquivo
+  original escolhido pelo operador (spec 002, SC-004). Se o arquivo não puder ser mostrado, o app
+  MUST avisar e permitir confirmar mesmo assim.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -325,6 +345,10 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   pendentes em que ninguém agiu, em até 5 segundos.
 - **SC-009**: Um documento substituído ou desfeito por engano volta a ser o atual em até 30
   segundos, durante os 30 dias seguintes, sem precisar anexar o arquivo de novo.
+- **SC-010**: A pré-visualização de um arquivo de até 25 MB aparece em até 3 segundos depois de o
+  operador escolhê-lo.
+- **SC-011**: Zero acessos à internet e zero cópias do arquivo deixadas no disco causados pela
+  pré-visualização.
 
 ## Assumptions
 
