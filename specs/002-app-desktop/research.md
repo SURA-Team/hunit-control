@@ -362,3 +362,43 @@ Detalhes em [contracts/api-changes.md](./contracts/api-changes.md).
   andamento".
 - **Rationale**: cada spec documenta o contrato que entregou; reescrever o artefato da 001 com
   mudanças da 002 apagaria esse histórico.
+
+## Resultados da homologação (T080, 2026-11-13)
+
+Servidor de produção no commit `fb0ff06` (contrato 1.4.0, migration 0006 aplicada). Máquinas: PC de
+produção (P), PC do Financeiro (C) e PC da Controladoria (K). Hunit real, duas contas do Financeiro.
+
+| Teste | Máquina | Medido | Resultado |
+|---|---|---|---|
+| SC-008 — máquina nova pronta (≤ 15 min) | C e K | 1 a 2 min (estimado) | Aprovado: conexão confirmada pelo certificado raiz, "Testar aviso" ok |
+| SC-009 — perfil consulta sem ações de operador | P | — | Aprovado (área Executar oculta) |
+| SC-001 — abrir o app até iniciar (≤ 1 min) | P | dentro da meta, não cronometrado | Aprovado |
+| SC-002 — pedido do token até o aviso (≤ 5 s) | P e C | dentro da meta, não cronometrado | Aprovado: a janela volta à frente mesmo minimizada |
+| R-07 (a) — foco do teclado no campo do token | P | — | Aprovado: o campo recebe o foco |
+| R-07 (b) — notificação do Windows | P e C | — | Aprovado (som alto demais, ver pendências) |
+| FR-016a — "Nova tentativa N de 5" | P e C | — | Aprovado: 213 avisos, todos por 503 do Hunit; nenhum hotel esgotou as tentativas |
+| SC-005 — busca por código de autorização e por valor (≤ 30 s) | — | quase instantâneo | Aprovado |
+| SC-006 — servidor volta até o app funcionar (≤ 30 s) | P | 8 s ("servidor indisponível" em 5 s) | Aprovado |
+| SC-004 — nada sensível no disco | P | 140 arquivos | Aprovado: 0 achados na pasta de dados; 2 falsos positivos em arquivos de fábrica do Electron, sem alteração desde a instalação; o token é coberto pelo T073 |
+| Senha errada (US1, cenário 8) | C | — | Aprovado: `invalid_credentials`, mensagem clara |
+| Prazo do token esgotado e "Iniciar de novo" (US1, cenário 5) | P | prazo de 5 min | Aprovado: nova execução com os mesmos dados |
+| Cancelar e retomar (FR-017, FR-018) | P | — | Aprovado: a retomada processou só os 5 hotéis pendentes |
+| Duas contas ao mesmo tempo (FR-012) | P e C | contas com 83 e 73 hotéis | Aprovado: cada máquina recebeu só o seu pedido de token |
+
+SC-001 e SC-002 foram avaliados sem cronômetro; a medição exata fica para a primeira rotina real.
+
+Documentação corrigida a partir da homologação: a impressão digital do certificado raiz é conferida
+com `certutil -dump` no arquivo exportado (o container do proxy não tem `openssl`), e o `curl.exe`
+do Windows precisa de `--ssl-no-revoke` (README e quickstart §3).
+
+**Pendências para avaliar** (mudam o comportamento: passam pela spec antes do código):
+
+1. Som do aviso alto demais: hoje tocam dois sons ao mesmo tempo (o da notificação do Windows e o do
+   app). Proposta da homologação: um som só, com controle de volume e opção de silenciar.
+2. Avaliar se a notificação basta, sem trazer a janela para a frente (FR-011 a FR-014, R-07). O
+   SC-002 continua valendo.
+3. Servidor (feature 001): muitos 503 do Hunit com 5 hotéis em paralelo — uma rotina de 83 hotéis
+   levou 9,5 min, contra 2,7 min de outra igual. Reavaliar o `HOTEL_CONCURRENCY` ou uma espera entre
+   leituras.
+4. Servidor (feature 001): o `server` às vezes não termina o desligamento em 10 s e é encerrado à
+   força (código 137); o `backup` sempre é, porque o bash não trata o SIGTERM.

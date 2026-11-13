@@ -165,8 +165,12 @@ certificados no repositório a seguir" → Autoridades de Certificação Raiz Co
 Depois, numa máquina cliente:
 
 ```powershell
-curl.exe https://<SERVER_HOSTNAME>/v1/health        # → {"status":"ok"}
+curl.exe --ssl-no-revoke https://<SERVER_HOSTNAME>/v1/health        # → {"status":"ok"}
 ```
+
+O `--ssl-no-revoke` é preciso no Windows: o `curl.exe` tenta conferir se o certificado foi
+revogado, e a autoridade interna do Caddy não publica essa lista. O app desktop não faz essa
+consulta.
 
 Trocar o `SERVER_HOSTNAME` gera um certificado novo, mas o raiz continua o mesmo enquanto o volume
 `caddy-data` existir. **Não apague esse volume**: se ele for perdido, um novo raiz é criado e
@@ -226,10 +230,11 @@ chave desta máquina (passo 7).
 
    ```powershell
    # No PC do servidor
-   (Get-PfxCertificate .\hunit-raiz.crt).GetCertHashString('SHA256')
+   certutil -dump .\hunit-raiz.crt | Select-String sha256
    ```
 
-   O comando mostra a mesma sequência que o app, sem os dois-pontos.
+   A linha "Cert Hash(sha256)" mostra a mesma sequência que o app, com espaços no lugar dos
+   dois-pontos.
 
 3. Cole a chave de acesso e clique em **Testar conexão**. O app mostra o nome do cliente e o
    perfil. Só então **Salvar conexão** fica disponível.

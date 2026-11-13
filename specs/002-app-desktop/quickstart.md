@@ -49,7 +49,8 @@ Cronometrar a partir da cópia do instalador para a máquina.
 1. Rodar o instalador (sem administrador); o app abre na tela de configuração (US1, cenário 1).
 2. Informar o endereço `https://<SERVER_HOSTNAME>`, escolher o `hunit-raiz.crt` e conferir a
    impressão digital mostrada com a do servidor
-   (`docker compose exec proxy sh -c "openssl x509 -in /data/caddy/pki/authorities/local/root.crt -noout -fingerprint -sha256"`).
+   (no PC do servidor, com o certificado exportado: `certutil -dump .\hunit-raiz.crt | Select-String sha256` — linha
+   "Cert Hash(sha256)"; o container do proxy não tem `openssl`).
 3. Colar a chave e clicar em **Testar conexão** → mostra o nome do cliente e o perfil.
 4. **Salvar** e clicar em **Testar aviso** → notificação do Windows, janela à frente e som. Se a
    notificação não aparecer, liberar as notificações do "HUNIT Control" nas configurações do
