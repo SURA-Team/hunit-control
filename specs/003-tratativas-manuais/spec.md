@@ -54,6 +54,9 @@ relatórios e painéis, e exportação de planilhas.
   o perfil consulta: não registra nada nem roda execuções. O Comercial ainda não usa o sistema.
 - Q: O operador vê o documento antes de enviar? → A: Sim. O app mostra uma pré-visualização do
   arquivo escolhido antes da confirmação do registro ou da substituição, também no lote (FR-018).
+- Q: A seleção do lote se perde ao pesquisar de novo, como no sistema anterior? → A: Não. A seleção
+  se mantém entre pesquisas, filtros e páginas até ser aplicada, limpa ou o app ser fechado
+  (FR-006a).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -134,16 +137,22 @@ comprovante, passa a "Cobrada" mantendo os dois documentos.
 
 ### User Story 3 - Aplicar o mesmo documento a várias reservas (Priority: P3)
 
-Um mesmo e-mail ou comprovante costuma cobrir várias reservas do mesmo hotel. O operador seleciona
-as reservas na consulta, escolhe "Anexar tratativa" ou "Anexar comprovante", confirma e o documento
+Um mesmo e-mail ou comprovante costuma cobrir várias reservas, nem sempre do mesmo hotel nem do mesmo
+filtro. O operador pesquisa uma reserva, marca, pesquisa outra, marca — e a seleção vai se acumulando
+entre as pesquisas. Depois escolhe "Anexar tratativa" ou "Anexar comprovante", confirma e o documento
 é registrado em todas as que aceitam; as demais são listadas com o motivo de terem ficado de fora.
+
+No sistema anterior, fazer uma nova pesquisa desmarcava as reservas já selecionadas, e o operador
+tinha de juntar tudo num filtro só ou tratar uma de cada vez. Esta história corrige esse
+comportamento.
 
 **Why this priority**: economiza tempo quando há muitas reservas, mas o registro de uma em uma
 (US1/US2) já resolve a operação.
 
-**Independent Test**: selecionar 10 reservas, sendo 2 delas "já cobradas", aplicar um comprovante e
-conferir que 8 ficaram "Cobradas", que as 2 foram informadas com o motivo e que o arquivo baixado de
-cada uma é o mesmo.
+**Independent Test**: selecionar 10 reservas em 10 pesquisas diferentes (por número de reserva,
+trocando também o hotel e o período), sendo 2 delas "já cobradas"; conferir que as 10 continuam
+selecionadas ao fim; aplicar um comprovante e conferir que 8 ficaram "Cobradas", que as 2 foram
+informadas com o motivo e que o arquivo baixado de cada uma é o mesmo.
 
 **Acceptance Scenarios**:
 
@@ -154,6 +163,14 @@ cada uma é o mesmo.
    ficam com o documento e o resultado lista as ignoradas com o motivo de cada uma.
 3. **Given** uma falha no meio da aplicação em lote, **When** o operador vê o resultado, **Then** sabe
    exatamente quais reservas ficaram com o documento e quais não, e pode repetir só as que faltaram.
+4. **Given** uma reserva marcada, **When** o operador faz outra pesquisa, troca filtros ou muda de
+   página, **Then** a reserva continua selecionada, e as que aparecerem de novo num resultado
+   aparecem marcadas.
+5. **Given** reservas selecionadas em pesquisas diferentes, **When** o operador olha a seleção,
+   **Then** vê quantas são e o total dos valores, pode abrir a lista das selecionadas (inclusive as que
+   não estão no resultado atual), desmarcar uma delas ou limpar tudo.
+6. **Given** o lote aplicado, **When** o resultado aparece, **Then** a seleção é limpa, exceto as
+   reservas que falharam por erro (cenário 3), que continuam selecionadas para repetir.
 
 ---
 
@@ -249,6 +266,13 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   reservas de uma vez, depois de uma confirmação que mostre quantas aceitam, quantas serão ignoradas
   e o total dos valores. O resultado MUST informar, por reserva, se o documento foi registrado ou o
   motivo de ter ficado de fora.
+- **FR-006a**: No app, a seleção de reservas para o lote MUST se manter entre pesquisas, trocas de
+  filtro e de página, até o operador desmarcar, limpar a seleção, aplicar o lote (FR-006; as que
+  falharam por erro continuam selecionadas) ou fechar o app. O app MUST mostrar a quantidade e o
+  total dos valores selecionados e permitir ver a lista completa da seleção, inclusive das reservas
+  fora do resultado atual, e desmarcar cada uma. A elegibilidade (FR-003) MUST ser conferida no
+  momento da confirmação: uma reserva que mudou de classificação depois de selecionada aparece entre
+  as ignoradas, com o motivo.
 - **FR-007**: Os registros MUST NOT gerar nenhuma requisição ao Hunit nem alterar dado lido dele; uma
   nova verificação da reserva MUST NOT apagar ou alterar tratativas, documentos ou valor manual.
 
@@ -332,7 +356,8 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 
 - **SC-001**: O operador registra o comprovante de uma reserva encontrada na consulta em até 1 minuto.
 - **SC-002**: O operador aplica um mesmo documento a 20 reservas selecionadas em até 2 minutos,
-  incluindo a confirmação.
+  incluindo a confirmação. Achando cada reserva por uma pesquisa diferente, 100% das 20 continuam
+  selecionadas no momento de aplicar.
 - **SC-003**: Zero requisições ao Hunit causadas por tratativas, e zero alterações na classificação
   calculada das reservas.
 - **SC-004**: 100% das tratativas e documentos permanecem iguais depois de novas verificações das
