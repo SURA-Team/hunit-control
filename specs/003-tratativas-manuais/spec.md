@@ -38,8 +38,8 @@ tratativas registradas no sistema anterior, relatórios e painéis, e exportaç�
 - Q: O que fazer com documentos substituídos ou desfeitos? → A: Guardar por 30 dias e depois apagar
   (FR-013); enquanto guardados, o operador pode revertê-los, voltando-os a documento atual (FR-013a).
 - Q: Quais classificações aceitam tratativa? → A: Pendente de cobrança, erro na cobrança, cartão
-  validado (não cobrado) e erro de análise; "cobrar na maquininha" não, porque é cobrada pelo
-  Comercial (FR-003, Assumptions).
+  validado (não cobrado) e erro de análise aceitam tratativa e comprovante; "cobrar na maquininha"
+  aceita o comprovante, mesmo depois que existir a planilha do comercial (FR-003).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -69,14 +69,17 @@ baixado idêntico ao enviado e que o registro mostra o cliente e o momento.
    informa o valor cobrado, **Then** esse valor passa a ser exibido como valor cobrado, identificado
    como informado manualmente; **When** ele volta ao valor do Hunit, **Then** o valor manual é
    removido.
-4. **Given** uma reserva "já cobrada", "faturada" ou outra que não exige ação do Financeiro (FR-003),
+4. **Given** uma reserva "cobrar na maquininha" cobrada na maquininha, **When** o operador anexa o
+   comprovante, **Then** ela passa a "Cobrada"; **When** ele tenta anexar uma tratativa, **Then** o
+   sistema recusa e explica por quê (FR-003).
+5. **Given** uma reserva "já cobrada", "faturada" ou outra que não exige ação do Financeiro (FR-003),
    **When** o operador tenta anexar um comprovante, **Then** o sistema recusa e explica por quê.
-5. **Given** um arquivo de tipo não aceito ou maior que o limite (FR-008), **When** o operador tenta
+6. **Given** um arquivo de tipo não aceito ou maior que o limite (FR-008), **When** o operador tenta
    anexá-lo, **Then** o sistema recusa com uma mensagem que diz o motivo e os limites, e nada é
    gravado.
-6. **Given** uma reserva com comprovante, **When** o operador anexa outro comprovante, **Then** o
+7. **Given** uma reserva com comprovante, **When** o operador anexa outro comprovante, **Then** o
    novo substitui o anterior como comprovante atual e a substituição fica no histórico da reserva.
-7. **Given** um comprovante substituído há menos de 30 dias, **When** o operador escolhe reverter,
+8. **Given** um comprovante substituído há menos de 30 dias, **When** o operador escolhe reverter,
    **Then** o comprovante anterior volta a ser o atual, o que foi revertido passa a ser o substituído
    e o histórico registra a reversão; **Given** um substituído há mais de 30 dias, **Then** a opção de
    reverter não aparece e o arquivo não está mais disponível.
@@ -208,10 +211,13 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   - sem nenhum dos dois → a classificação do servidor, sem marcação.
   "Enviada" MUST continuar sendo tratada como pendência em filtros e totais; "Cobrada" MUST deixar de
   ser.
-- **FR-003**: Só aceitam novos registros as reservas cuja classificação exige ação do Financeiro:
-  pendente de cobrança, erro na cobrança, cartão validado (não cobrado) e erro de análise. As demais
-  (ignorada, faturada, cobrar na maquininha, cancelada sem cobrança, já cobrada) MUST ser recusadas
-  com o motivo.
+- **FR-003**: Só aceitam novos registros as reservas cuja classificação exige uma cobrança ainda não
+  registrada no Hunit:
+  - pendente de cobrança, erro na cobrança, cartão validado (não cobrado) e erro de análise aceitam
+    tratativa e comprovante;
+  - cobrar na maquininha aceita só o comprovante (a cobrança é feita na maquininha, sem tratativa
+    com o hotel), e com ele passa a "Cobrada" (FR-002).
+  As demais (ignorada, faturada, cancelada sem cobrança, já cobrada) MUST ser recusadas com o motivo.
 - **FR-004**: Cada documento MUST poder ser substituído por outro do mesmo tipo e desfeito
   (removido). A situação exibida MUST refletir o que restou (FR-002).
 - **FR-005**: O operador MUST poder informar manualmente o valor cobrado de uma reserva que tenha
@@ -317,8 +323,10 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   independentemente da máquina exigiria login por usuário, fora do escopo.
 - Os tipos aceitos (FR-008) são os usados no sistema anterior; o limite de 25 MB cobre e-mails com
   anexos comuns. Os dois podem ser ajustados no plano se a homologação mostrar necessidade.
-- "Cobrar na maquininha" não aceita tratativa porque a cobrança é feita pelo Comercial, fora do
-  Hunit e fora da rotina do Financeiro; se o Comercial passar a usar o sistema, isso será revisto.
+- "Cobrar na maquininha" é cobrada fora do Hunit, na maquininha; o comprovante dessa cobrança é
+  registrado no sistema por quem tiver acesso de operador (hoje o Financeiro e a Controladoria). A
+  futura planilha do comercial não substitui esse registro: o sistema continua sendo a fonte da
+  verdade (constitution, princípio VI), e a planilha será uma projeção dele.
 - O volume é pequeno: dezenas de documentos por semana, de 4 operadores.
 - As tratativas registradas no sistema anterior não entram nesta feature: virão com a importação do
   histórico (spec futura). Até lá, quem precisar consulta o sistema anterior.
