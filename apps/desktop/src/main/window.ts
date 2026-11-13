@@ -7,7 +7,7 @@
  */
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, session, type WebContents } from 'electron';
 
 export interface RendererLocation {
   /** Endereço que o app carrega e do qual aceita pedidos pela ponte. */
@@ -37,6 +37,22 @@ export function denyAllPermissions(): void {
   session.defaultSession.setPermissionCheckHandler(() => false);
 }
 
+/**
+ * Proteções de todo conteúdo web que o app criar — não só da janela principal (checklist de
+ * segurança, seção 5): nada de navegar para fora do app, abrir janelas ou anexar webviews.
+ * Registrar em `app.on('web-contents-created')`, antes de criar a janela.
+ */
+export function guardWebContents(contents: WebContents, location: RendererLocation): void {
+  contents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(location.trustedPrefix)) event.preventDefault();
+  });
+  contents.on('will-redirect', (event, url) => {
+    if (!url.startsWith(location.trustedPrefix)) event.preventDefault();
+  });
+  contents.on('will-attach-webview', (event) => event.preventDefault());
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+}
+
 export function createMainWindow(location: RendererLocation): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
@@ -52,21 +68,14 @@ export function createMainWindow(location: RendererLocation): BrowserWindow {
       sandbox: true,
       nodeIntegration: false,
       nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
       webviewTag: false,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
       spellcheck: false,
       devTools: !app.isPackaged,
     },
   });
-
-  // Nada de navegar para fora do app nem abrir outras janelas.
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(location.trustedPrefix)) event.preventDefault();
-  });
-  window.webContents.on('will-redirect', (event, url) => {
-    if (!url.startsWith(location.trustedPrefix)) event.preventDefault();
-  });
-  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   window.once('ready-to-show', () => window.show());
   void window.loadURL(location.url);

@@ -59,6 +59,18 @@ cobertos pelo [quickstart.md](./quickstart.md).
 - **Alternatives considered**: a interface chamar a API direto com `fetch` (exigiria a chave na
   interface, CORS no servidor e `connect-src` aberto); `electron-trpc` (tipagem ponta a ponta, mas
   mais uma dependência e um roteador para cerca de 25 funções — o contrato tipado com `zod` basta).
+- **Revisão de segurança (T077, 2026-11-13)**, com o checklist da skill `electron-best-practices`
+  (seções 1 a 5 e 8) e a fronteira acima:
+
+  | Item | Resultado |
+  |---|---|
+  | Janela: isolamento, sandbox, sem Node, sem webview | Já atendido. Passaram a ser explícitos também `nodeIntegrationInSubFrames`, `allowRunningInsecureContent` e `experimentalFeatures` (todos desligados) |
+  | Preload: sem `ipcRenderer` exposto, canais fixos, inscrição com cancelamento, sem módulos do Node | Atendido; o T081 confere a ponte contra o `ipc.md` |
+  | Validação da ponte | Toda entrada passa por `zod`; caminhos de arquivo nunca vêm da interface (só dos diálogos do principal); nada chega a `shell.openExternal` ou `child_process` |
+  | Canais sem uso | Dois achados: `connection.remove` não tinha botão (também era lacuna da FR-003) e `reservations.get` não era usado. A configuração ganhou "Remover a configuração desta máquina", com confirmação, e o detalhe da reserva passou a buscá-la atualizada |
+  | CSP | Na própria página (`<meta>`): o app carrega `file://`, onde não há cabeçalho HTTP para o `onHeadersReceived`. Sem `unsafe-eval`/`unsafe-inline` em scripts, `object-src 'none'`, `connect-src 'none'`, `base-uri 'none'` (mais estritos que o checklist). Só o servidor de desenvolvimento (`pnpm dev`) libera script inline e WebSocket, para o React Refresh; o build não muda (conferido em `out/renderer/index.html`) |
+  | Navegação | As proteções (navegar, redirecionar, abrir janela, anexar webview) passaram a valer para **todo** conteúdo web, em `app.on('web-contents-created')`, não só para a janela principal |
+  | Empacotamento | `asar` com verificação de integridade pelas *fuses*; build sem *source maps*; DevTools e ganchos de teste só fora do pacote. Sem assinatura de código: decisão do R-11 (4 máquinas internas) |
 
 ## R-03 — Conexão com o servidor e confiança no certificado (FR-001, FR-002, SC-007)
 
@@ -328,6 +340,12 @@ Detalhes em [contracts/api-changes.md](./contracts/api-changes.md).
   (`app.getPath('crashDumps')`) mesmo sem `crashReporter.start()` — eles podem conter a memória do
   processo, inclusive a senha. Se gravar, o app esvazia essa pasta ao iniciar e a varredura do
   SC-004 inclui a pasta. O app nunca chama `crashReporter.start()`.
+- **Verificado em 2026-11-13 (T076, Windows 11, Electron 45.2)**: com o app aberto, a interface
+  derrubada de propósito (`forcefullyCrashRenderer`) e depois o processo principal (`process.crash`),
+  a pasta `crashDumps` (`<pasta de dados>\Crashpad`) continuou vazia. Sem `crashReporter.start()`, o
+  Electron não grava *minidumps*; o app não precisa esvaziar a pasta. A sonda fica em
+  `apps/desktop/test/e2e/crash-dumps-probe.test.ts` e roda só com `HUNIT_DESKTOP_CRASH_PROBE=1`, para
+  repetir a conferência a cada atualização do Electron. A varredura do SC-004 (T073) inclui a pasta.
 - **Rationale**: o princípio VI proíbe credenciais em registros, e a clarificação proíbe reservas
   em disco; não ter arquivo de registro elimina a classe inteira de vazamento. Diagnóstico de falhas
   do servidor continua nos registros do servidor.

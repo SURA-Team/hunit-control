@@ -123,6 +123,27 @@ describe('SetupScreen — conexão', () => {
     expect(screen.getByText(/chave guardada/i)).toBeInTheDocument();
   });
 
+  it('remover a configuração pede confirmação e apaga (FR-003)', async () => {
+    mocked(hunit.api.connection.getConfig).mockImplementation(() => okResult(CONFIG));
+    renderWithApp(<SetupScreen />, hunit);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: /remover a configuração/i }));
+    expect(hunit.api.connection.remove).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: /sim, remover/i }));
+
+    await waitFor(() => expect(hunit.api.connection.remove).toHaveBeenCalled());
+  });
+
+  it('sem configuração, não oferece remover', async () => {
+    renderWithApp(<SetupScreen />, hunit);
+    await screen.findByLabelText(/endereço do servidor/i);
+
+    expect(
+      screen.queryByRole('button', { name: /remover a configuração/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('mostra a versão do app (FR-025)', async () => {
     renderWithApp(<SetupScreen />, hunit);
 

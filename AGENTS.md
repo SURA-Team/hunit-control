@@ -26,6 +26,7 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
 | `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle) |
+| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md` |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
@@ -36,8 +37,8 @@ funcionar porque o Hunit mudou a UI.
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento. **Não é versionado** (está no `.gitignore`): existe só na máquina de quem desenvolve |
 
 O monorepo (pnpm + TypeScript) foi criado pela feature 001; a estrutura detalhada está em
-`specs/001-consulta-reservas-hunit/plan.md`. O app desktop (`apps/desktop`, Electron) ainda não
-existe e terá uma feature própria. Atualize esta tabela quando a estrutura mudar.
+`specs/001-consulta-reservas-hunit/plan.md`. O app desktop (`apps/desktop`) veio com a feature 002
+(`specs/002-app-desktop/`). Atualize esta tabela quando a estrutura mudar.
 
 ## Fluxo de trabalho (Spec-Driven Development)
 
@@ -117,6 +118,11 @@ administrador, `corepack enable` também funciona.
 Os testes precisam de mais duas coisas: o **Docker em execução** (os testes de banco sobem um
 PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tabela).
 
+O terminal integrado do VS Code (e o do Claude Code dentro dele) define `ELECTRON_RUN_AS_NODE=1`.
+Com ela, o Electron roda como Node e o app não abre. Os testes de ponta a ponta tiram a variável do
+processo do app sozinhos; para `pnpm --filter @hunit/desktop dev`, rode antes
+`Remove-Item Env:ELECTRON_RUN_AS_NODE` (PowerShell) ou `unset ELECTRON_RUN_AS_NODE` (Git Bash).
+
 | Comando | O que faz |
 |---|---|
 | `pnpm install` | Instala as dependências do monorepo |
@@ -125,7 +131,10 @@ PostgreSQL temporário) e o **Chromium do Playwright** instalado (comando na tab
 | `pnpm lint` | ESLint + Prettier + lint do contrato OpenAPI (falha se os tipos gerados estiverem desatualizados) |
 | `pnpm format` | Formata o código com o Prettier |
 | `pnpm test` | Roda todos os testes (Vitest) |
-| `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker — inclui o teste de segurança SC-004 e o de cópia e restauração, que roda os scripts de `deploy/backup/` num container `postgres:17`) |
+| `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker — inclui o teste de segurança SC-004 e o de cópia e restauração, que roda os scripts de `deploy/backup/` num container `postgres:17`). Do app: `desktop` (processo principal, com servidor HTTPS local e certificados gerados no teste), `desktop-ui` (interface, jsdom) e `desktop-e2e` (o app compilado aberto pelo Playwright contra a API da 001 com o Hunit simulado; exige o Docker e abre janelas) |
+| `pnpm --filter @hunit/desktop dev` | Abre o app em desenvolvimento (electron-vite, recarga da tela na hora). Sem `ELECTRON_RUN_AS_NODE` no terminal |
+| `pnpm --filter @hunit/desktop build` | Compila o app para `apps/desktop/out/` (o `pnpm build` da raiz também compila) |
+| `pnpm --filter @hunit/desktop dist` | Gera o instalador NSIS em `apps/desktop/release/` (sem assinatura de código; research R-11 da 002) |
 | `pnpm build` | Compila os pacotes para `dist/`, na ordem das dependências. Use sempre este antes dos comandos `hunit:*`: `pnpm --filter @hunit/server build` compila só o servidor e usa o `dist` antigo do `@hunit/contracts` e do `@hunit/domain` (os testes leem o código-fonte e não acusam) |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
 | `pnpm --filter @hunit/server db:generate --name=<descrição>` | Gera uma migration depois de mudar `apps/server/src/persistence/schema.ts` (não precisa de banco) |
@@ -145,7 +154,11 @@ Regras ao mexer em dependências e no contrato:
 
 - O `pnpm-workspace.yaml` só aceita versões publicadas há 3 dias ou mais e nega scripts de
   instalação de dependências. Se uma dependência nova exigir script, avalie e registre a decisão
-  em `allowBuilds`.
+  em `allowBuilds`. Hoje só o `electron` tem script liberado (baixa o binário oficial e confere o
+  checksum); o `electron-winstaller` fica negado (serve só ao instalador Squirrel, que o app não usa).
+- O app desktop não tem `dependencies` no `package.json`: tudo vai em `devDependencies` e é
+  empacotado pelo Vite (há um teste que confere). As fuses do instalador ficam no
+  `electron-builder.yml` e também são conferidas por teste.
 - A versão do pacote `playwright` e a da imagem em `apps/server/Dockerfile` têm de ser iguais
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
@@ -172,5 +185,12 @@ estimativa de tempo (`current` e `timing` em `GET /v1/executions/{id}`), cancela
 confirmados em parte com o `hunit:reservations-check` (T022). Desde a Fase 6, apaga as evidências
 vencidas e anonimiza reservas antigas sozinho (`apps/server/src/maintenance/retention.ts`, ao subir e
 a cada 24 h), aceita conexões da rede só por HTTPS (container `proxy`) e faz cópias cifradas do
-banco (container `backup`); a implantação no PC de produção está no `README.md`. Ainda não existe
-o app Electron; documente aqui quando for criado.
+banco (container `backup`); a implantação no PC de produção está no `README.md`.
+
+Desde a feature 002, existe o app desktop (`apps/desktop`): configura a conexão confirmando o
+servidor pelo certificado raiz do Caddy (sem instalar nada no Windows), executa a consulta com o
+aviso do pedido de token (notificação, janela à frente e som), acompanha, cancela e retoma execuções
+e consulta reservas e evidências. O contrato da API passou para a 1.4.0 (só acréscimos: `/me`,
+`requestedClient` e `active` na lista de execuções, `warnings` no estado da execução, `q`, `channel`
+e `amount` nas reservas, `/channels` e a lista de evidências da execução). A instalação do app está
+no `README.md`.

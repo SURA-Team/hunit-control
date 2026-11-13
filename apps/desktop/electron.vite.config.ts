@@ -6,6 +6,21 @@
 // Node ficam de fora, como o electron-vite já faz por padrão.
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
+import type { Plugin } from 'vite';
+
+/**
+ * Só no servidor de desenvolvimento (`pnpm dev`): o React Refresh injeta um script inline e a
+ * recarga da tela usa WebSocket, que a CSP do app bloqueia (research R-02). O build — que vai para
+ * o instalador e para os testes de ponta a ponta — mantém a CSP como está no index.html.
+ */
+const developmentCsp: Plugin = {
+  name: 'hunit-development-csp',
+  apply: 'serve',
+  transformIndexHtml: (html) =>
+    html
+      .replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+      .replace("connect-src 'none'", "connect-src 'self' ws://localhost:* http://localhost:*"),
+};
 
 export default defineConfig({
   main: {
@@ -27,6 +42,6 @@ export default defineConfig({
     },
   },
   renderer: {
-    plugins: [react()],
+    plugins: [react(), developmentCsp],
   },
 });

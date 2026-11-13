@@ -14,6 +14,8 @@ const EXPECTED_IGNORED = [
   /(^|\/)coverage\/$/,
   /(^|\/)\.vitest\/$/,
   /(^|\/)test\/fixtures\/hunit\/raw\/$/,
+  // Saídas do app desktop: código compilado pelo electron-vite e instaladores (specs/002).
+  /^apps\/desktop\/(out|release)\/$/,
   /(^|\/)\.env(\.[^/]+)?$/,
   /\.(har|log|xlsx|xls|csv|tsv|tsbuildinfo)$/,
 ];

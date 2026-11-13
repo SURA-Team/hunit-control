@@ -119,6 +119,23 @@ describe('lista (FR-021)', () => {
   });
 });
 
+describe('detalhe (FR-022)', () => {
+  it('abrir uma reserva busca o detalhe atualizado no servidor', async () => {
+    mocked(hunit.api.reservations.get).mockImplementation(() =>
+      okResult(reservation('7001', { reason: 'motivo atualizado no servidor' })),
+    );
+    renderWithApp(<ReservationsScreen />, hunit);
+
+    await userEvent.click(await screen.findByText('7001'));
+
+    expect(await screen.findByText('motivo atualizado no servidor')).toBeInTheDocument();
+    expect(hunit.api.reservations.get).toHaveBeenCalledWith({
+      hotelCode: '31',
+      reservationNumber: '7001',
+    });
+  });
+});
+
 describe('filtros (FR-020 a FR-020b)', () => {
   it('a busca livre vai sem espaços nas pontas e só com 2 ou mais caracteres', async () => {
     renderWithApp(<ReservationsScreen />, hunit);

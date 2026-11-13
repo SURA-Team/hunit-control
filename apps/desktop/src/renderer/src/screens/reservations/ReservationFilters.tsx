@@ -56,6 +56,8 @@ interface Props {
   onChange: (draft: FilterDraft) => void;
   onSearch: () => void;
   onClear: () => void;
+  /** Servidor indisponível: a busca fica desabilitada (FR-005). */
+  disabled: boolean;
   hotels: Hotel[];
   channels: string[];
   errors: { q?: string | null; amount?: string | null; period?: string | null };
@@ -66,6 +68,7 @@ export function ReservationFilters({
   onChange,
   onSearch,
   onClear,
+  disabled,
   hotels,
   channels,
   errors,
@@ -197,7 +200,9 @@ export function ReservationFilters({
               <Button variant="default" onClick={onClear}>
                 Limpar
               </Button>
-              <Button type="submit">Buscar</Button>
+              <Button type="submit" disabled={disabled}>
+                Buscar
+              </Button>
             </Group>
           </Group>
         </Stack>

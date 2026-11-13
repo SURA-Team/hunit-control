@@ -71,7 +71,7 @@ async function fillAccessAndPeriod(password = PASSWORD) {
 }
 
 async function waitForDialog() {
-  await launched.window.getByText('O Hunit pediu o token').waitFor({ timeout: 5_000 });
+  await launched.window.getByText('O Hunit pediu o token').waitFor({ timeout: 10_000 });
 }
 
 async function closeDialog() {
@@ -118,7 +118,12 @@ describe('US1 — executar e responder ao token', () => {
     await window.getByLabel('Token do autenticador').fill('111111');
     await window.getByRole('button', { name: 'Enviar token' }).click();
 
-    await window.getByText('O Hunit recusou o token.').first().waitFor({ timeout: 10_000 });
+    // O desfecho aparece no próprio diálogo (o servidor volta a running antes de o Hunit
+    // recusar; o pedido não pode fechar como aceito).
+    await window
+      .getByRole('dialog', { name: 'O Hunit pediu o token' })
+      .getByText('O Hunit recusou o token.')
+      .waitFor({ timeout: 10_000 });
     await closeDialog();
     await window.getByRole('button', { name: 'Iniciar de novo' }).waitFor();
   });

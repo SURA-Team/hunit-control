@@ -107,10 +107,24 @@ describe('ConnectionManager', () => {
     expect(manager.getState()).toMatchObject({ status: 'online', client: IDENTITY });
     expect(statuses()).toEqual(['connecting', 'offline', 'connecting', 'online']);
 
-    // Online, não testa mais sozinho.
+    // Online, volta ao intervalo longo: nada de testes a cada 5 s.
     const calls = api.healthCalls;
     await vi.advanceTimersByTimeAsync(20_000);
     expect(api.healthCalls).toBe(calls);
+  });
+
+  it('online, testa /health a cada 30 s e percebe sozinho que o servidor sumiu (FR-005)', async () => {
+    const manager = newManager();
+    await manager.start();
+    const calls = api.healthCalls;
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(api.healthCalls).toBe(calls + 1);
+    expect(manager.getState().status).toBe('online');
+
+    api.health = failure('offline');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(manager.getState().status).toBe('offline');
   });
 
   it('falha de TLS → untrusted_server, sem novas tentativas', async () => {

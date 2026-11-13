@@ -45,7 +45,7 @@ export function RunScreen({ onOpenExecution }: { onOpenExecution: (executionId: 
 function RunForm({ onOpenExecution }: { onOpenExecution: (executionId: string) => void }) {
   const hunit = useHunit();
   const queryClient = useQueryClient();
-  const { client } = useConnection();
+  const { client, isOnline } = useConnection();
 
   const credentials = useQuery({
     queryKey: ['credentials'],
@@ -188,7 +188,7 @@ function RunForm({ onOpenExecution }: { onOpenExecution: (executionId: string) =
             error={hotelError}
           />
           <Group>
-            <Button onClick={submit} loading={start.isPending} size="md">
+            <Button onClick={submit} loading={start.isPending} size="md" disabled={!isOnline}>
               Iniciar execução
             </Button>
           </Group>

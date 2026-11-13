@@ -29,7 +29,12 @@ import { saveEvidence } from './evidence-download.js';
 import { ExecutionWatcher } from './execution-watcher.js';
 import { createInvokeHandlers, type InvokeHandlers } from './ipc-handlers.js';
 import { createStoryHandlers } from './story-handlers.js';
-import { createMainWindow, denyAllPermissions, rendererLocation } from './window.js';
+import {
+  createMainWindow,
+  denyAllPermissions,
+  guardWebContents,
+  rendererLocation,
+} from './window.js';
 
 const APP_USER_MODEL_ID = 'io.github.sura-team.hunit-control';
 /** Certificado raiz não passa de alguns KB; arquivo maior não é o que o operador quis escolher. */
@@ -178,6 +183,7 @@ async function start(): Promise<void> {
   };
 
   const location = rendererLocation();
+  app.on('web-contents-created', (_event, contents) => guardWebContents(contents, location));
 
   /** Só a página do próprio app, na janela principal, fala com a ponte. */
   const isTrusted = (event: IpcMainInvokeEvent | Electron.IpcMainEvent) =>

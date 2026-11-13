@@ -33,6 +33,11 @@ export interface ConnectionManagerOptions<Config, Api extends ConnectionApi> {
   onState(state: ConnectionState): void;
   /** Intervalo entre os testes quando o servidor está indisponível. Padrão: 5 s. */
   retryIntervalMs?: number;
+  /**
+   * Intervalo entre os testes com o servidor no ar: a queda é percebida mesmo sem nenhuma tela
+   * consultando (FR-005). Padrão: 30 s.
+   */
+  onlineCheckIntervalMs?: number;
 }
 
 export class ConnectionManager<Config = unknown, Api extends ConnectionApi = ConnectionApi> {
@@ -47,9 +52,11 @@ export class ConnectionManager<Config = unknown, Api extends ConnectionApi = Con
   /** Aumenta a cada reconexão: respostas de uma tentativa antiga são ignoradas. */
   private generation = 0;
   private readonly retryIntervalMs: number;
+  private readonly onlineCheckIntervalMs: number;
 
   constructor(private readonly options: ConnectionManagerOptions<Config, Api>) {
     this.retryIntervalMs = options.retryIntervalMs ?? 5_000;
+    this.onlineCheckIntervalMs = options.onlineCheckIntervalMs ?? 30_000;
   }
 
   getState(): ConnectionState {
@@ -121,6 +128,25 @@ export class ConnectionManager<Config = unknown, Api extends ConnectionApi = Con
       return;
     }
     this.setState('online', me.data);
+    this.scheduleOnlineCheck(generation);
+  }
+
+  /** Com o servidor no ar, testa `/health` de tempos em tempos para perceber uma queda. */
+  private scheduleOnlineCheck(generation: number): void {
+    this.stopRetrying();
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.onlineCheck(generation);
+    }, this.onlineCheckIntervalMs);
+  }
+
+  private async onlineCheck(generation: number): Promise<void> {
+    const api = this.api;
+    if (api === null || generation !== this.generation || this.state.status !== 'online') return;
+    const health = await api.getHealth();
+    if (generation !== this.generation || this.state.status !== 'online') return;
+    if (health.ok) this.scheduleOnlineCheck(generation);
+    else this.fail(health.error);
   }
 
   private fail(error: AppError): void {
@@ -131,6 +157,7 @@ export class ConnectionManager<Config = unknown, Api extends ConnectionApi = Con
 
   private goOffline(): void {
     this.setState('offline', null);
+    this.stopRetrying();
     this.scheduleRetry();
   }
 

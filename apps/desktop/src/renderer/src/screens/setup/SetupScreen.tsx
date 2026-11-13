@@ -10,6 +10,7 @@ import {
   Divider,
   Group,
   Loader,
+  Modal,
   Paper,
   PasswordInput,
   Stack,
@@ -60,6 +61,7 @@ export function SetupScreen() {
         />
       )}
       <AttentionTest />
+      {config.data && <RemoveConfiguration />}
       {info.data && (
         <Text size="sm" c="dimmed">
           HUNIT Control — versão {info.data.version}
@@ -233,6 +235,60 @@ function AttentionTest() {
           </Button>
         </Group>
       </Stack>
+    </Paper>
+  );
+}
+
+/** Remover a configuração desta máquina, inclusive a chave guardada (FR-003). */
+function RemoveConfiguration() {
+  const hunit = useHunit();
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const remove = useMutation({
+    mutationFn: () => unwrap(hunit.connection.remove()),
+    onSuccess: async () => {
+      setConfirming(false);
+      await queryClient.invalidateQueries({ queryKey: ['config'] });
+    },
+  });
+
+  return (
+    <Paper withBorder p="md" radius="md">
+      <Stack gap="sm">
+        <Title order={4}>Remover a configuração</Title>
+        <Text size="sm">
+          Apaga desta máquina o endereço do servidor, o certificado e a chave de acesso guardada.
+          Para usar o app de novo, será preciso configurar outra vez.
+        </Text>
+        <Group>
+          <Button color="red" variant="light" onClick={() => setConfirming(true)}>
+            Remover a configuração desta máquina
+          </Button>
+        </Group>
+        {remove.isError && (
+          <Alert color="red" role="alert">
+            {messageOf(remove.error)}
+          </Alert>
+        )}
+      </Stack>
+      <Modal
+        opened={confirming}
+        onClose={() => setConfirming(false)}
+        title="Remover a configuração?"
+        centered
+      >
+        <Stack>
+          <Text size="sm">A chave de acesso guardada nesta máquina será apagada.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setConfirming(false)}>
+              Não
+            </Button>
+            <Button color="red" onClick={() => remove.mutate()} loading={remove.isPending}>
+              Sim, remover
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Paper>
   );
 }

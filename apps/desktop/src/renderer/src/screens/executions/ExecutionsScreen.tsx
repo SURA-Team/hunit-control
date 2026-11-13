@@ -109,6 +109,7 @@ export function ExecutionsScreen({
           <Button
             variant="default"
             onClick={() => void list.fetchNextPage()}
+            disabled={state?.status === 'offline'}
             loading={list.isFetchingNextPage}
           >
             Carregar mais

@@ -203,22 +203,61 @@ describe('pedido de token (FR-011, FR-012)', () => {
     expect(requests).toEqual([]);
   });
 
+  // O servidor volta a `running` ("Token recebido. Concluindo o acesso.") antes de o Hunit
+  // conferir o token; o pedido só fecha como aceito quando o acesso termina (primeiro evento de
+  // andamento depois disso), ou como recusado se vier `failed`/`invalid_token`.
   it.each([
-    ['running depois do token enviado daqui', 'running', {}, true, 'accepted'],
-    ['failed por token recusado', 'failed', { endReason: 'invalid_token' }, true, 'rejected'],
-    ['failed por prazo', 'failed', { endReason: 'two_factor_timeout' }, false, 'expired'],
-    ['cancelada', 'cancelled', { endReason: 'cancelled_by_client' }, false, 'finished'],
-    ['running sem token enviado daqui', 'running', {}, false, 'answered_elsewhere'],
-  ] as const)('%s → %s', async (_caso, status, overrides, tokenSentHere, reason) => {
+    [
+      'running e acesso concluído, token enviado daqui',
+      ['running', 'catalog'],
+      {},
+      true,
+      'accepted',
+    ],
+    [
+      'running e depois failed por token recusado',
+      ['running', 'failed'],
+      { endReason: 'invalid_token' },
+      true,
+      'rejected',
+    ],
+    ['failed por token recusado', ['failed'], { endReason: 'invalid_token' }, true, 'rejected'],
+    ['failed por prazo', ['failed'], { endReason: 'two_factor_timeout' }, false, 'expired'],
+    ['cancelada', ['cancelled'], { endReason: 'cancelled_by_client' }, false, 'finished'],
+    [
+      'running e acesso concluído, sem token enviado daqui',
+      ['running', 'catalog'],
+      {},
+      false,
+      'answered_elsewhere',
+    ],
+  ] as const)('%s → %s', async (_caso, steps, overrides, tokenSentHere, reason) => {
     watcher.track(ID, { own: true });
     await waitForStreams(1);
     emitStatus('awaiting_2fa');
     await vi.waitFor(() => expect(requests).toHaveLength(1));
 
     if (tokenSentHere) watcher.noteTokenSent(ID);
-    emitStatus(status, overrides);
+    for (const step of steps) {
+      if (step === 'catalog') emitEvent('catalog_updated');
+      else emitStatus(step, step === 'running' ? {} : overrides);
+    }
 
     await vi.waitFor(() => expect(closed).toEqual([{ executionId: ID, reason }]));
+  });
+
+  it('running logo depois do token ainda não fecha o pedido (o Hunit ainda confere)', async () => {
+    watcher.track(ID, { own: true });
+    await waitForStreams(1);
+    emitStatus('awaiting_2fa');
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    watcher.noteTokenSent(ID);
+
+    emitStatus('running');
+    await vi.waitFor(() => expect(changed.length).toBeGreaterThanOrEqual(2));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(closed).toEqual([]);
   });
 });
 

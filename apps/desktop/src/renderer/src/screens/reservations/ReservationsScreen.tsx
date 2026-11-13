@@ -100,6 +100,7 @@ export function ReservationsScreen({
         <StaleDataNotice updatedAt={list.dataUpdatedAt} offline={state?.status === 'offline'} />
       </Group>
       <ReservationFilters
+        disabled={state?.status === 'offline'}
         draft={draft}
         onChange={setDraft}
         onSearch={search}
@@ -170,6 +171,7 @@ export function ReservationsScreen({
           <Button
             variant="default"
             onClick={() => void list.fetchNextPage()}
+            disabled={state?.status === 'offline'}
             loading={list.isFetchingNextPage}
           >
             Carregar mais
@@ -186,8 +188,20 @@ export function ReservationsScreen({
         closeButtonProps={{ 'aria-label': 'Fechar detalhe' }}
         transitionProps={{ duration: 0 }}
       >
-        {selected && <ReservationDetail reservation={selected} />}
+        {selected && <ReservationDetailLoader initial={selected} />}
       </Drawer>
     </Stack>
   );
+}
+
+/** O detalhe busca a reserva atualizada no servidor; enquanto isso, mostra a linha da lista. */
+function ReservationDetailLoader({ initial }: { initial: Reservation }) {
+  const hunit = useHunit();
+  const key = { hotelCode: initial.hotelCode, reservationNumber: initial.reservationNumber };
+  const detail = useQuery({
+    queryKey: ['reservation', key.hotelCode, key.reservationNumber],
+    queryFn: () => unwrap(hunit.reservations.get(key)),
+    initialData: initial,
+  });
+  return <ReservationDetail reservation={detail.data} />;
 }

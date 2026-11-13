@@ -72,13 +72,18 @@ qualquer estado ──(remover configuração)──► não configurado
 fechado ──(execução desta máquina entra em awaiting_2fa, ou é encontrada assim ao abrir/reconectar)──► aberto(prazo)
 aberto ──(operador confirma)──► enviando
 enviando ──(202: token entregue à execução)──► aguardando resultado
-aguardando resultado ──(execução sai de awaiting_2fa para running)──► fechado (aceito)
-aguardando resultado ──(execução termina com invalid_token)──► fechado (recusado: mensagem e opção de iniciar de novo)
+aguardando resultado ──(execução sai de awaiting_2fa para running)──► conferindo
+conferindo ──(primeiro evento de andamento: acesso ao Hunit concluído)──► fechado (aceito)
+conferindo / aguardando resultado ──(execução termina com invalid_token)──► fechado (recusado: mensagem e opção de iniciar de novo)
 aberto ──(prazo vence / execução termina / token enviado por outro caminho)──► fechado (com o motivo)
 enviando ──(409 not_awaiting_two_factor)──► fechado ("a execução não aguarda mais o token")
 ```
 
 - A contagem regressiva usa `twoFactorDeadline - (agora + offsetMs)`.
+- O servidor volta a execução para `running` ("Token recebido. Concluindo o acesso.") **antes** de o
+  Hunit conferir o token; com o token errado, ela vai de `running` para `failed`/`invalid_token`.
+  Por isso `running` não fecha o pedido como aceito: o aceite é o primeiro evento de andamento
+  depois dele (catálogo, hotel iniciado). Corrigido na implementação (Fase 6, achado do T073).
 - Execuções de outras máquinas nunca abrem o pedido automaticamente; o campo de token fica no
   detalhe delas, para o perfil operador (R-07).
 

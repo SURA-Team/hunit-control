@@ -74,6 +74,12 @@ interface Tracked {
   awaiting: boolean;
   /** O token deste pedido foi enviado por esta máquina. */
   tokenSent: boolean;
+  /**
+   * A execução saiu da espera do token e o Hunit está conferindo o token: o servidor volta a
+   * `running` antes da resposta do Hunit. O pedido fecha como aceito no primeiro evento de
+   * andamento (acesso concluído) ou como recusado se a execução falhar.
+   */
+  verifying: boolean;
   finished: boolean;
   running: boolean;
   controller: AbortController | null;
@@ -161,6 +167,7 @@ export class ExecutionWatcher {
         lastEventId: undefined,
         awaiting: false,
         tokenSent: false,
+        verifying: false,
         finished: false,
         running: false,
         controller: null,
@@ -260,22 +267,42 @@ export class ExecutionWatcher {
   private onEvent(entry: Tracked, event: EventSourceMessage): void {
     if (event.id) entry.lastEventId = event.id;
     this.options.onChanged(entry.executionId);
-    if (event.event !== 'status_changed') return;
 
     let status: ExecutionStatus | undefined;
-    try {
-      status = (JSON.parse(event.data) as { status?: ExecutionStatus }).status;
-    } catch {
-      return;
+    if (event.event === 'status_changed') {
+      try {
+        status = (JSON.parse(event.data) as { status?: ExecutionStatus }).status;
+      } catch {
+        return;
+      }
+      if (!status) return;
     }
-    if (!status) return;
     const next = status;
-    entry.queue = entry.queue.then(() => this.onStatus(entry, next)).catch(() => undefined);
+    // Todos os eventos passam pela mesma fila: o andamento que confirma o token é tratado depois
+    // da mudança de estado que o antecedeu.
+    entry.queue = entry.queue
+      .then(() => (next ? this.onStatus(entry, next) : this.onProgress(entry)))
+      .catch(() => undefined);
+  }
+
+  /** Um evento de andamento depois de `running`: o Hunit aceitou o token (acesso concluído). */
+  private onProgress(entry: Tracked): Promise<void> {
+    if (entry.verifying)
+      this.closeRequest(entry, entry.tokenSent ? 'accepted' : 'answered_elsewhere');
+    return Promise.resolve();
+  }
+
+  private closeRequest(entry: Tracked, reason: TwoFactorCloseReason): void {
+    this.options.onTwoFactorClosed({ executionId: entry.executionId, reason });
+    entry.awaiting = false;
+    entry.verifying = false;
+    entry.tokenSent = false;
   }
 
   private async onStatus(entry: Tracked, status: ExecutionStatus): Promise<void> {
-    const needsState = status === 'awaiting_2fa' || entry.awaiting || FINAL_STATUSES.has(status);
-    if (!needsState || !(entry.own || entry.awaiting)) {
+    const pending = entry.awaiting || entry.verifying;
+    const needsState = status === 'awaiting_2fa' || pending || FINAL_STATUSES.has(status);
+    if (!needsState || !(entry.own || pending)) {
       if (FINAL_STATUSES.has(status)) this.finish(entry, null);
       return;
     }
@@ -310,13 +337,12 @@ export class ExecutionWatcher {
       return Promise.resolve();
     }
 
-    if (entry.awaiting) {
-      this.options.onTwoFactorClosed({
-        executionId: entry.executionId,
-        reason: closeReason(execution.status, execution.endReason ?? null, entry.tokenSent),
-      });
+    if (entry.awaiting && (execution.status === 'running' || execution.status === 'queued')) {
+      // Saiu da espera: o Hunit ainda confere o token.
       entry.awaiting = false;
-      entry.tokenSent = false;
+      entry.verifying = true;
+    } else if (entry.awaiting || entry.verifying) {
+      this.closeRequest(entry, closeReason(execution.status, execution.endReason ?? null));
     }
 
     if (FINAL_STATUSES.has(execution.status)) {
@@ -342,14 +368,11 @@ function latestEventId(execution: Execution): string | undefined {
   return latest === undefined ? undefined : String(latest);
 }
 
+/** Desfecho do pedido quando a execução termina antes de o acesso ao Hunit ser concluído. */
 function closeReason(
   status: ExecutionStatus,
   endReason: ExecutionEndReason | null,
-  tokenSentHere: boolean,
 ): TwoFactorCloseReason {
-  if (status === 'running' || status === 'queued') {
-    return tokenSentHere ? 'accepted' : 'answered_elsewhere';
-  }
   if (status === 'failed' && endReason === 'invalid_token') return 'rejected';
   if (status === 'failed' && endReason === 'two_factor_timeout') return 'expired';
   return 'finished';
