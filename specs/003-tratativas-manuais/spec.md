@@ -28,9 +28,11 @@ pode receber dois documentos independentes:
 
 - a **tratativa** (prova de que o pedido de cobrança foi feito — por exemplo, o e-mail do Financeiro
   ao Comercial), que faz a reserva aparecer como **Enviada**, mas continua contando como pendência;
-- o **comprovante de cobrança** (prova de que o valor foi cobrado — por exemplo, o comprovante do
-  Comercial ou a confirmação do adquirente obtida pela Controladoria), que faz a reserva aparecer
-  como **Cobrada** em todas as consultas.
+- o **comprovante de cobrança** (prova de que o valor foi cobrado — por exemplo, o comprovante que o
+  Comercial devolve), que faz a reserva aparecer como **Cobrada** em todas as consultas.
+
+Quem registra é o Financeiro. A Controladoria só consulta: vê a situação de cada reserva e baixa os
+documentos para conferir os pagamentos com o adquirente.
 
 Ficam **fora do escopo** e serão tratados em specs próprias: envio de e-mail pelo sistema, inclusão
 das reservas enviadas na planilha do comercial (sincronização com o Sheets), conciliação automática
@@ -47,17 +49,16 @@ relatórios e painéis, e exportação de planilhas.
   validado (não cobrado), erro de análise e cobrar na maquininha aceitam tratativa e comprovante,
   mesmo depois que existir a planilha do comercial (FR-003).
 - Q: Quem cobra e quem registra? → A: Todas as cobranças são feitas pelo Comercial. O Financeiro
-  verifica as inconsistências e pede ao Comercial que cobre (tratativa); a Controladoria controla os
-  pagamentos, principalmente com o adquirente (comprovante). Os dois usam o perfil operador; o
-  Comercial ainda não usa o sistema.
+  verifica as inconsistências, pede ao Comercial que cobre (tratativa) e registra o comprovante; usa
+  o perfil operador. A Controladoria controla os pagamentos, principalmente com o adquirente, e usa
+  o perfil consulta: não registra nada nem roda execuções. O Comercial ainda não usa o sistema.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Registrar o comprovante de cobrança de uma reserva (Priority: P1)
 
-O operador (em geral da Controladoria) confirma que uma reserva pendente — de cobrança, com erro na
-cobrança ou a cobrar na maquininha — foi cobrada pelo Comercial, por exemplo conferindo com o
-adquirente. Ele anexa o comprovante e, se o Hunit não traz o valor cobrado, informa o valor. A
+O operador do Financeiro recebe a confirmação de que uma reserva pendente — de cobrança, com erro na
+cobrança ou a cobrar na maquininha — foi cobrada pelo Comercial. Ele anexa o comprovante e, se o Hunit não traz o valor cobrado, informa o valor. A
 partir daí a reserva aparece como **Cobrada** para todos, com o comprovante disponível para abrir ou
 baixar, e com o registro de quem anexou e quando.
 
@@ -153,7 +154,8 @@ cada uma é o mesmo.
 
 ### User Story 4 - Consultar e filtrar pelas tratativas (Priority: P2)
 
-Quem consulta as reservas (operador ou perfil consulta) filtra pela situação da tratativa — sem
+Quem consulta as reservas (o Financeiro, com perfil operador, ou a Controladoria, com perfil
+consulta) filtra pela situação da tratativa — sem
 tratativa, enviada, cobrada manualmente — combinando com os filtros que já existem, vê os documentos
 de cada reserva e os baixa. O perfil consulta não pode registrar, substituir nem desfazer nada.
 
@@ -332,16 +334,17 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 - Os tipos aceitos (FR-008) são os usados no sistema anterior; o limite de 25 MB cobre e-mails com
   anexos comuns. Os dois podem ser ajustados no plano se a homologação mostrar necessidade.
 - Todas as cobranças são feitas pelo Comercial, que ainda não usa o sistema. A tratativa (pedido
-  de cobrança) e o comprovante são registrados por quem tem perfil operador — hoje o Financeiro e a
-  Controladoria. O sistema não distingue os dois setores: o registro de quem fez é o cliente da API
-  (a máquina). Se o Comercial passar a usar o sistema, poderá registrar comprovantes com o mesmo
-  perfil, sem mudar esta spec.
+  de cobrança) e o comprovante são registrados pelo Financeiro, com o perfil operador; o registro de
+  quem fez é o cliente da API (a máquina). A Controladoria usa o perfil consulta (já validado na
+  homologação da 002): vê as tratativas e baixa os documentos, sem registrar nada. Se a Controladoria
+  ou o Comercial precisarem registrar comprovantes no futuro, basta uma chave de perfil operador,
+  sem mudar esta spec.
 - A futura planilha do comercial não substitui esses registros: o sistema continua sendo a fonte da
   verdade (constitution, princípio VI), e a planilha será uma projeção dele. Quando ela existir, o
   pedido ao Comercial poderá passar a ser a inclusão na planilha, em vez do e-mail.
-- A Controladoria confere os pagamentos com o adquirente fora do sistema e registra o comprovante
-  manualmente; importar os relatórios do adquirente e conciliar sozinho fica para uma spec futura.
-- O volume é pequeno: dezenas de documentos por semana, de 4 operadores.
+- A Controladoria confere os pagamentos com o adquirente fora do sistema, usando a consulta e os
+  documentos; importar os relatórios do adquirente e conciliar sozinho fica para uma spec futura.
+- O volume é pequeno: dezenas de documentos por semana, registrados pelos operadores do Financeiro.
 - As tratativas registradas no sistema anterior não entram nesta feature: virão com a importação do
   histórico (spec futura). Até lá, quem precisar consulta o sistema anterior.
 - "Enviada" registra que houve uma tratativa com documento; a inclusão das reservas enviadas na
