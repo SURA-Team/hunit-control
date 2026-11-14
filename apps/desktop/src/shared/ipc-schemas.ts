@@ -4,6 +4,7 @@
  * entrada inválida vira `invalid_input`, sem chamar a API nem tocar no disco.
  */
 import { z } from 'zod';
+import { MAX_TREATMENT_RESERVATIONS } from './ipc-types.js';
 
 /** Datas no formato da API (YYYY-MM-DD), com dia que existe no calendário. */
 const isoDate = z
@@ -111,6 +112,11 @@ export const reservationListInputSchema = z.strictObject({
     .string()
     .regex(/^[0-9]+\.[0-9]{2}$/, 'valor no formato 1234.56')
     .optional(),
+  treatmentStatus: z
+    .array(z.enum(['none', 'sent', 'charged']))
+    .max(3)
+    .optional(),
+  pendingCharge: z.boolean().optional(),
   cursor: cursor.optional(),
   limit: limit.optional(),
 });
@@ -127,4 +133,42 @@ export const evidenceSaveInputSchema = z.strictObject({
     .string()
     .regex(/^[A-Za-z0-9_-]{1,40}$/, 'só letras, números, - e _')
     .optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Tratativas manuais (specs/003, contracts/ipc.md)
+// ---------------------------------------------------------------------------
+
+const treatmentKind = z.enum(['request', 'proof']);
+const treatmentReservations = z
+  .array(reservationKeySchema)
+  .min(1)
+  .max(MAX_TREATMENT_RESERVATIONS, `no máximo ${MAX_TREATMENT_RESERVATIONS} reservas`);
+
+export const pickFileInputSchema = z.strictObject({ kind: treatmentKind });
+
+/** Id que o processo principal deu ao arquivo escolhido. */
+export const selectionIdSchema = uuid;
+
+export const documentIdSchema = uuid;
+
+export const treatmentCheckInputSchema = z.strictObject({
+  kind: treatmentKind,
+  reservations: treatmentReservations,
+});
+
+// A interface não informa nome nem conteúdo do arquivo: o principal usa o que leu do disco.
+export const treatmentApplyInputSchema = z.strictObject({
+  selectionId: selectionIdSchema,
+  kind: treatmentKind,
+  reservations: treatmentReservations,
+});
+
+export const manualAmountInputSchema = z.strictObject({
+  hotelCode: shortText,
+  reservationNumber: shortText,
+  amount: z
+    .string()
+    .regex(/^[0-9]+\.[0-9]{2}$/, 'valor no formato 1234.56')
+    .refine((value) => Number(value) > 0, 'o valor deve ser maior que zero'),
 });

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import type { Reservation } from '../../src/shared/ipc-types';
 import { renderWithApp } from './render';
+import { NO_TREATMENT } from './treatment-fixtures';
 
 /**
  * Valores em reais: o Intl usa um espaço que não quebra a linha, que a Testing Library normaliza
@@ -55,6 +56,7 @@ function reservation(overrides: Partial<Reservation> = {}): Reservation {
     verificationCount: 4,
     lastExecutionId: '11111111-1111-4111-8111-111111111111',
     anonymized: false,
+    treatment: { ...NO_TREATMENT, acceptsDocuments: false },
     ...overrides,
   };
 }

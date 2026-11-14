@@ -2,6 +2,9 @@
  * Filtros da consulta de reservas (specs/002, FR-020 a FR-020b): busca livre, valor no formato
  * brasileiro, hotel, período de check-in, situações, canal, "não encontrada" e execução. Os filtros
  * só valem ao clicar em "Buscar"; a busca é feita pelo servidor.
+ *
+ * Tratativas (specs/003, FR-002, FR-015): o filtro "Tratativa" e o atalho "Falta cobrar" — este
+ * vale na hora, e quem decide o que falta cobrar é o servidor.
  */
 import {
   Badge,
@@ -21,6 +24,8 @@ import {
   CLASSIFICATION_LABELS,
   CLASSIFICATION_ORDER,
   RESERVATION_STATUS_LABELS,
+  TREATMENT_STATUS_LABELS,
+  TREATMENT_STATUS_ORDER,
 } from '../../presentation/labels';
 import { PeriodPicker } from '../run/PeriodPicker';
 
@@ -30,6 +35,10 @@ export interface FilterDraft {
   hotelCodes: string[];
   classifications: string[];
   reservationStatuses: string[];
+  /** Situação da tratativa: sem tratativa, Enviada, Cobrada. */
+  treatmentStatuses: string[];
+  /** "Falta cobrar": exige cobrança e ainda não tem comprovante. */
+  pendingCharge: boolean;
   channel: string | null;
   notFound: boolean;
   checkInFrom: string | null;
@@ -43,6 +52,8 @@ export const EMPTY_FILTERS: FilterDraft = {
   hotelCodes: [],
   classifications: [],
   reservationStatuses: [],
+  treatmentStatuses: [],
+  pendingCharge: false,
   channel: null,
   notFound: false,
   checkInFrom: null,
@@ -54,6 +65,8 @@ interface Props {
   draft: FilterDraft;
   onChange: (draft: FilterDraft) => void;
   onSearch: () => void;
+  /** Atalho que vale na hora, sem clicar em "Buscar". */
+  onQuickFilter: (draft: FilterDraft) => void;
   onClear: () => void;
   /** Servidor indisponível: a busca fica desabilitada (FR-005). */
   disabled: boolean;
@@ -66,6 +79,7 @@ export function ReservationFilters({
   draft,
   onChange,
   onSearch,
+  onQuickFilter,
   onClear,
   disabled,
   hotels,
@@ -151,6 +165,20 @@ export function ReservationFilters({
               clearable
               hidePickedOptions
             />
+            <MultiSelect
+              label="Tratativa"
+              placeholder={
+                draft.treatmentStatuses.length === 0 ? 'Com ou sem tratativa' : undefined
+              }
+              data={TREATMENT_STATUS_ORDER.map((value) => ({
+                value,
+                label: TREATMENT_STATUS_LABELS[value].name,
+              }))}
+              value={draft.treatmentStatuses}
+              onChange={(value) => set('treatmentStatuses', value)}
+              clearable
+              hidePickedOptions
+            />
             <Select
               label="Canal"
               placeholder="Todos os canais"
@@ -163,6 +191,16 @@ export function ReservationFilters({
           </SimpleGrid>
           <Group justify="space-between">
             <Group gap="sm">
+              <Button
+                variant={draft.pendingCharge ? 'filled' : 'light'}
+                size="xs"
+                aria-pressed={draft.pendingCharge}
+                disabled={disabled}
+                title="Reservas que exigem cobrança e ainda não têm comprovante"
+                onClick={() => onQuickFilter({ ...draft, pendingCharge: !draft.pendingCharge })}
+              >
+                Falta cobrar
+              </Button>
               <Checkbox
                 label="Só as não encontradas na última verificação"
                 checked={draft.notFound}

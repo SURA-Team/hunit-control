@@ -8,12 +8,18 @@ import { parse } from 'yaml';
 import contractSource from '../../../../packages/contracts/openapi.yaml?raw';
 import {
   CLASSIFICATION_LABELS,
+  DOCUMENT_STATE_LABELS,
   END_REASON_MESSAGES,
   ERROR_MESSAGES,
   EXECUTION_STATUS_LABELS,
   HOTEL_STATUS_LABELS,
+  OUTCOME_NAMES,
+  OUTCOME_REASON_MESSAGES,
   RESERVATION_STATUS_LABELS,
   TONES,
+  TREATMENT_EVENT_NAMES,
+  TREATMENT_KIND_NAMES,
+  TREATMENT_STATUS_LABELS,
 } from '../../src/renderer/src/presentation/labels.js';
 
 interface Schema {
@@ -35,6 +41,9 @@ describe('todo valor dos enums da API tem nome e tom', () => {
     ['ReservationStatus', RESERVATION_STATUS_LABELS],
     ['ExecutionStatus', EXECUTION_STATUS_LABELS],
     ['HotelRunStatus', HOTEL_STATUS_LABELS],
+    // Tratativas manuais (specs/003, data-model §7).
+    ['TreatmentStatus', TREATMENT_STATUS_LABELS],
+    ['TreatmentDocumentState', DOCUMENT_STATE_LABELS],
   ] as const)('%s', (name, labels) => {
     const table = labels as Record<string, { name: string; tone: string }>;
     for (const value of enumOf(name)) {
@@ -42,6 +51,28 @@ describe('todo valor dos enums da API tem nome e tom', () => {
       expect(TONES, value).toContain(table[value]?.tone);
     }
     expect(Object.keys(table).sort()).toEqual([...enumOf(name)].sort());
+  });
+
+  it('os enums das tratativas têm nome (specs/003, data-model §7)', () => {
+    const named = (table: Record<string, string>, values: Array<string | null>) => {
+      const expected = values.filter((value): value is string => value !== null);
+      for (const value of expected) expect(table[value], value).toBeTruthy();
+      expect(Object.keys(table).sort()).toEqual([...expected].sort());
+    };
+    const property = (schema: string, name: string) =>
+      (schemas[schema]?.properties?.[name]?.enum ?? []) as Array<string | null>;
+
+    named(TREATMENT_KIND_NAMES, enumOf('TreatmentDocumentKind'));
+    named(TREATMENT_EVENT_NAMES, property('TreatmentEvent', 'type'));
+    named(OUTCOME_NAMES, property('ReservationOutcome', 'outcome'));
+    named(OUTCOME_REASON_MESSAGES, property('ReservationOutcome', 'reason'));
+  });
+
+  it('as situações da tratativa têm os nomes da spec 003', () => {
+    expect(TREATMENT_STATUS_LABELS.none.name).toBe('Sem tratativa');
+    expect(TREATMENT_STATUS_LABELS.sent.name).toBe('Enviada');
+    expect(TREATMENT_STATUS_LABELS.charged.name).toBe('Cobrada');
+    expect(TREATMENT_KIND_NAMES).toEqual({ request: 'Tratativa', proof: 'Comprovante' });
   });
 
   it('ExecutionEndReason tem mensagem', () => {

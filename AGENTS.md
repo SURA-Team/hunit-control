@@ -211,3 +211,14 @@ e consulta reservas e evidências. O contrato da API passou para a 1.4.0 (só ac
 `requestedClient` e `active` na lista de execuções, `warnings` no estado da execução, `q`, `channel`
 e `amount` nas reservas, `/channels` e a lista de evidências da execução). A instalação do app está
 no `README.md`.
+
+Desde a feature 003 (`specs/003-tratativas-manuais/`), o Financeiro registra por reserva a
+tratativa (pedido de cobrança ao Comercial → "Enviada") e o comprovante (→ "Cobrada"), com
+pré-visualização no app, substituir, desfazer e reverter por 30 dias, valor cobrado informado à mão
+e aplicação em lote com a seleção mantida entre pesquisas. Os documentos ficam no PostgreSQL
+(`treatment_files`, `bytea`, deduplicados por SHA-256) e entram nas cópias de segurança. O
+contrato passou para a 1.5.0 (só acréscimos: `/treatment-files`, `/treatment-documents` e o
+`check`, `/reservations/{hotel}/{número}/treatment` e `manual-amount`, `Reservation.treatment`
+e os filtros `treatmentStatus` e `pendingCharge`). O envio de documentos é a única rota com corpo
+binário (até 25 MiB). O log do servidor registra as requisições sem a query (nome do arquivo e
+busca livre podem ter dados pessoais).

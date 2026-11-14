@@ -25,10 +25,13 @@ import { Attention } from './attention.js';
 import { ConfigStore, DEFAULT_PREFERENCES } from './config-store.js';
 import { ConnectionManager } from './connection.js';
 import { CredentialsVault } from './credentials-vault.js';
+import { buildDocumentPreview } from './document-preview.js';
 import { saveEvidence } from './evidence-download.js';
 import { ExecutionWatcher } from './execution-watcher.js';
 import { createInvokeHandlers, type InvokeHandlers } from './ipc-handlers.js';
+import { PickedFiles } from './picked-files.js';
 import { createStoryHandlers } from './story-handlers.js';
+import { createTreatmentHandlers } from './treatments.js';
 import {
   createMainWindow,
   denyAllPermissions,
@@ -135,6 +138,15 @@ async function start(): Promise<void> {
     reportFailure: (error) => connection.reportFailure(error),
   });
 
+  // Arquivos escolhidos para as tratativas: só na memória, até confirmar ou cancelar (specs/003).
+  const pickedFiles = new PickedFiles({
+    showOpenDialog: (options) =>
+      mainWindow ? dialog.showOpenDialog(mainWindow, options) : dialog.showOpenDialog(options),
+  });
+  const showSaveDialog: Parameters<typeof createTreatmentHandlers>[0]['showSaveDialog'] = (
+    options,
+  ) => (mainWindow ? dialog.showSaveDialog(mainWindow, options) : dialog.showSaveDialog(options));
+
   const handlers: InvokeHandlers = {
     ...createInvokeHandlers({
       appVersion: app.getVersion(),
@@ -174,11 +186,16 @@ async function start(): Promise<void> {
         saveEvidence({
           ...input,
           defaultDirectory: app.getPath('downloads'),
-          showSaveDialog: (options) =>
-            mainWindow
-              ? dialog.showSaveDialog(mainWindow, options)
-              : dialog.showSaveDialog(options),
+          showSaveDialog,
         }),
+    }),
+    ...createTreatmentHandlers({
+      getApi: () => connection.getApi(),
+      reportFailure: (error) => connection.reportFailure(error),
+      files: pickedFiles,
+      buildPreview: buildDocumentPreview,
+      showSaveDialog,
+      defaultDirectory: app.getPath('downloads'),
     }),
   };
 
@@ -238,6 +255,7 @@ async function start(): Promise<void> {
   app.on('window-all-closed', () => app.quit());
   app.on('will-quit', () => {
     watcher.stopAll();
+    pickedFiles.clear();
     vault.dispose();
     void connection.dispose();
   });

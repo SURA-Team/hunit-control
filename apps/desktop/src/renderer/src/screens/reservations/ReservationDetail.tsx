@@ -1,14 +1,16 @@
 /**
  * Detalhe da reserva (specs/002, FR-022, US3 cenários 4 e 5): dados da cobrança, motivo da
  * classificação, o que mudou desde a verificação anterior e o histórico de verificação. Tudo como
- * o servidor informa; o app só formata.
+ * o servidor informa; o app só formata. A tratativa manual (specs/003) fica numa seção própria.
  */
 import { Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import type { ReactNode } from 'react';
 import type { Reservation } from '../../../../shared/ipc-types';
 import { StatusBadge } from '../../components/StatusBadge';
+import { TreatmentBadge } from '../../components/TreatmentBadge';
 import { formatDate, formatDateTime, formatMoney } from '../../presentation/format';
 import { CLASSIFICATION_LABELS, RESERVATION_STATUS_LABELS } from '../../presentation/labels';
+import { TreatmentSection } from './TreatmentSection';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -56,6 +58,7 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
         </Title>
         <Group gap="xs">
           <StatusBadge label={CLASSIFICATION_LABELS[reservation.classification]} size="md" />
+          <TreatmentBadge status={reservation.treatment.status} size="md" />
           <StatusBadge label={RESERVATION_STATUS_LABELS[reservation.reservationStatus]} size="md" />
         </Group>
       </Group>
@@ -94,6 +97,8 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
           </Text>
         )}
       </Paper>
+
+      <TreatmentSection reservation={reservation} />
 
       <Paper withBorder p="sm" radius="sm">
         <Title order={5} mb="xs">

@@ -33,7 +33,12 @@ import type {
   Reservation,
   ReservationKey,
   ReservationListInput,
+  ReservationOutcome,
+  ReservationTreatment,
   Result,
+  TreatmentCheck,
+  TreatmentDetail,
+  TreatmentDocumentKind,
 } from '../shared/ipc-types.js';
 
 type Schemas = components['schemas'];
@@ -59,6 +64,9 @@ const TLS_ERROR_CODES = new Set([
 const UNTRUSTED_DETAIL =
   'Não foi possível confirmar a identidade do servidor: o certificado apresentado não é o do servidor configurado.';
 const OFFLINE_DETAIL = 'O servidor não respondeu.';
+
+/** Tempo máximo do envio de um documento (até 25 MB pela rede local). */
+const UPLOAD_TIMEOUT_MS = 120_000;
 
 export interface ApiClientOptions {
   /** Origem do servidor, sem barra no fim (ex.: "https://192.168.0.50"). */
@@ -108,8 +116,33 @@ const API_ERROR_CODES = new Set<string>([
   'nothing_to_resume',
   'execution_already_resumed',
   'evidence_expired',
+  'empty_file',
+  'file_too_large',
+  'unsupported_file_type',
+  'file_not_found',
+  'not_eligible_for_treatment',
+  'document_not_current',
+  'document_not_revertible',
+  'proof_required',
+  'document_purged',
   'internal_error',
 ] satisfies Schemas['Problem']['code'][]);
+
+/**
+ * Nome do arquivo num `content-disposition`: prefere `filename*` (UTF-8, RFC 6266), depois
+ * `filename`; sem nenhum dos dois, um nome genérico.
+ */
+export function fileNameFromDisposition(header: string | null): string {
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header ?? '')?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // Cai no nome simples.
+    }
+  }
+  return /filename="([^"]*)"/i.exec(header ?? '')?.[1] ?? 'documento';
+}
 
 /** Erro de uma resposta HTTP que não deu certo, a partir do corpo `problem+json` (se houver). */
 export function httpError(status: number, body: unknown): AppError {
@@ -255,6 +288,118 @@ export class ApiClient {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Tratativas manuais (specs/003, contracts/api-changes.md)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Envia o arquivo de uma tratativa ou de um comprovante. Os bytes saem da memória do processo
+   * principal; o nome vai na query (o servidor não o registra em log).
+   */
+  async uploadTreatmentFile(
+    name: string,
+    content: Uint8Array,
+  ): Promise<Result<Schemas['TreatmentFile']>> {
+    const opened = await this.raw(
+      `/treatment-files?name=${encodeURIComponent(name)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: content,
+      },
+      UPLOAD_TIMEOUT_MS,
+    );
+    if (!opened.ok) return opened;
+    try {
+      return { ok: true, data: (await opened.data.json()) as Schemas['TreatmentFile'] };
+    } catch (error) {
+      return { ok: false, error: networkError(error) };
+    }
+  }
+
+  checkTreatmentDocuments(body: {
+    kind: TreatmentDocumentKind;
+    reservations: ReservationKey[];
+  }): Promise<Result<TreatmentCheck>> {
+    return this.call(() => this.http.POST('/treatment-documents/check', { body }));
+  }
+
+  registerTreatmentDocuments(body: {
+    kind: TreatmentDocumentKind;
+    fileId: string;
+    fileName: string;
+    reservations: ReservationKey[];
+  }): Promise<Result<{ batchId: string; items: ReservationOutcome[] }>> {
+    return this.call(() => this.http.POST('/treatment-documents', { body }));
+  }
+
+  async removeTreatmentDocument(documentId: string): Promise<Result<void>> {
+    const result = await this.call(() =>
+      this.http.DELETE('/treatment-documents/{documentId}', { params: { path: { documentId } } }),
+    );
+    return result.ok ? { ok: true, data: undefined } : result;
+  }
+
+  revertTreatmentDocument(documentId: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/treatment-documents/{documentId}/revert', {
+        params: { path: { documentId } },
+      }),
+    );
+  }
+
+  getReservationTreatment(key: ReservationKey): Promise<Result<TreatmentDetail>> {
+    return this.call(() =>
+      this.http.GET('/reservations/{hotelCode}/{reservationNumber}/treatment', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  setManualChargedAmount(
+    key: ReservationKey,
+    amount: string,
+  ): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.PUT('/reservations/{hotelCode}/{reservationNumber}/manual-amount', {
+        params: { path: key },
+        body: { amount },
+      }),
+    );
+  }
+
+  clearManualChargedAmount(key: ReservationKey): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.DELETE('/reservations/{hotelCode}/{reservationNumber}/manual-amount', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  /** Baixa o arquivo de um documento, com o nome original; o conteúdo não vai para a interface. */
+  async downloadTreatmentDocument(
+    documentId: string,
+  ): Promise<Result<{ content: Buffer; fileName: string }>> {
+    const opened = await this.raw(
+      `/treatment-documents/${encodeURIComponent(documentId)}/file`,
+      {},
+      UPLOAD_TIMEOUT_MS,
+    );
+    if (!opened.ok) return opened;
+    const response = opened.data;
+    try {
+      return {
+        ok: true,
+        data: {
+          content: Buffer.from(await response.arrayBuffer()),
+          fileName: fileNameFromDisposition(response.headers.get('content-disposition')),
+        },
+      };
+    } catch (error) {
+      return { ok: false, error: networkError(error) };
+    }
+  }
+
   /**
    * Abre o fluxo de eventos (SSE) de uma execução. Sem tempo limite de requisição: o servidor
    * manda um batimento a cada 15 s, e quem lê o fluxo decide quando ele parou.
@@ -296,12 +441,19 @@ export class ApiClient {
   /** Requisição fora do cliente tipado (arquivos e fluxo de eventos). */
   private async raw(
     path: string,
-    init: { headers?: Record<string, string>; signal?: AbortSignal | undefined },
+    init: {
+      method?: 'GET' | 'POST';
+      headers?: Record<string, string>;
+      body?: Uint8Array;
+      signal?: AbortSignal | undefined;
+    },
     timeoutMs: number | null,
   ): Promise<Result<UndiciResponse>> {
     try {
       const request = new UndiciRequest(`${this.options.serverUrl}/v1${path}`, {
+        method: init.method ?? 'GET',
         headers: { ...init.headers, authorization: `Bearer ${this.options.apiKey}` },
+        ...(init.body && { body: init.body }),
         ...(init.signal && { signal: init.signal }),
       });
       const response = (await this.send(request, timeoutMs)) as unknown as UndiciResponse;

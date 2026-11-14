@@ -31,6 +31,17 @@ export const INVOKE = {
   reservationsList: 'reservations:list',
   reservationsGet: 'reservations:get',
   reservationsChannels: 'reservations:channels',
+  // Tratativas manuais (specs/003, contracts/ipc.md).
+  treatmentsPickFile: 'treatments:pickFile',
+  treatmentsDiscardFile: 'treatments:discardFile',
+  treatmentsCheck: 'treatments:check',
+  treatmentsApply: 'treatments:apply',
+  treatmentsGet: 'treatments:get',
+  treatmentsRemove: 'treatments:remove',
+  treatmentsRevert: 'treatments:revert',
+  treatmentsSetManualAmount: 'treatments:setManualAmount',
+  treatmentsClearManualAmount: 'treatments:clearManualAmount',
+  treatmentsSaveDocument: 'treatments:saveDocument',
 } as const;
 
 /** Avisos da interface ao principal (`send`, sem resposta). */

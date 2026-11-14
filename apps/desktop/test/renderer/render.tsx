@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 import { vi, type Mock } from 'vitest';
 import { HunitContext } from '../../src/renderer/src/hunit';
 import { ConnectionProvider } from '../../src/renderer/src/state/connection';
+import { SelectionProvider } from '../../src/renderer/src/state/selection';
 import type {
   ConnectionState,
   CredentialsClearReason,
@@ -134,6 +135,31 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       get: vi.fn(() => errorResult('not_found')),
       channels: vi.fn(() => okResult([])),
     },
+    treatments: {
+      pickFile: vi.fn(() => okResult(null)),
+      discardFile: vi.fn(() => okResult(undefined)),
+      check: vi.fn(() => errorResult('internal_error')),
+      apply: vi.fn(() => errorResult('internal_error')),
+      get: vi.fn(() =>
+        okResult({
+          treatment: {
+            status: 'none' as const,
+            request: null,
+            proof: null,
+            manualChargedAmount: null,
+            effectiveChargedAmount: null,
+            acceptsDocuments: true,
+          },
+          documents: [],
+          events: [],
+        }),
+      ),
+      remove: vi.fn(() => okResult(undefined)),
+      revert: vi.fn(() => errorResult('internal_error')),
+      setManualAmount: vi.fn(() => errorResult('internal_error')),
+      clearManualAmount: vi.fn(() => errorResult('internal_error')),
+      saveDocument: vi.fn(() => okResult(null)),
+    },
   };
 
   const emitTo = <T,>(set: Set<Listener<T>>, payload: T) => {
@@ -170,7 +196,9 @@ export function renderWithApp(
       <DatesProvider settings={{ locale: 'pt-br' }}>
         <QueryClientProvider client={queryClient}>
           <HunitContext.Provider value={hunit.api}>
-            <ConnectionProvider>{ui}</ConnectionProvider>
+            <ConnectionProvider>
+              <SelectionProvider>{ui}</SelectionProvider>
+            </ConnectionProvider>
           </HunitContext.Provider>
         </QueryClientProvider>
       </DatesProvider>

@@ -16,6 +16,7 @@ import {
   renderWithApp,
   type FakeHunit,
 } from './render';
+import { NO_TREATMENT } from './treatment-fixtures';
 
 const EXECUTION = '11111111-1111-4111-8111-111111111111';
 
@@ -34,6 +35,7 @@ function reservation(number: string, overrides: Partial<Reservation> = {}): Rese
     firstVerifiedAt: '2026-11-12T12:00:00.000Z',
     lastVerifiedAt: '2026-11-12T12:00:00.000Z',
     verificationCount: 1,
+    treatment: NO_TREATMENT,
     ...overrides,
   };
 }
