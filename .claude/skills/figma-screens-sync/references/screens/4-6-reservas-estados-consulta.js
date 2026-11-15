@@ -8,8 +8,19 @@ const CLASS = [['Amarelo', 'Pendente de cobrança'], ['Verde', 'Já cobrada'], [
 const HOTELS = [['101', 'Hotel Praia Azul', 6], ['102', 'Pousada Serra Verde', 4], ['103', 'Hotel Centro Histórico', 5], ['104', 'Resort Lagoa Clara', 7]];
 const money = (v) => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const RESERVATIONS = [];
-{ let n = 0; for (const [code, name, count] of HOTELS) for (let i = 0; i < count; i++, n++) RESERVATIONS.push([name, `${code}-${1000 + n}`, GUESTS[n % 10], CHANNELS[n % 5], `${14 + (n % 5)}/11/2026`, `${16 + (n % 5)}/11/2026`, money(380 + n * 137.5), { badge: CLASS[n % 7][0], text: CLASS[n % 7][1] }, { badge: 'Cinza', text: 'Ativa' }]); }
-const RES_COLS = [['Hotel', 180], ['Número', 89], ['Hóspede', 141], ['Canal', 115], ['Check-in', 104], ['Check-out', 104], ['Valor total', 104], ['Situação de cobrança', 254], ['Reserva', 'fill']];
+{ let n = 0; for (const [code, name, count] of HOTELS) for (let i = 0; i < count; i++, n++) RESERVATIONS.push([name, `${code}-${1000 + n}`, GUESTS[n % 10], CHANNELS[n % 5], `${16 + (n % 5)}/11/2026`, `${18 + (n % 5)}/11/2026`, money(380 + n * 137.5), { badge: CLASS[n % 7][0], text: CLASS[n % 7][1] }, '', { badge: 'Cinza', text: 'Ativa' }]); }
+// Colunas da lista (specs/003: coluna "Tratativa"; o operador ganha a caixa de seleção na frente).
+const RES_COLS = [['Hotel', 150], ['Número', 80], ['Hóspede', 130], ['Canal', 105], ['Check-in', 95], ['Check-out', 95], ['Valor total', 95], ['Situação de cobrança', 230], ['Tratativa', 95], ['Reserva', 'fill']];
+/** Linhas da lista: tratativas por número ({ '101-1000': ['Verde', 'Cobrada'] }) e caixas marcadas. */
+function reservationRows({ count = 12, treatments = {}, checked = [], operator = true } = {}) {
+  return RESERVATIONS.slice(0, count).map((r) => {
+    const row = [...r];
+    const t = treatments[r[1]];
+    row[8] = t ? { badge: t[0], text: t[1] } : '';
+    return operator ? [{ check: checked.includes(r[1]) }, ...row] : row;
+  });
+}
+const resCols = (operator = true) => (operator ? [[' ', 36], ...RES_COLS] : RES_COLS);
 
 async function reservationFilters(main, q = '') {
   const c = await card(main, null); c.name = 'Card — Filtros';
@@ -20,18 +31,82 @@ async function reservationFilters(main, q = '') {
   for (const [label, ph, v] of [['Hotéis', 'Todos os hotéis', 'Placeholder/Seletor'], ['Período de check-in', 'Qualquer data', 'Placeholder'], ['Situação de cobrança', 'Todas as situações de cobrança', 'Placeholder/Seletor']])
     (await field(r2, { label, value: ph, variant: v })).layoutSizingHorizontal = 'FILL';
   const r3 = row(c, 'Linha 3', { itemSpacing: 12, counterAxisAlignItems: 'MIN' });
-  for (const [label, ph] of [['Situação da reserva', 'Ativas e canceladas'], ['Canal', 'Todos os canais']])
+  for (const [label, ph] of [['Situação da reserva', 'Ativas e canceladas'], ['Tratativa', 'Com ou sem tratativa'], ['Canal', 'Todos os canais']])
     (await field(r3, { label, value: ph, variant: 'Placeholder/Seletor' })).layoutSizingHorizontal = 'FILL';
-  spacer(r3);
   const r4 = row(c, 'Ações', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
-  r4.appendChild(await I(K.checkbox, { [P.checkbox]: 'Só as não encontradas na última verificação' }));
+  const quick = AL('HORIZONTAL', { name: 'Atalhos', itemSpacing: 12, counterAxisAlignItems: 'CENTER' }); r4.appendChild(quick);
+  await btn(quick, 'Falta cobrar', 'Leve xs');
+  quick.appendChild(await I(K.checkbox, { [P.checkbox]: 'Só as não encontradas na última verificação' }));
   const b = AL('HORIZONTAL', { name: 'Botões', itemSpacing: 12 }); r4.appendChild(b); await btn(b, 'Limpar', 'Contorno'); await btn(b, 'Buscar');
 }
-async function reservationsPage(main, { q = '', empty = false } = {}) {
+/** Barra da seleção do lote (specs/003, FR-006a). */
+async function selectionBar(main, count, total) {
+  const c = await card(main, null, 'fill', 0); c.name = 'Card — Seleção do lote'; c.paddingTop = c.paddingBottom = 12;
+  const r = row(c, 'Seleção', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
+  r.appendChild(await rich([[String(count), 'b'], [` reservas selecionadas — total de `], [total, 'b']]));
+  const b = AL('HORIZONTAL', { name: 'Ações do lote', itemSpacing: 10, counterAxisAlignItems: 'CENTER' }); r.appendChild(b);
+  await btn(b, 'Ver seleção', 'Contorno xs'); await btn(b, 'Anexar tratativa', 'Contorno xs');
+  await btn(b, 'Anexar comprovante', 'Preenchido xs'); await btn(b, 'Desmarcar todas', 'Leve xs');
+}
+async function reservationsPage(main, { q = '', empty = false, operator = true, treatments = {}, checked = [], selection = null, count = 12 } = {}) {
   put(main, await T('Reservas', 'título página'));
   await reservationFilters(main, q);
+  if (selection) await selectionBar(main, selection[0], selection[1]);
   if (empty) put(main, await T('Nenhuma reserva encontrada com estes filtros.', 'corpo grande', 'texto/apagado'));
-  else await table(main, RES_COLS, RESERVATIONS.slice(0, 12));
+  else {
+    const rows = reservationRows({ count, treatments, checked, operator });
+    const t = await table(main, resCols(operator), rows);
+    if (operator) { // caixa do cabeçalho: parcial quando só parte da página está marcada
+      const head = t.children[0].children[0];
+      head.children.forEach((n) => n.remove());
+      head.appendChild(tick(checked.length === 0 ? false : checked.length >= rows.length ? true : 'some'));
+    }
+  }
+}
+/** Seção "Tratativa" do detalhe (specs/003, FR-017). docs: linhas [rótulo, arquivo, tamanho, anexado, estado, ações]. */
+async function treatmentSection(parent, { status, buttons, docs: docs0, manual, history }) {
+  const c = await card(parent, null, 'fill', 12); c.name = 'Card — Tratativa';
+  const h = row(c, 'Cabeçalho', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
+  const hl = AL('HORIZONTAL', { name: 'Título', itemSpacing: 8, counterAxisAlignItems: 'CENTER' }); h.appendChild(hl);
+  hl.appendChild(await T('Tratativa', 'corpo forte'));
+  if (status) await badge(hl, status[0], status[1]); else hl.appendChild(await T('Sem tratativa', 'corpo', 'texto/apagado'));
+  const hb = AL('HORIZONTAL', { name: 'Ações', itemSpacing: 8 }); h.appendChild(hb);
+  await btn(hb, buttons[0], 'Contorno xs'); await btn(hb, buttons[1], 'Preenchido xs');
+  // Documentos em linhas de altura automática: arquivo, anexado e situação em duas ou três linhas,
+  // como no app (FR-013a: "pode ser revertido até ...").
+  const lines = (parts) => async (cell) => {
+    cell.layoutMode = 'VERTICAL'; cell.primaryAxisAlignItems = 'CENTER'; cell.counterAxisAlignItems = 'MIN'; cell.itemSpacing = 2;
+    for (const [text, style, color] of parts) {
+      if (style === 'badge') { await badge(cell, text[0], text[1]); continue; }
+      const t = await T(text, style, color); cell.appendChild(t); t.layoutSizingHorizontal = 'FILL'; t.textAutoResize = 'HEIGHT';
+    }
+  };
+  const docs = await table(c, [['Documento', 122], ['Arquivo', 158], ['Anexado', 140], ['Situação', 125], [' ', 'fill']], docs0.map((d) => [
+    d[0],
+    d[1] ? { build: lines([[d[1], 'corpo'], [d[2], 'descrição', 'texto/apagado']]) } : { rich: [['Nenhum', 'dim']] },
+    d[3] ? { build: lines([[d[3], 'corpo'], ['por Recepção — PC 1', 'descrição', 'texto/apagado']]) } : '',
+    d[4] ? { build: lines([[d[4], 'badge'], ...(d[4][2] ? [[d[4][2], 'descrição', 'texto/apagado']] : [])]) } : '',
+    d[5] ? { build: async (cell) => { cell.primaryAxisAlignItems = 'MAX'; cell.itemSpacing = 6; for (const a of d[5]) await btn(cell, a, 'Contorno xs'); } } : '',
+  ]));
+  docs.children.forEach((r, index) => {
+    if (index === 0) return;
+    for (const cell of r.children) { cell.paddingTop = 8; cell.paddingBottom = 8; cell.layoutSizingVertical = 'HUG'; }
+    r.layoutSizingVertical = 'HUG';
+    for (const cell of r.children) cell.layoutSizingVertical = 'FILL';
+    const doc = r.children[0].children.find((n) => n.type === 'TEXT');
+    if (doc) { doc.layoutSizingHorizontal = 'FILL'; doc.textAutoResize = 'HEIGHT'; }
+  });
+  const v = row(c, 'Valor informado à mão', { itemSpacing: 16, counterAxisAlignItems: 'MAX' });
+  const vv = AL('VERTICAL', { name: 'Valor', itemSpacing: 2 }); v.appendChild(vv);
+  vv.appendChild(await T('Valor informado à mão', 'descrição', 'texto/apagado')); vv.appendChild(await T(manual ? `${manual} (informado à mão)` : '—'));
+  if (manual) await btn(v, 'Remover valor', 'Contorno xs');
+  if (history) {
+    await field(v, { label: 'Valor que foi cobrado (R$)', value: '1.234,56', variant: 'Placeholder', width: 220 });
+    await btn(v, 'Informar valor', 'Contorno xs');
+    put(c, await T('Histórico', 'corpo forte'));
+    for (const line of history) put(c, await T('•  ' + line), 'fill');
+  }
+  return c;
 }
 /** Pares rótulo/valor em 3 colunas. */
 async function kvGrid(parent, pairs, name) {
@@ -58,10 +133,11 @@ SCREENS['4.2'] = { name: 'Reservas — detalhe da reserva', h: 900, profile: 'Op
     const tl = AL('HORIZONTAL', { name: 'Título', itemSpacing: 8, counterAxisAlignItems: 'BASELINE' }); t.appendChild(tl);
     tl.appendChild(await T('Reserva 101-1002', 'título seção')); tl.appendChild(await T('hotel 101', 'corpo', 'texto/apagado'));
     const tr = AL('HORIZONTAL', { name: 'Situações', itemSpacing: 8 }); t.appendChild(tr); await badge(tr, 'Vermelho', 'Erro na cobrança'); await badge(tr, 'Cinza', 'Ativa');
-    await kvGrid(d, [['Hóspede', 'Carla Mendes'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '16/11/2026'], ['Check-out', '18/11/2026'], ['Valor total', 'R$ 655,00']], 'Dados da reserva');
+    await kvGrid(d, [['Hóspede', 'Carla Mendes'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '18/11/2026'], ['Check-out', '20/11/2026'], ['Valor total', 'R$ 655,00']], 'Dados da reserva');
     const m = AL('VERTICAL', { name: 'Motivo da classificação', itemSpacing: 2, paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12, cornerRadius: 8 });
     m.strokes = [paint('borda/padrão')]; put(d, m, 'fill');
     m.appendChild(await T('Motivo da classificação', 'descrição', 'texto/apagado')); m.appendChild(await T('O estado atual do pré-pagamento indica falha na cobrança.'));
+    await treatmentSection(d, { buttons: ['Anexar tratativa', 'Anexar comprovante'], docs: [['Tratativa'], ['Comprovante']] });
     const cb = await card(d, null, 'fill', 12); cb.name = 'Card — Cobrança'; put(cb, await T('Cobrança', 'corpo forte'));
     await kvGrid(cb, [['Data', '—'], ['Responsável', '—'], ['Valor cobrado', '—'], ['Transação', '—'], ['Autorização', '—'], ['Referência da operadora', '—'], ['Parcelamento', '—'], ['Estado do pré-pagamento', 'Fail'], ['Mensagem do pré-pagamento', 'Cartão recusado pela operadora']], 'Dados da cobrança');
     const vf = await card(d, null, 'fill', 12); vf.name = 'Card — Verificações'; put(vf, await T('Verificações', 'corpo forte'));
@@ -95,4 +171,4 @@ SCREENS['6.1'] = { name: 'Consulta — execuções', h: 900, profile: 'Consulta'
   } };
 
 SCREENS['6.2'] = { name: 'Consulta — reservas', h: 900, profile: 'Consulta', nav: NAV_RD, active: 'Reservas',
-  async build({ main }) { await reservationsPage(main); } };
+  async build({ main }) { await reservationsPage(main, { operator: false, treatments: { '101-1000': ['Verde', 'Cobrada'], '101-1003': ['Azul', 'Enviada'] } }); } };

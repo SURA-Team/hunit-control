@@ -198,6 +198,8 @@ async function table(parent, cols, rows) {
       if (typeof v === 'string') cell.appendChild(await T(v, header ? 'tabela' : 'corpo'));
       else if (v.badge) await badge(cell, v.badge, v.text);
       else if (v.rich) cell.appendChild(await rich(v.rich));
+      else if ('check' in v) cell.appendChild(tick(v.check));
+      else if (v.build) await v.build(cell);
     }
   };
   await mk(cols.map((c) => c[0]), true, false);
@@ -219,6 +221,15 @@ async function statGrid(parent, items, perRow = 5) {
     for (const s of tiles) { s.resize(s.width, max); s.layoutSizingHorizontal = 'FILL'; }
   }
   return g;
+}
+/** Caixa de seleção sem rótulo (tabelas): marcada = azul com o visto; 'some' = traço (parcial). */
+function tick(state) {
+  const f = figma.createFrame(); f.name = state ? 'Caixa marcada' : 'Caixa'; f.resize(18, 18); f.cornerRadius = 4;
+  if (!state) { f.fills = [paint('fundo/padrão')]; f.strokes = [paint('borda/campo')]; f.strokeWeight = 1; return f; }
+  f.fills = [paint('azul/6')];
+  const d = state === 'some' ? 'M4.5 9h9' : 'M4.5 9.5l3 3 6-6.5';
+  const icon = figma.createNodeFromSvg('<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="' + d + '" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  icon.name = 'visto'; f.appendChild(icon); icon.x = 0; icon.y = 0; return f;
 }
 const hotelCell = (name, code) => ({ rich: [[name], [` (${code})`, 'dimsm']] });
 
