@@ -217,6 +217,11 @@ pnpm --filter @hunit/desktop dist
 O instalador fica em `apps/desktop/release/` (`HUNIT Control Setup <versão>.exe`). Ele instala só
 para o usuário do Windows, sem pedir administrador, e cria o atalho no Menu Iniciar.
 
+A versão vem do campo `version` de `apps/desktop/package.json` e aparece no rodapé da
+**Configuração** ("HUNIT Control — versão …"). Suba a versão a cada entrega com mudança no app
+(ex.: 0.2.0 para a feature 003): com o mesmo número, não dá para saber qual app está instalado
+numa máquina.
+
 ### Instalar numa máquina
 
 1. Copie o instalador para a máquina e abra.
