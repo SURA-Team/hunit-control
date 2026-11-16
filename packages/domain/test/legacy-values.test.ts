@@ -93,11 +93,15 @@ describe('parseLegacyInteger', () => {
   it('inteiro maior ou igual a zero', () => {
     expect(parseLegacyInteger(3)).toEqual({ ok: true, value: 3 });
     expect(parseLegacyInteger('3')).toEqual({ ok: true, value: 3 });
+    // Como a cópia .xlsx do Google Sheets grava os inteiros (T045).
+    expect(parseLegacyInteger('3.0')).toEqual({ ok: true, value: 3 });
+    expect(parseLegacyInteger('12.00')).toEqual({ ok: true, value: 12 });
+    expect(parseLegacyInteger('3,0')).toEqual({ ok: true, value: 3 });
     expect(parseLegacyInteger(null)).toEqual({ ok: true, value: null });
   });
 
   it('fração, negativo e texto são ilegíveis', () => {
-    for (const value of [2.5, -1, 'x', '2.5']) {
+    for (const value of [2.5, -1, 'x', '2.5', '3.01', '3.']) {
       expect(parseLegacyInteger(value)).toEqual({ ok: false, code: 'unreadable_number' });
     }
   });
