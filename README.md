@@ -217,10 +217,14 @@ pnpm --filter @hunit/desktop dist
 O instalador fica em `apps/desktop/release/` (`HUNIT Control Setup <versão>.exe`). Ele instala só
 para o usuário do Windows, sem pedir administrador, e cria o atalho no Menu Iniciar.
 
-A versão vem do campo `version` de `apps/desktop/package.json` e aparece no rodapé da
-**Configuração** ("HUNIT Control — versão …"). Suba a versão a cada entrega com mudança no app
-(ex.: 0.2.0 para a feature 003): com o mesmo número, não dá para saber qual app está instalado
-numa máquina.
+A versão é `major.minor.<commits>`. O major e o minor vêm do campo `version` de
+`apps/desktop/package.json` (ex.: `0.2.0`), e o último número é a quantidade de commits do Git, por
+exemplo `0.2.131`. Por isso, cada atualização puxada para a pasta de produção gera um instalador com
+número novo, e o mesmo código gera sempre o mesmo número. A versão aparece no rodapé da
+**Configuração** ("HUNIT Control — versão …") e no nome do instalador. Suba o minor à mão só numa
+feature nova com mudança no app (ex.: `0.2.0` → `0.3.0`). O último número do `package.json` fica
+sempre `0`. Gere o instalador a partir de um clone completo do repositório: com
+`git clone --depth`, a contagem fica errada.
 
 ### Instalar numa máquina
 

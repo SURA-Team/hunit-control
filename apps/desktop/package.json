@@ -10,7 +10,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.e2e.json",
-    "dist": "electron-vite build && electron-builder --win"
+    "dist": "node scripts/dist.mjs"
   },
   "devDependencies": {
     "@hunit/contracts": "workspace:*",
