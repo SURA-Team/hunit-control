@@ -342,7 +342,7 @@ o histórico (spec US4).
 
 - [X] T036 [P] Ampliar o teste de cópia e restauração (grupo `server-db`, o que roda `deploy/backup/`) com uma reserva importada, com `legacy_reservations` e um documento importado: depois de restaurar, a origem, o documento e o download idêntico voltam (FR-023)
 - [X] T037 [P] Escrever `apps/server/test/integration/legacy-retention.test.ts`: a rotina de `apps/server/src/maintenance/retention.ts` anonimiza uma importada quando o check-in passa de 5 anos (relógio fixo) e purga os documentos dela como os da 003, mantendo `legacy_reservations` (FR-022); nenhum ajuste no código é esperado: se for preciso, corrigir e registrar em research.md
-- [ ] T038 [P] Escrever `apps/server/test/integration/legacy-import-perf.test.ts`, que só roda com `HUNIT_LEGACY_PERF=1`: simulação de 20 000 linhas e 2 000 anexos pequenos em até 5 min, e importação em até 15 min (SC-008); anotar os tempos medidos em research.md
+- [X] T038 [P] Escrever `apps/server/test/integration/legacy-import-perf.test.ts`, que só roda com `HUNIT_LEGACY_PERF=1`: simulação de 20 000 linhas e 2 000 anexos pequenos em até 5 min, e importação em até 15 min (SC-008); anotar os tempos medidos em research.md
 - [X] T039 [P] Escrever `apps/server/test/integration/legacy-homolog-prepare.test.ts`, que só roda com `HUNIT_HOMOLOG_DATABASE_URL` e `HUNIT_LEGACY_HOMOLOG_DIR`:
   - gera `planilha.xlsx` e `anexos\` fictícios para os hotéis `HML1` a `HML4` da homologação da 003 (códigos do sistema anterior `hml_um`… com nomes iguais aos do catálogo, mais um hotel sem correspondência);
   - cobre os casos do quickstart §2.2, inclusive reservas que já existem na homologação;

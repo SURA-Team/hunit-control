@@ -327,3 +327,17 @@ As colunas de autoria das tabelas da 003 (`treatment_files.uploaded_by_client_id
     telas ganha uma reserva importada (para o espelho no Figma);
   - medição: simulação de 20 000 linhas e 2 000 anexos pequenos (SC-008), num teste marcado como
     lento, fora da rodada normal.
+
+## Medições (T038, 2026-11-16)
+
+`legacy-import-perf` (SC-008) no PC de desenvolvimento, com o PostgreSQL de teste em container: 20 000
+linhas na aba "Reservas" e 2 000 tratativas com anexos pequenos.
+
+| Etapa | Tempo | Meta |
+|---|---|---|
+| Simulação | 178 s | até 5 min |
+| Importação | 465 s | até 15 min |
+
+A simulação gasta quase todo o tempo lendo o estado gravado de cada reserva (uma consulta por
+reserva); a importação, nas transações por reserva (R-09). Com alguns milhares de reservas (o volume
+esperado do sistema anterior), os dois ficam em poucos minutos.
