@@ -61,15 +61,19 @@ Regras:
 O arquivo [Hunit Control](https://www.figma.com/design/YCbxTAacFxbGuOF8uwoLtt/Hunit-Control) tem
 dois papéis, que não se misturam:
 
-- **Espelho do app** (páginas `Identidade visual`, `Telas — app atual (espelho)` e `Componentes`):
-  como o app desktop **está** no código. Mantido pelo agente com a skill `figma-screens-sync`, a
-  partir de prints do app real com dados fictícios.
-- **Design oficial**: a cópia de trabalho da UX. É a fonte da verdade de como o app **deve ser**. O
-  agente só lê; levar esse design para o código é trabalho de uma spec.
+- **Espelho do app, features 002 a 006**: uma página por feature, com o nome da branch
+  (`002-app-desktop`, `003-tratativas-manuais`, …), só com as telas que a feature criou ou mudou,
+  como ficaram no código. Uma tela substituída por uma feature seguinte fica com ❌ no nome e
+  oculta. As páginas `Identidade visual` e `Componentes` também são do espelho. Mantido pelo agente
+  com a skill `figma-screens-sync`, a partir de prints do app real com dados fictícios.
+- **Design oficial**: as páginas da UX. É a fonte da verdade de como o app **deve ser**. **A partir
+  da feature 007, a UX escreve as specs e desenha as telas antes do desenvolvimento**; não há
+  espelho para essas features. O agente só lê; levar o design para o código é trabalho da spec.
 
-Regra: mudou algo visível no app desktop (`apps/desktop/src/renderer`, rótulos em `presentation/`,
-ícone ou tema)? Ao concluir a task ou a feature, antes do PR, rode a skill `figma-screens-sync` para
-atualizar as telas afetadas do espelho e registrar a mudança no histórico dele.
+Regra: numa feature de 002 a 006, mudou algo visível no app desktop (`apps/desktop/src/renderer`,
+rótulos em `presentation/`, ícone ou tema)? Ao concluir a task ou a feature, antes do PR, rode a
+skill `figma-screens-sync` para atualizar a página da feature e registrar a mudança no histórico
+dela.
 
 ## Usando o legado como referência
 

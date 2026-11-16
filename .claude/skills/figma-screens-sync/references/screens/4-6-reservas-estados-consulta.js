@@ -8,15 +8,28 @@ const CLASS = [['Amarelo', 'Pendente de cobrança'], ['Verde', 'Já cobrada'], [
 const HOTELS = [['101', 'Hotel Praia Azul', 6], ['102', 'Pousada Serra Verde', 4], ['103', 'Hotel Centro Histórico', 5], ['104', 'Resort Lagoa Clara', 7]];
 const money = (v) => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const RESERVATIONS = [];
-{ let n = 0; for (const [code, name, count] of HOTELS) for (let i = 0; i < count; i++, n++) RESERVATIONS.push([name, `${code}-${1000 + n}`, GUESTS[n % 10], CHANNELS[n % 5], `${16 + (n % 5)}/11/2026`, `${18 + (n % 5)}/11/2026`, money(380 + n * 137.5), { badge: CLASS[n % 7][0], text: CLASS[n % 7][1] }, '', { badge: 'Cinza', text: 'Ativa' }]); }
-// Colunas da lista (specs/003: coluna "Tratativa"; o operador ganha a caixa de seleção na frente).
-const RES_COLS = [['Hotel', 150], ['Número', 80], ['Hóspede', 130], ['Canal', 105], ['Check-in', 95], ['Check-out', 95], ['Valor total', 95], ['Situação de cobrança', 230], ['Tratativa', 95], ['Reserva', 'fill']];
-/** Linhas da lista: tratativas por número ({ '101-1000': ['Verde', 'Cobrada'] }) e caixas marcadas. */
+{ let n = 0; for (const [code, name, count] of HOTELS) for (let i = 0; i < count; i++, n++) RESERVATIONS.push([name, `${code}-${1000 + n}`, GUESTS[n % 10], CHANNELS[n % 5], `${17 + (n % 5)}/11/2026`, `${19 + (n % 5)}/11/2026`, money(380 + n * 137.5), { badge: CLASS[n % 7][0], text: CLASS[n % 7][1] }, { badge: 'Cinza', text: 'Ativa' }]); }
+// Colunas da lista: a situação da reserva numa coluna só (specs/003, FR-002, FR-017); o operador
+// ganha a caixa de seleção na frente.
+const RES_COLS = [['Hotel', 150], ['Número', 80], ['Hóspede', 130], ['Canal', 105], ['Check-in', 95], ['Check-out', 95], ['Valor total', 95], ['Situação da reserva', 245], ['Reserva', 'fill']];
+/** Situação das reservas com tratativa no roteiro de captura, depois dos registros: [tom, nome, alerta "Verificar"]. */
+const TREATED = { '101-1000': ['Verde', 'Comprovante enviado'], '101-1003': ['Azul', 'Tratativa enviada'], '102-1007': ['Verde', 'Já cobrada', true] };
+/** Cor local na instância (sobreposição, sem mudar o componente compartilhado): fundo e texto. */
+function recolor(inst, fill, text) {
+  inst.fills = fill ? [paint(fill)] : [];
+  if (text) for (const t of inst.findAllWithCriteria({ types: ['TEXT'] })) t.fills = [paint(text)];
+  return inst;
+}
+/** Alerta "Verificar" (FR-002a): badge amarelo preenchido. */
+async function reviewBadge(parent) { return recolor(await badge(parent, 'Amarelo', 'Verificar'), 'amarelo/8', 'texto/inverso'); }
+/** Célula da situação da reserva, com o alerta quando houver. */
+const situationCell = ([tone, text, review]) => ({ build: async (cell) => { cell.itemSpacing = 4; await badge(cell, tone, text); if (review) await reviewBadge(cell); } });
+/** Linhas da lista: situação por número (TREATED) e caixas marcadas. */
 function reservationRows({ count = 12, treatments = {}, checked = [], operator = true } = {}) {
   return RESERVATIONS.slice(0, count).map((r) => {
     const row = [...r];
     const t = treatments[r[1]];
-    row[8] = t ? { badge: t[0], text: t[1] } : '';
+    if (t) row[7] = situationCell(t);
     return operator ? [{ check: checked.includes(r[1]) }, ...row] : row;
   });
 }
@@ -28,14 +41,16 @@ async function reservationFilters(main, q = '') {
   (await field(r1, { label: 'Busca livre', desc: 'Número da reserva, hóspede, transação, código de autorização ou referência da operadora', value: q, variant: q ? 'Preenchido' : 'Placeholder' })).layoutSizingHorizontal = 'FILL';
   (await field(r1, { label: 'Valor (R$)', desc: 'Valor total ou valor cobrado, como no extrato (ex.: 1.234,56)', variant: 'Placeholder' })).layoutSizingHorizontal = 'FILL';
   const r2 = row(c, 'Linha 2', { itemSpacing: 12, counterAxisAlignItems: 'MIN' });
-  for (const [label, ph, v] of [['Hotéis', 'Todos os hotéis', 'Placeholder/Seletor'], ['Período de check-in', 'Qualquer data', 'Placeholder'], ['Situação de cobrança', 'Todas as situações de cobrança', 'Placeholder/Seletor']])
+  for (const [label, ph, v] of [['Hotéis', 'Todos os hotéis', 'Placeholder/Seletor'], ['Período de check-in', 'Qualquer data', 'Placeholder'], ['Situação da reserva', 'Todas as situações', 'Placeholder/Seletor']])
     (await field(r2, { label, value: ph, variant: v })).layoutSizingHorizontal = 'FILL';
   const r3 = row(c, 'Linha 3', { itemSpacing: 12, counterAxisAlignItems: 'MIN' });
-  for (const [label, ph] of [['Situação da reserva', 'Ativas e canceladas'], ['Tratativa', 'Com ou sem tratativa'], ['Canal', 'Todos os canais']])
+  for (const [label, ph] of [['Ativa ou cancelada', 'Ativas e canceladas'], ['Canal', 'Todos os canais']])
     (await field(r3, { label, value: ph, variant: 'Placeholder/Seletor' })).layoutSizingHorizontal = 'FILL';
+  spacer(r3); // a grade do app tem 3 colunas: a terceira fica vazia
   const r4 = row(c, 'Ações', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
   const quick = AL('HORIZONTAL', { name: 'Atalhos', itemSpacing: 12, counterAxisAlignItems: 'CENTER' }); r4.appendChild(quick);
   await btn(quick, 'Falta cobrar', 'Leve xs');
+  recolor(await btn(quick, 'A verificar', 'Leve xs'), 'amarelo/1', 'amarelo/8');
   quick.appendChild(await I(K.checkbox, { [P.checkbox]: 'Só as não encontradas na última verificação' }));
   const b = AL('HORIZONTAL', { name: 'Botões', itemSpacing: 12 }); r4.appendChild(b); await btn(b, 'Limpar', 'Contorno'); await btn(b, 'Buscar');
 }
@@ -63,15 +78,28 @@ async function reservationsPage(main, { q = '', empty = false, operator = true, 
     }
   }
 }
-/** Seção "Tratativa" do detalhe (specs/003, FR-017). docs: linhas [rótulo, arquivo, tamanho, anexado, estado, ações]. */
-async function treatmentSection(parent, { status, buttons, docs: docs0, manual, history }) {
+/**
+ * Seção "Tratativa" do detalhe (specs/003, FR-017). status: [tom, nome, alerta]. docs: linhas
+ * [rótulo, arquivo, tamanho, anexado, estado, ações]. review: o status do Hunit do alerta
+ * "Verificar" (FR-002a). proof: mostra o campo do valor cobrado. more: botão "Mostrar mais" (FR-017a).
+ */
+async function treatmentSection(parent, { status, buttons, disabled = false, docs: docs0, manual, history, review, proof = !!manual, more = false }) {
   const c = await card(parent, null, 'fill', 12); c.name = 'Card — Tratativa';
   const h = row(c, 'Cabeçalho', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
   const hl = AL('HORIZONTAL', { name: 'Título', itemSpacing: 8, counterAxisAlignItems: 'CENTER' }); h.appendChild(hl);
   hl.appendChild(await T('Tratativa', 'corpo forte'));
-  if (status) await badge(hl, status[0], status[1]); else hl.appendChild(await T('Sem tratativa', 'corpo', 'texto/apagado'));
+  if (status) { await badge(hl, status[0], status[1]); if (status[2]) await reviewBadge(hl); } else hl.appendChild(await T('Sem tratativa', 'corpo', 'texto/apagado'));
   const hb = AL('HORIZONTAL', { name: 'Ações', itemSpacing: 8 }); h.appendChild(hb);
-  await btn(hb, buttons[0], 'Contorno xs'); await btn(hb, buttons[1], 'Preenchido xs');
+  await btn(hb, buttons[0], disabled ? 'Desabilitado xs' : 'Contorno xs'); await btn(hb, buttons[1], disabled ? 'Desabilitado xs' : 'Preenchido xs');
+  if (disabled) put(c, await T('O status do Hunit desta reserva não exige cobrança, por isso ela não aceita novos documentos.', 'corpo', 'texto/apagado'), 'fill');
+  if (review) {
+    const a = AL('VERTICAL', { name: 'Alerta — Verificar', itemSpacing: 10, paddingLeft: 16, paddingRight: 16, paddingTop: 16, paddingBottom: 16, cornerRadius: 8 });
+    a.fills = [paint('amarelo/1')]; put(c, a, 'fill');
+    a.appendChild(await T('Verificar', 'corpo forte', 'amarelo/8'));
+    const msg = await rich([['Depois da tratativa, o Hunit passou a mostrar esta reserva como '], [review, 'b'], ['. Confira a reserva e confirme. A tratativa continua registrada.']]);
+    put(a, msg, 'fill'); if (msg.type === 'TEXT') msg.textAutoResize = 'HEIGHT';
+    recolor(await btn(a, 'Confirmar', 'Preenchido xs'), 'amarelo/8', 'texto/inverso');
+  }
   // Documentos em linhas de altura automática: arquivo, anexado e situação em duas ou três linhas,
   // como no app (FR-013a: "pode ser revertido até ...").
   const lines = (parts) => async (cell) => {
@@ -100,13 +128,25 @@ async function treatmentSection(parent, { status, buttons, docs: docs0, manual, 
   const vv = AL('VERTICAL', { name: 'Valor', itemSpacing: 2 }); v.appendChild(vv);
   vv.appendChild(await T('Valor informado à mão', 'descrição', 'texto/apagado')); vv.appendChild(await T(manual ? `${manual} (informado à mão)` : '—'));
   if (manual) await btn(v, 'Remover valor', 'Contorno xs');
-  if (history) {
+  if (proof) {
     await field(v, { label: 'Valor que foi cobrado (R$)', value: '1.234,56', variant: 'Placeholder', width: 220 });
     await btn(v, 'Informar valor', 'Contorno xs');
+  }
+  if (history) {
     put(c, await T('Histórico', 'corpo forte'));
-    for (const line of history) put(c, await T('•  ' + line), 'fill');
+    // Os 5 mais recentes; "Mostrar mais" traz mais 10 a cada clique (FR-017a).
+    for (const line of history.slice(0, 5)) put(c, await T('•  ' + line), 'fill');
+    if (more) recolor(await btn(c, 'Mostrar mais', 'Leve xs'), null, null);
   }
   return c;
+}
+/** Quadro "Status do Hunit" do detalhe (FR-002): a classificação, o motivo e a anterior, se mudou. */
+async function hunitStatus(parent, [tone, text], reason, previous) {
+  const m = AL('VERTICAL', { name: 'Status do Hunit', itemSpacing: 4, paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12, cornerRadius: 8 });
+  m.strokes = [paint('borda/padrão')]; put(parent, m, 'fill');
+  const t = row(m, 'Título', { itemSpacing: 8 }); t.appendChild(await T('Status do Hunit', 'corpo forte')); await badge(t, tone, text);
+  m.appendChild(await T('Motivo da classificação', 'descrição', 'texto/apagado')); m.appendChild(await T(reason));
+  if (previous) { const p = row(m, 'Classificação anterior', { itemSpacing: 8 }); p.appendChild(await T('Classificação anterior:')); await badge(p, previous[0], previous[1]); }
 }
 /** Pares rótulo/valor em 3 colunas. */
 async function kvGrid(parent, pairs, name) {
@@ -134,9 +174,7 @@ SCREENS['4.2'] = { name: 'Reservas — detalhe da reserva', h: 900, profile: 'Op
     tl.appendChild(await T('Reserva 101-1002', 'título seção')); tl.appendChild(await T('hotel 101', 'corpo', 'texto/apagado'));
     const tr = AL('HORIZONTAL', { name: 'Situações', itemSpacing: 8 }); t.appendChild(tr); await badge(tr, 'Vermelho', 'Erro na cobrança'); await badge(tr, 'Cinza', 'Ativa');
     await kvGrid(d, [['Hóspede', 'Carla Mendes'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '18/11/2026'], ['Check-out', '20/11/2026'], ['Valor total', 'R$ 655,00']], 'Dados da reserva');
-    const m = AL('VERTICAL', { name: 'Motivo da classificação', itemSpacing: 2, paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12, cornerRadius: 8 });
-    m.strokes = [paint('borda/padrão')]; put(d, m, 'fill');
-    m.appendChild(await T('Motivo da classificação', 'descrição', 'texto/apagado')); m.appendChild(await T('O estado atual do pré-pagamento indica falha na cobrança.'));
+    await hunitStatus(d, ['Vermelho', 'Erro na cobrança'], 'O estado atual do pré-pagamento indica falha na cobrança.');
     await treatmentSection(d, { buttons: ['Anexar tratativa', 'Anexar comprovante'], docs: [['Tratativa'], ['Comprovante']] });
     const cb = await card(d, null, 'fill', 12); cb.name = 'Card — Cobrança'; put(cb, await T('Cobrança', 'corpo forte'));
     await kvGrid(cb, [['Data', '—'], ['Responsável', '—'], ['Valor cobrado', '—'], ['Transação', '—'], ['Autorização', '—'], ['Referência da operadora', '—'], ['Parcelamento', '—'], ['Estado do pré-pagamento', 'Fail'], ['Mensagem do pré-pagamento', 'Cartão recusado pela operadora']], 'Dados da cobrança');
@@ -171,4 +209,4 @@ SCREENS['6.1'] = { name: 'Consulta — execuções', h: 900, profile: 'Consulta'
   } };
 
 SCREENS['6.2'] = { name: 'Consulta — reservas', h: 900, profile: 'Consulta', nav: NAV_RD, active: 'Reservas',
-  async build({ main }) { await reservationsPage(main, { operator: false, treatments: { '101-1000': ['Verde', 'Cobrada'], '101-1003': ['Azul', 'Enviada'] } }); } };
+  async build({ main }) { await reservationsPage(main, { operator: false, treatments: TREATED }); } };

@@ -4,6 +4,19 @@ Cada tela tem um número `área.ordem`, usado no nome do frame no Figma (`2.4 Ex
 nome do print (`2.4-executar-pedido-de-token.png`), no roteiro de captura
 (`apps/desktop/test/e2e/screens-capture.test.ts`) e no construtor (`SCREENS['2.4']`).
 
+## Em que página está cada tela
+
+Uma página por feature, com o nome da branch; a página tem só as telas que a feature criou ou
+mudou. Versões substituídas ficam com `❌` no nome e ocultas. Atualize esta lista quando uma feature
+acrescentar telas à página dela.
+
+| Página | Telas visíveis | Ocultas (❌, substituídas) |
+|---|---|---|
+| `002-app-desktop` | 1.1 a 1.3, 2.1 a 2.10, 3.1 a 3.4, 5.1, 6.1 | 4.1, 4.2, 4.3, 6.2 (pela 003) |
+| `003-tratativas-manuais` | 4.1 a 4.9, 6.2 | — |
+
+## Catálogo
+
 Código: caminhos relativos a `apps/desktop/src/renderer/src/`. Altura: altura do frame no Figma
 (largura sempre 1440); acima de 900, o print é da página inteira.
 
@@ -26,17 +39,18 @@ Código: caminhos relativos a `apps/desktop/src/renderer/src/`. Altura: altura d
 | 3.2 | Execuções — detalhe em andamento | Gaveta: hotel atual, tempo restante, contagens, hotéis, evidências, cancelar | `screens/executions/ExecutionDetail.tsx`, `components/EvidenceList.tsx` | 900 | `3-execucoes.js` |
 | 3.3 | Execuções — confirmar cancelamento | Diálogo "Cancelar a execução?" sobre a gaveta | `screens/executions/ExecutionDetail.tsx` | 900 | `3-execucoes.js` |
 | 3.4 | Execuções — detalhe concluída | Gaveta da execução concluída com evidências | `screens/executions/ExecutionDetail.tsx` | 900 | `3-execucoes.js` |
-| 4.1 | Reservas — lista | Filtros (com "Tratativa" e "Falta cobrar"), caixas de seleção e tabela com a situação de cobrança e a tratativa | `screens/reservations/ReservationsScreen.tsx`, `ReservationFilters.tsx` | 900 | `4-6-reservas-estados-consulta.js` |
-| 4.2 | Reservas — detalhe da reserva | Gaveta: dados, motivo da classificação, tratativa sem documentos, cobrança, verificações | `screens/reservations/ReservationDetail.tsx` | 900 | `4-6-reservas-estados-consulta.js` |
+| 4.1 | Reservas — lista | Filtros ("Situação da reserva", "Ativa ou cancelada", atalhos "Falta cobrar" e "A verificar"), caixas de seleção e a coluna única "Situação da reserva" | `screens/reservations/ReservationsScreen.tsx`, `ReservationFilters.tsx` | 900 | `4-6-reservas-estados-consulta.js` |
+| 4.2 | Reservas — detalhe da reserva | Gaveta: situação no topo, dados, quadro "Status do Hunit" (classificação e motivo), tratativa sem documentos, cobrança, verificações | `screens/reservations/ReservationDetail.tsx` | 900 | `4-6-reservas-estados-consulta.js` |
 | 4.3 | Reservas — nenhum resultado | Busca sem resultado | `screens/reservations/ReservationsScreen.tsx` | 900 | `4-6-reservas-estados-consulta.js` |
-| 4.4 | Reservas — seleção do lote | Reservas marcadas em pesquisas diferentes, barra da seleção, "Enviada" e "Cobrada" na lista | `screens/reservations/ReservationsScreen.tsx`, `state/selection.tsx` | 900 | `4-tratativas.js` |
+| 4.4 | Reservas — seleção do lote | Reservas marcadas em pesquisas diferentes, barra da seleção, "Tratativa enviada", "Comprovante enviado" e o alerta "Verificar" na lista | `screens/reservations/ReservationsScreen.tsx`, `state/selection.tsx` | 900 | `4-tratativas.js` |
 | 4.5 | Reservas — reservas selecionadas | Gaveta com a lista completa da seleção | `screens/reservations/SelectionDrawer.tsx` | 900 | `4-tratativas.js` |
 | 4.6 | Reservas — anexar comprovante em lote | Diálogo: pré-visualização da imagem, aceitas, ignoradas com o motivo e total | `screens/reservations/AttachDialog.tsx`, `components/DocumentPreview.tsx` | 900 | `4-tratativas.js` |
-| 4.7 | Reservas — detalhe com tratativa | Gaveta com "Cobrada": documentos atuais e anterior, valor informado à mão, histórico | `screens/reservations/TreatmentSection.tsx` | 900 | `4-tratativas.js` |
+| 4.7 | Reservas — detalhe com tratativa | Gaveta com "Comprovante enviado": status do Hunit, documentos atuais e anterior, valor informado à mão, histórico com 5 itens e "Mostrar mais" | `screens/reservations/TreatmentSection.tsx` | 900 | `4-tratativas.js` |
 | 4.8 | Reservas — anexar tratativa (e-mail) | Diálogo com a pré-visualização de um .eml: cabeçalhos, texto e anexos | `screens/reservations/AttachDialog.tsx`, `components/DocumentPreview.tsx` | 900 | `4-tratativas.js` |
+| 4.9 | Reservas — detalhe com o alerta "Verificar" | Tratativa enviada e o Hunit passou a "Já cobrada": situação do Hunit com "Verificar", classificação anterior, alerta com "Confirmar", ações de registro desabilitadas | `screens/reservations/TreatmentSection.tsx`, `components/SituationBadge.tsx` | 900 | `4-tratativas.js` |
 | 5.1 | Servidor indisponível | Aviso amarelo, dados guardados com horário, menu sem "Executar" | `components/ConnectionBanner.tsx`, `components/StaleDataNotice.tsx`, `App.tsx` | 900 | `4-6-reservas-estados-consulta.js` |
 | 6.1 | Consulta — execuções | Perfil consulta: sem "Executar" e sem ações de operador | `App.tsx`, `screens/executions/` | 900 | `4-6-reservas-estados-consulta.js` |
-| 6.2 | Consulta — reservas | Perfil consulta na área Reservas: tratativas visíveis, sem caixas de seleção | `screens/reservations/` | 900 | `4-6-reservas-estados-consulta.js` |
+| 6.2 | Consulta — reservas | Perfil consulta na área Reservas: situação da reserva (com o alerta) visível, sem caixas de seleção | `screens/reservations/` | 900 | `4-6-reservas-estados-consulta.js` |
 
 Rótulos e cores das situações (todas as telas): `presentation/labels.ts`. Tema (cor primária, raio,
 fonte): `main.tsx`. Ícone: `apps/desktop/resources/icon.png`, componente `Marca/Ícone do app` na

@@ -342,12 +342,30 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         'pedido-101-1003.eml',
         emlFile({ subject: 'Pedido 101-1003' }),
       );
-      await server.test.app.inject({
-        method: 'PUT',
-        url: '/v1/reservations/101/101-1000/manual-amount',
-        headers: server.operator.headers,
-        payload: { amount: '380.00' },
-      });
+      // Valor informado, removido e informado de novo: o histórico passa de 5 itens e a tela
+      // 4.7 mostra "Mostrar mais" (FR-017a).
+      for (const method of ['PUT', 'DELETE', 'PUT'] as const) {
+        await server.test.app.inject({
+          method,
+          url: '/v1/reservations/101/101-1000/manual-amount',
+          headers: server.operator.headers,
+          ...(method === 'PUT' && { payload: { amount: '380.00' } }),
+        });
+      }
+      // Tratativa enviada e, depois, o Hunit passou a mostrar "Já cobrada": alerta "Verificar"
+      // (FR-002a, tela 4.9).
+      await register(
+        '102-1007',
+        'request',
+        'pedido-102-1007.eml',
+        emlFile({ subject: 'Pedido 102-1007' }),
+      );
+      await server.test.database.pool.query(
+        `update reservations set classification = 'virtual_card_already_charged',
+           previous_classification = classification, status_changed = true,
+           status_changed_at = now()
+         where hotel_code = '102' and reservation_number = '102-1007'`,
+      );
 
       await goTo('Reservas');
       await window.getByRole('button', { name: 'Limpar' }).first().click();
@@ -402,6 +420,11 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('4.8', 'reservas-anexar-tratativa-email');
       await single.getByRole('button', { name: 'Cancelar' }).click();
       await single.waitFor({ state: 'detached' });
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+
+      await window.getByRole('cell', { name: '102-1007', exact: true }).click();
+      await window.getByTestId('review-alert').waitFor({ timeout: 15_000 });
+      await shot('4.9', 'reservas-detalhe-verificar', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
     });
 

@@ -1,24 +1,25 @@
-// Telas 4.4 a 4.8 — Tratativas manuais (specs/003): seleção do lote, lista da seleção, anexar em
-// lote, detalhe com tratativa e pré-visualização de e-mail. Requer o figma-prelude.js e o
-// 4-6-reservas-estados-consulta.js antes deste arquivo (usa reservationsPage, kvGrid e
-// treatmentSection). Dados fictícios, os mesmos do roteiro de captura.
+// Telas 4.4 a 4.9 — Tratativas manuais (specs/003): seleção do lote, lista da seleção, anexar em
+// lote, detalhe com tratativa, pré-visualização de e-mail e alerta "Verificar". Requer o
+// figma-prelude.js e o 4-6-reservas-estados-consulta.js antes deste arquivo (usa reservationsPage,
+// kvGrid, treatmentSection, hunitStatus, reviewBadge e TREATED). Dados fictícios, os mesmos do
+// roteiro de captura.
 
-const TREATED = { '101-1000': ['Verde', 'Cobrada'], '101-1003': ['Azul', 'Enviada'] };
 const SELECTED = ['101-1002', '101-1003', '101-1005'];
 const SELECTION = [4, 'R$ 4.957,50'];
 
-/** Gaveta do detalhe da reserva: título, situações, dados e motivo. */
-async function detailHead(d, number, badges, pairs, reason) {
+/**
+ * Gaveta do detalhe da reserva: título, situação da reserva (com o alerta) e "Ativa", dados e o
+ * quadro "Status do Hunit". badges: [[tom, nome, alerta]]; hunit: [tom, nome]; previous: anterior.
+ */
+async function detailHead(d, number, badges, pairs, hunit, reason, previous) {
   await titleWithClose(d, 'Detalhe da reserva');
   const t = row(d, 'Reserva', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
   const tl = AL('HORIZONTAL', { name: 'Título', itemSpacing: 8, counterAxisAlignItems: 'BASELINE' }); t.appendChild(tl);
-  tl.appendChild(await T(`Reserva ${number}`, 'título seção')); tl.appendChild(await T('hotel 101', 'corpo', 'texto/apagado'));
+  tl.appendChild(await T(`Reserva ${number}`, 'título seção')); tl.appendChild(await T(`hotel ${number.slice(0, 3)}`, 'corpo', 'texto/apagado'));
   const tr = AL('HORIZONTAL', { name: 'Situações', itemSpacing: 8 }); t.appendChild(tr);
-  for (const [tone, text] of badges) await badge(tr, tone, text);
+  for (const [tone, text, review] of badges) { await badge(tr, tone, text); if (review) await reviewBadge(tr); }
   await kvGrid(d, pairs, 'Dados da reserva');
-  const m = AL('VERTICAL', { name: 'Motivo da classificação', itemSpacing: 2, paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12, cornerRadius: 8 });
-  m.strokes = [paint('borda/padrão')]; put(d, m, 'fill');
-  m.appendChild(await T('Motivo da classificação', 'descrição', 'texto/apagado')); m.appendChild(await T(reason));
+  await hunitStatus(d, hunit, reason, previous);
 }
 
 /** Linha "arquivo  tamanho" do topo do diálogo de anexar. */
@@ -48,7 +49,7 @@ SCREENS['4.5'] = { name: 'Reservas — reservas selecionadas', h: 900, profile: 
     await btn(r, 'Limpar seleção', 'Contorno xs');
     await table(d, [['Hotel', 150], ['Número', 105], ['Hóspede', 140], ['Valor total', 105], ['Situação', 'fill'], [' ', 44]], [
       ['Hotel Praia Azul', '101-1002', 'Carla Mendes', 'R$ 655,00', { badge: 'Vermelho', text: 'Erro na cobrança' }, { build: async (c) => { await closeIcon(c); } }],
-      ['Hotel Praia Azul', '101-1003', 'Diego Fernandes', 'R$ 792,50', { badge: 'Amarelo', text: 'Cartão validado (não cobrado)' }, { build: async (c) => { await closeIcon(c); } }],
+      ['Hotel Praia Azul', '101-1003', 'Diego Fernandes', 'R$ 792,50', { badge: 'Azul', text: 'Tratativa enviada' }, { build: async (c) => { await closeIcon(c); } }],
       ['Hotel Praia Azul', '101-1005', 'Fábio Rocha', 'R$ 1.067,50', { badge: 'Amarelo', text: 'Cobrar na maquininha' }, { build: async (c) => { await closeIcon(c); } }],
       ['Resort Lagoa Clara', '104-1015', 'Fábio Rocha', 'R$ 2.442,50', { badge: 'Verde', text: 'Já cobrada' }, { build: async (c) => { await closeIcon(c); } }],
     ]);
@@ -77,24 +78,20 @@ SCREENS['4.7'] = { name: 'Reservas — detalhe com tratativa', h: 900, profile: 
     await reservationsPage(main, { treatments: TREATED });
     overlay(root);
     const d = drawer(root, 'Gaveta — detalhe com tratativa');
-    await detailHead(d, '101-1000', [['Amarelo', 'Pendente de cobrança'], ['Verde', 'Cobrada'], ['Cinza', 'Ativa']],
-      [['Hóspede', 'Ana Ribeiro'], ['Canal', 'Booking.com'], ['Forma de pagamento', '—'], ['Check-in', '16/11/2026'], ['Check-out', '18/11/2026'], ['Valor total', 'R$ 380,00']],
-      'Pré-pagamento sem registro de cobrança e com a ação de cobrar disponível.');
+    await detailHead(d, '101-1000', [['Verde', 'Comprovante enviado'], ['Cinza', 'Ativa']],
+      [['Hóspede', 'Ana Ribeiro'], ['Canal', 'Booking.com'], ['Forma de pagamento', '—'], ['Check-in', '17/11/2026'], ['Check-out', '19/11/2026'], ['Valor total', 'R$ 380,00']],
+      ['Amarelo', 'Pendente de cobrança'], 'Pré-pagamento sem registro de cobrança e com a ação de cobrar disponível.');
     await treatmentSection(d, {
-      status: ['Verde', 'Cobrada'],
+      status: ['Verde', 'Comprovante enviado'],
       buttons: ['Substituir tratativa', 'Substituir comprovante'],
       docs: [
-        ['Tratativa', 'pedido-ao-comercial.eml', '252 B', '15/11/2026 10:19', ['Verde', 'Atual'], ['Baixar', 'Desfazer']],
-        ['Comprovante', 'comprovante-101-1000.pdf', '595 B', '15/11/2026 10:19', ['Verde', 'Atual'], ['Baixar', 'Desfazer']],
-        ['Comprovante anterior', 'comprovante-antigo.pdf', '593 B', '15/11/2026 10:19', ['Cinza', 'Substituído', '15/11/2026 10:19 por Recepção — PC 1\npode ser revertido até 15/12/2026'], ['Baixar', 'Reverter']],
+        ['Tratativa', 'pedido-ao-comercial.eml', '252 B', '16/11/2026 12:17', ['Verde', 'Atual'], ['Baixar', 'Desfazer']],
+        ['Comprovante', 'comprovante-101-1000.pdf', '595 B', '16/11/2026 12:17', ['Verde', 'Atual'], ['Baixar', 'Desfazer']],
+        ['Comprovante anterior', 'comprovante-antigo.pdf', '593 B', '16/11/2026 12:17', ['Cinza', 'Substituído', '16/11/2026 12:17 por Recepção — PC 1\npode ser revertido até 16/12/2026'], ['Baixar', 'Reverter']],
       ],
       manual: 'R$ 380,00',
-      history: [
-        '15/11/2026 10:19 — Informou valor: R$ 380,00 — Recepção — PC 1',
-        '15/11/2026 10:19 — Substituiu comprovante — Recepção — PC 1',
-        '15/11/2026 10:19 — Anexou comprovante — Recepção — PC 1',
-        '15/11/2026 10:19 — Anexou tratativa — Recepção — PC 1',
-      ],
+      history: ['16/11/2026 12:17 — Informou valor: R$ 380,00 — Recepção — PC 1', '16/11/2026 12:17 — Removeu valor — Recepção — PC 1', '16/11/2026 12:17 — Informou valor: R$ 380,00 — Recepção — PC 1', '16/11/2026 12:17 — Substituiu comprovante — Recepção — PC 1', '16/11/2026 12:17 — Anexou comprovante — Recepção — PC 1', '16/11/2026 12:17 — Anexou tratativa — Recepção — PC 1'],
+      more: true,
     });
   } };
 
@@ -104,8 +101,8 @@ SCREENS['4.8'] = { name: 'Reservas — anexar tratativa (e-mail)', h: 900, profi
     overlay(root);
     const d = drawer(root, 'Gaveta — detalhe da reserva');
     await detailHead(d, '101-1005', [['Amarelo', 'Cobrar na maquininha'], ['Cinza', 'Ativa']],
-      [['Hóspede', 'Fábio Rocha'], ['Canal', 'Booking.com'], ['Forma de pagamento', 'cartão de crédito'], ['Check-in', '16/11/2026'], ['Check-out', '18/11/2026'], ['Valor total', 'R$ 1.067,50']],
-      'Sem pré-pagamento e forma de pagamento cartão de crédito: cobrar na maquininha.');
+      [['Hóspede', 'Fábio Rocha'], ['Canal', 'Booking.com'], ['Forma de pagamento', 'cartão de crédito'], ['Check-in', '17/11/2026'], ['Check-out', '19/11/2026'], ['Valor total', 'R$ 1.067,50']],
+      ['Amarelo', 'Cobrar na maquininha'], 'Sem pré-pagamento e forma de pagamento cartão de crédito: cobrar na maquininha.');
     overlay(root);
     const m = modal(root, 780, 'Diálogo — anexar tratativa');
     await titleWithClose(m, 'Anexar tratativa', 'corpo forte');
@@ -123,4 +120,25 @@ SCREENS['4.8'] = { name: 'Reservas — anexar tratativa (e-mail)', h: 900, profi
     put(m, await T('Confira o arquivo acima. Ao confirmar, ele será registrado como a tratativa desta reserva.'), 'fill');
     await dialogButtons(m);
     center(root, m);
+  } };
+
+SCREENS['4.9'] = { name: 'Reservas — detalhe com o alerta "Verificar"', h: 900, profile: 'Operador', nav: NAV_OP, active: 'Reservas',
+  async build({ root, main }) {
+    await reservationsPage(main, { treatments: TREATED });
+    overlay(root);
+    const d = drawer(root, 'Gaveta — detalhe com o alerta Verificar');
+    await detailHead(d, '102-1007', [['Verde', 'Já cobrada', true], ['Cinza', 'Ativa']],
+      [['Hóspede', 'Henrique Alves'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '19/11/2026'], ['Check-out', '21/11/2026'], ['Valor total', 'R$ 1.342,50']],
+      ['Verde', 'Já cobrada'], 'Pré-pagamento sem registro de cobrança e com a ação de cobrar disponível.', ['Amarelo', 'Pendente de cobrança']);
+    await treatmentSection(d, {
+      status: ['Verde', 'Já cobrada', true],
+      buttons: ['Substituir tratativa', 'Anexar comprovante'],
+      disabled: true,
+      review: 'Já cobrada',
+      docs: [
+        ['Tratativa', 'pedido-102-1007.eml', '252 B', '16/11/2026 12:17', ['Verde', 'Atual'], ['Baixar', 'Desfazer']],
+        ['Comprovante'],
+      ],
+      history: ['16/11/2026 12:17 — Anexou tratativa — Recepção — PC 1'],
+    });
   } };
