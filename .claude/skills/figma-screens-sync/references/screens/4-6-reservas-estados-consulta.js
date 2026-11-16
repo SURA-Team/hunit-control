@@ -35,7 +35,13 @@ function reservationRows({ count = 12, treatments = {}, checked = [], operator =
 }
 const resCols = (operator = true) => (operator ? [[' ', 36], ...RES_COLS] : RES_COLS);
 
-async function reservationFilters(main, q = '') {
+/** Selo "Sistema anterior" (specs/004): contorno cinza, sem fundo, como o Badge outline do app. */
+async function legacyBadge(parent) {
+  const b = recolor(await badge(parent, 'Cinza', 'Sistema anterior'), null, 'texto/apagado');
+  b.strokes = [paint('borda/padrão')]; b.strokeWeight = 1;
+  return b;
+}
+async function reservationFilters(main, q = '', origin = 'Todas') {
   const c = await card(main, null); c.name = 'Card — Filtros';
   const r1 = row(c, 'Linha 1', { itemSpacing: 12, counterAxisAlignItems: 'MIN' });
   (await field(r1, { label: 'Busca livre', desc: 'Número da reserva, hóspede, transação, código de autorização ou referência da operadora', value: q, variant: q ? 'Preenchido' : 'Placeholder' })).layoutSizingHorizontal = 'FILL';
@@ -46,7 +52,8 @@ async function reservationFilters(main, q = '') {
   const r3 = row(c, 'Linha 3', { itemSpacing: 12, counterAxisAlignItems: 'MIN' });
   for (const [label, ph] of [['Ativa ou cancelada', 'Ativas e canceladas'], ['Canal', 'Todos os canais']])
     (await field(r3, { label, value: ph, variant: 'Placeholder/Seletor' })).layoutSizingHorizontal = 'FILL';
-  spacer(r3); // a grade do app tem 3 colunas: a terceira fica vazia
+  // Filtro "Origem" (specs/004): sempre com um valor escolhido, padrão "Todas".
+  (await field(r3, { label: 'Origem', value: origin, variant: 'Preenchido/Seletor' })).layoutSizingHorizontal = 'FILL';
   const r4 = row(c, 'Ações', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
   const quick = AL('HORIZONTAL', { name: 'Atalhos', itemSpacing: 12, counterAxisAlignItems: 'CENTER' }); r4.appendChild(quick);
   await btn(quick, 'Falta cobrar', 'Leve xs');
@@ -63,14 +70,14 @@ async function selectionBar(main, count, total) {
   await btn(b, 'Ver seleção', 'Contorno xs'); await btn(b, 'Anexar tratativa', 'Contorno xs');
   await btn(b, 'Anexar comprovante', 'Preenchido xs'); await btn(b, 'Desmarcar todas', 'Leve xs');
 }
-async function reservationsPage(main, { q = '', empty = false, operator = true, treatments = {}, checked = [], selection = null, count = 12 } = {}) {
+async function reservationsPage(main, { q = '', empty = false, operator = true, treatments = {}, checked = [], selection = null, count = 12, origin = 'Todas', rows: customRows = null, cols: customCols = null } = {}) {
   put(main, await T('Reservas', 'título página'));
-  await reservationFilters(main, q);
+  await reservationFilters(main, q, origin);
   if (selection) await selectionBar(main, selection[0], selection[1]);
   if (empty) put(main, await T('Nenhuma reserva encontrada com estes filtros.', 'corpo grande', 'texto/apagado'));
   else {
-    const rows = reservationRows({ count, treatments, checked, operator });
-    const t = await table(main, resCols(operator), rows);
+    const rows = customRows ?? reservationRows({ count, treatments, checked, operator });
+    const t = await table(main, customCols ?? resCols(operator), rows);
     if (operator) { // caixa do cabeçalho: parcial quando só parte da página está marcada
       const head = t.children[0].children[0];
       head.children.forEach((n) => n.remove());
@@ -83,7 +90,7 @@ async function reservationsPage(main, { q = '', empty = false, operator = true, 
  * [rótulo, arquivo, tamanho, anexado, estado, ações]. review: o status do Hunit do alerta
  * "Verificar" (FR-002a). proof: mostra o campo do valor cobrado. more: botão "Mostrar mais" (FR-017a).
  */
-async function treatmentSection(parent, { status, buttons, disabled = false, docs: docs0, manual, history, review, proof = !!manual, more = false }) {
+async function treatmentSection(parent, { status, buttons, disabled = false, docs: docs0, manual, history, review, proof = !!manual, more = false, author = 'Recepção — PC 1' }) {
   const c = await card(parent, null, 'fill', 12); c.name = 'Card — Tratativa';
   const h = row(c, 'Cabeçalho', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
   const hl = AL('HORIZONTAL', { name: 'Título', itemSpacing: 8, counterAxisAlignItems: 'CENTER' }); h.appendChild(hl);
@@ -112,7 +119,7 @@ async function treatmentSection(parent, { status, buttons, disabled = false, doc
   const docs = await table(c, [['Documento', 122], ['Arquivo', 158], ['Anexado', 140], ['Situação', 125], [' ', 'fill']], docs0.map((d) => [
     d[0],
     d[1] ? { build: lines([[d[1], 'corpo'], [d[2], 'descrição', 'texto/apagado']]) } : { rich: [['Nenhum', 'dim']] },
-    d[3] ? { build: lines([[d[3], 'corpo'], ['por Recepção — PC 1', 'descrição', 'texto/apagado']]) } : '',
+    d[3] ? { build: lines([[d[3], 'corpo'], [`por ${author}`, 'descrição', 'texto/apagado']]) } : '',
     d[4] ? { build: lines([[d[4], 'badge'], ...(d[4][2] ? [[d[4][2], 'descrição', 'texto/apagado']] : [])]) } : '',
     d[5] ? { build: async (cell) => { cell.primaryAxisAlignItems = 'MAX'; cell.itemSpacing = 6; for (const a of d[5]) await btn(cell, a, 'Contorno xs'); } } : '',
   ]));
