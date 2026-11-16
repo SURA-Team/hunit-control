@@ -80,7 +80,7 @@ anterior); 1 comando com 4 subcomandos; 1 filtro e 3 campos novos na API; 1 tela
 |---|---|---|---|
 | I | Spec-First | Spec 004 escrita e clarificada (4 decisões em 2026-11-16). Os dois ajustes que o plano revelou foram feitos **antes** na spec: "Saida" e "Total da reserva" obrigatórias (colunas sem valor padrão no banco) e a situação de "A revisar" com só tratativa (FR-007a) | ✅ |
 | II | Isolamento do Hunit | A importação não usa a camada do Hunit nem o `HunitGateway`; um teste confere zero chamadas (SC-005). Nenhuma rota nova no `read-only-guard` | ✅ |
-| III | API-First com Contrato | Toda funcionalidade **visível aos clientes** (marcação, filtro, origem dos registros) entra antes no `openapi.yaml` 1.6.0, só com acréscimos. A importação é um comando administrativo, como `create-client`, decidido na clarificação (FR-002): não é funcionalidade de cliente e não tem rota. O app só apresenta os campos novos | ✅ |
+| III | API-First com Contrato | Tudo o que os clientes usam (marcação, filtro, origem dos registros) entra antes no `openapi.yaml` 1.6.0, só com acréscimos. A importação é um **comando administrativo de implantação** (exceção do princípio III, constitution 1.2.0), decidido na clarificação (FR-002). Cumpre as três condições: não é usada pelos clientes, não acessa o Hunit e tudo o que grava (reservas, tratativas, documentos) fica visível pela API. O app só apresenta os campos novos | ✅ |
 | IV | Jobs Assíncronos | Não se aplica: nenhuma automação do Hunit nova. A exclusão mútua das importações usa um *advisory lock*, sem estado preso (R-01) | ✅ |
 | V | Servidor Central e Containers | Roda na imagem do `server`, configurado só por `DATABASE_URL`. A pasta de origem é uma entrada só de leitura montada num container de uso único, não estado. Nenhum volume nem variável de ambiente nova | ✅ |
 | VI | Dados e Segurança | PostgreSQL continua a fonte da verdade e a planilha é só entrada (lida uma vez, da cópia). Relatórios e logs só com códigos, linhas e números de reserva (R-11), e a planilha e a pasta nunca entram no Git (`*.xlsx` já ignorado). O autor reservado não tem credencial (R-05). Os dados importados entram nas cópias cifradas e na retenção | ✅ |
@@ -205,7 +205,6 @@ relatório + diferenças ◄────────── ───────
 | `not_virtual_card` gravado antes da R-22 | Reserva antiga aparecendo como "A revisar" | Aviso na simulação com a contagem (R-04); a R-22 registrou que não há |
 | Importação longa com execução no Hunit ao mesmo tempo | Travas e resultado dependente da ordem | Transação por reserva e regra de precedência independente da ordem, conferida por teste (R-06, R-09) |
 | Banco cresce com os documentos importados | Cópias maiores | Deduplicação; medir o tamanho da cópia antes e depois na homologação |
-| Branch da 003 ainda sem merge na `master` | Base diferente da `master` | A 004 parte da `003-tratativas-manuais`; fazer o merge da 003 antes de abrir o PR da 004 |
 | `read-excel-file` com mudanças frequentes | Versão nova quebrar a leitura | Versão fixada pelo lock; teste com planilha gerada cobre as abas e os tipos de célula |
 
 ## Complexity Tracking

@@ -20,8 +20,7 @@ implementação e confirme que falham. Grupos: `domain`, `server` (unidade), `se
 **Organization**: tarefas agrupadas por história, na ordem de prioridade da spec: US1 (P1), US2
 (P1), US3 (P2) e US4 (P3).
 
-**Pré-requisito da implementação**: a 003 mesclada na `master` e a `master` trazida para a
-`004-importacao-historico` (a branch partiu da `003-tratativas-manuais`).
+**Base**: a 003 já está na `master` (PR #3); a `004-importacao-historico` parte da `master`.
 
 **Dados**: nenhuma tarefa lê a planilha real nem a pasta de anexos real. Planilhas e anexos de
 teste são **gerados no próprio teste**, com dados fictícios e sem nomes de hotéis ou da empresa
@@ -88,7 +87,7 @@ usam.
   - **ordem** importação × coletor: `mergeVerification` ∘ `mergeLegacyReservation` e o inverso dão a mesma contagem e a mesma primeira verificação.
   - **duplicadas na planilha**: vale a de última verificação mais recente, a outra `duplicated_in_sheet`.
   - **anexo antigo**: `proof` se o código original é `virtual_card_pending_charge`, senão `request`; com documento novo do mesmo tipo na linha → `superseded_in_legacy`.
-  - **data original**: coluna própria → "Atualizado em" → última verificação com o aviso `original_date_missing`.
+  - **data original** (data-model §3.3): coluna própria → se vazia, "Atualizado em" → se vazia, última verificação com o aviso `original_date_missing`; coluna própria preenchida e ilegível → `unreadable_date`, sem passar para a seguinte.
   - **precedência dos documentos**: atual do HUNIT Control → `kept_hunit_control`; atual importado com o mesmo SHA-256 → `already_imported`; com outro → `replace`; valor manual sem comprovante → `manual_amount_without_proof`.
   - **nomes de hotel**: `normalizeHotelName` ("Hotel  São_José!" ≡ "hotel sao jose"), proposta com um candidato exato, nenhuma com zero ou mais de um
 
@@ -136,7 +135,7 @@ usam.
   - criar e fechar `legacy_imports` (contagens, `issues`, `differences`, `warnings`, status);
   - ler `legacy_reservations` por chave.
 
-  Em `apps/server/src/cli.ts`, o `create-client` passa a recusar o nome `sistema-anterior` ("Nome reservado"), com teste em `apps/server/test/unit/cli.test.ts`. Depende de T010
+  Em `apps/server/src/cli.ts`, o `create-client` passa a recusar o nome `sistema-anterior` ("Nome reservado"), com teste no `apps/server/test/integration/cli.test.ts` existente (grupo `server-db`). Depende de T010
 - [ ] T014 [P] Escrever `apps/server/test/unit/legacy-fingerprint.test.ts` e implementar `apps/server/src/legacy-import/fingerprint.ts`: SHA-256 de (SHA-256 da planilha + pares caminho/SHA-256 de cada arquivo referenciado, ordenados + associações confirmadas, ordenadas); qualquer mudança em um dos três muda a impressão digital (research R-08). Depende de T009
 
 **Checkpoint**: domínio, banco e peças do comando prontos. As histórias podem começar.
@@ -227,7 +226,7 @@ classificação convertida, `legacy` preenchido e as verificações; importar de
 - [ ] T023 [P] [US2] Ampliar `apps/server/test/contract/reservations.test.ts` (respostas validadas contra o `openapi.yaml` 1.6.0):
   - reserva importada sem verificação → `legacy` preenchido e sem `lastExecutionId`;
   - reserva do HUNIT Control → `legacy: null`;
-  - `pendingCharge=true` não traz `not_virtual_card`;
+  - `pendingCharge=true` não traz `not_virtual_card`, e traz as importadas `virtual_card_pending_charge` sem comprovante, inclusive com tratativa, junto com as do HUNIT Control (SC-009);
   - `situation=not_virtual_card` traz as "A revisar" com e sem tratativa;
   - `needsReview=true` não traz nenhuma delas
 
@@ -249,8 +248,10 @@ classificação convertida, `legacy` preenchido e as verificações; importar de
   - em `listReservations` e `getReservation`, juntar `legacy_reservations` (com o `started_at` da `first_import_id` como `importedAt`) sem consulta por linha.
 
   Em `apps/server/src/http/views.ts`, montar `Reservation.legacy`. Os testes T023 passam. Depende de T008, T010, T023
+- [ ] T046 [US2] Em `apps/desktop/src/renderer/src/presentation/labels.ts`, renomear `not_virtual_card` para `{ name: 'A revisar (sistema anterior)', tone: 'warning' }` e colocá-la logo depois de `analysis_error` em `CLASSIFICATION_ORDER` e `SITUATION_ORDER`, para o app mostrar as importadas certo já na US2 (spec US2, Independent Test). Atualizar `apps/desktop/test/renderer/labels.test.ts`. Numerada depois das demais por ter vindo da análise. Depende de T003
 
-**Checkpoint**: reservas importadas, consultáveis pela API e reimportáveis sem duplicar.
+**Checkpoint**: reservas importadas, consultáveis pela API e pelo app (com o nome "A revisar
+(sistema anterior)") e reimportáveis sem duplicar.
 
 ---
 
@@ -279,6 +280,9 @@ o histórico "Sistema anterior" com a data original e os recusados no relatório
   - **recusas**:
     - arquivo ausente, vazio, `.exe` renomeado, 26 MB e tipo não aceito → recusados com o motivo, e a reserva e o outro documento entram;
     - valor manual sem comprovante → `manual_amount_without_proof`.
+  - **reserva fora da aba de reservas**:
+    - que já existe no HUNIT Control → a tratativa é importada para ela;
+    - que não existe → `reservation_not_in_sheet`.
   - **precedência**:
     - comprovante já registrado no HUNIT Control → `kept_hunit_control` e o documento dele intacto;
     - "já cobrada" com tratativa → importada (FR-017) e `needsReview = true`;
@@ -316,8 +320,7 @@ o histórico (spec US4).
 ### Tests for User Story 4 ⚠️
 
 - [ ] T030 [P] [US4] Ampliar `apps/server/test/contract/reservations.test.ts`: `fromLegacy=true` traz só as importadas, inclusive as verificadas depois; `fromLegacy=false` traz o complemento; combinado com `hotelCode`, `situation` e `pendingCharge`; liberado aos dois perfis
-- [ ] T031 [P] [US4] Escrever `apps/desktop/test/renderer/legacy-origin.test.tsx` e ampliar `apps/desktop/test/renderer/labels.test.ts`:
-  - **nomes**: `not_virtual_card` = "A revisar (sistema anterior)", tom `warning`;
+- [ ] T031 [P] [US4] Escrever `apps/desktop/test/renderer/legacy-origin.test.tsx` (o nome de `not_virtual_card` já vem da T046):
   - **lista**: selo "Sistema anterior" nas reservas com `legacy`;
   - **filtro "Origem"** (Todas / Sistema anterior / HUNIT Control): enviado como `fromLegacy` `undefined`/`true`/`false`;
   - **detalhe**: seção "Sistema anterior" com a classificação original pelo nome do sistema anterior (código desconhecido aparece como está), verificações e data da importação, e "Ainda não verificada pelo HUNIT Control" sem `lastExecutionId`;
@@ -328,11 +331,7 @@ o histórico (spec US4).
 
 - [ ] T032 [US4] Em `apps/server/src/persistence/reservations-repo.ts`, filtro `fromLegacy` (`EXISTS`/`NOT EXISTS` em `legacy_reservations`), e repassar o parâmetro em `apps/server/src/http/handlers/reservations.ts`. Os testes T030 passam. Depende de T026, T030
 - [ ] T033 [P] [US4] Em `apps/desktop/src/shared/ipc-schemas.ts` (`fromLegacy: z.boolean().optional()`), `apps/desktop/src/shared/ipc-types.ts` (`fromLegacy?: boolean | undefined` e os tipos da API 1.6.0) e `apps/desktop/src/main/api-client.ts` (envia `fromLegacy` na query quando definido), conforme [contracts/ipc.md](./contracts/ipc.md); teste em `apps/desktop/test/main/api-client.test.ts`. Depende de T003
-- [ ] T034 [US4] Em `apps/desktop/src/renderer/src/presentation/labels.ts`:
-  - `not_virtual_card` → `{ name: 'A revisar (sistema anterior)', tone: 'warning' }`, logo depois de `analysis_error` em `CLASSIFICATION_ORDER` e `SITUATION_ORDER`;
-  - os nomes da classificação original (data-model §6) e "Sistema anterior".
-
-  Criar `apps/desktop/src/renderer/src/components/LegacyBadge.tsx`. Usar o selo em `ReservationsScreen.tsx`, o filtro "Origem" em `ReservationFilters.tsx`, a seção "Sistema anterior" em `ReservationDetail.tsx` e o autor "Sistema anterior" em `TreatmentSection.tsx` (todos em `apps/desktop/src/renderer/src/screens/reservations/`). Os testes T031 passam. Depende de T031, T033
+- [ ] T034 [US4] Em `apps/desktop/src/renderer/src/presentation/labels.ts`, acrescentar os nomes da classificação original (data-model §6) e "Sistema anterior". Criar `apps/desktop/src/renderer/src/components/LegacyBadge.tsx`. Usar o selo em `ReservationsScreen.tsx`, o filtro "Origem" em `ReservationFilters.tsx`, a seção "Sistema anterior" em `ReservationDetail.tsx` e o autor "Sistema anterior" em `TreatmentSection.tsx` (todos em `apps/desktop/src/renderer/src/screens/reservations/`). Os testes T031 passam. Depende de T031, T033
 - [ ] T035 [US4] Em `apps/desktop/test/e2e/screens-capture.test.ts`, inserir no servidor de teste uma reserva importada (com `legacy_reservations`, uma "A revisar" e um documento `fromLegacy`), para as capturas mostrarem o selo, o filtro, a seção do detalhe e o histórico. Os demais testes `desktop-e2e` continuam verdes. Depende de T034
 
 **Checkpoint**: todas as histórias funcionando e testadas.
@@ -364,7 +363,6 @@ o histórico (spec US4).
 
 ### Phase Dependencies
 
-- **Antes de tudo**: a 003 mesclada e a `master` trazida para a `004-importacao-historico`.
 - **Setup (Phase 1)**: T001 → T002.
 - **Foundational (Phase 2)**: depende do Setup; bloqueia as histórias. Trilhas:
   - **contrato**: T003;
@@ -373,7 +371,8 @@ o histórico (spec US4).
   - **peças do comando**: T002 + T009 → T011; T002 → T012; T009 → T014.
 - **US1 (Phase 3)**: depende da Phase 2. É o MVP: a simulação já serve para combinar a importação
   com o Financeiro.
-- **US2 (Phase 4)**: depende da US1 (planner, comando e relatório: T018–T020).
+- **US2 (Phase 4)**: depende da US1 (planner, comando e relatório: T018–T020). A T046 (nome no
+  app) só depende de T003 e pode ser feita a qualquer momento da fase.
 - **US3 (Phase 5)**: depende da US2 (transação por reserva e `run`: T024, T025).
 - **US4 (Phase 6)**:
   - servidor (T030, T032): depende da US2 (T026);
@@ -396,7 +395,7 @@ o histórico (spec US4).
 - Phase 2: T004, T005 e T006; T007 e T008; T011, T012 e T014 depois de T009 (T012 já depois de
   T002); T003 em paralelo com o domínio.
 - US1: T015, T016 e T017.
-- US2: T021, T022 e T023.
+- US2: T021, T022 e T023; T046 em paralelo com o servidor.
 - US4: T030 e T031; T033 em paralelo com qualquer tarefa do servidor depois de T003.
 - Polish: T036 a T041.
 

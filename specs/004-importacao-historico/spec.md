@@ -161,8 +161,7 @@ anterior" com a data original e que os casos fora das regras foram relatados e n
 2. **Given** uma reserva com comprovante no sistema anterior, **When** ela é importada, **Then** fica
    "Comprovante enviado", com o comprovante disponível para abrir e baixar, idêntico ao original.
 3. **Given** um documento importado, **When** se consulta o histórico da reserva, **Then** o registro
-   mostra que veio do sistema anterior, a data original do registro, quem o registrou no sistema
-   anterior (se a planilha informar) e o momento da importação.
+   mostra o autor "Sistema anterior", a data original do registro e o momento da importação.
 4. **Given** um arquivo referenciado pela planilha que não está na pasta, que está vazio, de tipo não
    aceito, com conteúdo diferente do tipo declarado ou maior que o limite (spec 003, FR-008),
    **When** a importação é feita, **Then** esse documento não é importado, é relatado com hotel,
@@ -351,7 +350,8 @@ pela API e pelo app, com chave de perfil operador e de perfil consulta.
 - **FR-013**: Os documentos importados MUST respeitar os tipos e o tamanho máximo da spec 003
   (FR-008); os que não respeitarem MUST ser relatados e não importados, sem impedir a reserva nem o
   outro documento dela. O documento baixado MUST ser idêntico ao arquivo de origem, com o nome
-  original informado pela planilha (spec 003, FR-009).
+  original informado pela planilha (spec 003, FR-009); se a planilha não trouxer o nome original,
+  ou trouxer um nome inválido, vale o nome do arquivo na pasta.
 - **FR-014**: Quando a reserva já tiver tratativa (ou comprovante) registrada no HUNIT Control, o
   registro do HUNIT Control MUST prevalecer e o documento do mesmo tipo vindo do sistema anterior MUST
   ser relatado como ignorado. Um documento que já foi importado (mesmo conteúdo, mesma reserva, mesmo
@@ -361,9 +361,9 @@ pela API e pelo app, com chave de perfil operador e de perfil consulta.
   FR-005), com a data original, quando a reserva tiver comprovante depois da importação; caso
   contrário MUST ser relatado e não importado.
 - **FR-016**: Cada registro importado MUST entrar no histórico da reserva (spec 003, FR-012) como
-  vindo do **sistema anterior**, com a data original do registro na planilha, quem o registrou no
-  sistema anterior quando a planilha informar, e o momento da importação, identificados como feitos
-  pela importação (não por um cliente da API). Os registros importados MUST seguir as mesmas regras dos demais: podem ser
+  vindo do **sistema anterior**, com a data original do registro na planilha e o momento da
+  importação, com o autor **"Sistema anterior"** (não um cliente da API: a planilha não informa
+  quem registrou cada documento). Os registros importados MUST seguir as mesmas regras dos demais: podem ser
   substituídos, desfeitos e revertidos (spec 003, FR-004 e FR-013a).
 - **FR-017**: A regra de elegibilidade para novos registros (spec 003, FR-003) MUST NOT impedir a
   importação de um documento: a importação registra o histórico, não uma ação nova.
@@ -372,8 +372,8 @@ pela API e pelo app, com chave de perfil operador e de perfil consulta.
 
 - **FR-018**: A planilha, os arquivos de origem e qualquer cópia temporária deles MUST NOT ser
   versionados nem ficar guardados depois da importação fora do que foi importado. Logs, mensagens de
-  erro, relatórios da simulação e da importação MUST mostrar só contagens, hotel, número da reserva,
-  tipo de documento e o motivo — nunca nome de hóspede, valores, dados de cobrança, nome ou conteúdo
+  erro, relatórios da simulação e da importação MUST mostrar só contagens, a aba e o número da linha
+  da planilha, hotel, número da reserva, tipo de documento e o motivo — nunca nome de hóspede, valores, dados de cobrança, nome ou conteúdo
   de arquivo, nem o conteúdo de uma célula.
 - **FR-019**: Só quem tem acesso ao comando no computador do servidor MUST poder simular e importar
   (FR-002); nenhum cliente da API, de perfil operador ou consulta, MUST poder fazê-lo. Os dois perfis
@@ -437,7 +437,7 @@ anterior" como origem (FR-016).
   anterior tinha (classificação, primeira e última verificação, contagem), quando o HUNIT Control
   já conhecia a reserva.
 - **Tratativa, Documento e Evento de tratativa** (da spec 003): ganham a origem "sistema anterior",
-  a data original do registro e, quando houver, quem registrou no sistema anterior.
+  a data original do registro e o autor "Sistema anterior".
 
 ## Success Criteria *(mandatory)*
 

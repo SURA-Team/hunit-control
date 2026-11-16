@@ -121,8 +121,11 @@ sistema anterior tinha (é o "registro do sistema anterior no histórico" da spe
 | Anexo antigo - arquivo no Dropbox / nome original / em | `proof` se o código original era `virtual_card_pending_charge`, senão `request` (R-07) | "Anexo antigo em" |
 | Valor manual / alterado em | `reservation_manual_amounts` + evento `amount_set` | "Valor manual alterado em" (vazia → "Atualizado em") |
 
-Sem nenhuma data legível, a data original é a "Ultima verificacao" da reserva no sistema anterior e
-o relatório registra o aviso `original_date_missing`. Cada documento gravado gera um evento
+A coluna de data do documento (ou do valor) vale se estiver preenchida e legível. Se estiver
+**preenchida e ilegível**, o documento (ou o valor) é recusado com `unreadable_date`, sem tentar a
+coluna seguinte. Só a coluna **vazia** passa para a seguinte ("Atualizado em"). Com as duas vazias,
+a data original é a "Ultima verificacao" da reserva no sistema anterior e o relatório registra o
+aviso `original_date_missing`. Cada documento gravado gera um evento
 `attached` (ou `replaced`, R-07) com `legacy_import_id`, `client_id` = autor reservado e `at` = data
 original.
 
