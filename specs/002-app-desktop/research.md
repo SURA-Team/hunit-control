@@ -289,6 +289,15 @@ Detalhes em [contracts/api-changes.md](./contracts/api-changes.md).
     se o Comercial entrar.
   - Atualização: novo instalador entregue manualmente (premissa da spec); sem atualização
     automática, o que também elimina o vetor de ataque de atualização.
+  - **Versão do instalador** (ajuste de 2026-11-16, depois da homologação da 003). A versão
+    é `major.minor.<commits do Git>`. O `package.json` guarda só o major e o minor (`x.y.0`), e o
+    `scripts/dist.mjs` passa a versão calculada ao electron-builder (`extraMetadata.version`, que
+    vale para o app e para o nome do instalador).
+    - Motivo: o instalador da produção saía com o mesmo número a cada atualização, e um substituía
+      o outro, porque ninguém subia o `package.json`.
+    - A contagem de commits só cresce na `master` e cabe nos 16 bits de cada parte da versão de
+      arquivo do Windows.
+    - Alternativa descartada: data e hora no último número, que passa de 65 535.
 - **Rationale**: o NSIS é o instalador mais conhecido no Windows e o modo por usuário dispensa a TI
   para instalar. As *fuses* fecham caminhos de abuso do binário do Electron (rodar como Node,
   injetar opções, inspecionar o processo que guarda a senha).
