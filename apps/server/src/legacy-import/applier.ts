@@ -3,7 +3,7 @@
  * cada reserva e a gravação do plano dela, numa transação por reserva — tudo ou nada (FR-021).
  */
 import type { ExistingReservation, TreatmentDocumentKind } from '@hunit/domain';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../persistence/db.js';
 import { toReservationRecord } from '../persistence/reservations-repo.js';
 import {
@@ -49,27 +49,36 @@ export async function loadReservationState(
     );
 
   const documents: ReservationState['documents'] = {};
-  const current = await db
+  const importedFiles: Record<TreatmentDocumentKind, Set<string>> = {
+    request: new Set(),
+    proof: new Set(),
+  };
+  const all = await db
     .select({
       id: treatmentDocuments.id,
       kind: treatmentDocuments.kind,
       sha256: treatmentDocuments.fileSha256,
       legacyImportId: treatmentDocuments.legacyImportId,
+      endedAt: treatmentDocuments.endedAt,
     })
     .from(treatmentDocuments)
     .where(
       and(
         eq(treatmentDocuments.hotelCode, hotelCode),
         eq(treatmentDocuments.reservationNumber, reservationNumber),
-        isNull(treatmentDocuments.endedAt),
       ),
     );
-  for (const document of current) {
-    documents[document.kind] = {
-      id: document.id,
-      sha256: document.sha256,
-      fromLegacy: document.legacyImportId !== null,
-    };
+  for (const document of all) {
+    if (document.legacyImportId !== null && document.sha256 !== null) {
+      importedFiles[document.kind].add(document.sha256);
+    }
+    if (document.endedAt === null) {
+      documents[document.kind] = {
+        id: document.id,
+        sha256: document.sha256,
+        fromLegacy: document.legacyImportId !== null,
+      };
+    }
   }
 
   const [manual] = await db
@@ -89,6 +98,7 @@ export async function loadReservationState(
     existing,
     origin: origin ?? null,
     documents,
+    importedFiles,
     manual: manual ? { amount: manual.amount, fromLegacy: manual.legacyImportId !== null } : null,
   };
 }

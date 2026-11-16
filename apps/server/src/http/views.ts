@@ -192,6 +192,8 @@ export function toTreatmentDocumentView(
       document.endedAt && isRevertible(document, now)
         ? iso(revertDeadline(document.endedAt))
         : null,
+    // Só nos importados do sistema anterior (specs/004, FR-016); ausente = false.
+    ...(document.fromLegacy ? { fromLegacy: true } : {}),
   };
 }
 
@@ -244,6 +246,7 @@ export function toTreatmentEventView(event: TreatmentEventRecord): TreatmentEven
     batchId: event.batchId,
     client: event.client,
     at: iso(event.at),
+    ...(event.fromLegacy ? { fromLegacy: true } : {}),
   };
 }
 

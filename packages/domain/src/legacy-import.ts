@@ -708,11 +708,17 @@ export interface CurrentDocument {
   sha256: string | null;
 }
 
-/** Precedência dos documentos (FR-014): o do HUNIT Control prevalece; importado igual é ignorado. */
+/**
+ * Precedência dos documentos (FR-014): o do HUNIT Control prevalece; importado igual é ignorado.
+ * `importedBefore` = esse mesmo arquivo já foi importado para a reserva e o tipo, em qualquer estado
+ * (ex.: o operador o desfez depois): a reimportação não o traz de volta.
+ */
 export function decideLegacyDocument(
   current: CurrentDocument | null,
   incomingSha256: string,
+  importedBefore = false,
 ): 'create' | 'replace' | { ignore: 'kept_hunit_control' | 'already_imported' } {
+  if (importedBefore) return { ignore: 'already_imported' };
   if (!current) return 'create';
   if (!current.fromLegacy) return { ignore: 'kept_hunit_control' };
   if (current.sha256 === null || current.sha256 === incomingSha256) {

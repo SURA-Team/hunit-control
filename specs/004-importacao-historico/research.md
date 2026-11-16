@@ -196,7 +196,9 @@ As colunas de autoria das tabelas da 003 (`treatment_files.uploaded_by_client_id
   - **Precedência** (FR-014): documento atual do mesmo tipo registrado no HUNIT Control (sem
     `legacy_import_id`) → ignorado (`kept_hunit_control`). Atual vindo de importação com o mesmo
     SHA-256 → ignorado (`already_imported`); com outro SHA-256 → substitui (estado `replaced`, prazo
-    de 30 dias da 003, evento `replaced`).
+    de 30 dias da 003, evento `replaced`). Ajuste da implementação: um arquivo já importado para a
+    reserva e o tipo, em **qualquer** estado (ex.: o operador o desfez), também é
+    `already_imported`, para a reimportação não trazer de volta o que o operador tirou.
   - **Valor manual** (FR-015): importado se a reserva fica com comprovante atual; senão,
     `manual_amount_without_proof`. Já existe valor manual do HUNIT Control → ignorado.
   - **Mais de 5 anos** (FR-022): reserva gravada já anonimizada (`guest_name = null`,

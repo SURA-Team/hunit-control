@@ -417,6 +417,8 @@ describe('precedência dos documentos e do valor manual (FR-014, FR-015)', () =>
       ignore: 'already_imported',
     });
     expect(decideLegacyDocument({ fromLegacy: true, sha256: 'a' }, 'b')).toBe('replace');
+    // Importado antes e desfeito pelo operador: não volta na reimportação.
+    expect(decideLegacyDocument(null, 'a', true)).toEqual({ ignore: 'already_imported' });
   });
 
   it('valor manual', () => {

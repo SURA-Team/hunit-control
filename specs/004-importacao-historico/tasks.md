@@ -266,7 +266,7 @@ o histórico "Sistema anterior" com a data original e os recusados no relatório
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T027 [P] [US3] Escrever `apps/server/test/integration/legacy-run-treatments.test.ts` (grupo `server-db`):
+- [X] T027 [P] [US3] Escrever `apps/server/test/integration/legacy-run-treatments.test.ts` (grupo `server-db`):
   - **documentos importados**:
     - tratativa → `treatment.status = 'sent'`;
     - comprovante → `charged`;
@@ -295,14 +295,14 @@ o histórico "Sistema anterior" com a data original e os recusados no relatório
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Em `apps/server/src/legacy-import/planner.ts` e `applier.ts`, planejar e gravar, **na mesma transação da reserva** (FR-021):
+- [X] T028 [US3] Em `apps/server/src/legacy-import/planner.ts` e `applier.ts`, planejar e gravar, **na mesma transação da reserva** (FR-021):
   - `treatment_files` (`ON CONFLICT (sha256) DO NOTHING`, `uploaded_by` = autor reservado);
   - `treatment_documents` (`current`, `legacy_import_id`, `attached_at` original; ou `purged` para mais de 5 anos);
   - substituição de um importado anterior (`replaced`, `ended_at` = agora, `ended_by` = autor reservado);
   - `reservation_manual_amounts` e os `treatment_events` (`attached`, `replaced`, `amount_set`) com `legacy_import_id`, `client_id` = autor reservado e `at` = data original.
 
   `ensureLegacyAuthor` (T013) é chamado no início do `run`. Depende de T024, T025, T027
-- [ ] T029 [US3] Em `apps/server/src/persistence/treatments-repo.ts` e `apps/server/src/http/views.ts`, devolver `fromLegacy: true` em `TreatmentDocument` e `TreatmentEvent` quando `legacy_import_id` estiver preenchido (omitido nos demais); conferir no `apps/server/test/contract/treatments-us1.test.ts` que as respostas continuam válidas contra o 1.6.0. Depende de T010, T028
+- [X] T029 [US3] Em `apps/server/src/persistence/treatments-repo.ts` e `apps/server/src/http/views.ts`, devolver `fromLegacy: true` em `TreatmentDocument` e `TreatmentEvent` quando `legacy_import_id` estiver preenchido (omitido nos demais); conferir no `apps/server/test/contract/treatments-us1.test.ts` que as respostas continuam válidas contra o 1.6.0. Depende de T010, T028
 
 **Checkpoint**: histórico completo importado: reservas, tratativas, comprovantes e valores.
 

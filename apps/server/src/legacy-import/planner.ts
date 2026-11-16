@@ -369,6 +369,8 @@ export interface ReservationState {
   existing: ExistingReservation | null;
   origin: LegacyOriginRecord | null;
   documents: Partial<Record<TreatmentDocumentKind, CurrentDocument & { id: string }>>;
+  /** Arquivos já importados para a reserva, por tipo, em qualquer estado (FR-014). */
+  importedFiles: Partial<Record<TreatmentDocumentKind, ReadonlySet<string>>>;
   manual: { fromLegacy: boolean; amount: Money } | null;
 }
 
@@ -501,7 +503,11 @@ export function planEntry(input: {
     }
     if (entry.plan.dateMissing) tally.warn('original_date_missing');
     const current = state.documents[entry.plan.kind] ?? null;
-    const choice = decideLegacyDocument(current, check.file.sha256);
+    const choice = decideLegacyDocument(
+      current,
+      check.file.sha256,
+      state.importedFiles[entry.plan.kind]?.has(check.file.sha256) ?? false,
+    );
     if (typeof choice === 'object') {
       recordTreatment(entity, slot, 'ignored', choice.ignore);
       if (entry.plan.kind === 'proof') proofAfterImport = true;
