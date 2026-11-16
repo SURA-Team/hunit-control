@@ -247,6 +247,15 @@ As colunas de autoria das tabelas da 003 (`treatment_files.uploaded_by_client_id
   ignora o que já entrou (hash e SHA-256 iguais) e completa o resto. A linha `import` fica com
   `status = 'interrupted'` quando o processo recebe sinal de encerramento, ou `running` se morrer
   sem aviso; a simulação seguinte mostra a anterior como não concluída.
+- **Ajuste da importação real (T045)**: uma falha inesperada ao gravar uma reserva não para mais
+  a importação. A reserva fica de fora com o motivo `import_failed` e o detalhe técnico seguro: o
+  código do PostgreSQL e o nome da regra ou da tabela, nunca a mensagem nem o `detail` do erro, que
+  repetem os valores da linha. A importação só para depois de 10 falhas seguidas (um problema geral,
+  como o banco fora do ar). Antes, o erro era descartado e a importação parava na primeira falha.
+  Também foram trazidas para a simulação as regras do banco que a planilha podia violar:
+  - valor manual zerado (`amount > 0`);
+  - valores acima de `numeric(12,2)`;
+  - inteiros acima de 2 147 483 647.
 - **Rationale**: tudo ou nada por reserva (FR-021, FR-011 da 003) sem uma transação gigante que
   travaria o coletor por minutos.
 - **Alternatives considered**: uma transação para a importação toda (travas longas, e uma falha no

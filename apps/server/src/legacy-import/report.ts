@@ -29,6 +29,8 @@ export const REASON_TEXT: Readonly<Record<string, string>> = {
   already_imported: 'Já importado, sem mudança',
   superseded_in_legacy: 'Anexo antigo substituído por documento mais novo na mesma linha',
   manual_amount_without_proof: 'Valor manual sem comprovante',
+  manual_amount_zero: 'Valor manual igual a zero (o HUNIT Control só aceita valor maior que zero)',
+  import_failed: 'Falha ao gravar ({detail}): a reserva ficou de fora',
 };
 
 const WARNING_TEXT: Readonly<Record<string, (count: number) => string>> = {
@@ -52,9 +54,9 @@ const ENTITY_TEXT: Readonly<Record<LegacyImportEntity, string>> = {
 
 const OUTCOME_TEXT = { ignored: 'ignorada', rejected: 'recusada' } as const;
 
-export function reasonText(reason: string, column?: string): string {
+export function reasonText(reason: string, column?: string, detail?: string): string {
   const text = REASON_TEXT[reason] ?? reason;
-  return text.replace('{column}', column ?? '');
+  return text.replace('{column}', column ?? '').replace('{detail}', detail ?? '?');
 }
 
 function countsRow(label: string, counts: LegacyOutcomeCounts): string {
@@ -172,7 +174,7 @@ export function formatReport({
           issue.reservationNumber || '-',
           ENTITY_TEXT[issue.entity],
           OUTCOME_TEXT[issue.outcome],
-          reasonText(issue.reason, issue.column),
+          reasonText(issue.reason, issue.column, issue.detail),
         ].join('   '),
       );
     }

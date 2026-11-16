@@ -146,6 +146,7 @@ export class Tally {
     outcome: Outcome;
     reason?: string;
     column?: string;
+    detail?: string;
   }): void {
     this.counts[COUNT_FIELD[input.entity]][input.outcome] += 1;
     const key = `${reservationKey(input.legacyHotel, input.reservationNumber)}|${input.slot}`;
@@ -160,6 +161,7 @@ export class Tally {
         outcome: input.outcome,
         reason: input.reason ?? 'unknown',
         ...(input.column ? { column: input.column } : {}),
+        ...(input.detail ? { detail: input.detail } : {}),
       });
     }
   }

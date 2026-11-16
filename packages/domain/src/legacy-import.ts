@@ -136,6 +136,8 @@ export const LEGACY_IMPORT_REASONS = [
   'already_imported',
   'superseded_in_legacy',
   'manual_amount_without_proof',
+  'manual_amount_zero',
+  'import_failed',
 ] as const;
 export type LegacyImportReason = (typeof LEGACY_IMPORT_REASONS)[number];
 
@@ -739,7 +741,9 @@ export function decideLegacyManualAmount(input: {
   | 'create'
   | 'update'
   | { ignore: 'kept_hunit_control' | 'already_imported' }
-  | { reject: 'manual_amount_without_proof' } {
+  | { reject: 'manual_amount_without_proof' | 'manual_amount_zero' } {
+  // O HUNIT Control só aceita valor manual maior que zero (specs/003, FR-005).
+  if (/^0+\.00$/.test(input.amount)) return { reject: 'manual_amount_zero' };
   if (!input.hasProof) return { reject: 'manual_amount_without_proof' };
   if (!input.current) return 'create';
   if (!input.current.fromLegacy) return { ignore: 'kept_hunit_control' };
