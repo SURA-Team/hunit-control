@@ -380,3 +380,16 @@ homologação (quickstart §6.1, passo 5).
 | Tratativa reclassificada pelo Hunit como "Já cobrada": "Já cobrada" com "Verificar" na lista; "A verificar" a encontra | Aprovado |
 | "Confirmar": o alerta some, a tratativa continua, o histórico mostra "Confirmou a verificação: Já cobrada" | Aprovado |
 | Perfil consulta: vê a coluna, o alerta e o "Status do Hunit", sem "Confirmar" nem ações de registro | Aprovado |
+
+### `.msg` real do Outlook (2026-11-16)
+
+O operador anexou como tratativa um `.msg` salvo do Outlook de verdade, só na tela de
+pré-visualização: remetente, destinatários, cópia, assunto, data, texto e anexos aparecem corretos.
+Aprovado. Nenhum dado do e-mail foi copiado para o repositório.
+
+**Para uma spec futura** (não muda o comportamento da 003): a pré-visualização prefere o corpo em
+texto e só usa o HTML quando não há texto (`apps/desktop/src/main/document-preview.ts`, função
+`body`). Nos e-mails do Outlook, o texto puro transforma cada célula de uma tabela numa linha solta,
+e as imagens embutidas na assinatura (`image001.png`) aparecem na lista de anexos. Opções a avaliar:
+mostrar o HTML, já isolado no `iframe` sem scripts e sem rede (R-08), quando ele existir; converter o
+RTF compactado do `.msg` quando não houver HTML; e separar as imagens embutidas (`cid:`) dos anexos.
