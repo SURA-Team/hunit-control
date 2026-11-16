@@ -70,7 +70,6 @@ export const LEGACY_REQUIRED_RESERVATION_COLUMNS = [
   'Reserva',
   'Entrada',
   'Saida',
-  'Total da reserva',
   'Codigo status',
   'Primeira verificacao',
   'Ultima verificacao',
@@ -340,7 +339,8 @@ export function parseLegacyReservationRow(
   const reservationNumber = read.requiredText('Reserva');
   const checkIn = read.date('Entrada');
   const checkOut = read.date('Saida');
-  const totalAmount = read.money('Total da reserva', true);
+  // Sem total, a reserva entra com ele vazio até a primeira verificação (FR-008).
+  const totalAmount = read.money('Total da reserva');
   const code = read.requiredText('Codigo status');
   const firstVerifiedAt = read.dateTime('Primeira verificacao', true);
   const lastVerifiedAt = read.dateTime('Ultima verificacao', true);
@@ -368,7 +368,7 @@ export function parseLegacyReservationRow(
     checkIn: checkIn!,
     checkOut: checkOut!,
     stayPeriod: read.text('Periodo da hospedagem') ?? '',
-    totalAmount: totalAmount!,
+    totalAmount,
     reservationStatus: 'unknown',
     classification: converted.classification,
     reason: legacyReason(code, converted.known, read.text('Motivo')),

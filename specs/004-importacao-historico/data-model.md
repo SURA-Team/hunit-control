@@ -83,7 +83,7 @@ novo em `classification` (R-04). Uma migration nova, gerada pelo `db:generate`.
 | Canal | `channel` | texto; vazio → `""` |
 | Entrada (*), Saida (*) | `check_in`, `check_out` | data (R-03); saída ≥ entrada |
 | Periodo da hospedagem | `stay_period` | texto; vazio → `""` |
-| Total da reserva (*) | `total_amount` | dinheiro (R-03) |
+| Total da reserva | `total_amount` | dinheiro (R-03); vazio → `null` (FR-008; a coluna passou a anulável na importação real, T045) |
 | Codigo status (*) | `classification` | conversão (R-04) |
 | Motivo | `reason` | `Sistema anterior: <Motivo>`; em "A revisar", motivo fixo com o código original |
 | Pre-pagamento encontrado | `pre_payment_found` | sim/não; vazio → `false` |

@@ -63,6 +63,7 @@ beforeAll(async () => {
       legacyReservationRow({ Reserva: 'L-REV', 'Codigo status': 'not_virtual_card' }, 3),
       legacyReservationRow({ Reserva: 'L-REV2', 'Codigo status': 'not_virtual_card' }, 4),
       legacyReservationRow({ Reserva: 'L-MERGE' }, 5),
+      legacyReservationRow({ Reserva: 'L-SEMTOTAL', 'Total da reserva': null }, 6),
     ],
     treatments: [request('L-PEND-T'), request('L-REV')],
   });
@@ -122,6 +123,17 @@ describe('Reservation.legacy e lastExecutionId (US2, T023)', () => {
     });
   });
 
+  it('sem "Total da reserva": importada com o total vazio, no contrato (FR-008)', async () => {
+    const response = await test.app.inject({
+      method: 'GET',
+      url: '/v1/reservations/HML1/L-SEMTOTAL',
+      headers: reader.headers,
+    });
+    expect(response.statusCode).toBe(200);
+    expectMatchesContract('getReservation', response);
+    expect(response.json<{ totalAmount: string | null }>().totalAmount).toBeNull();
+  });
+
   it('do HUNIT Control: legacy null; já conhecida e importada: merged', async () => {
     const all = (await list('limit=200')).json<{ items: ReservationBody[] }>();
     const byNumber = new Map(all.items.map((item) => [item.reservationNumber, item]));
@@ -157,7 +169,7 @@ describe('Reservation.legacy e lastExecutionId (US2, T023)', () => {
 describe('filtro fromLegacy (US4, T030)', () => {
   it('true: só as importadas, inclusive as que o HUNIT Control já conhecia', async () => {
     expect((await numbers('fromLegacy=true')).sort()).toEqual(
-      ['L-MERGE', 'L-PEND', 'L-PEND-T', 'L-REV', 'L-REV2'].sort(),
+      ['L-MERGE', 'L-PEND', 'L-PEND-T', 'L-REV', 'L-REV2', 'L-SEMTOTAL'].sort(),
     );
   });
 
@@ -170,6 +182,7 @@ describe('filtro fromLegacy (US4, T030)', () => {
       'L-MERGE',
       'L-PEND',
       'L-PEND-T',
+      'L-SEMTOTAL',
     ]);
     expect(await numbers('fromLegacy=false&situation=not_virtual_card')).toEqual([]);
   });

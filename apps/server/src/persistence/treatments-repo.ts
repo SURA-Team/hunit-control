@@ -215,7 +215,7 @@ async function lockReservation(
   key: ReservationKey,
 ): Promise<{
   classification: Classification;
-  totalAmount: string;
+  totalAmount: string | null;
   statusChangedAt: Date | null;
 } | null> {
   const [row] = await tx

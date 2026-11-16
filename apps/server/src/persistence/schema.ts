@@ -337,7 +337,8 @@ export const reservations = pgTable(
     checkOut: isoDate('check_out').notNull(),
     /** Período da hospedagem como exibido no Hunit. */
     stayPeriod: text('stay_period').notNull(),
-    totalAmount: money('total_amount').notNull(),
+    /** `null` só em reserva importada sem total, até a primeira verificação (specs/004, FR-008). */
+    totalAmount: money('total_amount'),
     reservationStatus: reservationStatusEnum('reservation_status').notNull(),
     classification: classificationEnum('classification').notNull(),
     /** Motivo que determinou a classificação (FR-014). */

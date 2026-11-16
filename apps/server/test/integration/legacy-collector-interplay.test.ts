@@ -168,6 +168,15 @@ describe('"A revisar (sistema anterior)" (FR-007a)', () => {
   });
 });
 
+describe('reserva importada sem total (FR-008)', () => {
+  it('entra com o total vazio e a primeira verificação o preenche', async () => {
+    await importRows([{ Reserva: '700040', 'Total da reserva': null }]);
+    expect((await find('HML1', '700040'))?.totalAmount).toBeNull();
+    await collect('HML1', [observed('HML1', '700040')], new Date('2026-11-14T12:00:00Z'));
+    expect((await find('HML1', '700040'))?.totalAmount).toBe('1234.56');
+  });
+});
+
 describe('importação e coleta ao mesmo tempo', () => {
   it('terminam sem erro e com a reserva gravada uma vez', async () => {
     await writeLegacyWorkbook(workspace.xlsx, {
