@@ -58,7 +58,7 @@ export function reasonText(reason: string, column?: string): string {
 }
 
 function countsRow(label: string, counts: LegacyOutcomeCounts): string {
-  const cell = (value: number) => String(value).padStart(11);
+  const cell = (value: number) => String(value).padStart(13);
   return `${label.padEnd(16)}${cell(counts.created)}${cell(counts.updated)}${cell(counts.ignored)}${cell(counts.rejected)}`;
 }
 
@@ -93,7 +93,7 @@ export function formatReport({
   const counts = record.counts;
   if (counts) {
     lines.push(
-      `${''.padEnd(16)}${'criadas'.padStart(11)}${'atualizadas'.padStart(11)}${'ignoradas'.padStart(11)}${'recusadas'.padStart(11)}`,
+      `${''.padEnd(16)}${'criadas'.padStart(13)}${'atualizadas'.padStart(13)}${'ignoradas'.padStart(13)}${'recusadas'.padStart(13)}`,
       countsRow('Reservas', counts.reservations),
       countsRow('Tratativas', counts.requests),
       countsRow('Comprovantes', counts.proofs),

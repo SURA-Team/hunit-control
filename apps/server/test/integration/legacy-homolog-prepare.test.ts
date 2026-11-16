@@ -98,19 +98,25 @@ describe.skipIf(!DATABASE_URL || !OUT_DIR)('preparação da homologação da imp
     }
     const first = (hotel: number, i: number) => `9${hotel}${String(i).padStart(4, '0')}`;
 
-    // Linhas com problema (uma de cada motivo) e o hotel sem correspondência no catálogo.
-    reservations.push(
-      legacyReservationRow({ Reserva: '980001', Entrada: 'data ilegível' }),
-      legacyReservationRow({ Reserva: '980002', 'Total da reserva': 'valor ilegível' }),
-      legacyReservationRow({ Reserva: '980003', Saida: null }),
-      legacyReservationRow({ Reserva: '980004', Saida: wallClock('2026-05-01T00:00:00') }),
-      legacyReservationRow({ Reserva: '980005', 'Quantidade de verificacoes': 0 }),
+    // Linhas com problema (uma de cada motivo), no hotel "Praia", e o hotel sem correspondência.
+    const praiaRow = (overrides: LegacyReservationRow) =>
       legacyReservationRow({
+        'Codigo hotel': 'hml_praia',
+        Hotel: 'Hotel Homologação Praia',
+        ...overrides,
+      });
+    reservations.push(
+      praiaRow({ Reserva: '980001', Entrada: 'data ilegível' }),
+      praiaRow({ Reserva: '980002', 'Total da reserva': 'valor ilegível' }),
+      praiaRow({ Reserva: '980003', Saida: null }),
+      praiaRow({ Reserva: '980004', Saida: wallClock('2026-05-01T00:00:00') }),
+      praiaRow({ Reserva: '980005', 'Quantidade de verificacoes': 0 }),
+      praiaRow({
         Reserva: '980006',
         'Ultima verificacao': wallClock('2026-05-02T10:00:00'),
       }),
-      legacyReservationRow({ Reserva: '980006' }),
-      legacyReservationRow({
+      praiaRow({ Reserva: '980006' }),
+      praiaRow({
         Reserva: '980007',
         Entrada: wallClock('2020-01-10T00:00:00'),
         Saida: wallClock('2020-01-12T00:00:00'),
@@ -120,7 +126,7 @@ describe.skipIf(!DATABASE_URL || !OUT_DIR)('preparação da homologação da imp
         Hotel: UNMATCHED.name,
         Reserva: '980008',
       }),
-      legacyReservationRow({ Reserva: '980009', 'Codigo status': 'codigo_desconhecido' }),
+      praiaRow({ Reserva: '980009', 'Codigo status': 'codigo_desconhecido' }),
     );
     // Reservas que a homologação já tem: o HUNIT Control prevalece (FR-010).
     for (const number of existing) {
