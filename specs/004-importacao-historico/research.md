@@ -341,3 +341,32 @@ linhas na aba "Reservas" e 2 000 tratativas com anexos pequenos.
 A simulação gasta quase todo o tempo lendo o estado gravado de cada reserva (uma consulta por
 reserva); a importação, nas transações por reserva (R-09). Com alguns milhares de reservas (o volume
 esperado do sistema anterior), os dois ficam em poucos minutos.
+
+## Homologação (T043, 2026-11-16)
+
+Pilha `hunit-homolog`, com os dados fictícios da 003 e a planilha gerada pelo
+`legacy-homolog-prepare` (174 linhas na aba "Reservas", 14 na aba "Tratativas").
+
+- **Comando:**
+  - Primeira simulação: todos os hotéis em "proposta", com a proposta certa para os quatro HML e
+    "sem proposta" para o desativado.
+  - Importar com o id dessa simulação, depois de confirmar os hotéis, foi recusado: "a planilha, a
+    pasta ou a associação de hotéis mudou desde a simulação" (FR-005a).
+  - Importação de 163 criadas, 3 atualizadas (as reservas que a homologação já tinha), 1 ignorada
+    (linha repetida) e 6 recusadas, com "Nenhuma diferença em relação à simulação".
+  - Nova simulação depois: 0 criadas e 0 atualizadas, tudo "já importado" (SC-003).
+  - Todos os motivos de recusa preparados apareceram, sem nenhum dado pessoal.
+- **App:**
+  - Filtro "Origem → Sistema anterior": 166 reservas (as 163 criadas e as 3 que já existiam).
+  - "A revisar (sistema anterior)" com tratativa, sem o alerta "Verificar".
+  - "Falta cobrar": traz as pendentes importadas e não traz as "A revisar".
+  - Documentos importados abrem e baixam, e o histórico mostra "Sistema anterior" com a data
+    original.
+  - O alerta "Verificar" aparece na "já cobrada" com tratativa.
+  - A reserva com check-in de 2020 aparece anonimizada, com o documento apagado pelo prazo.
+  - O perfil consulta não tem nenhuma ação nova.
+- **Achado, fora do escopo da 004:** a coluna "Valor total" da lista mostra o total da reserva do
+  Hunit, e o valor cobrado informado à mão (specs/003, FR-005) só aparece no detalhe. Para a
+  conferência rápida, a lista deveria mostrar o valor efetivamente cobrado. Fica para uma correção
+  própria (mudança de tela da 003).
+- **Tamanho da cópia de segurança antes e depois:** não medido nesta rodada.
