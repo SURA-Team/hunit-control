@@ -658,6 +658,8 @@ export interface LegacyImportIssue {
   reason: string;
   /** Nome da coluna, quando ajuda (nunca o valor). */
   column?: string;
+  /** Só em `import_failed`: código do erro e regra ou tabela do banco (nunca valores). */
+  detail?: string;
 }
 
 /** Aviso geral, com a quantidade de casos. */

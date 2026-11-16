@@ -79,7 +79,8 @@ describe('parseLegacyMoney', () => {
   });
 
   it('negativo, texto e formato ambíguo são ilegíveis', () => {
-    for (const value of [-1, '-10.00', 'abc', '1,2,3', '1234.567']) {
+    // Acima de numeric(12,2) também é ilegível (T045).
+    for (const value of [-1, '-10.00', 'abc', '1,2,3', '1234.567', '12345678901.00', 1e11]) {
       expect(parseLegacyMoney(value)).toEqual({ ok: false, code: 'unreadable_amount' });
     }
   });
@@ -101,7 +102,7 @@ describe('parseLegacyInteger', () => {
   });
 
   it('fração, negativo e texto são ilegíveis', () => {
-    for (const value of [2.5, -1, 'x', '2.5', '3.01', '3.']) {
+    for (const value of [2.5, -1, 'x', '2.5', '3.01', '3.', '2147483648', 2_147_483_648]) {
       expect(parseLegacyInteger(value)).toEqual({ ok: false, code: 'unreadable_number' });
     }
   });

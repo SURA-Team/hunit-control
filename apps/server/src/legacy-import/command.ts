@@ -15,7 +15,11 @@ import { proposeHotel } from '@hunit/domain';
 import { and, count, eq, isNull } from 'drizzle-orm';
 import type { CliIo } from '../cli.js';
 import type { DatabaseConnection } from '../persistence/db.js';
-import { isConstraintViolation, PG_UNIQUE_VIOLATION } from '../persistence/errors.js';
+import {
+  findDatabaseError,
+  isConstraintViolation,
+  PG_UNIQUE_VIOLATION,
+} from '../persistence/errors.js';
 import {
   ImportInProgressError,
   acceptHotelProposals,
@@ -68,6 +72,22 @@ const USAGE = `Uso:
 `;
 
 const PROGRESS_EVERY = 500;
+/** Falhas seguidas que indicam um problema geral (ex.: banco fora do ar): a importação para. */
+const MAX_CONSECUTIVE_FAILURES = 10;
+
+/**
+ * Causa técnica de uma falha, sem valores (FR-018, FR-021): o código do PostgreSQL e o nome da
+ * regra, da tabela ou da coluna. A mensagem e o `detail` do erro repetem os valores da linha e
+ * nunca são usados.
+ */
+export function failureDetail(error: unknown): string {
+  const database = findDatabaseError(error);
+  if (database) {
+    const where = database.constraint ?? database.column ?? database.table;
+    return [database.code, where].filter(Boolean).join(' ') || 'erro do banco';
+  }
+  return error instanceof Error ? error.name : 'erro';
+}
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo';
 
 /** Erro esperado: a mensagem é segura para mostrar (sem conteúdo da planilha). */
@@ -348,6 +368,8 @@ async function run(
     let done = 0;
     let status: 'completed' | 'interrupted' | 'failed' = 'completed';
     let failure: string | null = null;
+    let failed = 0;
+    let consecutive = 0;
 
     for (const key of keys) {
       if (options.shouldStop?.()) {
@@ -386,13 +408,32 @@ async function run(
           });
           tally.absorb(entryTally);
           applied = true;
+          consecutive = 0;
         } catch (error) {
           // A reserva foi gravada por uma execução no meio: na segunda vez ela já existe (R-06).
           if (attempt === 1 && isConstraintViolation(error, PG_UNIQUE_VIOLATION)) continue;
+          // Só esta reserva fica de fora; as outras seguem (FR-021). O registro guarda a causa
+          // técnica, sem valores.
           const row = reservation?.parsed.row ?? treatment?.row ?? 0;
           const sheet = reservation ? 'Reservas' : 'Tratativas';
-          failure = `Falha na linha ${row} da aba ${sheet}: a importação parou; o que foi gravado antes está completo. Rode uma nova simulação e importe de novo.`;
-          status = 'failed';
+          const detail = failureDetail(error);
+          tally.record({
+            sheet,
+            row,
+            legacyHotel: reservation?.parsed.legacyHotelKey ?? treatment?.legacyHotel ?? '',
+            reservationNumber: number,
+            entity: reservation ? 'reservation' : 'request',
+            slot: reservation ? 'reservation' : 'treatment',
+            outcome: 'rejected',
+            reason: 'import_failed',
+            detail,
+          });
+          failed += 1;
+          consecutive += 1;
+          if (consecutive >= MAX_CONSECUTIVE_FAILURES) {
+            failure = `Importação parada depois de ${MAX_CONSECUTIVE_FAILURES} falhas seguidas (a última: linha ${row} da aba ${sheet}, ${detail}). O que foi gravado está completo; leve o relatório ao desenvolvimento.`;
+            status = 'failed';
+          }
           break;
         }
       }
@@ -410,7 +451,10 @@ async function run(
       outcomes: tally.outcomes,
       differences: differencesBetween(simulation.outcomes, tally.outcomes),
     });
-    return { importId, status, failure };
+    if (!failure && failed > 0) {
+      failure = `${failed} reserva(s) com falha ao gravar ficaram de fora ("Falha ao gravar" no relatório).`;
+    }
+    return { importId, status, failure, failed };
   });
 
   if (result.failure) io.stderr(`${result.failure}\n`);
@@ -420,7 +464,7 @@ async function run(
     );
   }
   await printReport(connection, io, result.importId);
-  return result.status === 'completed' ? 0 : 1;
+  return result.status === 'completed' && result.failed === 0 ? 0 : 1;
 }
 
 async function hotelsCommand(

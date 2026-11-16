@@ -439,6 +439,10 @@ describe('precedência dos documentos e do valor manual (FR-014, FR-015)', () =>
     expect(decideLegacyManualAmount({ hasProof: true, current: null, amount: '1.00' })).toBe(
       'create',
     );
+    // Zero: o HUNIT Control só aceita valor maior que zero (T045).
+    expect(decideLegacyManualAmount({ hasProof: true, current: null, amount: '0.00' })).toEqual({
+      reject: 'manual_amount_zero',
+    });
     expect(
       decideLegacyManualAmount({
         hasProof: true,

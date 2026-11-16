@@ -148,27 +148,35 @@ function money(integer: string, decimals: string | undefined): Money {
   return `${whole}.${(decimals ?? '').padEnd(2, '0')}`;
 }
 
+/** Valores cabem em `numeric(12,2)`: até 10 dígitos antes da vírgula (specs/001, R-17). */
+const MAX_MONEY_DIGITS = 10;
+/** Inteiros cabem em `integer` do PostgreSQL. */
+const MAX_INTEGER = 2_147_483_647;
+
+function withinMoneyLimit(value: Money): LegacyParse<Money> {
+  return (value.split('.')[0] ?? '').length <= MAX_MONEY_DIGITS
+    ? { ok: true, value }
+    : { ok: false, code: 'unreadable_amount' };
+}
+
 /** Valor em BRL: `"1234.56"` (specs/001, R-17). */
 export function parseLegacyMoney(value: LegacyCellValue): LegacyParse<Money> {
   if (isBlank(value)) return { ok: true, value: null };
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || value < 0) return { ok: false, code: 'unreadable_amount' };
     const cents = Math.round(value * 100);
-    return {
-      ok: true,
-      value: `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`,
-    };
+    return withinMoneyLimit(`${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`);
   }
   if (typeof value !== 'string') return { ok: false, code: 'unreadable_amount' };
   const text = value.replace(/^R\$\s*/i, '').replace(/\s/g, '');
   const dot = DOT_DECIMAL.exec(text);
-  if (dot?.[1] !== undefined) return { ok: true, value: money(dot[1], dot[2]) };
+  if (dot?.[1] !== undefined) return withinMoneyLimit(money(dot[1], dot[2]));
   const thousands = BR_THOUSANDS.exec(text);
   if (thousands?.[1] !== undefined) {
-    return { ok: true, value: money(thousands[1].replaceAll('.', ''), thousands[2]) };
+    return withinMoneyLimit(money(thousands[1].replaceAll('.', ''), thousands[2]));
   }
   const br = BR_DECIMAL.exec(text);
-  if (br?.[1] !== undefined) return { ok: true, value: money(br[1], br[2]) };
+  if (br?.[1] !== undefined) return withinMoneyLimit(money(br[1], br[2]));
   return { ok: false, code: 'unreadable_amount' };
 }
 
@@ -182,12 +190,14 @@ const INTEGER_TEXT = /^(\d+)(?:[.,]0+)?$/;
 export function parseLegacyInteger(value: LegacyCellValue): LegacyParse<number> {
   if (isBlank(value)) return { ok: true, value: null };
   if (typeof value === 'number') {
-    return Number.isInteger(value) && value >= 0
+    return Number.isInteger(value) && value >= 0 && value <= MAX_INTEGER
       ? { ok: true, value }
       : { ok: false, code: 'unreadable_number' };
   }
   const integer = typeof value === 'string' ? INTEGER_TEXT.exec(value.trim()) : null;
-  if (integer?.[1] !== undefined) return { ok: true, value: Number(integer[1]) };
+  if (integer?.[1] !== undefined && Number(integer[1]) <= MAX_INTEGER) {
+    return { ok: true, value: Number(integer[1]) };
+  }
   return { ok: false, code: 'unreadable_number' };
 }
 

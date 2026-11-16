@@ -57,6 +57,11 @@ notificação, concorrência de hotéis, desligamento dos containers).
 - Q: (Importação real, T045) 631 reservas da planilha real não têm "Total da reserva", e 123
   tratativas delas seriam recusadas junto. Recusar ou aceitar? → A: Aceitar, com o total vazio até a
   primeira verificação pelo HUNIT Control (FR-008); nunca inventar um valor.
+- Q: (Importação real, T045) A importação parou com falha depois de ~24 mil reservas, e o erro
+  original se perdeu. O que fazer? → A: A falha de uma reserva deixa só ela de fora e fica no
+  relatório e no registro da importação, sem valores; a importação para só com 10 falhas seguidas
+  (FR-021). O que o banco recusaria (valor manual zerado, números grandes demais) passa a ser
+  recusado já na simulação (FR-015).
 - Q: Os nomes de coluna listados na spec batem com o cabeçalho das duas abas da planilha real? → A:
   Sim, os 35 da aba "Reservas" e os 14 da aba "Tratativas", na mesma ordem. O "Codigo hotel" do
   sistema anterior não é o código numérico do Hunit: é um nome em minúsculas separado por "_",
@@ -370,7 +375,8 @@ pela API e pelo app, com chave de perfil operador e de perfil consulta.
   importação anterior, o novo MUST substituí-lo (spec 003, FR-004), com o registro no histórico.
 - **FR-015**: O valor cobrado informado à mão no sistema anterior MUST virar valor manual (spec 003,
   FR-005), com a data original, quando a reserva tiver comprovante depois da importação; caso
-  contrário MUST ser relatado e não importado.
+  contrário MUST ser relatado e não importado. Valor manual igual a zero MUST ser recusado com o
+  motivo, já na simulação (o HUNIT Control só aceita valor maior que zero).
 - **FR-016**: Cada registro importado MUST entrar no histórico da reserva (spec 003, FR-012) como
   vindo do **sistema anterior**, com a data original do registro na planilha e o momento da
   importação, com o autor **"Sistema anterior"** (não um cliente da API: a planilha não informa
@@ -393,7 +399,10 @@ pela API e pelo app, com chave de perfil operador e de perfil consulta.
   tentativa MUST ser recusada com o motivo enquanto a primeira não terminar.
 - **FR-021**: Uma reserva (com suas tratativas, documentos e valor manual) MUST ser importada por
   inteiro ou não ser importada; uma importação interrompida MUST poder ser repetida até o fim, sem
-  duplicar nada (FR-009).
+  duplicar nada (FR-009). Uma falha inesperada ao gravar uma reserva MUST deixar só ela de fora e
+  aparecer no relatório e no registro da importação com a aba, a linha, a chave e a causa técnica
+  (código do erro e regra do banco, nunca valores); a importação MUST parar só depois de 10 falhas
+  seguidas.
 
 **Retenção**
 

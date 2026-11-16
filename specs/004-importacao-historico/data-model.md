@@ -156,6 +156,8 @@ Desfechos por entidade: `created`, `updated`, `ignored`, `rejected`.
 | `already_imported` | ignored | documento/valor | Já importado, sem mudança |
 | `superseded_in_legacy` | ignored | documento | Anexo antigo substituído por documento mais novo na mesma linha |
 | `manual_amount_without_proof` | rejected | valor | Valor manual sem comprovante |
+| `manual_amount_zero` | rejected | valor | Valor manual igual a zero (o HUNIT Control só aceita valor maior que zero) |
+| `import_failed` | rejected | reserva | Falha ao gravar: `<código do erro> <regra ou tabela do banco>` (ex.: `23514 reservation_manual_amounts_amount_check`); a reserva fica de fora e as outras seguem (FR-021) |
 
 Avisos (`warnings`, não recusam nada): `original_date_missing`, `anonymized_on_import` (contagem de
 reservas com check-in há mais de 5 anos), `unreferenced_files` (contagem), `obsolete_classification_in_use`
