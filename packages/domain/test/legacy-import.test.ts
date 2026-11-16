@@ -164,11 +164,15 @@ describe('linha → reserva (FR-008, data-model §3.1)', () => {
     [{ 'Quantidade de verificacoes': 'x' }, 'unreadable_number'],
     [{ Entrada: 'ontem' }, 'unreadable_date'],
     [{ 'Total da reserva': 'abc' }, 'unreadable_amount'],
-    [{ 'Total da reserva': '' }, 'missing_value'],
     [{ Reserva: '' }, 'missing_value'],
   ])('%o → %s', (overrides, reason) => {
     const result = parseLegacyReservationRow(row(overrides), 2, CUTOFF);
     expect(result.ok ? null : result.rejection.reason).toBe(reason);
+  });
+
+  it('sem "Total da reserva": importada com o total vazio, nunca inventado (FR-008)', () => {
+    expect(parsed({ 'Total da reserva': '' }).data.totalAmount).toBeNull();
+    expect(parsed({ 'Total da reserva': null }).data.totalAmount).toBeNull();
   });
 
   it('a recusa nunca traz o valor da célula', () => {

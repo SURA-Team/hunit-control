@@ -54,6 +54,9 @@ notificação, concorrência de hotéis, desligamento dos containers).
   recusas se perdiam no meio. O que mostrar? → A: Os "já importados sem mudança" viram uma contagem
   por tipo; as recusas e os demais ignorados continuam listados; `report --id <id> --all` mostra a
   lista completa (FR-005).
+- Q: (Importação real, T045) 631 reservas da planilha real não têm "Total da reserva", e 123
+  tratativas delas seriam recusadas junto. Recusar ou aceitar? → A: Aceitar, com o total vazio até a
+  primeira verificação pelo HUNIT Control (FR-008); nunca inventar um valor.
 - Q: Os nomes de coluna listados na spec batem com o cabeçalho das duas abas da planilha real? → A:
   Sim, os 35 da aba "Reservas" e os 14 da aba "Tratativas", na mesma ordem. O "Codigo hotel" do
   sistema anterior não é o código numérico do Hunit: é um nome em minúsculas separado por "_",
@@ -325,7 +328,9 @@ pela API e pelo app, com chave de perfil operador e de perfil consulta.
   continua "A revisar (sistema anterior)".
 - **FR-008**: As reservas importadas MUST ficar com a situação ativa/cancelada "não identificada"
   (spec 001, FR-014a) até serem verificadas pelo HUNIT Control, e MUST guardar os dados que o sistema
-  anterior leu do Hunit e que o HUNIT Control também guarda (spec 001, FR-016).
+  anterior leu do Hunit e que o HUNIT Control também guarda (spec 001, FR-016). Sem "Total da
+  reserva" na planilha, a reserva MUST ser importada com o total vazio (mostrado como "—"), nunca com
+  um valor inventado; a primeira verificação pelo HUNIT Control o preenche.
 
 **Reservas**
 
@@ -414,7 +419,7 @@ ordem em que aparecem. Obrigatórias marcadas com (*). O "Codigo hotel" é o ide
 no sistema anterior (nome em minúsculas separado por "_"), não o código do Hunit (FR-006a).
 
 **Aba de reservas**: Codigo hotel (*), Hotel (*), Reserva (*), Hospede, Canal, Entrada (*), Saida
-(*), Periodo da hospedagem, Total da reserva (*), Codigo status (*), Status, Motivo, Pre-pagamento encontrado,
+(*), Periodo da hospedagem, Total da reserva, Codigo status (*), Status, Motivo, Pre-pagamento encontrado,
 Cobranca registrada, Cobrado em, Cobrado por, Valor cobrado, ID da transacao, Codigo de autorizacao,
 Referencia do processador, Parcelado, Numero de parcelas, Valor da parcela, Estado do pre-pagamento,
 Mensagem do pre-pagamento, Acao de cobranca visivel, Requer tratamento manual, Primeira verificacao
