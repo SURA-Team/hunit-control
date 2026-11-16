@@ -14,11 +14,25 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { InvalidCredentialsError } from '../../../server/src/hunit/errors.js';
+import { setHotelMapping } from '../../../server/src/persistence/legacy-import-repo.js';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import {
   reservationDetails,
   type FakeScenario,
 } from '../../../server/test/helpers/fake-hunit-gateway.js';
+import {
+  legacyAttachmentPath,
+  legacyFile,
+  legacyReservationRow,
+  legacyTreatmentRow,
+  writeLegacyAttachments,
+  writeLegacyWorkbook,
+} from '../../../server/test/helpers/legacy-fixtures.js';
+import {
+  legacyImport,
+  legacyWorkspace,
+  reportId,
+} from '../../../server/test/helpers/legacy-import.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
 import { emlFile, pdfFile, pngFile } from '../helpers/synthetic-files.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
@@ -426,6 +440,69 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByTestId('review-alert').waitFor({ timeout: 15_000 });
       await shot('4.9', 'reservas-detalhe-verificar', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+    });
+
+    // Importação do histórico (specs/004): reservas importadas pelo comando real, com dados
+    // fictícios, para as telas da origem "Sistema anterior".
+    await step('4.10 e 4.11 sistema anterior', async () => {
+      const workspace = legacyWorkspace();
+      try {
+        await writeLegacyWorkbook(workspace.xlsx, {
+          reservations: [
+            legacyReservationRow({ Reserva: 'SA-2001', Hospede: 'Lúcia Barros' }, 1),
+            legacyReservationRow(
+              {
+                Reserva: 'SA-2002',
+                Hospede: 'Marcos Teixeira',
+                'Codigo status': 'not_virtual_card',
+                Status: 'Sem cartao virtual',
+              },
+              2,
+            ),
+          ],
+          treatments: [
+            legacyTreatmentRow('SA-2002', {
+              'Tratativa - arquivo no Dropbox': legacyAttachmentPath('pedido_sa_2002.pdf'),
+              'Tratativa - nome original': 'Pedido de cobrança SA-2002.pdf',
+              'Tratativa anexada em': '2026-05-02T09:30:00',
+            }),
+          ],
+        });
+        writeLegacyAttachments(workspace.files, {
+          [legacyAttachmentPath('pedido_sa_2002.pdf')]: legacyFile.pdf('sa-2002'),
+        });
+        const args = ['--xlsx', workspace.xlsx, '--files', workspace.files];
+        await legacyImport(server.test.database, ['simulate', ...args]);
+        await setHotelMapping(server.test.database.db, 'legacy_hml_um', '101');
+        const simulation = await legacyImport(server.test.database, ['simulate', ...args]);
+        await legacyImport(server.test.database, [
+          'run',
+          '--simulation',
+          reportId(simulation.stdout),
+          ...args,
+        ]);
+      } finally {
+        workspace.cleanup();
+      }
+
+      await goTo('Reservas');
+      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      const origin = window.getByLabel('Origem').and(window.locator('input'));
+      await origin.click();
+      await window.getByRole('option', { name: 'Sistema anterior' }).click();
+      await window.getByRole('button', { name: 'Buscar' }).click();
+      await window.getByTestId('legacy-badge').first().waitFor({ timeout: 15_000 });
+      await shot('4.10', 'reservas-filtro-sistema-anterior');
+
+      await window.getByRole('cell', { name: 'SA-2002 Sistema anterior', exact: true }).click();
+      await window.getByTestId('legacy-origin').waitFor({ timeout: 15_000 });
+      await window
+        .getByTestId('treatment-section')
+        .getByText('Histórico')
+        .waitFor({ timeout: 15_000 });
+      await shot('4.11', 'reservas-detalhe-sistema-anterior', true);
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+      await window.getByRole('button', { name: 'Limpar' }).first().click();
     });
 
     await step('1.3 configuração conectada', async () => {

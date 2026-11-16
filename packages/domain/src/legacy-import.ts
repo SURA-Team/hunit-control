@@ -316,10 +316,13 @@ export function anonymizationCutoff(today: IsoDate, retentionYears: number): Iso
 
 /** Motivo gravado na reserva importada (specs/001, FR-014). */
 function legacyReason(code: string, known: boolean, motivo: string | null): string {
-  if (!known) {
-    return `Sistema anterior: classificação "${code}" sem correspondência; a revisar na próxima verificação no Hunit`;
-  }
-  return `Sistema anterior: ${motivo ?? code}`;
+  if (known) return `Sistema anterior: ${motivo ?? code}`;
+  const noVirtualCard = ['not_virtual_card', LEGACY_CLASSIFICATIONS.not_virtual_card.label].some(
+    (value) => comparable(value) === comparable(code),
+  );
+  const what = noVirtualCard ? '"Sem cartão virtual"' : `classificação "${code}"`;
+  const why = noVirtualCard ? ' (o sistema anterior não guardava a forma de pagamento)' : '';
+  return `Sistema anterior: ${what} sem correspondência${why}; a revisar na próxima verificação no Hunit`;
 }
 
 /**

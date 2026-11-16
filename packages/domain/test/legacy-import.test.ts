@@ -112,6 +112,13 @@ describe('conversão da classificação (FR-007, R-04)', () => {
     expect(value.data.classification).toBe('not_virtual_card');
     expect(value.origin.originalClassification).toBe('codigo_desconhecido');
     expect(value.data.reason).toMatch(/sem correspondência/);
+    expect(value.data.reason).toContain('"codigo_desconhecido"');
+  });
+
+  it('"Sem cartão virtual": motivo com o nome do sistema anterior, sem o código técnico', () => {
+    const value = parsed({ 'Codigo status': 'not_virtual_card' });
+    expect(value.data.reason).toContain('"Sem cartão virtual" sem correspondência');
+    expect(value.data.reason).not.toContain('not_virtual_card');
   });
 
   it('código vazio recusa a linha (missing_value)', () => {
