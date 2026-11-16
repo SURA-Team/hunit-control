@@ -63,7 +63,7 @@ usam.
 
 ### Domínio: testes primeiro (grupo `domain`)
 
-- [ ] T004 [P] Escrever `packages/domain/test/legacy-values.test.ts` (research R-03):
+- [X] T004 [P] Escrever `packages/domain/test/legacy-values.test.ts` (research R-03):
   - data e hora: `Date` de célula, número de série (`45778.5` = 2025-05-01 12:00 de Brasília = `15:00Z`), ISO `2026-05-01T10:15:00`, ISO só data, `01/05/2026 10:15`, `01/05/2026`; o resultado é o instante UTC com +3 h;
   - data (`Entrada`/`Saida`): os mesmos formatos, resultado `AAAA-MM-DD`;
   - dinheiro: `1234.5` → `"1234.50"`, `"1234.56"`, `"1.234,56"`, `"R$ 1.234,56"` → `"1234.56"`; negativo, `"abc"` e `"1,2,3"` são ilegíveis;
@@ -71,7 +71,7 @@ usam.
   - sim/não: `true`, `"TRUE"`, `"Sim"`, `"não"`; vazio → `null`;
   - vazio em qualquer tipo → `null`;
   - o erro devolve só o código (`unreadable_date`, `unreadable_amount`, `unreadable_number`), nunca o valor
-- [ ] T005 [P] Ampliar `packages/domain/test/treatment.test.ts` (research R-04, data-model §5):
+- [X] T005 [P] Ampliar `packages/domain/test/treatment.test.ts` (research R-04, data-model §5):
   - `acceptsTreatment('not_virtual_card') === true`;
   - `requiresCharge`: igual a `acceptsTreatment` para todas as classificações, menos `not_virtual_card` (`false`), com um caso por valor de `CLASSIFICATIONS`;
   - `reservationSituation('not_virtual_card', 'sent') === 'not_virtual_card'` e `('not_virtual_card', 'charged') === 'proof_sent'`;
@@ -79,7 +79,7 @@ usam.
   - `isPendingCharge('not_virtual_card', 'none') === false`;
   - `CLASSIFICATIONS_REQUIRING_CHARGE` não contém `not_virtual_card`;
   - os casos atuais das outras classificações continuam iguais
-- [ ] T006 [P] Escrever `packages/domain/test/legacy-import.test.ts` (research R-04, R-06, R-07, R-10; data-model §3 e §4):
+- [X] T006 [P] Escrever `packages/domain/test/legacy-import.test.ts` (research R-04, R-06, R-07, R-10; data-model §3 e §4):
   - **colunas**: obrigatórias da spec ausentes → `missing_column` com o nome; ordem livre; coluna desconhecida ignorada; opcional ausente = vazia.
   - **conversão**: os 6 códigos da tabela de R-04, código desconhecido → `not_virtual_card` com o original guardado, vazio → `missing_value`; "Status anterior" por código e por rótulo, sem diferenciar maiúsculas e acentos.
   - **linha → reserva**: `reservation_status = 'unknown'`, `payment_form = null`, `changed_fields = []`, motivo `Sistema anterior: <Motivo>`, motivo fixo em "A revisar"; `inconsistent_dates` (saída < entrada; primeira > última); `verification_count` < 1 → `unreadable_number`; check-in há mais de 5 anos (relógio fixo) → `anonymize: true` e `guest_name = null`.
@@ -93,9 +93,9 @@ usam.
 
 ### Domínio: implementação
 
-- [ ] T007 [P] Implementar `packages/domain/src/legacy-values.ts`: `parseLegacyDateTime`, `parseLegacyDate`, `parseLegacyMoney`, `parseLegacyInteger`, `parseLegacyBoolean`. Cada uma recebe `Date | number | string | boolean | null` e devolve `{ ok: true, value } | { ok: false, code }`. Época do Sheets 1899-12-30; hora de Brasília = UTC−3 fixo. Sem I/O. Depende de T004
-- [ ] T008 [P] Em `packages/domain/src/treatment.ts`: `not_virtual_card: true` em `ACCEPTS_TREATMENT`; criar `requiresCharge` e `CLASSIFICATIONS_REQUIRING_CHARGE` (as que aceitam tratativa, menos `not_virtual_card`); `reservationSituation` usa `requiresCharge` para "Tratativa enviada"; `needsReview` devolve `false` quando a classificação é `not_virtual_card`; `isPendingCharge` usa `requiresCharge`. Em `packages/domain/src/types.ts`, documentar `not_virtual_card` como "A revisar (sistema anterior)": não é produzida pelo coletor e só aparece em reservas importadas (research R-04). Exportar o que é novo em `packages/domain/src/index.ts`. Depende de T005
-- [ ] T009 Implementar `packages/domain/src/legacy-import.ts`:
+- [X] T007 [P] Implementar `packages/domain/src/legacy-values.ts`: `parseLegacyDateTime`, `parseLegacyDate`, `parseLegacyMoney`, `parseLegacyInteger`, `parseLegacyBoolean`. Cada uma recebe `Date | number | string | boolean | null` e devolve `{ ok: true, value } | { ok: false, code }`. Época do Sheets 1899-12-30; hora de Brasília = UTC−3 fixo. Sem I/O. Depende de T004
+- [X] T008 [P] Em `packages/domain/src/treatment.ts`: `not_virtual_card: true` em `ACCEPTS_TREATMENT`; criar `requiresCharge` e `CLASSIFICATIONS_REQUIRING_CHARGE` (as que aceitam tratativa, menos `not_virtual_card`); `reservationSituation` usa `requiresCharge` para "Tratativa enviada"; `needsReview` devolve `false` quando a classificação é `not_virtual_card`; `isPendingCharge` usa `requiresCharge`. Em `packages/domain/src/types.ts`, documentar `not_virtual_card` como "A revisar (sistema anterior)": não é produzida pelo coletor e só aparece em reservas importadas (research R-04). Exportar o que é novo em `packages/domain/src/index.ts`. Depende de T005
+- [X] T009 Implementar `packages/domain/src/legacy-import.ts`:
   - `LEGACY_RESERVATION_COLUMNS` e `LEGACY_TREATMENT_COLUMNS`, com as obrigatórias da spec: Codigo hotel, Hotel, Reserva, Entrada, Saida, Total da reserva, Codigo status, Primeira verificacao, Ultima verificacao e Quantidade de verificacoes; Codigo hotel e Reserva na aba de tratativas;
   - `mapHeaders`, `convertLegacyClassification` e `parseLegacyReservationRow` (→ dados da reserva + origem + `rowHash` SHA-256 dos valores normalizados, sem `node:crypto`: receber a função de hash por parâmetro, para o domínio continuar sem I/O);
   - `mergeLegacyReservation`, `pickDuplicate`, `legacyAttachmentKind`, `originalDate`, `decideDocument` e `decideManualAmount`;

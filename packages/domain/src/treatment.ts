@@ -45,8 +45,9 @@ const ACCEPTS_TREATMENT: Readonly<Record<Classification, boolean>> = {
   invoiced: false,
   cancelled_no_charge: false,
   virtual_card_already_charged: false,
-  // Obsoleta (specs/001, R-22): só existe em registros antigos.
-  not_virtual_card: false,
+  // "A revisar (sistema anterior)" (specs/004, FR-007a): reserva importada sem classificação
+  // correspondente; aceita os documentos, mas não exige cobrança (ver `requiresCharge`).
+  not_virtual_card: true,
 };
 
 /** A reserva com essa classificação aceita tratativa e comprovante? (FR-003) */
@@ -58,6 +59,19 @@ export function acceptsTreatment(classification: Classification): boolean {
 export const CLASSIFICATIONS_ACCEPTING_TREATMENT: readonly Classification[] = (
   Object.keys(ACCEPTS_TREATMENT) as Classification[]
 ).filter((classification) => ACCEPTS_TREATMENT[classification]);
+
+/**
+ * A classificação exige cobrança? É a base de "Falta cobrar", de "Tratativa enviada" e do alerta
+ * "Verificar". Igual a `acceptsTreatment`, menos "A revisar (sistema anterior)": ela aceita
+ * documentos, mas ainda não se sabe se exige cobrança (specs/004, FR-007a, research R-04).
+ */
+export function requiresCharge(classification: Classification): boolean {
+  return acceptsTreatment(classification) && classification !== 'not_virtual_card';
+}
+
+/** Classificações que exigem cobrança, para montar filtros sem repetir a lista. */
+export const CLASSIFICATIONS_REQUIRING_CHARGE: readonly Classification[] =
+  CLASSIFICATIONS_ACCEPTING_TREATMENT.filter(requiresCharge);
 
 /** Situação exibida a partir dos documentos atuais da reserva (FR-002). */
 export function treatmentStatus(documents: {
@@ -84,7 +98,7 @@ export function reservationSituation(
   status: TreatmentStatus,
 ): ReservationSituation {
   if (status === 'charged') return 'proof_sent';
-  if (status === 'sent' && acceptsTreatment(classification)) return 'treatment_sent';
+  if (status === 'sent' && requiresCharge(classification)) return 'treatment_sent';
   return classification;
 }
 
@@ -99,6 +113,8 @@ export function needsReview(input: {
   statusChangedAt: Date | null;
   lastReviewAt: Date | null;
 }): boolean {
+  // `acceptsTreatment`, e não `requiresCharge`: "A revisar (sistema anterior)" aceita tratativa e
+  // não gera alerta (specs/004, FR-007a).
   if (input.status !== 'sent' || acceptsTreatment(input.classification)) return false;
   if (input.lastReviewAt === null) return true;
   return (
@@ -111,7 +127,7 @@ export function needsReview(input: {
  * tratativa ou "Tratativa enviada".
  */
 export function isPendingCharge(classification: Classification, status: TreatmentStatus): boolean {
-  return acceptsTreatment(classification) && status !== 'charged';
+  return requiresCharge(classification) && status !== 'charged';
 }
 
 /** Até quando um documento que deixou de ser o atual em `endedAt` pode ser revertido. */

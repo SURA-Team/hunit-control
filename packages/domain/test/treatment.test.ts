@@ -10,10 +10,12 @@ import {
   TREATMENT_STATUSES,
   acceptsTreatment,
   effectiveChargedAmount,
+  CLASSIFICATIONS_REQUIRING_CHARGE,
   isPendingCharge,
   isRevertible,
   needsReview,
   reservationSituation,
+  requiresCharge,
   revertDeadline,
   treatmentStatus,
 } from '../src/treatment.js';
@@ -30,6 +32,13 @@ const ELIGIBILITY: Record<Classification, boolean> = {
   invoiced: false,
   cancelled_no_charge: false,
   virtual_card_already_charged: false,
+  // "A revisar (sistema anterior)": aceita tratativa e comprovante (specs/004, FR-007a).
+  not_virtual_card: true,
+};
+
+/** Exige cobrança ("Falta cobrar", "Tratativa enviada"): as que aceitam, menos "A revisar". */
+const REQUIRES_CHARGE: Record<Classification, boolean> = {
+  ...ELIGIBILITY,
   not_virtual_card: false,
 };
 
@@ -55,6 +64,21 @@ describe('acceptsTreatment', () => {
   );
 });
 
+describe('requiresCharge (specs/004, R-04)', () => {
+  it.each(
+    CLASSIFICATIONS.map((classification) => [classification, REQUIRES_CHARGE[classification]]),
+  )('%s → %s', (classification, expected) => {
+    expect(requiresCharge(classification)).toBe(expected);
+  });
+
+  it('a lista para os filtros não tem "A revisar (sistema anterior)"', () => {
+    expect([...CLASSIFICATIONS_REQUIRING_CHARGE].sort()).toEqual(
+      CLASSIFICATIONS.filter((classification) => REQUIRES_CHARGE[classification]).sort(),
+    );
+    expect(CLASSIFICATIONS_REQUIRING_CHARGE).not.toContain('not_virtual_card');
+  });
+});
+
 describe('treatmentStatus', () => {
   it.each([
     [{ hasCurrentRequest: false, hasCurrentProof: false }, 'none'],
@@ -76,7 +100,7 @@ describe('reservationSituation (FR-002, R-14)', () => {
   it('tratativa só aparece enquanto a classificação exige cobrança', () => {
     for (const classification of CLASSIFICATIONS) {
       expect(reservationSituation(classification, 'sent')).toBe(
-        ELIGIBILITY[classification] ? 'treatment_sent' : classification,
+        REQUIRES_CHARGE[classification] ? 'treatment_sent' : classification,
       );
     }
   });
@@ -120,6 +144,12 @@ describe('needsReview — alerta "Verificar" (FR-002a, R-14)', () => {
     expect(needsReview({ ...base, status: 'none' })).toBe(false);
     expect(needsReview({ ...base, classification: 'virtual_card_pending_charge' })).toBe(false);
   });
+
+  it('"A revisar (sistema anterior)" com tratativa não tem alerta (specs/004, FR-007a)', () => {
+    expect(needsReview({ ...base, classification: 'not_virtual_card' })).toBe(false);
+    expect(reservationSituation('not_virtual_card', 'sent')).toBe('not_virtual_card');
+    expect(reservationSituation('not_virtual_card', 'charged')).toBe('proof_sent');
+  });
 });
 
 describe('isPendingCharge ("Falta cobrar")', () => {
@@ -133,6 +163,8 @@ describe('isPendingCharge ("Falta cobrar")', () => {
     expect(isPendingCharge('virtual_card_pending_charge', 'charged')).toBe(false);
     expect(isPendingCharge('invoiced', 'none')).toBe(false);
     expect(isPendingCharge('virtual_card_already_charged', 'sent')).toBe(false);
+    expect(isPendingCharge('not_virtual_card', 'none')).toBe(false);
+    expect(isPendingCharge('not_virtual_card', 'sent')).toBe(false);
   });
 });
 
