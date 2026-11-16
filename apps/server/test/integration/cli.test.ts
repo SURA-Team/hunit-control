@@ -99,6 +99,14 @@ describe('create-client (T017)', () => {
   });
 });
 
+describe('nome reservado (specs/004, T013)', () => {
+  it('create-client recusa o nome do autor dos registros importados', async () => {
+    const result = await cli(['create-client', '--name', 'sistema-anterior', '--role', 'reader']);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Nome reservado');
+  });
+});
+
 describe('revoke-client (T017)', () => {
   it('revoga o cliente: a chave deixa de ser aceita', async () => {
     const created = await cli(['create-client', '--name', 'a-revogar', '--role', 'operator']);

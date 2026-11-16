@@ -22,9 +22,11 @@ import {
 } from '@mantine/core';
 import type { Hotel } from '../../../../shared/ipc-types';
 import {
+  ORIGIN_OPTIONS,
   RESERVATION_STATUS_LABELS,
   SITUATION_LABELS,
   SITUATION_ORDER,
+  type OriginFilter,
 } from '../../presentation/labels';
 import { PeriodPicker } from '../run/PeriodPicker';
 
@@ -41,6 +43,8 @@ export interface FilterDraft {
   /** "A verificar": o Hunit mudou a situação depois da tratativa (FR-002a). */
   needsReview: boolean;
   channel: string | null;
+  /** Origem (specs/004, FR-011): todas, só do sistema anterior ou só do HUNIT Control. */
+  origin: OriginFilter;
   notFound: boolean;
   checkInFrom: string | null;
   checkInTo: string | null;
@@ -56,6 +60,7 @@ export const EMPTY_FILTERS: FilterDraft = {
   pendingCharge: false,
   needsReview: false,
   channel: null,
+  origin: 'all',
   notFound: false,
   checkInFrom: null,
   checkInTo: null,
@@ -172,6 +177,13 @@ export function ReservationFilters({
               onChange={(value) => set('channel', value)}
               clearable
               searchable
+            />
+            <Select
+              label="Origem"
+              data={[...ORIGIN_OPTIONS]}
+              value={draft.origin}
+              onChange={(value) => set('origin', value ?? 'all')}
+              allowDeselect={false}
             />
           </SimpleGrid>
           <Group justify="space-between">

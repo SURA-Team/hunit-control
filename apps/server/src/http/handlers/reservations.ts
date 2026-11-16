@@ -7,6 +7,7 @@ import {
   listChannels,
   listReservations,
 } from '../../persistence/reservations-repo.js';
+import { loadLegacyOrigins } from '../../persistence/legacy-import-repo.js';
 import { loadTreatmentSummaries, reservationKeyOf } from '../../persistence/treatments-repo.js';
 import { ProblemError } from '../problem.js';
 import { toReservationView } from '../views.js';
@@ -63,15 +64,22 @@ export function createReservationHandlers(dependencies: { db: Database; now?: ()
           pendingCharge: query.pendingCharge,
           situations: query.situation,
           needsReview: query.needsReview,
+          fromLegacy: query.fromLegacy,
           limit: query.limit ?? DEFAULT_PAGE_SIZE,
           cursor: query.cursor,
         });
         // Tratativas da página inteira de uma vez, sem consulta por reserva (specs/003).
         const treatments = await loadTreatmentSummaries(db, page.items);
+        const origins = await loadLegacyOrigins(db, page.items);
         const at = now();
         return {
           items: page.items.map((row) =>
-            toReservationView(row, treatments.get(reservationKeyOf(row)), at),
+            toReservationView(
+              row,
+              treatments.get(reservationKeyOf(row)),
+              at,
+              origins.get(reservationKeyOf(row)) ?? null,
+            ),
           ),
           nextCursor: page.nextCursor,
         };
@@ -94,7 +102,13 @@ export function createReservationHandlers(dependencies: { db: Database; now?: ()
       const row = await findReservation(db, hotelCode, reservationNumber);
       if (!row) throw new ProblemError('not_found', 'Reserva não encontrada.');
       const treatments = await loadTreatmentSummaries(db, [row]);
-      return toReservationView(row, treatments.get(reservationKeyOf(row)), now());
+      const origins = await loadLegacyOrigins(db, [row]);
+      return toReservationView(
+        row,
+        treatments.get(reservationKeyOf(row)),
+        now(),
+        origins.get(reservationKeyOf(row)) ?? null,
+      );
     },
   };
 }

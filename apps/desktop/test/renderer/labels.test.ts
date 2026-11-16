@@ -8,6 +8,7 @@ import { parse } from 'yaml';
 import contractSource from '../../../../packages/contracts/openapi.yaml?raw';
 import {
   CLASSIFICATION_LABELS,
+  CLASSIFICATION_ORDER,
   DOCUMENT_STATE_LABELS,
   END_REASON_MESSAGES,
   ERROR_MESSAGES,
@@ -133,8 +134,18 @@ describe('situações de cobrança (data-model §6.1)', () => {
       analysis_error: 'Erro de análise',
       cancelled_no_charge: 'Cancelada sem cobrança',
       ignored_hotelbeds_258: 'Ignorada (Hotelbeds 258)',
-      not_virtual_card: 'Não é cartão virtual (situação antiga)',
+      not_virtual_card: 'A revisar (sistema anterior)',
     });
+  });
+
+  it('"A revisar (sistema anterior)" pede atenção e vem logo depois das que pedem ação (specs/004)', () => {
+    expect(CLASSIFICATION_LABELS.not_virtual_card.tone).toBe('warning');
+    expect(CLASSIFICATION_ORDER.indexOf('not_virtual_card')).toBe(
+      CLASSIFICATION_ORDER.indexOf('analysis_error') + 1,
+    );
+    expect(SITUATION_ORDER.indexOf('not_virtual_card')).toBe(
+      SITUATION_ORDER.indexOf('analysis_error') + 1,
+    );
   });
 
   it('pendentes em atenção, cobradas em sucesso, erros em erro', () => {

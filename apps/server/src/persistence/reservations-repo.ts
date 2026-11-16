@@ -1,5 +1,6 @@
 import {
   CLASSIFICATIONS_ACCEPTING_TREATMENT,
+  CLASSIFICATIONS_REQUIRING_CHARGE,
   markNotFound,
   mergeVerification,
   selectNotFound,
@@ -31,6 +32,7 @@ import type { HotelProgress } from './execution-hotels-repo.js';
 import { InvalidCursorError } from './executions-repo.js';
 import {
   executionHotels,
+  legacyReservations,
   reservationManualAmounts,
   reservationObservations,
   reservations,
@@ -244,6 +246,11 @@ export interface ReservationFilters {
   situations?: readonly ReservationSituation[] | undefined;
   /** Alerta "Verificar" (specs/003, FR-002a): `true` = só com o alerta; `false` = o contrário. */
   needsReview?: boolean | undefined;
+  /**
+   * Origem "Sistema anterior" (specs/004, FR-011): `true` = só as importadas, mesmo verificadas
+   * depois; `false` = só as que não vieram de lá.
+   */
+  fromLegacy?: boolean | undefined;
 }
 
 export interface ListReservationsOptions extends ReservationFilters {
@@ -308,16 +315,27 @@ function treatmentStatusCondition(status: TreatmentStatus): SQL {
 }
 
 /**
- * "Falta cobrar" (specs/003, FR-002; mesma regra de `isPendingCharge`): a classificação aceita
- * tratativa — a lista vem do domínio — e a reserva não tem comprovante vigente.
+ * "Falta cobrar" (specs/003, FR-002; mesma regra de `isPendingCharge`): a classificação exige
+ * cobrança — a lista vem do domínio, sem "A revisar (sistema anterior)" (specs/004, FR-007a) — e
+ * a reserva não tem comprovante vigente.
  */
 function pendingChargeCondition(): SQL {
-  return sql`(${inArray(reservations.classification, [...CLASSIFICATIONS_ACCEPTING_TREATMENT])} and not ${hasVigenteDocument('proof')})`;
+  return sql`(${requiresChargeCondition()} and not ${hasVigenteDocument('proof')})`;
 }
 
-/** A classificação da reserva exige cobrança? (Lista do domínio, FR-003.) */
+/** A classificação da reserva aceita tratativa? (Lista do domínio, FR-003.) */
 function acceptsTreatmentCondition(): SQL {
   return inArray(reservations.classification, [...CLASSIFICATIONS_ACCEPTING_TREATMENT]);
+}
+
+/** A classificação exige cobrança? (Mesma regra de `requiresCharge`, specs/004, R-04.) */
+function requiresChargeCondition(): SQL {
+  return inArray(reservations.classification, [...CLASSIFICATIONS_REQUIRING_CHARGE]);
+}
+
+/** A reserva veio do sistema anterior? (specs/004, FR-011.) */
+function fromLegacyCondition(): SQL {
+  return sql`exists (select 1 from ${legacyReservations} lr where lr.hotel_code = ${reservations.hotelCode} and lr.reservation_number = ${reservations.reservationNumber})`;
 }
 
 /**
@@ -329,10 +347,10 @@ function situationCondition(situation: ReservationSituation): SQL {
   const hasRequest = hasVigenteDocument('request');
   if (situation === 'proof_sent') return hasProof;
   if (situation === 'treatment_sent') {
-    return sql`(${hasRequest} and not ${hasProof} and ${acceptsTreatmentCondition()})`;
+    return sql`(${hasRequest} and not ${hasProof} and ${requiresChargeCondition()})`;
   }
   // Uma classificação que exige cobrança só aparece sem tratativa; as outras, com ou sem.
-  const shown = CLASSIFICATIONS_ACCEPTING_TREATMENT.includes(situation)
+  const shown = CLASSIFICATIONS_REQUIRING_CHARGE.includes(situation)
     ? sql`(not ${hasProof} and not ${hasRequest})`
     : sql`(not ${hasProof})`;
   return sql`(${eq(reservations.classification, situation)} and ${shown})`;
@@ -340,7 +358,8 @@ function situationCondition(situation: ReservationSituation): SQL {
 
 /**
  * Alerta "Verificar" (specs/003, FR-002a; mesma regra de `needsReview`): só tratativa,
- * classificação que não exige cobrança e nenhuma confirmação desde a última mudança de situação.
+ * classificação que não aceita tratativa (por isso "A revisar (sistema anterior)" fica de fora,
+ * specs/004) e nenhuma confirmação desde a última mudança de situação.
  */
 function needsReviewCondition(): SQL {
   return sql`(${hasVigenteDocument('request')} and not ${hasVigenteDocument('proof')} and not ${acceptsTreatmentCondition()} and not exists (select 1 from ${treatmentEvents} te where te.hotel_code = ${reservations.hotelCode} and te.reservation_number = ${reservations.reservationNumber} and te.type = 'review_confirmed' and te.at >= coalesce(${reservations.statusChangedAt}, '-infinity'::timestamptz)))`;
@@ -403,6 +422,8 @@ export async function listReservations(
   }
   if (options.needsReview === true) conditions.push(needsReviewCondition());
   if (options.needsReview === false) conditions.push(not(needsReviewCondition()));
+  if (options.fromLegacy === true) conditions.push(fromLegacyCondition());
+  if (options.fromLegacy === false) conditions.push(not(fromLegacyCondition()));
   if (options.cursor !== undefined) {
     const [hotelCode, reservationNumber] = decodeCursor(options.cursor);
     conditions.push(

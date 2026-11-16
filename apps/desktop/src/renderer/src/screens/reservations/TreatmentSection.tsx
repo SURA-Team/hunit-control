@@ -44,6 +44,7 @@ import {
   CLASSIFICATION_LABELS,
   DOCUMENT_STATE_LABELS,
   errorMessage,
+  LEGACY_ORIGIN_NAME,
   TREATMENT_EVENT_NAMES,
   TREATMENT_KIND_NAMES,
   TREATMENT_KIND_ORDER,
@@ -350,7 +351,8 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
               {detail.data?.events.slice(0, historyShown).map((event) => (
                 <li key={event.id}>
                   <Text size="sm" span>
-                    {formatDateTime(event.at)} — {eventDescription(event)} — {event.client}
+                    {formatDateTime(event.at)} — {eventDescription(event)} —{' '}
+                    {event.fromLegacy ? LEGACY_ORIGIN_NAME : event.client}
                   </Text>
                 </li>
               ))}
@@ -432,7 +434,7 @@ function DocumentCells({
       <Table.Td>
         {formatDateTime(document.attachedAt)}
         <Text size="xs" c="dimmed">
-          por {document.attachedBy}
+          por {document.fromLegacy ? LEGACY_ORIGIN_NAME : document.attachedBy}
         </Text>
       </Table.Td>
       <Table.Td>

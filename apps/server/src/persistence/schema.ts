@@ -143,6 +143,24 @@ export const treatmentEventTypeEnum = pgEnum('treatment_event_type', [
   'review_confirmed',
 ]);
 
+/** Simulação ou importação do histórico do sistema anterior (specs/004, data-model §1.1). */
+export const legacyImportKindEnum = pgEnum('legacy_import_kind', ['simulation', 'import']);
+
+/** Situação de uma simulação ou importação (specs/004, research R-09). */
+export const legacyImportStatusEnum = pgEnum('legacy_import_status', [
+  'running',
+  'completed',
+  'failed',
+  'interrupted',
+]);
+
+/** Associação de um hotel do sistema anterior ao catálogo (specs/004, FR-006a, research R-10). */
+export const legacyHotelDecisionEnum = pgEnum('legacy_hotel_decision', [
+  'proposed',
+  'confirmed',
+  'unmapped',
+]);
+
 export type ClientRole = (typeof clientRoleEnum.enumValues)[number];
 export type ExecutionStatus = (typeof executionStatusEnum.enumValues)[number];
 export type ExecutionEndReason = (typeof executionEndReasonEnum.enumValues)[number];
@@ -356,9 +374,11 @@ export const reservations = pgTable(
     statusChangedAt: timestamptz('status_changed_at'),
     /** Preenchido = "não encontrada na última verificação" (FR-018a). */
     notFoundSince: timestamptz('not_found_since'),
-    lastExecutionId: uuid('last_execution_id')
-      .notNull()
-      .references(() => executions.id),
+    /**
+     * Última execução que verificou a reserva. `null` = reserva só do sistema anterior, ainda não
+     * verificada pelo HUNIT Control (specs/004, research R-06).
+     */
+    lastExecutionId: uuid('last_execution_id').references(() => executions.id),
     anonymizedAt: timestamptz('anonymized_at'),
   },
   (table) => [
@@ -493,6 +513,8 @@ export const treatmentDocuments = pgTable(
     endedAt: timestamptz('ended_at'),
     endedByClientId: uuid('ended_by_client_id').references(() => apiClients.id),
     purgedAt: timestamptz('purged_at'),
+    /** Preenchido = importado do sistema anterior por esta importação (specs/004, FR-016). */
+    legacyImportId: uuid('legacy_import_id').references((): AnyPgColumn => legacyImports.id),
   },
   (table) => [
     foreignKey({
@@ -540,6 +562,8 @@ export const reservationManualAmounts = pgTable(
     setByClientId: uuid('set_by_client_id')
       .notNull()
       .references(() => apiClients.id),
+    /** Preenchido = valor vindo do sistema anterior (specs/004, FR-015). */
+    legacyImportId: uuid('legacy_import_id').references((): AnyPgColumn => legacyImports.id),
   },
   (table) => [
     primaryKey({ columns: [table.hotelCode, table.reservationNumber] }),
@@ -580,6 +604,8 @@ export const treatmentEvents = pgTable(
       .notNull()
       .references(() => apiClients.id),
     at: timestamptz('at').notNull().defaultNow(),
+    /** Preenchido = evento criado pela importação do sistema anterior (specs/004, FR-016). */
+    legacyImportId: uuid('legacy_import_id').references((): AnyPgColumn => legacyImports.id),
   },
   (table) => [
     foreignKey({
@@ -592,5 +618,156 @@ export const treatmentEvents = pgTable(
       table.reservationNumber,
       table.id,
     ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Importação do histórico do sistema anterior (specs/004, data-model.md). Nenhuma tabela guarda
+// conteúdo de célula da planilha que o HUNIT Control já não guardaria numa reserva (FR-018).
+// ---------------------------------------------------------------------------
+
+/** Quantidades por desfecho (data-model §4). */
+export interface LegacyOutcomeCounts {
+  created: number;
+  updated: number;
+  ignored: number;
+  rejected: number;
+}
+
+/** Contagens de uma simulação ou importação, por entidade e desfecho (data-model §1.1). */
+export interface LegacyImportCounts {
+  reservations: LegacyOutcomeCounts;
+  requests: LegacyOutcomeCounts;
+  proofs: LegacyOutcomeCounts;
+  manualAmounts: LegacyOutcomeCounts;
+  unreferencedFiles: number;
+}
+
+/** Entidade de um desfecho: a reserva, a tratativa, o comprovante ou o valor manual. */
+export type LegacyImportEntity = 'reservation' | 'request' | 'proof' | 'manual_amount';
+
+/** Ignorado ou recusado: só códigos, números de linha e chaves, nunca valores (FR-018). */
+export interface LegacyImportIssue {
+  sheet: 'Reservas' | 'Tratativas';
+  row: number;
+  legacyHotel: string;
+  reservationNumber: string;
+  entity: LegacyImportEntity;
+  outcome: 'ignored' | 'rejected';
+  reason: string;
+  /** Nome da coluna, quando ajuda (nunca o valor). */
+  column?: string;
+}
+
+/** Aviso geral, com a quantidade de casos. */
+export interface LegacyImportWarningEntry {
+  code: string;
+  count: number;
+}
+
+/** Desfecho que mudou entre a simulação e a importação (FR-005a). */
+export interface LegacyImportDifference {
+  legacyHotel: string;
+  reservationNumber: string;
+  entity: LegacyImportEntity;
+  simulated: string;
+  imported: string;
+}
+
+/** Cada simulação ou importação (FR-005, FR-005a). */
+export const legacyImports = pgTable(
+  'legacy_imports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: legacyImportKindEnum('kind').notNull(),
+    /** Só em `import`: a simulação confirmada. */
+    simulationId: uuid('simulation_id').references((): AnyPgColumn => legacyImports.id),
+    status: legacyImportStatusEnum('status').notNull().default('running'),
+    /** SHA-256 da planilha + arquivos referenciados + associação de hotéis (research R-08). */
+    fingerprint: text('fingerprint').notNull(),
+    startedAt: timestamptz('started_at').notNull().defaultNow(),
+    finishedAt: timestamptz('finished_at'),
+    counts: jsonb('counts').$type<LegacyImportCounts>(),
+    issues: jsonb('issues').$type<LegacyImportIssue[]>().notNull().default([]),
+    differences: jsonb('differences').$type<LegacyImportDifference[]>(),
+    warnings: jsonb('warnings').$type<LegacyImportWarningEntry[]>().notNull().default([]),
+    /**
+     * Desfecho de cada entidade, por chave `código do hotel|reserva|entidade` (ex.: `created`,
+     * `rejected:file_not_found`), para a importação apontar o que mudou desde a simulação
+     * (FR-005a). Só códigos e chaves (FR-018).
+     */
+    outcomes: jsonb('outcomes').$type<Record<string, string>>().notNull().default({}),
+  },
+  (table) => [
+    check(
+      'legacy_imports_simulation_check',
+      sql`(${table.kind} = 'import') = (${table.simulationId} is not null)`,
+    ),
+    check(
+      'legacy_imports_finished_check',
+      sql`(${table.status} = 'running') = (${table.finishedAt} is null)`,
+    ),
+  ],
+);
+
+/** Associação de cada hotel do sistema anterior a um hotel do catálogo (FR-006a, R-10). */
+export const legacyHotelMappings = pgTable(
+  'legacy_hotel_mappings',
+  {
+    /** "Codigo hotel" do sistema anterior (minúsculas com "_"). */
+    legacyKey: text('legacy_key').primaryKey(),
+    /** "Hotel" da última simulação. */
+    legacyName: text('legacy_name').notNull(),
+    decision: legacyHotelDecisionEnum('decision').notNull().default('proposed'),
+    hotelCode: text('hotel_code').references(() => hotels.code),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'legacy_hotel_mappings_decision_check',
+      sql`(${table.decision} <> 'confirmed' or ${table.hotelCode} is not null)
+        and (${table.decision} <> 'unmapped' or ${table.hotelCode} is null)`,
+    ),
+  ],
+);
+
+/**
+ * Origem "Sistema anterior" de uma reserva (FR-010, FR-011): ter linha aqui é a marcação, para
+ * sempre, mesmo depois de verificada pelo HUNIT Control. Não tem dado pessoal; a retenção não a
+ * apaga.
+ */
+export const legacyReservations = pgTable(
+  'legacy_reservations',
+  {
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    legacyHotelKey: text('legacy_hotel_key').notNull(),
+    /** "Codigo status" como estava na planilha (pode ser um valor desconhecido). */
+    originalClassification: text('original_classification').notNull(),
+    originalPreviousClassification: text('original_previous_classification'),
+    firstVerifiedAt: timestamptz('first_verified_at').notNull(),
+    lastVerifiedAt: timestamptz('last_verified_at').notNull(),
+    verificationCount: integer('verification_count').notNull(),
+    /** `true` = já verificada pelo HUNIT Control quando foi importada (FR-010). */
+    merged: boolean('merged').notNull(),
+    /** Quanto foi somado a `reservations.verification_count` por esta origem (research R-06). */
+    appliedCount: integer('applied_count').notNull(),
+    /** SHA-256 dos valores normalizados da linha (FR-010a). */
+    rowHash: text('row_hash').notNull(),
+    firstImportId: uuid('first_import_id')
+      .notNull()
+      .references(() => legacyImports.id),
+    lastImportId: uuid('last_import_id')
+      .notNull()
+      .references(() => legacyImports.id),
+  },
+  (table) => [
+    primaryKey({ columns: [table.hotelCode, table.reservationNumber] }),
+    foreignKey({
+      name: 'legacy_reservations_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    check('legacy_reservations_verification_count_check', sql`${table.verificationCount} >= 1`),
   ],
 );

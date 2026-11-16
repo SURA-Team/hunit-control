@@ -13,7 +13,8 @@ acrescentar telas à página dela.
 | Página | Telas visíveis | Ocultas (❌, substituídas) |
 |---|---|---|
 | `002-app-desktop` | 1.1 a 1.3, 2.1 a 2.10, 3.1 a 3.4, 5.1, 6.1 | 4.1, 4.2, 4.3, 6.2 (pela 003) |
-| `003-tratativas-manuais` | 4.1 a 4.9, 6.2 | — |
+| `003-tratativas-manuais` | 4.2, 4.5 a 4.9 | 4.1, 4.3, 4.4, 6.2 (pela 004) |
+| `004-importacao-historico` | 4.1, 4.3, 4.4, 6.2 (filtro "Origem"), 4.10, 4.11 | — |
 
 ## Catálogo
 
@@ -48,6 +49,8 @@ Código: caminhos relativos a `apps/desktop/src/renderer/src/`. Altura: altura d
 | 4.7 | Reservas — detalhe com tratativa | Gaveta com "Comprovante enviado": status do Hunit, documentos atuais e anterior, valor informado à mão, histórico com 5 itens e "Mostrar mais" | `screens/reservations/TreatmentSection.tsx` | 900 | `4-tratativas.js` |
 | 4.8 | Reservas — anexar tratativa (e-mail) | Diálogo com a pré-visualização de um .eml: cabeçalhos, texto e anexos | `screens/reservations/AttachDialog.tsx`, `components/DocumentPreview.tsx` | 900 | `4-tratativas.js` |
 | 4.9 | Reservas — detalhe com o alerta "Verificar" | Tratativa enviada e o Hunit passou a "Já cobrada": situação do Hunit com "Verificar", classificação anterior, alerta com "Confirmar", ações de registro desabilitadas | `screens/reservations/TreatmentSection.tsx`, `components/SituationBadge.tsx` | 900 | `4-tratativas.js` |
+| 4.10 | Reservas — filtro "Sistema anterior" | Filtro "Origem: Sistema anterior", selo "Sistema anterior" ao lado do número, "A revisar (sistema anterior)" e "Não identificada" | `screens/reservations/ReservationsScreen.tsx`, `ReservationFilters.tsx`, `components/LegacyBadge.tsx` | 900 | `4-sistema-anterior.js` |
+| 4.11 | Reservas — detalhe da reserva do sistema anterior | Gaveta: selo, "A revisar (sistema anterior)", tratativa importada com autor "Sistema anterior", "Ainda não verificada pelo HUNIT Control" e a seção "Sistema anterior" | `screens/reservations/ReservationDetail.tsx`, `TreatmentSection.tsx` | 1640 | `4-sistema-anterior.js` |
 | 5.1 | Servidor indisponível | Aviso amarelo, dados guardados com horário, menu sem "Executar" | `components/ConnectionBanner.tsx`, `components/StaleDataNotice.tsx`, `App.tsx` | 900 | `4-6-reservas-estados-consulta.js` |
 | 6.1 | Consulta — execuções | Perfil consulta: sem "Executar" e sem ações de operador | `App.tsx`, `screens/executions/` | 900 | `4-6-reservas-estados-consulta.js` |
 | 6.2 | Consulta — reservas | Perfil consulta na área Reservas: situação da reserva (com o alerta) visível, sem caixas de seleção | `screens/reservations/` | 900 | `4-6-reservas-estados-consulta.js` |
@@ -56,4 +59,9 @@ Rótulos e cores das situações (todas as telas): `presentation/labels.ts`. Tem
 fonte): `main.tsx`. Ícone: `apps/desktop/resources/icon.png`, componente `Marca/Ícone do app` na
 página `Identidade visual`.
 
-O `4-tratativas.js` usa funções do `4-6-reservas-estados-consulta.js`: envie os dois juntos (prelúdio + 4-6 + 4-tratativas) ao reconstruir qualquer tela 4.x ou a 6.2.
+O `4-tratativas.js` e o `4-sistema-anterior.js` usam funções do `4-6-reservas-estados-consulta.js`:
+envie o 4-6 junto (prelúdio + 4-6 + o arquivo da tela). Prelúdio + 4-6 + 4-tratativas passa um pouco
+dos 50 mil caracteres: tire as linhas só de comentário (`// …`) antes de enviar.
+
+A 004 acrescentou o filtro "Origem" ao painel de filtros (`reservationFilters`): toda tela 4.x ou 6.2
+reconstruída a partir dela já sai com o filtro.

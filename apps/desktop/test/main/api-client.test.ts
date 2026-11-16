@@ -5,6 +5,7 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { ApiClient, fileNameFromDisposition } from '../../src/main/api-client.js';
+import { reservationListInputSchema } from '../../src/shared/ipc-schemas.js';
 import type { AppError, Result } from '../../src/shared/ipc-types.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
 import {
@@ -338,5 +339,23 @@ describe('fileNameFromDisposition', () => {
     [null, 'documento'],
   ])('%s → %s', (header, expected) => {
     expect(fileNameFromDisposition(header)).toBe(expected);
+  });
+});
+
+describe('ApiClient — origem "Sistema anterior" (specs/004, T033)', () => {
+  it('fromLegacy vai na query da lista de reservas; a ponte o aceita', async () => {
+    let query = new URLSearchParams();
+    server.on('GET', '/v1/reservations', (request, response) => {
+      query = request.query;
+      sendJson(response, 200, { items: [], nextCursor: null });
+    });
+
+    const result = await newClient().listReservations({ fromLegacy: true, pendingCharge: true });
+
+    expect(result.ok).toBe(true);
+    expect(query.get('fromLegacy')).toBe('true');
+    expect(query.get('pendingCharge')).toBe('true');
+    expect(reservationListInputSchema.safeParse({ fromLegacy: false }).success).toBe(true);
+    expect(reservationListInputSchema.safeParse({ fromLegacy: 'sim' }).success).toBe(false);
   });
 });

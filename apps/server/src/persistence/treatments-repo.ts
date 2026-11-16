@@ -55,6 +55,8 @@ export interface TreatmentDocumentRecord extends ReservationKey {
   attachedBy: string;
   endedAt: Date | null;
   endedBy: string | null;
+  /** Importado do sistema anterior (specs/004, FR-016). */
+  fromLegacy: boolean;
 }
 
 export interface TreatmentEventRecord {
@@ -69,6 +71,8 @@ export interface TreatmentEventRecord {
   batchId: string | null;
   client: string;
   at: Date;
+  /** Criado pela importação do sistema anterior (specs/004, FR-016). */
+  fromLegacy: boolean;
 }
 
 /** O que a reserva tem de tratativa neste momento. */
@@ -124,6 +128,7 @@ const DOCUMENT_COLUMNS = {
   attachedBy: attachedByClient.name,
   endedAt: treatmentDocuments.endedAt,
   endedBy: endedByClient.name,
+  fromLegacy: sql<boolean>`${treatmentDocuments.legacyImportId} is not null`,
 };
 
 function selectDocuments(executor: Executor) {
@@ -660,6 +665,7 @@ export async function getTreatmentDetail(
       batchId: treatmentEvents.batchId,
       client: apiClients.name,
       at: treatmentEvents.at,
+      fromLegacy: sql<boolean>`${treatmentEvents.legacyImportId} is not null`,
     })
     .from(treatmentEvents)
     .innerJoin(apiClients, eq(apiClients.id, treatmentEvents.clientId))

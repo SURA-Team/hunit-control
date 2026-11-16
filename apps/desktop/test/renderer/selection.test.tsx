@@ -95,7 +95,7 @@ describe('seleção que não se perde (US3 cenários 4 e 5)', () => {
     // Voltar à primeira pesquisa: a reserva reaparece já marcada.
     await searchFor(user, '7001');
     expect(await checkbox('7001')).toBeChecked();
-  });
+  }, 30_000); // Cenário longo (várias pesquisas): na rodada completa em paralelo passa dos 15 s padrão.
 
   it('trocar filtros, limpar a busca e carregar mais mantêm as marcas', async () => {
     renderWithApp(<ReservationsScreen />, hunit);

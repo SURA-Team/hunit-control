@@ -7,10 +7,15 @@
 import { Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import type { ReactNode } from 'react';
 import type { Reservation } from '../../../../shared/ipc-types';
+import { LegacyBadge } from '../../components/LegacyBadge';
 import { StatusBadge } from '../../components/StatusBadge';
 import { SituationBadge } from '../../components/SituationBadge';
 import { formatDate, formatDateTime, formatMoney } from '../../presentation/format';
-import { CLASSIFICATION_LABELS, RESERVATION_STATUS_LABELS } from '../../presentation/labels';
+import {
+  CLASSIFICATION_LABELS,
+  RESERVATION_STATUS_LABELS,
+  legacyClassificationName,
+} from '../../presentation/labels';
 import { TreatmentSection } from './TreatmentSection';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -58,6 +63,7 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
           </Text>
         </Title>
         <Group gap="xs">
+          {reservation.legacy && <LegacyBadge size="md" />}
           <SituationBadge treatment={reservation.treatment} size="md" />
           <StatusBadge label={RESERVATION_STATUS_LABELS[reservation.reservationStatus]} size="md" />
         </Group>
@@ -130,7 +136,41 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
           <Field label="Última">{formatDateTime(reservation.lastVerifiedAt)}</Field>
           <Field label="Quantidade">{reservation.verificationCount}</Field>
         </SimpleGrid>
+        {reservation.lastExecutionId === undefined && (
+          <Text size="sm" c="dimmed" mt={6}>
+            Ainda não verificada pelo HUNIT Control: os dados são os do sistema anterior.
+          </Text>
+        )}
       </Paper>
+
+      {reservation.legacy && (
+        <Paper withBorder p="sm" radius="sm" data-testid="legacy-origin">
+          <Title order={5} mb="xs">
+            Sistema anterior
+          </Title>
+          <SimpleGrid cols={3} spacing="sm">
+            <Field label="Classificação original">
+              {legacyClassificationName(reservation.legacy.originalClassification)}
+            </Field>
+            <Field label="Importada em">{formatDateTime(reservation.legacy.importedAt)}</Field>
+            <Field label="Verificações no sistema anterior">
+              {reservation.legacy.verificationCount}
+            </Field>
+            <Field label="Primeira verificação">
+              {formatDateTime(reservation.legacy.firstVerifiedAt)}
+            </Field>
+            <Field label="Última verificação">
+              {formatDateTime(reservation.legacy.lastVerifiedAt)}
+            </Field>
+          </SimpleGrid>
+          {reservation.legacy.merged && (
+            <Text size="sm" c="dimmed" mt={6}>
+              O HUNIT Control já conhecia esta reserva: valem os dados dele. A primeira verificação
+              e a quantidade acima incluem as do sistema anterior.
+            </Text>
+          )}
+        </Paper>
+      )}
     </Stack>
   );
 }

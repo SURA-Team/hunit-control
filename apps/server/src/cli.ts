@@ -14,11 +14,15 @@ import { generateApiKey, hashApiKey } from './http/auth.js';
 import { ClientNameTakenError, createClient, revokeClient } from './persistence/clients-repo.js';
 import { connectDatabase, runMigrations, type DatabaseConnection } from './persistence/db.js';
 import { findDatabaseError } from './persistence/errors.js';
+import { legacyImportCommand, type LegacyImportOptions } from './legacy-import/command.js';
+import { LEGACY_AUTHOR_NAME } from './persistence/legacy-import-repo.js';
 import { clientRoleEnum, type ClientRole } from './persistence/schema.js';
 
 const USAGE = `Uso:
   create-client --name <nome> --role <operator|reader>   Cadastra um cliente e mostra a chave de API
   revoke-client --name <nome>                             Revoga um cliente (a chave deixa de valer)
+  legacy-import <subcomando>                              Importa o histórico do sistema anterior
+                                                          (legacy-import --help mostra os subcomandos)
 
 Níveis de acesso:
   operator   inicia, cancela e retoma execuções, envia o token e consulta resultados
@@ -43,6 +47,11 @@ function isClientRole(value: string): value is ClientRole {
 
 function readName(value: string | undefined): string {
   if (value === undefined) throw new UsageError('Informe o nome do cliente com --name.');
+  if (value === LEGACY_AUTHOR_NAME) {
+    throw new UsageError(
+      `Nome reservado: "${LEGACY_AUTHOR_NAME}" é o autor dos registros importados do sistema anterior.`,
+    );
+  }
   if (!CLIENT_NAME_PATTERN.test(value)) {
     throw new UsageError(
       'Nome inválido: use de 2 a 50 caracteres, só letras minúsculas, números, "-" e "_".',
@@ -98,20 +107,38 @@ async function revokeClientCommand(
   );
 }
 
-const COMMANDS = {
+type Command = (
+  args: string[],
+  io: CliIo,
+  connection: DatabaseConnection,
+  options: CliOptions,
+) => Promise<void | number>;
+
+const COMMANDS: Record<string, Command> = {
   'create-client': createClientCommand,
   'revoke-client': revokeClientCommand,
-} as const;
+  'legacy-import': (args, io, connection, options) =>
+    legacyImportCommand(args, io, connection, options.legacyImport),
+};
 
-function isCommand(value: string | undefined): value is keyof typeof COMMANDS {
-  return value !== undefined && value in COMMANDS;
+export interface CliOptions {
+  /** Relógio e parada da importação do histórico (specs/004). */
+  legacyImport?: LegacyImportOptions;
+}
+
+function isCommand(value: string | undefined): boolean {
+  return value !== undefined && Object.hasOwn(COMMANDS, value);
 }
 
 /** Executa um comando e devolve o código de saída do processo (0 = sucesso). */
-export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
+export async function runCli(
+  argv: readonly string[],
+  io: CliIo,
+  options: CliOptions = {},
+): Promise<number> {
   const [commandName, ...args] = argv;
 
-  if (!isCommand(commandName)) {
+  if (commandName === undefined || !isCommand(commandName)) {
     io.stderr(
       commandName === undefined ? USAGE : `Comando desconhecido: ${commandName}\n\n${USAGE}`,
     );
@@ -122,8 +149,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
   try {
     connection = connectDatabase(loadDatabaseUrl(io.env));
     await runMigrations(connection);
-    await COMMANDS[commandName](args, io, connection);
-    return 0;
+    const exitCode = await COMMANDS[commandName]!(args, io, connection, options);
+    return typeof exitCode === 'number' ? exitCode : 0;
   } catch (error) {
     if (
       error instanceof UsageError ||
@@ -159,9 +186,24 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
-  process.exitCode = await runCli(process.argv.slice(2), {
-    stdout: (text) => void process.stdout.write(text),
-    stderr: (text) => void process.stderr.write(text),
-    env: process.env,
-  });
+  const argv = process.argv.slice(2);
+  // Na importação, Ctrl+C ou o encerramento do container param entre uma reserva e outra, sem
+  // deixar reserva pela metade (specs/004, research R-09).
+  let stopRequested = false;
+  if (argv[0] === 'legacy-import') {
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.on(signal, () => {
+        stopRequested = true;
+      });
+    }
+  }
+  process.exitCode = await runCli(
+    argv,
+    {
+      stdout: (text) => void process.stdout.write(text),
+      stderr: (text) => void process.stderr.write(text),
+      env: process.env,
+    },
+    { legacyImport: { shouldStop: () => stopRequested } },
+  );
 }

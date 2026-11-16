@@ -120,6 +120,8 @@ export const reservationListInputSchema = z.strictObject({
   // Situação da reserva (specs/003): os valores aceitos são conferidos pelo servidor.
   situation: z.array(z.string().min(1).max(64)).max(20).optional(),
   needsReview: z.boolean().optional(),
+  // Origem "Sistema anterior" (specs/004, FR-011).
+  fromLegacy: z.boolean().optional(),
   cursor: cursor.optional(),
   limit: limit.optional(),
 });

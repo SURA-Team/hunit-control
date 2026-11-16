@@ -19,6 +19,12 @@ import {
   runMigrations,
   type DatabaseConnection,
 } from '../../src/persistence/db.js';
+import { ensureLegacyAuthor } from '../../src/persistence/legacy-import-repo.js';
+import {
+  legacyImports,
+  legacyReservations,
+  treatmentDocuments,
+} from '../../src/persistence/schema.js';
 import { saveTreatmentFile } from '../../src/persistence/treatment-files-repo.js';
 import { registerDocuments, setManualAmount } from '../../src/persistence/treatments-repo.js';
 import { insertClient, insertExecution, insertReservation } from '../helpers/factories.js';
@@ -82,6 +88,47 @@ beforeAll(async () => {
     now,
   });
   await setManualAmount(source.db, { key, amount: '123.45', clientId: client.id, now });
+
+  // Uma reserva importada do sistema anterior, com a origem e um documento importado (specs/004,
+  // FR-023): ainda não verificada pelo HUNIT Control (sem execução).
+  const author = await ensureLegacyAuthor(source.db);
+  const [legacyImport] = await source.db
+    .insert(legacyImports)
+    .values({ kind: 'simulation', fingerprint: 'f', status: 'completed', finishedAt: now })
+    .returning({ id: legacyImports.id });
+  const imported = await insertReservation(source.db, {
+    hotelCode: second.hotelCode,
+    reservationNumber: 'L-9003',
+    classification: 'not_virtual_card',
+    reservationStatus: 'unknown',
+    lastExecutionId: null,
+  });
+  await source.db.insert(legacyReservations).values({
+    hotelCode: imported.hotelCode,
+    reservationNumber: imported.reservationNumber,
+    legacyHotelKey: 'legacy_hml_um',
+    originalClassification: 'not_virtual_card',
+    firstVerifiedAt: now,
+    lastVerifiedAt: now,
+    verificationCount: 2,
+    merged: false,
+    appliedCount: 2,
+    rowHash: 'h',
+    firstImportId: legacyImport!.id,
+    lastImportId: legacyImport!.id,
+  });
+  await source.db.insert(treatmentDocuments).values({
+    hotelCode: imported.hotelCode,
+    reservationNumber: imported.reservationNumber,
+    kind: 'request',
+    fileSha256: DOCUMENT_SHA256,
+    originalName: 'pedido-importado.pdf',
+    sizeBytes: DOCUMENT.length,
+    mediaType: 'application/pdf',
+    attachedAt: now,
+    attachedByClientId: author,
+    legacyImportId: legacyImport!.id,
+  });
 }, 180_000);
 
 afterAll(async () => {
@@ -150,7 +197,15 @@ async function dumpOf(database: string) {
       `select id, reservation_number, kind, state, original_name, file_sha256 ` +
       `from treatment_documents; ` +
       `select id, type, document_id, amount from treatment_events order by id; ` +
-      `select reservation_number, amount from reservation_manual_amounts"`,
+      `select reservation_number, amount from reservation_manual_amounts; ` +
+      // Importação do histórico (specs/004, FR-023).
+      `select reservation_number, coalesce(last_execution_id::text, 'sem-execucao') ` +
+      `from reservations order by reservation_number; ` +
+      `select reservation_number, original_classification, merged, applied_count ` +
+      `from legacy_reservations; ` +
+      `select kind, status, fingerprint from legacy_imports; ` +
+      `select reservation_number, legacy_import_id is not null from treatment_documents ` +
+      `order by reservation_number"`,
   );
   return rows.trim();
 }
@@ -221,6 +276,10 @@ describe('backup.sh once (FR-030, SC-011)', () => {
     );
     expect(original).toContain('comprovante-ficticio.pdf');
     expect(original).toContain('9002|123.45');
+    // A reserva importada volta com a origem e o documento importado (specs/004, FR-023).
+    expect(original).toContain('L-9003|sem-execucao');
+    expect(original).toContain('L-9003|not_virtual_card|f|2');
+    expect(original).toContain('L-9003|t');
     expect(await dumpOf('restaurado')).toBe(original);
   });
 
@@ -363,7 +422,7 @@ describe('restauração completa', () => {
       const result = await connection.db.execute<{ count: string }>(
         sql`select count(*)::text as count from reservations`,
       );
-      expect(result.rows[0]?.count).toBe('2');
+      expect(result.rows[0]?.count).toBe('3'); // 2 do HUNIT Control + 1 importada (specs/004)
     } finally {
       await connection.close();
     }
