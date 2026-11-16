@@ -108,6 +108,39 @@ export const SITUATION_ORDER: ReservationSituation[] = [
   'ignored_hotelbeds_258',
 ];
 
+// ---------------------------------------------------------------------------
+// Importação do histórico do sistema anterior (specs/004, data-model §6)
+// ---------------------------------------------------------------------------
+
+/** Selo, autor dos registros importados e opção do filtro "Origem". */
+export const LEGACY_ORIGIN_NAME = 'Sistema anterior';
+
+/** Opções do filtro "Origem" (`fromLegacy`). */
+export const ORIGIN_OPTIONS = [
+  { value: 'all', label: 'Todas' },
+  { value: 'legacy', label: LEGACY_ORIGIN_NAME },
+  { value: 'hunit', label: 'HUNIT Control' },
+] as const;
+
+export type OriginFilter = (typeof ORIGIN_OPTIONS)[number]['value'];
+
+/**
+ * Nome da classificação original, como o sistema anterior a mostrava. Um código desconhecido
+ * aparece como veio da planilha.
+ */
+const LEGACY_CLASSIFICATION_NAMES: Readonly<Record<string, string>> = {
+  ignored_hotelbeds_258: 'Ignorada - prefixo 258',
+  virtual_card_already_charged: 'Pré-pagamento cobrado',
+  virtual_card_pending_charge: 'Pré-pagamento pendente',
+  virtual_card_charge_error: 'Erro na cobrança',
+  analysis_error: 'Erro de análise',
+  not_virtual_card: 'Sem cartão virtual',
+};
+
+export function legacyClassificationName(code: string): string {
+  return LEGACY_CLASSIFICATION_NAMES[code] ?? code;
+}
+
 /** Alerta "Verificar" (FR-002a): o Hunit mudou a situação depois da tratativa. */
 export const REVIEW_LABEL: Label = { name: 'Verificar', tone: 'warning' };
 

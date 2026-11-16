@@ -320,7 +320,7 @@ o histórico (spec US4).
 ### Tests for User Story 4 ⚠️
 
 - [X] T030 [P] [US4] Ampliar `apps/server/test/contract/reservations-legacy.test.ts`: `fromLegacy=true` traz só as importadas, inclusive as verificadas depois; `fromLegacy=false` traz o complemento; combinado com `hotelCode`, `situation` e `pendingCharge`; liberado aos dois perfis
-- [ ] T031 [P] [US4] Escrever `apps/desktop/test/renderer/legacy-origin.test.tsx` (o nome de `not_virtual_card` já vem da T046):
+- [X] T031 [P] [US4] Escrever `apps/desktop/test/renderer/legacy-origin.test.tsx` (o nome de `not_virtual_card` já vem da T046):
   - **lista**: selo "Sistema anterior" nas reservas com `legacy`;
   - **filtro "Origem"** (Todas / Sistema anterior / HUNIT Control): enviado como `fromLegacy` `undefined`/`true`/`false`;
   - **detalhe**: seção "Sistema anterior" com a classificação original pelo nome do sistema anterior (código desconhecido aparece como está), verificações e data da importação, e "Ainda não verificada pelo HUNIT Control" sem `lastExecutionId`;
@@ -330,8 +330,8 @@ o histórico (spec US4).
 ### Implementation for User Story 4
 
 - [X] T032 [US4] Em `apps/server/src/persistence/reservations-repo.ts`, filtro `fromLegacy` (`EXISTS`/`NOT EXISTS` em `legacy_reservations`), e repassar o parâmetro em `apps/server/src/http/handlers/reservations.ts`. Os testes T030 passam. Depende de T026, T030
-- [ ] T033 [P] [US4] Em `apps/desktop/src/shared/ipc-schemas.ts` (`fromLegacy: z.boolean().optional()`), `apps/desktop/src/shared/ipc-types.ts` (`fromLegacy?: boolean | undefined` e os tipos da API 1.6.0) e `apps/desktop/src/main/api-client.ts` (envia `fromLegacy` na query quando definido), conforme [contracts/ipc.md](./contracts/ipc.md); teste em `apps/desktop/test/main/api-client.test.ts`. Depende de T003
-- [ ] T034 [US4] Em `apps/desktop/src/renderer/src/presentation/labels.ts`, acrescentar os nomes da classificação original (data-model §6) e "Sistema anterior". Criar `apps/desktop/src/renderer/src/components/LegacyBadge.tsx`. Usar o selo em `ReservationsScreen.tsx`, o filtro "Origem" em `ReservationFilters.tsx`, a seção "Sistema anterior" em `ReservationDetail.tsx` e o autor "Sistema anterior" em `TreatmentSection.tsx` (todos em `apps/desktop/src/renderer/src/screens/reservations/`). Os testes T031 passam. Depende de T031, T033
+- [X] T033 [P] [US4] Em `apps/desktop/src/shared/ipc-schemas.ts` (`fromLegacy: z.boolean().optional()`), `apps/desktop/src/shared/ipc-types.ts` (`fromLegacy?: boolean | undefined` e os tipos da API 1.6.0) e `apps/desktop/src/main/api-client.ts` (envia `fromLegacy` na query quando definido), conforme [contracts/ipc.md](./contracts/ipc.md); teste em `apps/desktop/test/main/api-client.test.ts`. Depende de T003
+- [X] T034 [US4] Em `apps/desktop/src/renderer/src/presentation/labels.ts`, acrescentar os nomes da classificação original (data-model §6) e "Sistema anterior". Criar `apps/desktop/src/renderer/src/components/LegacyBadge.tsx`. Usar o selo em `ReservationsScreen.tsx`, o filtro "Origem" em `ReservationFilters.tsx`, a seção "Sistema anterior" em `ReservationDetail.tsx` e o autor "Sistema anterior" em `TreatmentSection.tsx` (todos em `apps/desktop/src/renderer/src/screens/reservations/`). Os testes T031 passam. Depende de T031, T033
 - [ ] T035 [US4] Em `apps/desktop/test/e2e/screens-capture.test.ts`, inserir no servidor de teste uma reserva importada (com `legacy_reservations`, uma "A revisar" e um documento `fromLegacy`), para as capturas mostrarem o selo, o filtro, a seção do detalhe e o histórico. Os demais testes `desktop-e2e` continuam verdes. Depende de T034
 
 **Checkpoint**: todas as histórias funcionando e testadas.

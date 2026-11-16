@@ -202,6 +202,8 @@ export interface ReservationListInput {
   situation?: ReservationSituation[] | undefined;
   /** "A verificar" (specs/003, FR-002a): só as reservas com o alerta. */
   needsReview?: boolean | undefined;
+  /** Origem (specs/004, FR-011): `true` = só as do sistema anterior; `false` = só as outras. */
+  fromLegacy?: boolean | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
 }

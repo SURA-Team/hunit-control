@@ -30,6 +30,7 @@ import type {
   TreatmentDocumentKind,
 } from '../../../../shared/ipc-types';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
+import { LegacyBadge } from '../../components/LegacyBadge';
 import { StatusBadge } from '../../components/StatusBadge';
 import { SituationBadge } from '../../components/SituationBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
@@ -62,6 +63,7 @@ function toQuery(draft: FilterDraft, q: string | undefined, amount: string | und
     ...(draft.pendingCharge && { pendingCharge: true }),
     ...(draft.needsReview && { needsReview: true }),
     ...(draft.channel && { channel: draft.channel }),
+    ...(draft.origin !== 'all' && { fromLegacy: draft.origin === 'legacy' }),
     ...(draft.notFound && { notFound: true }),
     ...(draft.checkInFrom && { checkInFrom: draft.checkInFrom }),
     ...(draft.checkInTo && { checkInTo: draft.checkInTo }),
@@ -282,7 +284,12 @@ export function ReservationsScreen({
                 <Table.Td>
                   {hotelNames.get(reservation.hotelCode) ?? reservation.hotelCode}
                 </Table.Td>
-                <Table.Td>{reservation.reservationNumber}</Table.Td>
+                <Table.Td>
+                  <Group gap={6} wrap="nowrap">
+                    {reservation.reservationNumber}
+                    {reservation.legacy && <LegacyBadge />}
+                  </Group>
+                </Table.Td>
                 <Table.Td>
                   <GuestName reservation={reservation} />
                 </Table.Td>
