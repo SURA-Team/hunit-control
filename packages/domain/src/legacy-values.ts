@@ -172,6 +172,12 @@ export function parseLegacyMoney(value: LegacyCellValue): LegacyParse<Money> {
   return { ok: false, code: 'unreadable_amount' };
 }
 
+/**
+ * Inteiro em texto, com casas decimais zeradas opcionais: a cópia .xlsx exportada pelo Google Sheets
+ * grava os números inteiros como `3.0` (descoberto na importação real, T045).
+ */
+const INTEGER_TEXT = /^(\d+)(?:[.,]0+)?$/;
+
 /** Inteiro maior ou igual a zero. */
 export function parseLegacyInteger(value: LegacyCellValue): LegacyParse<number> {
   if (isBlank(value)) return { ok: true, value: null };
@@ -180,9 +186,8 @@ export function parseLegacyInteger(value: LegacyCellValue): LegacyParse<number> 
       ? { ok: true, value }
       : { ok: false, code: 'unreadable_number' };
   }
-  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
-    return { ok: true, value: Number(value.trim()) };
-  }
+  const integer = typeof value === 'string' ? INTEGER_TEXT.exec(value.trim()) : null;
+  if (integer?.[1] !== undefined) return { ok: true, value: Number(integer[1]) };
   return { ok: false, code: 'unreadable_number' };
 }
 

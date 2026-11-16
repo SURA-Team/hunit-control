@@ -69,7 +69,9 @@ célula com formato de data chega como `Date`.
   - **dinheiro**: número, `1234.56`, `1.234,56` ou `R$ 1.234,56`; vira string decimal com duas casas
     (specs/001, R-17); negativo é ilegível;
   - **inteiro** (`Quantidade de verificacoes`, `Numero de parcelas`): número inteiro ≥ 0, ou texto
-    com um;
+    com um, inclusive com casas decimais zeradas (`3.0`). Ajuste da importação real (T045): a cópia
+    .xlsx exportada pelo Google Sheets grava os inteiros assim, e a primeira simulação recusou quase
+    todas as linhas por "número ilegível";
   - **sim/não**: booleano, `TRUE`/`FALSE`, `Sim`/`Não`, `true`/`false`; vazio = desconhecido.
   Célula vazia em coluna opcional = `null`. Qualquer outro conteúdo é **ilegível** e recusa a linha
   com o código do motivo (R-08), sem repetir o valor.
