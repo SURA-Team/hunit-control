@@ -144,6 +144,8 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
         okResult({
           treatment: {
             status: 'none' as const,
+            situation: 'virtual_card_pending_charge' as const,
+            needsReview: false,
             request: null,
             proof: null,
             manualChargedAmount: null,
@@ -158,6 +160,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       revert: vi.fn(() => errorResult('internal_error')),
       setManualAmount: vi.fn(() => errorResult('internal_error')),
       clearManualAmount: vi.fn(() => errorResult('internal_error')),
+      confirmReview: vi.fn(() => errorResult('internal_error')),
       saveDocument: vi.fn(() => okResult(null)),
     },
   };

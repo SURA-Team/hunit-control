@@ -4,10 +4,8 @@
  * limpar tudo.
  */
 import { Button, CloseButton, Drawer, Group, Stack, Table, Text, Title } from '@mantine/core';
-import { StatusBadge } from '../../components/StatusBadge';
-import { TreatmentBadge } from '../../components/TreatmentBadge';
+import { SituationBadge } from '../../components/SituationBadge';
 import { formatMoney, sumMoney } from '../../presentation/format';
-import { CLASSIFICATION_LABELS } from '../../presentation/labels';
 import { useSelection } from '../../state/selection';
 
 export function SelectionDrawer({
@@ -76,10 +74,7 @@ export function SelectionDrawer({
                   </Table.Td>
                   <Table.Td>{formatMoney(item.totalAmount)}</Table.Td>
                   <Table.Td>
-                    <Group gap={4}>
-                      <StatusBadge label={CLASSIFICATION_LABELS[item.classification]} size="xs" />
-                      <TreatmentBadge status={item.treatmentStatus} size="xs" />
-                    </Group>
+                    <SituationBadge treatment={item} size="xs" />
                   </Table.Td>
                   <Table.Td>
                     <CloseButton

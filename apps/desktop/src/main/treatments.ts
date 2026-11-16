@@ -49,6 +49,7 @@ type TreatmentApi = Pick<
   | 'getReservationTreatment'
   | 'setManualChargedAmount'
   | 'clearManualChargedAmount'
+  | 'confirmTreatmentReview'
   | 'downloadTreatmentDocument'
 >;
 
@@ -241,6 +242,10 @@ export function createTreatmentHandlers(services: TreatmentServices): InvokeHand
 
     [INVOKE.treatmentsClearManualAmount]: handle(reservationKeySchema, (key) =>
       withApi((api) => api.clearManualChargedAmount(key)),
+    ),
+
+    [INVOKE.treatmentsConfirmReview]: handle(reservationKeySchema, (key) =>
+      withApi((api) => api.confirmTreatmentReview(key)),
     ),
 
     /**

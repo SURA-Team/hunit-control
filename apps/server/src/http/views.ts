@@ -8,6 +8,8 @@ import {
   effectiveChargedAmount,
   isRevertible,
   revertDeadline,
+  needsReview,
+  reservationSituation,
   treatmentStatus,
   type Classification,
 } from '@hunit/domain';
@@ -197,13 +199,26 @@ export function toTreatmentDocumentView(
  * vigentes e os valores são calculados aqui, com as regras do domínio — os clientes só exibem.
  */
 export function toReservationTreatmentView(
-  reservation: { classification: Classification; chargedAmount: string | null },
+  reservation: {
+    classification: Classification;
+    chargedAmount: string | null;
+    statusChangedAt: Date | null;
+  },
   summary: TreatmentSummary,
   now: Date,
 ): ReservationTreatmentView {
   const hasCurrentProof = summary.proof !== null;
+  const status = treatmentStatus({ hasCurrentRequest: summary.request !== null, hasCurrentProof });
   return {
-    status: treatmentStatus({ hasCurrentRequest: summary.request !== null, hasCurrentProof }),
+    status,
+    // Situação da reserva e alerta "Verificar" (FR-002, FR-002a, research R-14).
+    situation: reservationSituation(reservation.classification, status),
+    needsReview: needsReview({
+      classification: reservation.classification,
+      status,
+      statusChangedAt: reservation.statusChangedAt,
+      lastReviewAt: summary.lastReviewAt,
+    }),
     request: summary.request ? toTreatmentDocumentView(summary.request, now) : null,
     proof: summary.proof ? toTreatmentDocumentView(summary.proof, now) : null,
     manualChargedAmount: summary.manualAmount,
@@ -224,6 +239,7 @@ export function toTreatmentEventView(event: TreatmentEventRecord): TreatmentEven
     documentId: event.documentId,
     previousDocumentId: event.previousDocumentId,
     amount: event.amount,
+    classification: event.classification,
     batchId: event.batchId,
     client: event.client,
     at: iso(event.at),

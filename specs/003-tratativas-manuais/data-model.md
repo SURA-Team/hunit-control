@@ -77,7 +77,8 @@ comprovante (FR-013a) traz de volta o valor que já estava.
 |---|---|---|
 | `id` | `bigserial` PK | ordem dos eventos |
 | `hotel_code`, `reservation_number` | `text` | FK `reservations` |
-| `type` | enum | `attached`, `replaced`, `removed`, `reverted`, `amount_set`, `amount_cleared` |
+| `type` | enum | `attached`, `replaced`, `removed`, `reverted`, `amount_set`, `amount_cleared`, `review_confirmed` (R-14) |
+| `classification` | enum `classification`, anulável | só em `review_confirmed`: o status do Hunit confirmado (R-14) |
 | `kind` | enum `treatment_document_kind`, anulável | nos eventos de documento |
 | `document_id` | `uuid` FK `treatment_documents`, anulável | documento que ficou atual (`attached`, `reverted`) ou que deixou de ser (`removed`) |
 | `previous_document_id` | `uuid`, anulável | o que foi substituído (`replaced`, `reverted`) |
@@ -113,21 +114,26 @@ Prazo de reversão (`revertibleUntil`) = `ended_at` + 30 dias (R-04).
 
 Calculadas pelo servidor com as funções do domínio (R-04) e devolvidas prontas na API:
 
-| Documentos atuais | `treatmentStatus` | Nome no app | Conta como pendência |
-|---|---|---|---|
-| comprovante (com ou sem tratativa) | `charged` | Cobrada | não |
-| só tratativa | `sent` | Enviada | sim |
-| nenhum | `none` | (a classificação, sem marcação) | conforme a classificação |
+| Documentos atuais | Classificação (status do Hunit) | `treatmentStatus` | `situation` (nome no app) | `needsReview` | Conta como pendência |
+|---|---|---|---|---|---|
+| comprovante (com ou sem tratativa) | qualquer | `charged` | `proof_sent` (Comprovante enviado) | não | não |
+| só tratativa | exige cobrança (§4) | `sent` | `treatment_sent` (Tratativa enviada) | não | sim |
+| só tratativa | não exige cobrança | `sent` | a classificação (ex.: Já cobrada) | sim, até confirmar (R-14) | não |
+| nenhum | qualquer | `none` | a classificação | não | conforme a classificação |
 
-- A classificação calculada continua no campo `classification`, sem mudança; o app mostra
-  "Cobrada" ou "Enviada" junto dela.
-- O filtro `classification` continua comparando a classificação calculada, e o resumo por
-  classificação das execuções (spec 002) continua mostrando o que o Hunit informou.
+- A classificação calculada continua no campo `classification`, sem mudança; o app a mostra no
+  detalhe como "Status do Hunit" e a lista mostra só a `situation` (FR-017).
+- O filtro `situation` (R-14) devolve exatamente as reservas com essa `situation`; os filtros
+  `classification` e `treatmentStatus` continuam na API. O resumo por classificação das execuções
+  (spec 002) continua mostrando o que o Hunit informou.
+- **"A verificar"** é o filtro `needsReview=true`: só tratativa, classificação que não exige
+  cobrança e nenhum `review_confirmed` com `at` ≥ `reservations.status_changed_at` (R-14).
 - **"Falta cobrar"** (FR-002) é um filtro do servidor, `pendingCharge=true`:
   `acceptsTreatment(classification)` (§4) **e** `treatmentStatus` ∈ {`none`, `sent`}. A regra fica
   no domínio (`isPendingCharge`, R-04); o app só envia o parâmetro.
 - Uma reserva com documentos que passou a uma classificação que não aceita registros (ex.:
-  "já cobrada" pelo Hunit) mantém os documentos e o `treatmentStatus` (caso-limite da spec).
+  "já cobrada" pelo Hunit) mantém os documentos e o `treatmentStatus` (caso-limite da spec); só a
+  `situation` muda, conforme a tabela acima.
 - Valor cobrado: `payment.chargedAmount` (Hunit) e `treatment.manualChargedAmount` (à mão) vêm
   separados; `treatment.effectiveChargedAmount` = o do Hunit quando existe, senão o manual (só com
   comprovante atual).
@@ -172,14 +178,19 @@ Nenhum dos dois vai para o disco (FR-018a; specs/002, FR-008a).
 |---|---|
 | `kind: request` | Tratativa |
 | `kind: proof` | Comprovante |
-| `treatmentStatus: sent` | Enviada |
-| `treatmentStatus: charged` | Cobrada |
-| `treatmentStatus: none` (filtro) | Sem tratativa |
+| `situation` (coluna e filtro) | "Situação da reserva" |
+| `situation: treatment_sent` / `treatmentStatus: sent` | Tratativa enviada |
+| `situation: proof_sent` / `treatmentStatus: charged` | Comprovante enviado |
+| `situation: <classificação>` | o nome da classificação (ex.: Pendente de cobrança) |
+| `classification` (detalhe) | "Status do Hunit" |
+| `needsReview` | alerta "Verificar"; ação "Confirmar" |
 | `pendingCharge` (filtro rápido) | Falta cobrar |
+| `needsReview` (filtro rápido) | A verificar |
+| `reservationStatus` (filtro) | "Ativa ou cancelada" |
 | `state: replaced` | Substituído |
 | `state: removed` | Desfeito |
 | `state: purged` | Arquivo apagado pelo prazo de retenção |
-| eventos | Anexou, Substituiu, Desfez, Reverteu, Informou valor, Removeu valor |
+| eventos | Anexou, Substituiu, Desfez, Reverteu, Informou valor, Removeu valor, Confirmou a verificação (com o status do Hunit) |
 | `not_eligible` | "Esta reserva não exige cobrança (situação: …)" |
 | `same_file` | "Esta reserva já tem este arquivo" |
 | `file_too_large` | "O arquivo tem mais de 25 MB" |

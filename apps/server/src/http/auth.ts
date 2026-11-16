@@ -37,6 +37,7 @@ export const OPERATOR_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   'revertTreatmentDocument',
   'setManualChargedAmount',
   'clearManualChargedAmount',
+  'confirmTreatmentReview',
 ]);
 
 /** Gera uma chave de API nova, com 256 bits aleatórios. */

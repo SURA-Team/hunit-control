@@ -14,6 +14,8 @@ import type {
 
 export const NO_TREATMENT: ReservationTreatment = {
   status: 'none',
+  situation: 'virtual_card_pending_charge',
+  needsReview: false,
   request: null,
   proof: null,
   manualChargedAmount: null,
@@ -38,8 +40,16 @@ export function document(overrides: Partial<TreatmentDocument> = {}): TreatmentD
   };
 }
 
+/** Situação que o servidor devolveria para uma reserva pendente com esses documentos. */
+const SITUATION_OF: Record<ReservationTreatment['status'], ReservationTreatment['situation']> = {
+  none: 'virtual_card_pending_charge',
+  sent: 'treatment_sent',
+  charged: 'proof_sent',
+};
+
 export function treatment(overrides: Partial<ReservationTreatment> = {}): ReservationTreatment {
-  return { ...NO_TREATMENT, ...overrides };
+  const status = overrides.status ?? NO_TREATMENT.status;
+  return { ...NO_TREATMENT, situation: SITUATION_OF[status], ...overrides };
 }
 
 export function detail(overrides: Partial<TreatmentDetail> = {}): TreatmentDetail {

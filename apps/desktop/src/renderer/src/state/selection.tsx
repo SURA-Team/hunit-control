@@ -20,6 +20,9 @@ export interface SelectedReservation extends ReservationKey {
   totalAmount: string | null;
   classification: Reservation['classification'];
   treatmentStatus: Reservation['treatment']['status'];
+  /** Situação da reserva e alerta quando foi marcada (specs/003, FR-002, FR-002a). */
+  situation: Reservation['treatment']['situation'];
+  needsReview: boolean;
 }
 
 export interface SelectionValue {
@@ -50,6 +53,8 @@ function toSelected(reservation: Reservation): SelectedReservation {
     totalAmount: reservation.totalAmount ?? null,
     classification: reservation.classification,
     treatmentStatus: reservation.treatment.status,
+    situation: reservation.treatment.situation,
+    needsReview: reservation.treatment.needsReview,
   };
 }
 

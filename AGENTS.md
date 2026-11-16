@@ -220,6 +220,11 @@ e aplicação em lote com a seleção mantida entre pesquisas. Os documentos fic
 (`treatment_files`, `bytea`, deduplicados por SHA-256) e entram nas cópias de segurança. O
 contrato passou para a 1.5.0 (só acréscimos: `/treatment-files`, `/treatment-documents` e o
 `check`, `/reservations/{hotel}/{número}/treatment` e `manual-amount`, `Reservation.treatment`
-e os filtros `treatmentStatus` e `pendingCharge`). O envio de documentos é a única rota com corpo
+e os filtros `treatmentStatus` e `pendingCharge`). Depois da homologação, ainda na 1.5.0: a situação
+da reserva numa coluna só (`treatment.situation` e o filtro `situation`), o alerta "Verificar" quando
+o Hunit muda a situação de uma reserva só com tratativa (`treatment.needsReview`, o filtro
+`needsReview` e `POST …/treatment/review`) e o histórico com "Mostrar mais" (research R-14). A
+homologação roda num ambiente separado da produção, no mesmo PC (`deploy/homolog/`, quickstart
+§2.1 da 003). O envio de documentos é a única rota com corpo
 binário (até 25 MiB). O log do servidor registra as requisições sem a query (nome do arquivo e
 busca livre podem ter dados pessoais).

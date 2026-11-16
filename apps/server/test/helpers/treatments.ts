@@ -129,6 +129,8 @@ export interface DocumentBody {
 
 export interface TreatmentBody {
   status: 'none' | 'sent' | 'charged';
+  situation: string;
+  needsReview: boolean;
   request: DocumentBody | null;
   proof: DocumentBody | null;
   manualChargedAmount: string | null;
@@ -143,6 +145,7 @@ export interface EventBody {
   documentId: string | null;
   previousDocumentId: string | null;
   amount: string | null;
+  classification: string | null;
   batchId: string | null;
   client: string;
   at: string;

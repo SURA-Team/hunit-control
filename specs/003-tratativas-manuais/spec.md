@@ -27,9 +27,9 @@ reserva, que nunca altera nada no Hunit nem a classificação calculada pelo ser
 pode receber dois documentos independentes:
 
 - a **tratativa** (prova de que o pedido de cobrança foi feito — por exemplo, o e-mail do Financeiro
-  ao Comercial), que faz a reserva aparecer como **Enviada**, mas continua contando como pendência;
+  ao Comercial), que faz a reserva aparecer como **Tratativa enviada**, mas continua contando como pendência;
 - o **comprovante de cobrança** (prova de que o valor foi cobrado — por exemplo, o comprovante que o
-  Comercial devolve), que faz a reserva aparecer como **Cobrada** em todas as consultas.
+  Comercial devolve), que faz a reserva aparecer como **Comprovante enviado** em todas as consultas.
 
 Quem registra é o Financeiro. A Controladoria só consulta: vê a situação de cada reserva e baixa os
 documentos para conferir os pagamentos com o adquirente.
@@ -61,13 +61,39 @@ relatórios e painéis, e exportação de planilhas.
   "Falta cobrar" (classificação que exige cobrança e sem comprovante); o filtro por classificação e o
   resumo das execuções continuam mostrando o que o Hunit informou (FR-002).
 
+### Session 2026-11-16 (homologação, T054)
+
+Revisão das telas na homologação. Substitui a resposta sobre "Falta cobrar" da sessão anterior no
+que diz respeito ao filtro por classificação.
+
+- Q: A lista mostra a situação de cobrança (Hunit) e a tratativa em colunas separadas? → A: Não.
+  Uma coluna só, **"Situação da reserva"**: "Comprovante enviado", "Tratativa enviada" ou a
+  situação do Hunit (FR-002). Os nomes "Enviada" e "Cobrada" passam a "Tratativa enviada" e
+  "Comprovante enviado"; "Comprovante enviado" conta como cobrada.
+- Q: Onde fica o que o Hunit informa? → A: No detalhe da reserva, no campo **"Status do Hunit"**
+  (a classificação). Ele muda quando uma nova verificação no Hunit o atualiza, mas não troca a
+  situação da reserva com comprovante, para não perder o comprovante (FR-002).
+- Q: E os filtros? → A: Um filtro único "Situação da reserva", com os mesmos valores da coluna, e o
+  atalho "Falta cobrar" (FR-015). Filtrar "Pendente de cobrança" passa a trazer só as pendentes sem
+  tratativa e sem comprovante.
+- Q: Reserva com "Tratativa enviada" em que o Hunit passa a "Já cobrada" ou "Cancelada sem
+  cobrança": o que aparece? → A: A situação do Hunit prevalece (a cobrança é mais importante que o
+  pedido), com um alerta **"Verificar"** para o operador conferir. "Confirmar" só tira o alerta e
+  fica no histórico; a tratativa continua registrada, porque será usada num futuro relatório de
+  reservas recuperadas (FR-002a). "Faturada" não acontece depois da tratativa (a política da reserva
+  não muda), mas a regra vale para qualquer situação que deixe de exigir cobrança.
+- Q: E com "Comprovante enviado"? → A: O comprovante sempre prevalece, sem alerta; o status do Hunit
+  atualizado aparece só no detalhe.
+- Q: O histórico mostra tudo de uma vez? → A: Não. Os 5 itens mais recentes e o botão "Mostrar
+  mais" (FR-017a).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Registrar o comprovante de cobrança de uma reserva (Priority: P1)
 
 O operador do Financeiro recebe a confirmação de que uma reserva pendente — de cobrança, com erro na
 cobrança ou a cobrar na maquininha — foi cobrada pelo Comercial. Ele anexa o comprovante e, se o Hunit não traz o valor cobrado, informa o valor. A
-partir daí a reserva aparece como **Cobrada** para todos, com o comprovante disponível para abrir ou
+partir daí a reserva aparece como **Comprovante enviado** para todos, com o comprovante disponível para abrir ou
 baixar, e com o registro de quem anexou e quando.
 
 **Why this priority**: é o registro que tira a reserva da lista do que falta cobrar. Sem ele, o
@@ -75,13 +101,13 @@ Financeiro e a Controladoria não conseguem distinguir o que está de fato pende
 resolvido, que é o motivo de o sistema existir.
 
 **Independent Test**: com reservas pendentes gravadas, anexar um comprovante a uma delas e conferir
-que ela passa a aparecer como "Cobrada" na consulta (pela API e pelo app), que o arquivo pode ser
+que ela passa a aparecer como "Comprovante enviado" na consulta (pela API e pelo app), que o arquivo pode ser
 baixado idêntico ao enviado e que o registro mostra o cliente e o momento.
 
 **Acceptance Scenarios**:
 
 1. **Given** uma reserva "pendente de cobrança", **When** o operador anexa um comprovante válido,
-   **Then** a reserva passa a ser exibida como "Cobrada" (cobrada manualmente) em todas as consultas,
+   **Then** a reserva passa a ser exibida como "Comprovante enviado" em todas as consultas,
    e o comprovante fica disponível para abrir e baixar.
 2. **Given** uma reserva com comprovante, **When** qualquer cliente autorizado consulta a reserva,
    **Then** vê o nome do arquivo, o tamanho, quem o anexou e quando.
@@ -90,7 +116,7 @@ baixado idêntico ao enviado e que o registro mostra o cliente e o momento.
    como informado manualmente; **When** ele volta ao valor do Hunit, **Then** o valor manual é
    removido.
 4. **Given** uma reserva "cobrar na maquininha" que o Comercial cobrou na maquininha, **When** o
-   operador anexa o comprovante, **Then** ela passa a "Cobrada".
+   operador anexa o comprovante, **Then** ela passa a "Comprovante enviado".
 5. **Given** uma reserva "já cobrada", "faturada" ou outra que não exige cobrança (FR-003),
    **When** o operador tenta anexar um comprovante, **Then** o sistema recusa e explica por quê.
 6. **Given** um arquivo de tipo não aceito ou maior que o limite (FR-008), **When** o operador tenta
@@ -108,32 +134,33 @@ baixado idêntico ao enviado e que o registro mostra o cliente e o momento.
 
 ---
 
-### User Story 2 - Registrar a tratativa (reserva "Enviada") (Priority: P2)
+### User Story 2 - Registrar a tratativa (reserva "Tratativa enviada") (Priority: P2)
 
 O operador do Financeiro verificou uma inconsistência e pediu ao Comercial, por e-mail (ou outro
 meio), que cobre a reserva. Ele anexa o documento do pedido à reserva, que passa a aparecer como
-**Enviada**: todos sabem que a cobrança já foi pedida, mas a reserva continua contando como pendente
+**Tratativa enviada**: todos sabem que a cobrança já foi pedida, mas a reserva continua contando como pendente
 até chegar o comprovante.
 
 **Why this priority**: evita pedir a mesma cobrança duas vezes e mostra o que está com o Comercial;
 mas a reserva ainda está pendente, então vem depois do comprovante.
 
 **Independent Test**: anexar uma tratativa a uma reserva pendente e conferir que ela aparece como
-"Enviada", que continua sendo contada entre as pendências nos filtros e que, ao anexar depois o
-comprovante, passa a "Cobrada" mantendo os dois documentos.
+"Tratativa enviada", que continua sendo contada entre as pendências nos filtros e que, ao anexar depois o
+comprovante, passa a "Comprovante enviado" mantendo os dois documentos.
 
 **Acceptance Scenarios**:
 
 1. **Given** uma reserva que exige ação, **When** o operador anexa a tratativa, **Then** a reserva é
-   exibida como "Enviada" e continua sendo encontrada quando se filtra pela classificação original
-   (ex.: "pendente de cobrança").
-2. **Given** uma reserva "Enviada", **When** o operador anexa o comprovante, **Then** ela passa a
-   "Cobrada" e os dois documentos continuam disponíveis, cada um com seu autor e momento.
+   exibida como "Tratativa enviada" e continua sendo encontrada pelo atalho "Falta cobrar"; no
+   detalhe, o "Status do Hunit" continua mostrando a classificação original (ex.: "pendente de
+   cobrança").
+2. **Given** uma reserva "Tratativa enviada", **When** o operador anexa o comprovante, **Then** ela passa a
+   "Comprovante enviado" e os dois documentos continuam disponíveis, cada um com seu autor e momento.
 3. **Given** uma reserva só com comprovante, **When** o operador anexa a tratativa depois, **Then**
-   ela continua "Cobrada" e a tratativa fica disponível ao lado do comprovante.
+   ela continua "Comprovante enviado" e a tratativa fica disponível ao lado do comprovante.
 4. **Given** uma tratativa ou um comprovante registrado por engano, **When** o operador desfaz esse
    documento, **Then** a situação exibida volta a refletir só o que restou (ex.: desfazer o
-   comprovante de uma reserva que tem tratativa a deixa "Enviada"), e o histórico registra quem
+   comprovante de uma reserva que tem tratativa a deixa "Tratativa enviada"), e o histórico registra quem
    desfez e quando. Por 30 dias, o documento desfeito pode ser revertido (FR-013a).
 
 ---
@@ -180,9 +207,9 @@ informadas com o motivo e que o arquivo baixado de cada uma é o mesmo.
 ### User Story 4 - Consultar e filtrar pelas tratativas (Priority: P2)
 
 Quem consulta as reservas (o Financeiro, com perfil operador, ou a Controladoria, com perfil
-consulta) filtra pela situação da tratativa — sem
-tratativa, enviada, cobrada manualmente — combinando com os filtros que já existem, vê os documentos
-de cada reserva e os baixa. O perfil consulta não pode registrar, substituir nem desfazer nada.
+consulta) filtra pela situação da reserva — a do Hunit, "Tratativa enviada" ou "Comprovante
+enviado" —, combinando com os filtros que já existem, vê os documentos de cada reserva e os baixa.
+O perfil consulta não pode registrar, substituir nem desfazer nada.
 
 **Why this priority**: sem o filtro, o operador não consegue montar a lista do que ainda falta tratar,
 que é o uso diário da feature.
@@ -193,23 +220,39 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 
 **Acceptance Scenarios**:
 
-1. **Given** reservas pendentes com e sem tratativa, **When** o operador filtra "pendente de cobrança"
-   + "sem tratativa", **Then** vê só as pendentes em que ninguém agiu ainda; **When** usa "Falta
+1. **Given** reservas pendentes com e sem tratativa, **When** o operador filtra a situação "Pendente
+   de cobrança", **Then** vê só as pendentes em que ninguém agiu ainda; **When** usa "Falta
    cobrar", **Then** vê todas as reservas que exigem cobrança e ainda não têm comprovante, inclusive as
-   "Enviadas", e nenhuma "Cobrada".
-2. **Given** reservas cobradas manualmente, **When** se filtra "cobrada manualmente", **Then** elas
-   aparecem, cada uma com o comprovante disponível.
+   "Tratativa enviada", e nenhuma "Comprovante enviado".
+2. **Given** reservas com comprovante, **When** se filtra "Comprovante enviado", **Then** elas
+   aparecem, cada uma com o comprovante disponível, qualquer que seja o status do Hunit.
 3. **Given** uma chave de perfil consulta, **When** ela tenta registrar, substituir ou desfazer um
-   documento, ou alterar o valor, **Then** a API recusa e o app não oferece essas ações.
-4. **Given** uma reserva com tratativa, **When** se abre o seu histórico, **Then** aparecem todos os
-   registros, substituições e desfazimentos, com quem e quando.
+   documento, alterar o valor ou confirmar um alerta, **Then** a API recusa e o app não oferece
+   essas ações.
+4. **Given** uma reserva com tratativa, **When** se abre o seu histórico, **Then** aparecem os 5
+   registros mais recentes (registros, substituições, desfazimentos e confirmações, com quem e
+   quando) e o botão "Mostrar mais", que mostra os anteriores.
+5. **Given** uma reserva "Tratativa enviada" que o Hunit passou a mostrar como "Já cobrada" ou
+   "Cancelada sem cobrança", **When** se consulta a lista, **Then** a situação da reserva é a do
+   Hunit, com o alerta "Verificar", e o atalho "A verificar" a encontra; **When** o operador
+   confirma, **Then** o alerta some, a tratativa continua registrada e o histórico mostra quem
+   confirmou e quando.
+6. **Given** uma reserva "Comprovante enviado" que o Hunit passou a mostrar com outra situação,
+   **When** se consulta a lista, **Then** ela continua "Comprovante enviado", sem alerta, e o detalhe
+   mostra o novo "Status do Hunit".
 
 ### Edge Cases
 
 - **Nova verificação depois da tratativa**: a reserva é verificada de novo pelo servidor; a tratativa
-  e os documentos permanecem (spec 001, FR-018b). Se a classificação do Hunit mudar para "já
-  cobrada", a reserva aparece como já cobrada pelo Hunit e o comprovante manual continua visível,
-  sem conflito.
+  e os documentos permanecem (spec 001, FR-018b). O "Status do Hunit" do detalhe passa a mostrar a
+  classificação nova. Com comprovante, a situação da reserva continua "Comprovante enviado". Só com
+  tratativa, se a classificação deixar de exigir cobrança (ex.: "já cobrada"), a situação passa a
+  ser a do Hunit, com o alerta "Verificar" (FR-002a).
+- **Alerta confirmado e o Hunit muda de novo**: se a classificação ou a situação da reserva no
+  Hunit mudar depois da confirmação, o alerta volta enquanto a situação continuar a ser uma que não
+  exige cobrança; se voltar a exigir cobrança, a reserva volta a "Tratativa enviada", sem alerta.
+- **Desfazer a tratativa de uma reserva com alerta**: o alerta some junto com a tratativa (a
+  reserva fica só com a situação do Hunit); o histórico guarda os dois registros.
 - **Classificação muda para uma que não aceita tratativa** (ex.: de "pendente de cobrança" para
   "faturada"): os documentos já registrados permanecem visíveis e baixáveis; novos registros são
   recusados enquanto a classificação não exigir ação.
@@ -251,16 +294,26 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 - **FR-001**: O sistema MUST permitir registrar, para cada reserva (identificada por hotel + número,
   spec 001 FR-017), dois documentos independentes: a **tratativa** e o **comprovante de cobrança**.
   Cada um é opcional e pode ser registrado sem o outro, em qualquer ordem.
-- **FR-002**: A situação exibida da reserva MUST ser derivada assim, sem alterar a classificação
-  calculada pelo servidor:
-  - com comprovante → **Cobrada** (cobrada manualmente);
-  - só com tratativa → **Enviada**;
-  - sem nenhum dos dois → a classificação do servidor, sem marcação.
-  "Enviada" MUST continuar sendo tratada como pendência; "Cobrada" MUST deixar de ser. Para isso, a
-  consulta MUST oferecer o filtro **"Falta cobrar"**: reservas cuja classificação exige cobrança
-  (FR-003) e que não têm comprovante (sem tratativa ou "Enviada"). O filtro por classificação continua
-  mostrando a classificação calculada a partir do Hunit, e o resumo por situação de cada execução
-  (spec 002) continua mostrando o que o Hunit informou naquela execução.
+- **FR-002**: A **situação da reserva** MUST ser derivada assim, sem alterar a classificação
+  calculada pelo servidor (o **status do Hunit**):
+  - com comprovante → **Comprovante enviado** (conta como cobrada), qualquer que seja o status do
+    Hunit;
+  - só com tratativa, e o status do Hunit exige cobrança (FR-003) → **Tratativa enviada**;
+  - só com tratativa, e o status do Hunit deixou de exigir cobrança (ex.: "já cobrada", "cancelada
+    sem cobrança") → o status do Hunit, com o alerta de FR-002a;
+  - sem nenhum dos dois → o status do Hunit.
+  "Tratativa enviada" MUST continuar sendo tratada como pendência; "Comprovante enviado" MUST deixar
+  de ser. Para isso, a consulta MUST oferecer o atalho **"Falta cobrar"**: reservas cujo status do
+  Hunit exige cobrança (FR-003) e que não têm comprovante (sem tratativa ou "Tratativa enviada"). O
+  status do Hunit é atualizado por cada nova verificação e MUST aparecer no detalhe da reserva; o
+  resumo por situação de cada execução (spec 002) continua mostrando o que o Hunit informou naquela
+  execução.
+- **FR-002a**: Uma reserva só com tratativa cujo status do Hunit deixou de exigir cobrança MUST ficar
+  com o alerta **"Verificar"** até o operador **confirmar** que conferiu. Confirmar MUST só tirar o
+  alerta: a tratativa e os documentos continuam registrados, e a confirmação MUST ficar no histórico
+  (FR-012) com o status do Hunit confirmado. Se o status do Hunit (classificação ou situação da
+  reserva) mudar de novo depois da confirmação, o alerta MUST voltar enquanto o status continuar a
+  não exigir cobrança. A confirmação não depende de FR-003 e não acessa o Hunit (FR-007).
 - **FR-003**: Só aceitam novos registros (tratativa e comprovante) as reservas cuja classificação
   exige uma cobrança ainda não registrada no Hunit: pendente de cobrança, erro na cobrança, cartão
   validado (não cobrado), erro de análise e cobrar na maquininha. As demais (ignorada, faturada,
@@ -300,8 +353,8 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 
 **Auditoria e acesso**
 
-- **FR-012**: Todo registro, substituição, desfazimento e alteração de valor manual MUST ficar no
-  histórico da reserva com o cliente da API que fez e o momento. O histórico MUST NOT ser apagado
+- **FR-012**: Todo registro, substituição, desfazimento, alteração de valor manual e confirmação de
+  alerta (FR-002a) MUST ficar no histórico da reserva com o cliente da API que fez e o momento. O histórico MUST NOT ser apagado
   pelas ações dos operadores.
 - **FR-013**: Documentos substituídos ou desfeitos MUST ser guardados por 30 dias a partir da
   substituição ou do desfazimento, visíveis e baixáveis no histórico da reserva, e depois apagados
@@ -311,16 +364,20 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
   houver, passa a ser o substituído (com novo prazo de 30 dias). A situação exibida MUST refletir o
   resultado (FR-002), a reversão MUST ficar no histórico (FR-012) e MUST respeitar a regra de
   FR-003. Depois do prazo, a opção de reverter deixa de aparecer.
-- **FR-014**: O perfil operador MUST poder registrar, substituir, desfazer, reverter e informar valor; o perfil
+- **FR-014**: O perfil operador MUST poder registrar, substituir, desfazer, reverter, informar valor e
+  confirmar o alerta de FR-002a; o perfil
   consulta MUST poder apenas ver e baixar. A API MUST recusar ações de registro vindas de clientes do
   perfil consulta.
 
 **Consulta**
 
-- **FR-015**: A consulta de reservas (API e app) MUST permitir filtrar pela situação da tratativa —
-  sem tratativa, enviada, cobrada manualmente — e pelo atalho "Falta cobrar" (FR-002), combinando com
-  os filtros existentes (hotel, período, classificação, situação da reserva etc.), e MUST mostrar, para cada reserva, a situação exibida, os
-  documentos atuais (nome, tamanho, autor, momento), o valor manual e o histórico.
+- **FR-015**: A consulta de reservas (API e app) MUST permitir filtrar pela **situação da reserva**
+  (FR-002) — uma ou mais entre "Comprovante enviado", "Tratativa enviada" e cada status do Hunit, com
+  exatamente as reservas que a coluna mostra com essa situação — e pelos atalhos "Falta cobrar"
+  (FR-002) e **"A verificar"** (FR-002a), combinando com os filtros existentes (hotel, período, ativa
+  ou cancelada etc.). MUST mostrar, para cada reserva, a situação da reserva, o alerta, se houver, o
+  status do Hunit, os documentos atuais (nome, tamanho, autor, momento), o valor manual e o
+  histórico.
 
 **Retenção**
 
@@ -335,8 +392,13 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 - **FR-017**: O app MUST oferecer, na consulta de reservas, as ações de anexar tratativa, anexar
   comprovante, substituir, desfazer (com confirmação), reverter um documento substituído ou desfeito
   (dentro do prazo de FR-013), informar e remover valor manual, abrir e
-  baixar documentos, seleção de várias reservas para aplicação em lote e o filtro de FR-015. As ações
-  de registro MUST ficar ocultas para o perfil consulta.
+  baixar documentos, confirmar o alerta (FR-002a), seleção de várias reservas para aplicação em lote
+  e os filtros de FR-015. As ações de registro MUST ficar ocultas para o perfil consulta. A lista
+  MUST mostrar uma única coluna **"Situação da reserva"** (FR-002), com o alerta "Verificar" quando
+  houver; o detalhe MUST mostrar a situação da reserva e, à parte, o campo **"Status do Hunit"**. O
+  filtro de ativas e canceladas, que se chamava "Situação da reserva", passa a "Ativa ou cancelada".
+- **FR-017a**: O histórico da reserva no app MUST mostrar os 5 itens mais recentes e, se houver mais,
+  o botão **"Mostrar mais"**, que mostra os próximos 10 a cada clique.
 - **FR-018**: Antes de confirmar o registro ou a substituição de um documento (individual ou em
   lote), o app MUST mostrar uma pré-visualização do arquivo escolhido: PDF e imagens como são;
   e-mails (.eml e .msg) com remetente, destinatários, assunto, data, o texto da mensagem e a lista de
@@ -350,15 +412,17 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 ### Key Entities *(include if feature involves data)*
 
 - **Tratativa da reserva**: o estado manual atual de uma reserva (hotel + número): documento de
-  tratativa atual, comprovante atual, valor cobrado manual, situação exibida derivada (FR-002).
+  tratativa atual, comprovante atual, valor cobrado manual, situação da reserva derivada (FR-002) e
+  o alerta "Verificar" (FR-002a).
 - **Documento**: arquivo anexado a uma reserva; tipo (tratativa ou comprovante), nome original,
   tamanho, tipo de conteúdo, quem anexou (cliente da API) e quando; estado (atual, substituído ou
   desfeito) e, se não for atual, até quando pode ser revertido. Um mesmo arquivo aplicado em
   lote (FR-006) vale para cada reserva como documento dela.
 - **Evento de tratativa**: entrada do histórico — registrar, substituir, desfazer, reverter,
-  informar valor, remover valor — com o documento ou valor envolvido, o cliente da API e o momento.
-- **Reserva** (da spec 001): ganha a situação exibida e a ligação com a tratativa; sua
-  classificação calculada não muda.
+  informar valor, remover valor, confirmar alerta — com o documento, o valor ou o status do Hunit
+  envolvido, o cliente da API e o momento.
+- **Reserva** (da spec 001): ganha a situação da reserva e a ligação com a tratativa; sua
+  classificação calculada (o status do Hunit) não muda.
 
 ## Success Criteria *(mandatory)*
 
@@ -376,7 +440,7 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 - **SC-006**: Com uma chave de perfil consulta, zero ações de registro são aceitas.
 - **SC-007**: Depois de restaurar uma cópia de segurança, 100% dos documentos atuais voltam
   disponíveis.
-- **SC-008**: O filtro "pendente de cobrança" + "sem tratativa" devolve exatamente as reservas
+- **SC-008**: O filtro de situação "Pendente de cobrança" devolve exatamente as reservas
   pendentes em que ninguém agiu, em até 5 segundos.
 - **SC-009**: Um documento substituído ou desfeito por engano volta a ser o atual em até 30
   segundos, durante os 30 dias seguintes, sem precisar anexar o arquivo de novo.
@@ -406,7 +470,7 @@ documentos podem ser baixados e que nenhuma ação de registro está disponível
 - O volume é pequeno: dezenas de documentos por semana, registrados pelos operadores do Financeiro.
 - As tratativas registradas no sistema anterior não entram nesta feature: virão com a importação do
   histórico (spec futura). Até lá, quem precisar consulta o sistema anterior.
-- "Enviada" registra que houve uma tratativa com documento; a inclusão das reservas enviadas na
+- "Tratativa enviada" registra que houve uma tratativa com documento; a inclusão das reservas enviadas na
   planilha do comercial fica para a spec de sincronização com o Sheets, que poderá mudar o que
   significa "enviar".
 - A API cresce só com acréscimos, sem quebrar o app desktop atual nem os clientes da 001.

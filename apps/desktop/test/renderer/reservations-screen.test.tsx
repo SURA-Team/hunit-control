@@ -169,14 +169,14 @@ describe('filtros (FR-020 a FR-020b)', () => {
     await waitFor(() => expect(lastQuery()).toMatchObject({ amount: '1234.56' }));
   });
 
-  it('combina hotel, situação de cobrança, situação da reserva, canal e "não encontrada"', async () => {
+  it('combina hotel, situação da reserva, ativa ou cancelada, canal e "não encontrada"', async () => {
     renderWithApp(<ReservationsScreen />, hunit);
     const user = userEvent.setup();
     await screen.findByText('7001');
 
     await user.click(screen.getByPlaceholderText(/todos os hotéis/i));
     await user.click(await screen.findByRole('option', { name: /Pousada Serra/ }));
-    await user.click(screen.getByPlaceholderText(/todas as situações de cobrança/i));
+    await user.click(screen.getByPlaceholderText('Todas as situações'));
     await user.click(await screen.findByRole('option', { name: 'Pendente de cobrança' }));
     await user.click(screen.getByPlaceholderText(/ativas e canceladas/i));
     await user.click(await screen.findByRole('option', { name: 'Cancelada' }));
@@ -188,7 +188,7 @@ describe('filtros (FR-020 a FR-020b)', () => {
     await waitFor(() =>
       expect(lastQuery()).toMatchObject({
         hotelCode: ['32'],
-        classification: ['virtual_card_pending_charge'],
+        situation: ['virtual_card_pending_charge'],
         reservationStatus: ['cancelled'],
         channel: 'Expedia',
         notFound: true,

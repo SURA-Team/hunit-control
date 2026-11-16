@@ -186,6 +186,7 @@ describe('perfil consulta (SC-006)', () => {
     expect(nonGet.map((operation) => operation.operationId).sort()).toEqual([
       'checkTreatmentDocuments',
       'clearManualChargedAmount',
+      'confirmTreatmentReview',
       'registerTreatmentDocuments',
       'removeTreatmentDocument',
       'revertTreatmentDocument',

@@ -25,6 +25,7 @@ import {
 import {
   checkDocuments,
   clearManualAmount,
+  confirmReview,
   findDocument,
   getTreatmentDetail,
   loadTreatmentSummary,
@@ -328,6 +329,17 @@ export function createTreatmentHandlers(dependencies: TreatmentHandlerDependenci
       });
       if (result === 'not_found') throw new ProblemError('not_found', 'Reserva não encontrada.');
       if (result === 'proof_required') throw new ProblemError('proof_required');
+      return treatmentOf(key);
+    },
+
+    /**
+     * POST .../treatment/review — confirma o alerta "Verificar" (FR-002a, research R-14). Sem
+     * alerta, não grava nada e devolve a tratativa como está.
+     */
+    async confirmTreatmentReview(request: FastifyRequest) {
+      const key = request.params as ReservationParams;
+      const result = await confirmReview(db, { key, clientId: clientOf(request).id, now: now() });
+      if (result === 'not_found') throw new ProblemError('not_found', 'Reserva não encontrada.');
       return treatmentOf(key);
     },
 

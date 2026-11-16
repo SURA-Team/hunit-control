@@ -60,8 +60,125 @@ async function show(current: ReservationTreatment, more: Partial<TreatmentDetail
 
 const section = () => within(screen.getByTestId('treatment-section'));
 
+/** Reserva com tratativa que o Hunit passou a mostrar como "Já cobrada" (FR-002a). */
+const REVIEW = treatment({
+  status: 'sent',
+  situation: 'virtual_card_already_charged',
+  needsReview: true,
+  acceptsDocuments: false,
+  request: REQUEST,
+});
+
+async function showReview(current = REVIEW) {
+  mocked(hunit.api.treatments.get).mockImplementation(() =>
+    okResult(detail({ treatment: current, documents: [REQUEST] })),
+  );
+  renderWithApp(
+    <ReservationDetail
+      reservation={pendingReservation('7001', {
+        classification: 'virtual_card_already_charged',
+        treatment: current,
+      })}
+    />,
+    hunit,
+  );
+  await waitFor(() => expect(hunit.api.connection.getState).toHaveBeenCalled());
+  await act(() => Promise.resolve());
+}
+
+function events(count: number): TreatmentDetail['events'] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: count - index,
+    type: 'amount_set' as const,
+    kind: null,
+    documentId: null,
+    previousDocumentId: null,
+    amount: `${100 + index}.00`,
+    classification: null,
+    batchId: null,
+    client: 'desktop-financeiro',
+    at: new Date(2026, 10, 13, 10, index).toISOString(),
+  }));
+}
+
 beforeEach(() => {
   hunit = fakeHunit();
+});
+
+describe('alerta "Verificar" (FR-002a)', () => {
+  it('o operador vê o motivo e confirma; a confirmação vai para o servidor', async () => {
+    mocked(hunit.api.treatments.confirmReview).mockImplementation(() =>
+      okResult({ ...REVIEW, needsReview: false }),
+    );
+    await showReview();
+    const user = userEvent.setup();
+
+    const alert = section().getByTestId('review-alert');
+    expect(alert).toHaveTextContent('o Hunit passou a mostrar esta reserva como Já cobrada');
+    expect(alert).toHaveTextContent('A tratativa continua registrada');
+    await user.click(within(alert).getByRole('button', { name: 'Confirmar' }));
+
+    await waitFor(() => expect(hunit.api.treatments.confirmReview).toHaveBeenCalledWith(KEY));
+    expect(await section().findByText('Verificação confirmada.')).toBeInTheDocument();
+  });
+
+  it('o perfil consulta vê o alerta, mas não confirma', async () => {
+    hunit = fakeHunit(ONLINE_READER);
+    await showReview();
+
+    const alert = section().getByTestId('review-alert');
+    expect(alert).toHaveTextContent('Já cobrada');
+    expect(within(alert).queryByRole('button', { name: 'Confirmar' })).not.toBeInTheDocument();
+  });
+
+  it('sem alerta, não mostra nada', async () => {
+    await show(treatment({ status: 'sent', request: REQUEST }));
+    expect(section().queryByTestId('review-alert')).not.toBeInTheDocument();
+  });
+
+  it('a confirmação aparece no histórico com o status do Hunit', async () => {
+    const [first] = events(1);
+    await show(treatment({ status: 'sent', request: REQUEST }), {
+      events: [
+        {
+          ...(first as TreatmentDetail['events'][number]),
+          type: 'review_confirmed',
+          amount: null,
+          classification: 'virtual_card_already_charged',
+        },
+      ],
+    });
+
+    expect(
+      await section().findByText(/Confirmou a verificação: Já cobrada — desktop-financeiro/),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('histórico (FR-017a)', () => {
+  const items = () =>
+    within(section().getByRole('list', { name: 'Histórico da tratativa' })).getAllByRole(
+      'listitem',
+    );
+
+  it('mostra os 5 mais recentes e "Mostrar mais" traz mais 10 a cada clique', async () => {
+    await show(treatment({ status: 'charged', proof: PROOF }), { events: events(18) });
+    const user = userEvent.setup();
+
+    await waitFor(() => expect(items()).toHaveLength(5));
+    await user.click(section().getByRole('button', { name: 'Mostrar mais' }));
+    expect(items()).toHaveLength(15);
+    await user.click(section().getByRole('button', { name: 'Mostrar mais' }));
+    expect(items()).toHaveLength(18);
+    expect(section().queryByRole('button', { name: 'Mostrar mais' })).not.toBeInTheDocument();
+  });
+
+  it('com até 5 itens, não mostra o botão', async () => {
+    await show(treatment({ status: 'charged', proof: PROOF }), { events: events(5) });
+
+    await waitFor(() => expect(items()).toHaveLength(5));
+    expect(section().queryByRole('button', { name: 'Mostrar mais' })).not.toBeInTheDocument();
+  });
 });
 
 describe('situação e documentos', () => {
@@ -75,9 +192,9 @@ describe('situação e documentos', () => {
     expect(section().getAllByText('Nenhum')).toHaveLength(2);
   });
 
-  it('só com tratativa mostra "Enviada"; com comprovante, "Cobrada"', async () => {
+  it('só com tratativa mostra "Tratativa enviada"; com comprovante, "Comprovante enviado"', async () => {
     await show(treatment({ status: 'sent', request: REQUEST }));
-    expect(section().getByText('Enviada')).toBeInTheDocument();
+    expect(section().getByText('Tratativa enviada')).toBeInTheDocument();
   });
 
   it('mostra arquivo, tamanho, quem anexou e quando de cada documento atual', async () => {
@@ -85,7 +202,7 @@ describe('situação e documentos', () => {
       documents: [PROOF, REQUEST],
     });
 
-    expect(section().getByText('Cobrada')).toBeInTheDocument();
+    expect(section().getByText('Comprovante enviado')).toBeInTheDocument();
     const proofRow = section().getByRole('row', { name: /comprovante\.pdf/ });
     expect(proofRow).toHaveTextContent('12,1 KB');
     expect(proofRow).toHaveTextContent('13/11/2026 10:30');

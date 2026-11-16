@@ -216,7 +216,26 @@ marcadas, aplicar um comprovante: 8 Cobradas, 2 ignoradas com o motivo, mesmo ar
 - [X] T051 [P] Ampliar `apps/desktop/test/e2e/no-sensitive-data-on-disk.test.ts`: depois de escolher, pré-visualizar (PDF, imagem, .eml com HTML) e cancelar ou confirmar, a pasta de dados do app e a pasta temporária do usuário não têm cópia do documento (busca por um marcador único do conteúdo) e não houve requisição de rede da interface (SC-011, FR-018a)
 - [X] T052 [P] Atualizar `README.md` (tratativas: quem registra e quem consulta, tipos e limite de 25 MB, 30 dias para reverter, retenção, as cópias de segurança passam a incluir os documentos e crescem com eles) e o `AGENTS.md` (estado do sistema: contrato 1.5.0 e tratativas; tabela de estrutura, se mudou)
 - [X] T053 Rodar `pnpm typecheck`, `pnpm lint` e `pnpm test` (com o Docker) e corrigir o que falhar; conferir que `packages/contracts/openapi.yaml` e `specs/003-tratativas-manuais/contracts/openapi.yaml` estão idênticos e que a cópia da 002 continua na 1.4.0
-- [ ] T054 ⛔ HOMOLOGAÇÃO Executar o [quickstart.md](./quickstart.md) §3 a §6 com o servidor de produção, na máquina do Financeiro (operador) e na da Controladoria (consulta), só com arquivos de teste sem dados reais; registrar em `specs/003-tratativas-manuais/research.md` ("Resultados da homologação") os tempos de SC-001, SC-002, SC-009 e SC-010, o tamanho da cópia de segurança antes e depois, e o resultado de cada passo
+- [X] T056 Preparar o ambiente de homologação ([quickstart.md](./quickstart.md) §2.1): `deploy/homolog/` com o arquivo do Compose que só acrescenta a porta do banco em `127.0.0.1` e o modelo de variáveis (portas, banco, volumes e cópias separados dos de produção; endereço do Hunit inválido, para o servidor de homologação nunca acessá-lo); `apps/desktop/test/homolog/homolog-prepare.test.ts`, desligado nas rodadas normais, que recusa banco com reservas, grava hotéis e reservas fictícios de todas as classificações e gera os arquivos de teste sintéticos (PDF, PNG, .eml, .msg, 26 MB, executável renomeado)
+- [X] T054 ⛔ HOMOLOGAÇÃO Executar o [quickstart.md](./quickstart.md) §3 a §6 no **ambiente de homologação** (T056), nunca no banco de produção: pilha separada no PC do servidor, com dados fictícios; o app compilado aberto duas vezes, com pastas de dados próprias, uma com a chave de operador e outra com a de consulta; só arquivos de teste sem dados reais. Registrar em `specs/003-tratativas-manuais/research.md` ("Resultados da homologação") os tempos de SC-001, SC-002, SC-009 e SC-010, o tamanho da cópia de segurança antes e depois, e o resultado de cada passo. Depende de T056
+
+---
+
+## Phase 8: Ajustes da homologação — situação da reserva numa coluna só, alerta "Verificar" e histórico
+
+**Purpose**: pendências da homologação (T054; spec, clarificações de 2026-11-16: FR-002, FR-002a,
+FR-015, FR-017, FR-017a; research R-14). O contrato continua na 1.5.0, que não chegou à produção.
+
+- [X] T057 [P] Em `packages/domain/src/treatment.ts`, acrescentar `ReservationSituation` (`proof_sent`, `treatment_sent` e as classificações), `reservationSituation(classification, status)` e `needsReview({ classification, status, statusChangedAt, lastReviewAt })` (R-14); testes em `packages/domain/test/treatment.test.ts` com a tabela do data-model §3 (inclusive confirmação anterior à última mudança e `statusChangedAt` nulo)
+- [X] T058 [P] Em `packages/contracts/openapi.yaml` (1.5.0), acrescentar `ReservationSituation`, `situation` e `needsReview` em `ReservationTreatment`, `review_confirmed` e `classification` em `TreatmentEvent`, os filtros `situation` e `needsReview` em `GET /reservations` e `POST /reservations/{hotelCode}/{reservationNumber}/treatment/review` (api-changes §12); rodar o `generate` e copiar para `specs/003-tratativas-manuais/contracts/openapi.yaml`
+- [X] T059 Em `apps/server/src/persistence/schema.ts`, acrescentar `review_confirmed` ao enum dos eventos e a coluna `classification` em `treatment_events`; gerar a migration com `db:generate --name=treatment_review`. Depende de T058
+- [X] T060 No servidor, calcular `situation` e `needsReview` em toda `ReservationTreatment` (com `status_changed_at` e a última confirmação), os filtros `situation` e `needsReview` em `reservations-repo.ts` (mesma regra do domínio, em SQL) e a confirmação em `treatments-repo.ts` + handler + `OPERATOR_ONLY_OPERATIONS`; testes de contrato e integração (`server-db`): cada situação filtrada bate com a coluna, alerta depois de reclassificar, confirmar tira o alerta e grava o evento, nova mudança no Hunit faz o alerta voltar, sem alerta = 200 sem evento, perfil consulta = 403. Depende de T057, T059
+- [X] T061 No app, processo principal e ponte: `treatments.confirmReview` (`main/treatments.ts`, `ipc-handlers.ts`, preload e `shared/ipc-types.ts`) e os filtros `situation` e `needsReview` em `reservations.list` (ipc.md); testes no grupo `desktop`. Depende de T058
+- [X] T062 Na interface: nomes e cores de cada situação e do evento novo em `presentation/labels.ts`; um badge de situação com o alerta "Verificar"; na lista, a coluna única "Situação da reserva" no lugar de "Situação de cobrança" e "Tratativa"; nos filtros, "Situação da reserva" (único), "Ativa ou cancelada" (o antigo "Situação da reserva") e o atalho "A verificar"; no detalhe, a situação no topo e o campo "Status do Hunit" (com o motivo e a classificação anterior); na seção da tratativa, o alerta com o botão "Confirmar" (só operador) e o histórico com 5 itens e "Mostrar mais" (+10). Testes no grupo `desktop-ui`. Depende de T061
+- [X] T063 Atualizar os E2E (`apps/desktop/test/e2e/`) aos nomes novos e acrescentar: reserva com tratativa reclassificada como "Já cobrada" no banco de teste → alerta na lista e no filtro "A verificar"; confirmar → alerta some e o histórico mostra a confirmação; histórico com mais de 5 itens → "Mostrar mais". Depende de T060, T062
+- [X] T064 Atualizar o roteiro de captura (`screens-capture.test.ts`) e `.claude/skills/figma-screens-sync/references/screens.md` com as telas que mudaram (lista, filtros, detail, alerta, histórico) e rodar a skill `figma-screens-sync` para a página `003-tratativas-manuais`. Depende de T063
+- [X] T065 Rodar `pnpm typecheck`, `pnpm lint` e `pnpm test` e corrigir o que falhar; conferir as duas cópias do `openapi.yaml`. Depende de T060 a T064
+- [X] T066 ⛔ HOMOLOGAÇÃO dos ajustes: no ambiente de homologação (T056), com o servidor e o app atualizados, executar o [quickstart.md](./quickstart.md) §6.1 (situação da reserva, filtros, alerta e histórico) e registrar no `research.md`. Depende de T065
 
 ---
 
@@ -237,7 +256,8 @@ marcadas, aplicar um comprovante: 8 Cobradas, 2 ignoradas com o motivo, mesmo ar
   Pode andar em paralelo com a US1/US2; o E2E (T040) precisa de documentos gravados, que o servidor
   de teste insere direto no banco.
 - **US3 (Phase 6)**: depende da US1 (registro e diálogo) e da US4 (coluna e filtros da lista, T039).
-- **Polish (Phase 7)**: T049 e T050 dependem de T026; T051 de T029; T054 de tudo.
+- **Polish (Phase 7)**: T049 e T050 dependem de T026; T051 de T029; T056 de T053; T054 de tudo.
+- **Ajustes da homologação (Phase 8)**: T057 e T058 em paralelo; T058 → T059 → T060 (com T057); T058 → T061 → T062; T060 + T062 → T063 → T064; T065 → T066.
 
 ### Within Each User Story
 

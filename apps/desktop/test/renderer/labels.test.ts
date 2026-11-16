@@ -16,6 +16,9 @@ import {
   OUTCOME_NAMES,
   OUTCOME_REASON_MESSAGES,
   RESERVATION_STATUS_LABELS,
+  REVIEW_LABEL,
+  SITUATION_LABELS,
+  SITUATION_ORDER,
   TONES,
   TREATMENT_EVENT_NAMES,
   TREATMENT_KIND_NAMES,
@@ -44,6 +47,7 @@ describe('todo valor dos enums da API tem nome e tom', () => {
     // Tratativas manuais (specs/003, data-model §7).
     ['TreatmentStatus', TREATMENT_STATUS_LABELS],
     ['TreatmentDocumentState', DOCUMENT_STATE_LABELS],
+    ['ReservationSituation', SITUATION_LABELS],
   ] as const)('%s', (name, labels) => {
     const table = labels as Record<string, { name: string; tone: string }>;
     for (const value of enumOf(name)) {
@@ -70,9 +74,18 @@ describe('todo valor dos enums da API tem nome e tom', () => {
 
   it('as situações da tratativa têm os nomes da spec 003', () => {
     expect(TREATMENT_STATUS_LABELS.none.name).toBe('Sem tratativa');
-    expect(TREATMENT_STATUS_LABELS.sent.name).toBe('Enviada');
-    expect(TREATMENT_STATUS_LABELS.charged.name).toBe('Cobrada');
+    expect(TREATMENT_STATUS_LABELS.sent.name).toBe('Tratativa enviada');
+    expect(TREATMENT_STATUS_LABELS.charged.name).toBe('Comprovante enviado');
     expect(TREATMENT_KIND_NAMES).toEqual({ request: 'Tratativa', proof: 'Comprovante' });
+  });
+
+  it('a situação da reserva tem os nomes da homologação (FR-002, FR-002a)', () => {
+    expect(SITUATION_LABELS.treatment_sent.name).toBe('Tratativa enviada');
+    expect(SITUATION_LABELS.proof_sent.name).toBe('Comprovante enviado');
+    expect(SITUATION_LABELS.virtual_card_already_charged.name).toBe('Já cobrada');
+    expect([...SITUATION_ORDER].sort()).toEqual([...enumOf('ReservationSituation')].sort());
+    expect(REVIEW_LABEL.name).toBe('Verificar');
+    expect(TREATMENT_EVENT_NAMES.review_confirmed).toBe('Confirmou a verificação');
   });
 
   it('ExecutionEndReason tem mensagem', () => {

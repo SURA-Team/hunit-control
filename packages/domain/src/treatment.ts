@@ -11,7 +11,10 @@ import type { Classification, Money } from './types.js';
 export const TREATMENT_DOCUMENT_KINDS = ['request', 'proof'] as const;
 export type TreatmentDocumentKind = (typeof TREATMENT_DOCUMENT_KINDS)[number];
 
-/** Situação da tratativa: sem tratativa, Enviada (só tratativa) ou Cobrada (com comprovante). */
+/**
+ * Situação dos documentos: sem tratativa, `sent` (só tratativa) ou `charged` (com comprovante). O
+ * que a lista mostra é a `ReservationSituation`, que também considera a classificação.
+ */
 export const TREATMENT_STATUSES = ['none', 'sent', 'charged'] as const;
 export type TreatmentStatus = (typeof TREATMENT_STATUSES)[number];
 
@@ -66,8 +69,46 @@ export function treatmentStatus(documents: {
 }
 
 /**
+ * Situação da reserva (FR-002, research R-14): "Comprovante enviado", "Tratativa enviada" ou a
+ * própria classificação (o status do Hunit). É o valor da coluna única da lista e do filtro.
+ */
+export type ReservationSituation = 'proof_sent' | 'treatment_sent' | Classification;
+
+/**
+ * Comprovante sempre prevalece. A tratativa só aparece enquanto o Hunit ainda indica que falta
+ * cobrar; se a classificação deixou de exigir cobrança (ex.: "já cobrada"), vale a do Hunit, com o
+ * alerta de `needsReview`.
+ */
+export function reservationSituation(
+  classification: Classification,
+  status: TreatmentStatus,
+): ReservationSituation {
+  if (status === 'charged') return 'proof_sent';
+  if (status === 'sent' && acceptsTreatment(classification)) return 'treatment_sent';
+  return classification;
+}
+
+/**
+ * Alerta "Verificar" (FR-002a, research R-14): só com tratativa, a classificação deixou de exigir
+ * cobrança e ninguém confirmou depois da última mudança de situação no Hunit. `statusChangedAt`
+ * nulo (a situação nunca mudou) torna válida qualquer confirmação.
+ */
+export function needsReview(input: {
+  classification: Classification;
+  status: TreatmentStatus;
+  statusChangedAt: Date | null;
+  lastReviewAt: Date | null;
+}): boolean {
+  if (input.status !== 'sent' || acceptsTreatment(input.classification)) return false;
+  if (input.lastReviewAt === null) return true;
+  return (
+    input.statusChangedAt !== null && input.lastReviewAt.getTime() < input.statusChangedAt.getTime()
+  );
+}
+
+/**
  * "Falta cobrar" (FR-002): a classificação exige cobrança e a reserva não tem comprovante — sem
- * tratativa ou "Enviada".
+ * tratativa ou "Tratativa enviada".
  */
 export function isPendingCharge(classification: Classification, status: TreatmentStatus): boolean {
   return acceptsTreatment(classification) && status !== 'charged';

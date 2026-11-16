@@ -61,6 +61,8 @@ export function createReservationHandlers(dependencies: { db: Database; now?: ()
           amount: query.amount,
           treatmentStatuses: query.treatmentStatus,
           pendingCharge: query.pendingCharge,
+          situations: query.situation,
+          needsReview: query.needsReview,
           limit: query.limit ?? DEFAULT_PAGE_SIZE,
           cursor: query.cursor,
         });

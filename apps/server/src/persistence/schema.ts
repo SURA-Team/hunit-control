@@ -129,7 +129,10 @@ export const treatmentDocumentStateEnum = pgEnum('treatment_document_state', [
   'purged',
 ]);
 
-/** Tipo de evento do histórico das tratativas (specs/003, FR-012). */
+/**
+ * Tipo de evento do histórico das tratativas (specs/003, FR-012). `review_confirmed` = o operador
+ * confirmou o alerta "Verificar" (FR-002a, research R-14).
+ */
 export const treatmentEventTypeEnum = pgEnum('treatment_event_type', [
   'attached',
   'replaced',
@@ -137,6 +140,7 @@ export const treatmentEventTypeEnum = pgEnum('treatment_event_type', [
   'reverted',
   'amount_set',
   'amount_cleared',
+  'review_confirmed',
 ]);
 
 export type ClientRole = (typeof clientRoleEnum.enumValues)[number];
@@ -568,6 +572,8 @@ export const treatmentEvents = pgTable(
     previousDocumentId: uuid('previous_document_id').references(() => treatmentDocuments.id),
     /** Preenchido nos eventos de valor. */
     amount: money('amount'),
+    /** Só em `review_confirmed`: o status do Hunit que o operador confirmou (research R-14). */
+    classification: classificationEnum('classification'),
     /** Mesmo valor para tudo o que foi gravado no mesmo pedido em lote (research R-05). */
     batchId: uuid('batch_id'),
     clientId: uuid('client_id')

@@ -323,3 +323,47 @@ Nenhum parâmetro de consulta é registrado no log do servidor (research R-13).
 
 O parâmetro `amount` passa a achar também o valor manual (descrição atualizada: "valor total, valor
 cobrado ou valor cobrado informado à mão").
+
+## 12. Situação da reserva e alerta "Verificar" (FR-002, FR-002a, FR-015; research R-14)
+
+Acréscimos da homologação (T054), ainda dentro da 1.5.0, que não chegou à produção.
+
+```yaml
+ReservationSituation:
+  type: string
+  description: >-
+    Situação da reserva (FR-002): proof_sent = Comprovante enviado; treatment_sent = Tratativa
+    enviada; os demais valores são a classificação (status do Hunit).
+  enum: [proof_sent, treatment_sent, <os valores de Classification>]
+
+ReservationTreatment:               # dois campos novos, obrigatórios
+  situation: { $ref: '#/components/schemas/ReservationSituation' }
+  needsReview:
+    type: boolean
+    description: Alerta "Verificar" (FR-002a)
+
+TreatmentEvent:
+  type: enum ganha review_confirmed
+  classification:                   # novo, só em review_confirmed
+    oneOf: [{ $ref: Classification }, { type: 'null' }]
+```
+
+`GET /v1/reservations` ganha:
+
+```yaml
+- name: situation
+  in: query
+  description: Situação da reserva (FR-002), qualquer uma das informadas. Combinável com os demais.
+  schema: { type: array, items: { $ref: '#/components/schemas/ReservationSituation' } }
+  style: form
+  explode: true
+- name: needsReview
+  in: query
+  description: true = só as reservas com o alerta "Verificar" (FR-002a); false = o contrário.
+  schema: { type: boolean }
+```
+
+`POST /v1/reservations/{hotelCode}/{reservationNumber}/treatment/review` — confirmar o alerta
+(FR-002a). Perfil operador (`OPERATOR_ONLY_OPERATIONS`). Sem corpo. `200` com a
+`ReservationTreatment` atualizada; sem alerta, `200` sem gravar nada. `404` se a reserva não existe.
+Não acessa o Hunit e não passa pela FR-003.

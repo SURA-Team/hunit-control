@@ -295,15 +295,44 @@ describe('limite da seleção (FR-006a)', () => {
 });
 
 describe('tratativas na lista (US4, FR-015)', () => {
-  it('mostra "Enviada" e "Cobrada" em cada linha', async () => {
-    serveByNumber({
-      '7001': { treatment: treatment({ status: 'sent', request: document({ kind: 'request' }) }) },
-      '7002': { treatment: treatment({ status: 'charged', proof: document() }) },
-    });
+  it('mostra a situação da reserva numa coluna só, com o alerta "Verificar" (FR-002, FR-002a)', async () => {
+    mocked(hunit.api.reservations.list).mockImplementation(() =>
+      okResult({
+        items: [
+          pendingReservation('7001', {
+            treatment: treatment({ status: 'sent', request: document({ kind: 'request' }) }),
+          }),
+          pendingReservation('7002', {
+            treatment: treatment({ status: 'charged', proof: document() }),
+          }),
+          pendingReservation('7003', {
+            classification: 'virtual_card_already_charged',
+            treatment: treatment({
+              status: 'sent',
+              situation: 'virtual_card_already_charged',
+              needsReview: true,
+              request: document({ kind: 'request' }),
+            }),
+          }),
+        ],
+        nextCursor: null,
+      }),
+    );
     renderWithApp(<ReservationsScreen />, hunit);
 
-    expect(await screen.findByRole('row', { name: /7001/ })).toHaveTextContent('Enviada');
-    expect(screen.getByRole('row', { name: /7002/ })).toHaveTextContent('Cobrada');
+    expect(
+      await screen.findByRole('columnheader', { name: 'Situação da reserva' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Tratativa' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('columnheader', { name: 'Situação de cobrança' }),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('row', { name: /7001/ })).toHaveTextContent('Tratativa enviada');
+    expect(screen.getByRole('row', { name: /7002/ })).toHaveTextContent('Comprovante enviado');
+    const review = screen.getByRole('row', { name: /7003/ });
+    expect(review).toHaveTextContent('Já cobrada');
+    expect(review).toHaveTextContent('Verificar');
+    expect(screen.getByRole('row', { name: /7001/ })).not.toHaveTextContent('Verificar');
   });
 
   it('"Falta cobrar" vale na hora e só envia o pedido: a regra é do servidor', async () => {
@@ -319,23 +348,44 @@ describe('tratativas na lista (US4, FR-015)', () => {
     // A tela não monta a lista de classificações por conta própria.
     expect(lastQuery()).not.toHaveProperty('classification');
     expect(lastQuery()).not.toHaveProperty('treatmentStatus');
+    expect(lastQuery()).not.toHaveProperty('situation');
     expect(shortcut).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(shortcut);
     await waitFor(() => expect(lastQuery()).not.toHaveProperty('pendingCharge'));
   });
 
-  it('o filtro "Tratativa" aceita mais de uma situação e vai como treatmentStatus', async () => {
+  it('o filtro único "Situação da reserva" aceita mais de uma e vai como situation (FR-015)', async () => {
     renderWithApp(<ReservationsScreen />, hunit);
     const user = userEvent.setup();
     await screen.findByText('7001');
 
-    await user.click(screen.getByPlaceholderText('Com ou sem tratativa'));
-    await user.click(await screen.findByRole('option', { name: 'Sem tratativa' }));
-    await user.click(await screen.findByRole('option', { name: 'Enviada' }));
+    expect(screen.queryByPlaceholderText('Com ou sem tratativa')).not.toBeInTheDocument();
+    expect(screen.getByText('Ativa ou cancelada')).toBeInTheDocument();
+    await user.click(screen.getByPlaceholderText('Todas as situações'));
+    await user.click(await screen.findByRole('option', { name: 'Tratativa enviada' }));
+    await user.click(await screen.findByRole('option', { name: 'Comprovante enviado' }));
     await user.click(screen.getByRole('button', { name: /^buscar$/i }));
 
-    await waitFor(() => expect(lastQuery()).toMatchObject({ treatmentStatus: ['none', 'sent'] }));
+    await waitFor(() =>
+      expect(lastQuery()).toMatchObject({ situation: ['treatment_sent', 'proof_sent'] }),
+    );
+    expect(lastQuery()).not.toHaveProperty('classification');
+    expect(lastQuery()).not.toHaveProperty('treatmentStatus');
+  });
+
+  it('"A verificar" vale na hora e só envia o pedido (FR-002a)', async () => {
+    renderWithApp(<ReservationsScreen />, hunit);
+    const user = userEvent.setup();
+    await screen.findByText('7001');
+    const shortcut = screen.getByRole('button', { name: 'A verificar' });
+
+    await user.click(shortcut);
+
+    await waitFor(() => expect(lastQuery()).toMatchObject({ needsReview: true }));
+    expect(shortcut).toHaveAttribute('aria-pressed', 'true');
+    await user.click(shortcut);
+    await waitFor(() => expect(lastQuery()).not.toHaveProperty('needsReview'));
   });
 });
 
@@ -354,7 +404,9 @@ describe('perfil consulta (FR-014, FR-017)', () => {
     );
     renderWithApp(<ReservationsScreen />, hunit);
 
-    expect(await screen.findByRole('row', { name: /7001/ })).toHaveTextContent('Cobrada');
+    expect(await screen.findByRole('row', { name: /7001/ })).toHaveTextContent(
+      'Comprovante enviado',
+    );
     expect(screen.queryByRole('checkbox', { name: /selecionar/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId('selection-bar')).not.toBeInTheDocument();
     // Os filtros de consulta continuam disponíveis.

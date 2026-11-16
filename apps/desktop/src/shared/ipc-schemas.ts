@@ -117,6 +117,9 @@ export const reservationListInputSchema = z.strictObject({
     .max(3)
     .optional(),
   pendingCharge: z.boolean().optional(),
+  // Situação da reserva (specs/003): os valores aceitos são conferidos pelo servidor.
+  situation: z.array(z.string().min(1).max(64)).max(20).optional(),
+  needsReview: z.boolean().optional(),
   cursor: cursor.optional(),
   limit: limit.optional(),
 });

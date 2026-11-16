@@ -95,6 +95,7 @@ const hunit: HunitApi = {
     revert: (documentId) => invoke(INVOKE.treatmentsRevert, documentId),
     setManualAmount: (input) => invoke(INVOKE.treatmentsSetManualAmount, input),
     clearManualAmount: (input) => invoke(INVOKE.treatmentsClearManualAmount, input),
+    confirmReview: (input) => invoke(INVOKE.treatmentsConfirmReview, input),
     saveDocument: (documentId) => invoke(INVOKE.treatmentsSaveDocument, documentId),
   },
 };

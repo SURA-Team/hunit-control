@@ -256,6 +256,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reservations/{hotelCode}/{reservationNumber}/treatment/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma o alerta "Verificar" de uma reserva (feature 003, FR-002a)
+         * @description O operador conferiu a reserva que, depois da tratativa, o Hunit passou a mostrar numa
+         *     situação que não exige cobrança. Só tira o alerta e registra a confirmação no histórico,
+         *     com o status do Hunit confirmado; a tratativa continua registrada. Sem alerta, responde 200
+         *     sem gravar nada. Não acessa o Hunit.
+         */
+        post: operations["confirmTreatmentReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reservations/{hotelCode}/{reservationNumber}/manual-amount": {
         parameters: {
             query?: never;
@@ -638,6 +664,11 @@ export interface components {
          */
         TreatmentStatus: "none" | "sent" | "charged";
         /**
+         * @description Situação da reserva (feature 003, FR-002): proof_sent = Comprovante enviado (com comprovante, qualquer que seja a classificação); treatment_sent = Tratativa enviada (só tratativa e a classificação ainda exige cobrança); os demais valores são a classificação (status do Hunit).
+         * @enum {string}
+         */
+        ReservationSituation: "proof_sent" | "treatment_sent" | "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "cancelled_no_charge" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
+        /**
          * @description current = documento atual; replaced = substituído; removed = desfeito; purged = arquivo apagado pelo prazo de retenção (o registro fica)
          * @enum {string}
          */
@@ -678,6 +709,9 @@ export interface components {
         /** @description Resumo da tratativa manual de uma reserva (feature 003) */
         ReservationTreatment: {
             status: components["schemas"]["TreatmentStatus"];
+            situation: components["schemas"]["ReservationSituation"];
+            /** @description Alerta "Verificar" (FR-002a): só tratativa, a classificação deixou de exigir cobrança e ninguém confirmou depois da última mudança de situação no Hunit */
+            needsReview: boolean;
             request: components["schemas"]["TreatmentDocument"] | null;
             proof: components["schemas"]["TreatmentDocument"] | null;
             manualChargedAmount: components["schemas"]["Money"];
@@ -688,13 +722,15 @@ export interface components {
         TreatmentEvent: {
             id: number;
             /** @enum {string} */
-            type: "attached" | "replaced" | "removed" | "reverted" | "amount_set" | "amount_cleared";
+            type: "attached" | "replaced" | "removed" | "reverted" | "amount_set" | "amount_cleared" | "review_confirmed";
             kind?: components["schemas"]["TreatmentDocumentKind"] | null;
             /** Format: uuid */
             documentId?: string | null;
             /** Format: uuid */
             previousDocumentId?: string | null;
             amount?: components["schemas"]["Money"];
+            /** @description Só em review_confirmed — o status do Hunit que o operador confirmou (FR-002a) */
+            classification?: components["schemas"]["Classification"] | null;
             /** Format: uuid */
             batchId?: string | null;
             /** @description Nome do cliente da API que fez a ação */
@@ -1182,6 +1218,10 @@ export interface operations {
                  *     filtro. Combinável com os demais.
                  */
                 pendingCharge?: boolean;
+                /** @description Situação da reserva (feature 003, FR-002): qualquer uma das informadas, exatamente como em ReservationTreatment.situation. Combinável com os demais filtros. */
+                situation?: components["schemas"]["ReservationSituation"][];
+                /** @description true = só as reservas com o alerta "Verificar" (feature 003, FR-002a); false = o contrário. Omitido = sem esse filtro. */
+                needsReview?: boolean;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -1262,6 +1302,33 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    confirmTreatmentReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tratativa atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

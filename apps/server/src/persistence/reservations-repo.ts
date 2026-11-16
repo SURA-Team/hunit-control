@@ -7,6 +7,7 @@ import {
   type Period,
   type ReservationData,
   type ReservationRecord,
+  type ReservationSituation,
   type ReservationStatus,
   type TreatmentDocumentKind,
   type TreatmentStatus,
@@ -34,6 +35,7 @@ import {
   reservationObservations,
   reservations,
   treatmentDocuments,
+  treatmentEvents,
 } from './schema.js';
 
 export type ReservationRow = typeof reservations.$inferSelect;
@@ -238,6 +240,10 @@ export interface ReservationFilters {
    * comprovante; `false` = o contrário.
    */
   pendingCharge?: boolean | undefined;
+  /** Situação da reserva (specs/003, FR-002, research R-14): qualquer uma das informadas. */
+  situations?: readonly ReservationSituation[] | undefined;
+  /** Alerta "Verificar" (specs/003, FR-002a): `true` = só com o alerta; `false` = o contrário. */
+  needsReview?: boolean | undefined;
 }
 
 export interface ListReservationsOptions extends ReservationFilters {
@@ -309,6 +315,37 @@ function pendingChargeCondition(): SQL {
   return sql`(${inArray(reservations.classification, [...CLASSIFICATIONS_ACCEPTING_TREATMENT])} and not ${hasVigenteDocument('proof')})`;
 }
 
+/** A classificação da reserva exige cobrança? (Lista do domínio, FR-003.) */
+function acceptsTreatmentCondition(): SQL {
+  return inArray(reservations.classification, [...CLASSIFICATIONS_ACCEPTING_TREATMENT]);
+}
+
+/**
+ * Condição de cada situação da reserva (specs/003, FR-002; mesma regra de
+ * `reservationSituation`): exatamente as reservas que a coluna mostra com essa situação.
+ */
+function situationCondition(situation: ReservationSituation): SQL {
+  const hasProof = hasVigenteDocument('proof');
+  const hasRequest = hasVigenteDocument('request');
+  if (situation === 'proof_sent') return hasProof;
+  if (situation === 'treatment_sent') {
+    return sql`(${hasRequest} and not ${hasProof} and ${acceptsTreatmentCondition()})`;
+  }
+  // Uma classificação que exige cobrança só aparece sem tratativa; as outras, com ou sem.
+  const shown = CLASSIFICATIONS_ACCEPTING_TREATMENT.includes(situation)
+    ? sql`(not ${hasProof} and not ${hasRequest})`
+    : sql`(not ${hasProof})`;
+  return sql`(${eq(reservations.classification, situation)} and ${shown})`;
+}
+
+/**
+ * Alerta "Verificar" (specs/003, FR-002a; mesma regra de `needsReview`): só tratativa,
+ * classificação que não exige cobrança e nenhuma confirmação desde a última mudança de situação.
+ */
+function needsReviewCondition(): SQL {
+  return sql`(${hasVigenteDocument('request')} and not ${hasVigenteDocument('proof')} and not ${acceptsTreatmentCondition()} and not exists (select 1 from ${treatmentEvents} te where te.hotel_code = ${reservations.hotelCode} and te.reservation_number = ${reservations.reservationNumber} and te.type = 'review_confirmed' and te.at >= coalesce(${reservations.statusChangedAt}, '-infinity'::timestamptz)))`;
+}
+
 /**
  * Reservas com filtros combináveis (FR-020), em ordem de hotel e número, paginadas por cursor.
  * Os filtros de classificação e situação valem para o estado atual da reserva.
@@ -360,6 +397,12 @@ export async function listReservations(
   }
   if (options.pendingCharge === true) conditions.push(pendingChargeCondition());
   if (options.pendingCharge === false) conditions.push(not(pendingChargeCondition()));
+  if (has(options.situations)) {
+    const anySituation = or(...options.situations.map(situationCondition));
+    if (anySituation) conditions.push(anySituation);
+  }
+  if (options.needsReview === true) conditions.push(needsReviewCondition());
+  if (options.needsReview === false) conditions.push(not(needsReviewCondition()));
   if (options.cursor !== undefined) {
     const [hotelCode, reservationNumber] = decodeCursor(options.cursor);
     conditions.push(

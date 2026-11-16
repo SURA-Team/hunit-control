@@ -12,6 +12,8 @@ import {
   effectiveChargedAmount,
   isPendingCharge,
   isRevertible,
+  needsReview,
+  reservationSituation,
   revertDeadline,
   treatmentStatus,
 } from '../src/treatment.js';
@@ -61,6 +63,62 @@ describe('treatmentStatus', () => {
     [{ hasCurrentRequest: true, hasCurrentProof: true }, 'charged'],
   ] as const)('%o → %s', (documents, expected) => {
     expect(treatmentStatus(documents)).toBe(expected);
+  });
+});
+
+describe('reservationSituation (FR-002, R-14)', () => {
+  it('comprovante sempre prevalece, qualquer que seja o status do Hunit', () => {
+    for (const classification of CLASSIFICATIONS) {
+      expect(reservationSituation(classification, 'charged')).toBe('proof_sent');
+    }
+  });
+
+  it('tratativa só aparece enquanto a classificação exige cobrança', () => {
+    for (const classification of CLASSIFICATIONS) {
+      expect(reservationSituation(classification, 'sent')).toBe(
+        ELIGIBILITY[classification] ? 'treatment_sent' : classification,
+      );
+    }
+  });
+
+  it('sem documentos, vale a classificação', () => {
+    for (const classification of CLASSIFICATIONS) {
+      expect(reservationSituation(classification, 'none')).toBe(classification);
+    }
+  });
+});
+
+describe('needsReview — alerta "Verificar" (FR-002a, R-14)', () => {
+  const changed = new Date('2026-11-16T12:00:00Z');
+  const before = new Date('2026-11-16T11:00:00Z');
+  const after = new Date('2026-11-16T13:00:00Z');
+  const base = {
+    classification: 'virtual_card_already_charged' as Classification,
+    status: 'sent' as const,
+    statusChangedAt: changed,
+    lastReviewAt: null,
+  };
+
+  it('tratativa e classificação que deixou de exigir cobrança, sem confirmação → alerta', () => {
+    expect(needsReview(base)).toBe(true);
+    expect(needsReview({ ...base, classification: 'cancelled_no_charge' })).toBe(true);
+  });
+
+  it('confirmação depois da última mudança tira o alerta; anterior, não', () => {
+    expect(needsReview({ ...base, lastReviewAt: after })).toBe(false);
+    expect(needsReview({ ...base, lastReviewAt: changed })).toBe(false);
+    expect(needsReview({ ...base, lastReviewAt: before })).toBe(true);
+  });
+
+  it('sem mudança registrada, qualquer confirmação vale', () => {
+    expect(needsReview({ ...base, statusChangedAt: null })).toBe(true);
+    expect(needsReview({ ...base, statusChangedAt: null, lastReviewAt: before })).toBe(false);
+  });
+
+  it('sem alerta com comprovante, sem documentos ou com classificação que exige cobrança', () => {
+    expect(needsReview({ ...base, status: 'charged' })).toBe(false);
+    expect(needsReview({ ...base, status: 'none' })).toBe(false);
+    expect(needsReview({ ...base, classification: 'virtual_card_pending_charge' })).toBe(false);
   });
 });
 

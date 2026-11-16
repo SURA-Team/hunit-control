@@ -11,11 +11,13 @@
 import {
   acceptsTreatment,
   isRevertible,
+  needsReview,
+  treatmentStatus,
   type Classification,
   type TreatmentDocumentKind,
   type TreatmentDocumentState,
 } from '@hunit/domain';
-import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, max, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Database } from './db.js';
 import {
@@ -62,6 +64,8 @@ export interface TreatmentEventRecord {
   documentId: string | null;
   previousDocumentId: string | null;
   amount: string | null;
+  /** Só em `review_confirmed`: o status do Hunit confirmado (research R-14). */
+  classification: Classification | null;
   batchId: string | null;
   client: string;
   at: Date;
@@ -74,9 +78,16 @@ export interface TreatmentSummary {
   /** Comprovante vigente. */
   proof: TreatmentDocumentRecord | null;
   manualAmount: string | null;
+  /** Última confirmação do alerta "Verificar" (FR-002a, research R-14). */
+  lastReviewAt: Date | null;
 }
 
-export const EMPTY_TREATMENT: TreatmentSummary = { request: null, proof: null, manualAmount: null };
+export const EMPTY_TREATMENT: TreatmentSummary = {
+  request: null,
+  proof: null,
+  manualAmount: null,
+  lastReviewAt: null,
+};
 
 export type OutcomeReason = 'not_found' | 'not_eligible' | 'same_file';
 
@@ -132,7 +143,7 @@ function ofReservation(
 
 /** `(hotel, número) in (...)`, para ler os dados de várias reservas numa consulta só. */
 function inReservations(
-  table: typeof treatmentDocuments | typeof reservationManualAmounts,
+  table: typeof treatmentDocuments | typeof reservationManualAmounts | typeof treatmentEvents,
   keys: readonly ReservationKey[],
 ): SQL {
   const tuples = keys.map((key) => sql`(${key.hotelCode}, ${key.reservationNumber})`);
@@ -140,7 +151,7 @@ function inReservations(
 }
 
 /**
- * Resumo da tratativa de várias reservas, em duas consultas (sem consulta por reserva). Reservas
+ * Resumo da tratativa de várias reservas, em três consultas (sem consulta por reserva). Reservas
  * sem nada registrado ficam fora do mapa.
  */
 export async function loadTreatmentSummaries(
@@ -171,6 +182,17 @@ export async function loadTreatmentSummaries(
     .where(inReservations(reservationManualAmounts, keys));
   for (const amount of amounts) summaryOf(amount).manualAmount = amount.amount;
 
+  const reviews = await executor
+    .select({
+      hotelCode: treatmentEvents.hotelCode,
+      reservationNumber: treatmentEvents.reservationNumber,
+      at: max(treatmentEvents.at),
+    })
+    .from(treatmentEvents)
+    .where(and(inReservations(treatmentEvents, keys), eq(treatmentEvents.type, 'review_confirmed')))
+    .groupBy(treatmentEvents.hotelCode, treatmentEvents.reservationNumber);
+  for (const review of reviews) summaryOf(review).lastReviewAt = review.at;
+
   return summaries;
 }
 
@@ -186,9 +208,17 @@ export async function loadTreatmentSummary(
 async function lockReservation(
   tx: Transaction,
   key: ReservationKey,
-): Promise<{ classification: Classification; totalAmount: string } | null> {
+): Promise<{
+  classification: Classification;
+  totalAmount: string;
+  statusChangedAt: Date | null;
+} | null> {
   const [row] = await tx
-    .select({ classification: reservations.classification, totalAmount: reservations.totalAmount })
+    .select({
+      classification: reservations.classification,
+      totalAmount: reservations.totalAmount,
+      statusChangedAt: reservations.statusChangedAt,
+    })
     .from(reservations)
     .where(
       and(
@@ -557,6 +587,45 @@ export async function clearManualAmount(
   });
 }
 
+/**
+ * Confirma o alerta "Verificar" (FR-002a, research R-14): só grava o evento `review_confirmed`,
+ * com a classificação confirmada, se a reserva tem o alerta neste momento. Não passa pela FR-003
+ * (a reserva com alerta é justamente a que não aceita registros) e não muda nenhum documento.
+ */
+export async function confirmReview(
+  db: Database,
+  input: { key: ReservationKey; clientId: string; now: Date },
+): Promise<'ok' | 'not_found'> {
+  const { key } = input;
+  return db.transaction(async (tx) => {
+    const reservation = await lockReservation(tx, key);
+    if (!reservation) return 'not_found';
+
+    const summary = await loadTreatmentSummary(tx, key);
+    const status = treatmentStatus({
+      hasCurrentRequest: summary.request !== null,
+      hasCurrentProof: summary.proof !== null,
+    });
+    const pending = needsReview({
+      classification: reservation.classification,
+      status,
+      statusChangedAt: reservation.statusChangedAt,
+      lastReviewAt: summary.lastReviewAt,
+    });
+    if (pending) {
+      await tx.insert(treatmentEvents).values({
+        hotelCode: key.hotelCode,
+        reservationNumber: key.reservationNumber,
+        type: 'review_confirmed',
+        classification: reservation.classification,
+        clientId: input.clientId,
+        at: input.now,
+      });
+    }
+    return 'ok';
+  });
+}
+
 export interface TreatmentDetail {
   summary: TreatmentSummary;
   /** Todos os documentos da reserva, do mais recente para o mais antigo. */
@@ -587,6 +656,7 @@ export async function getTreatmentDetail(
       documentId: treatmentEvents.documentId,
       previousDocumentId: treatmentEvents.previousDocumentId,
       amount: treatmentEvents.amount,
+      classification: treatmentEvents.classification,
       batchId: treatmentEvents.batchId,
       client: apiClients.name,
       at: treatmentEvents.at,

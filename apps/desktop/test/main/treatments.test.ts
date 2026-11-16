@@ -89,6 +89,7 @@ function setup() {
     getReservationTreatment: vi.fn(() => fail({ code: 'not_found' })),
     setManualChargedAmount: vi.fn(() => fail({ code: 'proof_required' })),
     clearManualChargedAmount: vi.fn(() => fail({ code: 'not_found' })),
+    confirmTreatmentReview: vi.fn(() => fail({ code: 'forbidden_for_role' })),
     downloadTreatmentDocument: vi.fn(() =>
       ok({ content: Buffer.from('conteudo do documento'), fileName: 'Comprovante: nº 1?.pdf' }),
     ),
@@ -366,11 +367,15 @@ describe('ações de uma reserva', () => {
       await invoke(INVOKE.treatmentsSetManualAmount, { ...key, amount: '500.00' }),
     ).toMatchObject({ error: { code: 'proof_required' } });
     await invoke(INVOKE.treatmentsClearManualAmount, key);
+    expect(await invoke(INVOKE.treatmentsConfirmReview, key)).toMatchObject({
+      error: { code: 'forbidden_for_role' },
+    });
 
     expect(api.removeTreatmentDocument).toHaveBeenCalledWith(DOCUMENT);
     expect(api.revertTreatmentDocument).toHaveBeenCalledWith(DOCUMENT);
     expect(api.setManualChargedAmount).toHaveBeenCalledWith(key, '500.00');
     expect(api.clearManualChargedAmount).toHaveBeenCalledWith(key);
+    expect(api.confirmTreatmentReview).toHaveBeenCalledWith(key);
   });
 
   it.each([

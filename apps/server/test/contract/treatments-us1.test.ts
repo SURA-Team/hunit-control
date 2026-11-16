@@ -557,6 +557,8 @@ describe('GET /v1/reservations/{hotelCode}/{reservationNumber}/treatment', () =>
     expect(empty.json()).toEqual({
       treatment: {
         status: 'none',
+        situation: 'invoiced',
+        needsReview: false,
         request: null,
         proof: null,
         manualChargedAmount: null,

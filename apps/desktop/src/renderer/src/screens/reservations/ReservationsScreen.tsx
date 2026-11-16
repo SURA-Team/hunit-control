@@ -4,7 +4,9 @@
  * "carregar mais" mantém os filtros; o detalhe abre num painel lateral. Nada é gravado: o que
  * está na tela fica só em memória (FR-008a).
  *
- * Tratativas (specs/003): cada linha mostra "Enviada" ou "Cobrada"; o perfil operador marca
+ * Tratativas (specs/003): cada linha mostra a situação da reserva numa coluna só — "Tratativa
+ * enviada", "Comprovante enviado" ou o status do Hunit, com o alerta "Verificar" quando houver
+ * (FR-002, FR-002a, FR-017); o perfil operador marca
  * reservas para aplicar o mesmo documento a várias. A seleção fica fora desta tela
  * (`state/selection`): pesquisar de novo, trocar filtros ou carregar mais não desmarca nada.
  */
@@ -29,10 +31,10 @@ import type {
 } from '../../../../shared/ipc-types';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
 import { StatusBadge } from '../../components/StatusBadge';
-import { TreatmentBadge } from '../../components/TreatmentBadge';
+import { SituationBadge } from '../../components/SituationBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDate, formatMoney, parseAmountInput, sumMoney } from '../../presentation/format';
-import { CLASSIFICATION_LABELS, RESERVATION_STATUS_LABELS } from '../../presentation/labels';
+import { RESERVATION_STATUS_LABELS } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
 import { SELECTION_LIMIT, useSelection } from '../../state/selection';
 import { AttachDialog } from './AttachDialog';
@@ -50,17 +52,15 @@ function toQuery(draft: FilterDraft, q: string | undefined, amount: string | und
     ...(q !== undefined && { q }),
     ...(amount !== undefined && { amount }),
     ...(draft.hotelCodes.length > 0 && { hotelCode: draft.hotelCodes }),
-    ...(draft.classifications.length > 0 && {
-      classification: draft.classifications as Applied['classification'],
+    ...(draft.situations.length > 0 && {
+      situation: draft.situations as Applied['situation'],
     }),
     ...(draft.reservationStatuses.length > 0 && {
       reservationStatus: draft.reservationStatuses as Applied['reservationStatus'],
     }),
-    ...(draft.treatmentStatuses.length > 0 && {
-      treatmentStatus: draft.treatmentStatuses as Applied['treatmentStatus'],
-    }),
-    // "Falta cobrar": a regra é do servidor; a tela só pede (specs/003, FR-002).
+    // "Falta cobrar" e "A verificar": a regra é do servidor; a tela só pede (specs/003).
     ...(draft.pendingCharge && { pendingCharge: true }),
+    ...(draft.needsReview && { needsReview: true }),
     ...(draft.channel && { channel: draft.channel }),
     ...(draft.notFound && { notFound: true }),
     ...(draft.checkInFrom && { checkInFrom: draft.checkInFrom }),
@@ -259,8 +259,7 @@ export function ReservationsScreen({
               <Table.Th>Check-in</Table.Th>
               <Table.Th>Check-out</Table.Th>
               <Table.Th>Valor total</Table.Th>
-              <Table.Th>Situação de cobrança</Table.Th>
-              <Table.Th>Tratativa</Table.Th>
+              <Table.Th>Situação da reserva</Table.Th>
               <Table.Th>Reserva</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -292,10 +291,7 @@ export function ReservationsScreen({
                 <Table.Td>{formatDate(reservation.checkOut)}</Table.Td>
                 <Table.Td>{formatMoney(reservation.totalAmount)}</Table.Td>
                 <Table.Td>
-                  <StatusBadge label={CLASSIFICATION_LABELS[reservation.classification]} />
-                </Table.Td>
-                <Table.Td>
-                  <TreatmentBadge status={reservation.treatment.status} />
+                  <SituationBadge treatment={reservation.treatment} />
                 </Table.Td>
                 <Table.Td>
                   <StatusBadge label={RESERVATION_STATUS_LABELS[reservation.reservationStatus]} />

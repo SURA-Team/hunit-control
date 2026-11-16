@@ -24,6 +24,7 @@ export type ClassificationCounts = Schemas['ClassificationCounts'];
 export type EvidenceSummary = Schemas['EvidenceSummary'];
 export type TreatmentDocumentKind = Schemas['TreatmentDocumentKind'];
 export type TreatmentStatus = Schemas['TreatmentStatus'];
+export type ReservationSituation = Schemas['ReservationSituation'];
 export type TreatmentDocumentState = Schemas['TreatmentDocumentState'];
 export type TreatmentDocument = Schemas['TreatmentDocument'];
 export type ReservationTreatment = Schemas['ReservationTreatment'];
@@ -193,10 +194,14 @@ export interface ReservationListInput {
   channel?: string | undefined;
   /** Formato da API: "1234.56". */
   amount?: string | undefined;
-  /** Situação da tratativa (specs/003): sem tratativa, Enviada, Cobrada. */
+  /** Situação dos documentos (specs/003): sem tratativa, só tratativa, com comprovante. */
   treatmentStatus?: TreatmentStatus[] | undefined;
   /** "Falta cobrar" (specs/003, FR-002): a regra é do servidor. */
   pendingCharge?: boolean | undefined;
+  /** Situação da reserva (specs/003, FR-002, FR-015): a mesma da coluna da lista. */
+  situation?: ReservationSituation[] | undefined;
+  /** "A verificar" (specs/003, FR-002a): só as reservas com o alerta. */
+  needsReview?: boolean | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
 }
@@ -383,6 +388,8 @@ export interface HunitApi {
     revert: (documentId: string) => Promise<Result<ReservationTreatment>>;
     setManualAmount: (input: ManualAmountInput) => Promise<Result<ReservationTreatment>>;
     clearManualAmount: (input: ReservationKey) => Promise<Result<ReservationTreatment>>;
+    /** Confirma o alerta "Verificar" (FR-002a): só tira o alerta e registra no histórico. */
+    confirmReview: (input: ReservationKey) => Promise<Result<ReservationTreatment>>;
     /** Baixa e abre "Salvar como" com o nome original; `null` = cancelado. */
     saveDocument: (documentId: string) => Promise<Result<{ savedTo: string } | null>>;
   };

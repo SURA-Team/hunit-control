@@ -292,3 +292,91 @@ não são dados pessoais do hóspede e já eram registrados desde a 001.
 
 **Alternativa considerada**: mandar o nome num cabeçalho (`X-File-Name`) — resolveria só o envio,
 e a busca continuaria vazando.
+
+## R-14 — Situação da reserva numa coluna só e o alerta "Verificar" (FR-002, FR-002a, FR-015, FR-017a)
+
+Veio da homologação (T054, clarificações de 2026-11-16).
+
+**Decisão**:
+
+1. **Situação da reserva** é um valor só, derivado no domínio (`reservationSituation`) a partir da
+   classificação e dos documentos atuais: `proof_sent` (com comprovante), `treatment_sent` (só
+   tratativa e a classificação ainda exige cobrança, FR-003) ou a própria classificação. O tipo
+   `ReservationSituation` da API é a união: `proof_sent`, `treatment_sent` e os valores de
+   `Classification`. O servidor devolve `treatment.situation` pronta; o app só dá nome e cor.
+2. **Filtro único** `situation` (lista) em `GET /reservations`, com a mesma regra em SQL, como já
+   acontece com `pendingCharge` (R-04): "Pendente de cobrança" traz só as pendentes sem tratativa e
+   sem comprovante. `classification` e `treatmentStatus` continuam na API (outros clientes e o futuro
+   relatório de recuperadas), mas o app deixa de usá-los.
+3. **Alerta "Verificar"** (`treatment.needsReview`): só tratativa, classificação que não exige
+   cobrança e nenhuma confirmação depois da última mudança de situação no Hunit
+   (`reservations.status_changed_at`, que a verificação já grava quando a classificação ou a
+   situação da reserva mudam). Confirmar grava um evento `review_confirmed` no histórico, com a
+   classificação confirmada; o alerta é recalculado a cada leitura (`max(at)` das confirmações ≥
+   `status_changed_at` = confirmado). Assim uma nova mudança no Hunit faz o alerta voltar sozinho, e
+   nada além do histórico precisa ser guardado.
+4. **`POST /reservations/{hotelCode}/{reservationNumber}/treatment/review`** (perfil operador):
+   confirma. Sem alerta, responde 200 sem gravar nada (dois operadores confirmando ao mesmo tempo
+   não é erro). Não passa por FR-003: a reserva com alerta é justamente a que não aceita registros.
+5. **Histórico** continua vindo inteiro da API (poucos itens por reserva); o app mostra 5 e "Mostrar
+   mais" (+10) na própria tela.
+
+**Alternativas consideradas**:
+
+- Guardar a confirmação numa coluna da reserva ou da tratativa: precisaria ser limpa a cada nova
+  verificação, misturando a gravação das reservas (001) com as tratativas; o evento já é exigido
+  pela FR-012 e basta.
+- Montar a situação no app a partir de `classification` e `treatment.status`: o filtro precisa da
+  mesma regra no servidor, e duas cópias da regra divergem.
+- Paginar o histórico na API: desnecessário para o volume esperado (dezenas de eventos por reserva).
+
+## Resultados da homologação (T054, 2026-11-16)
+
+Ambiente de homologação no PC do servidor (quickstart §2.1, T056): pilha `hunit-homolog` separada
+da produção, branch `003-tratativas-manuais` a partir do commit `7abca64`, 4 hotéis e 2 000
+reservas fictícias, arquivos de teste sintéticos. Duas instâncias do app compilado, com pastas de
+dados próprias: "operador" (papel do Financeiro) e "consulta" (papel da Controladoria).
+
+| Teste | Medido | Resultado |
+|---|---|---|
+| Cópia de segurança antes (2 000 reservas, sem documentos) | 44 765 bytes (`hunit-20261116-133152.dump.gpg`) | — |
+| Cópia de segurança depois (§3 a §6 feitas: 21 reservas com comprovante, 2 com tratativa) | 96 379 bytes (`hunit-20261116-143153.dump.gpg`) | Aprovado: os documentos entram na cópia (+51 614 bytes, com os documentos sintéticos de poucos KB) |
+| SC-010 — pré-visualização (≤ 3 s) | ~1 s | Aprovado |
+| SC-001 — registrar o comprovante (≤ 1 min) | ~1 s para gravar | Aprovado |
+| SC-009 — reverter (≤ 30 s) | ~1 s | Aprovado |
+| SC-002 — lote de 20 com a seleção entre pesquisas (≤ 2 min) | < 20 s (as 20 pesquisas); < 1 s para aplicar | Aprovado: 18 Cobradas, 2 ignoradas (já cobradas no Hunit), seleção vazia |
+| §3 — cancelar sem mudar a reserva, valor manual e volta ao do Hunit, substituir, recusa de faturada e de já cobrada, recusa de 26 MB e de executável renomeado, maquininha com .jpg | — | Aprovado |
+| §4 — tratativa .eml (pré-visualização sem imagem externa) e .msg → "Enviada"; comprovante → "Cobrada"; desfazer → "Enviada" | — | Aprovado |
+| §5 — mesmo arquivo baixado de duas reservas do lote (SC-005) | — | Aprovado |
+| §6 — filtros "pendente + sem tratativa", "Cobrada" e "Falta cobrar"; detalhe e download no perfil consulta; nenhuma ação de registro visível | — | Aprovado |
+| SC-006 — `POST /v1/treatment-documents` com chave de consulta → 403 | — | Aprovado: `403 forbidden_for_role` ("O cliente homolog-consulta tem nível reader") |
+
+**Pendências para avaliar** (mudam o comportamento: passam pela spec antes do código):
+
+1. **Uma coluna só para a situação** (§3). Hoje a lista tem duas colunas: a situação de cobrança
+   (classificação do Hunit) e a tratativa. Pedido: uma única coluna "Situação da reserva", com as
+   situações novas "Tratativa enviada" e "Comprovante enviado" (que conta como cobrada), e, no
+   detalhe da reserva, um campo com o status do Hunit (a classificação de hoje). Esse campo muda
+   quando uma nova verificação no Hunit o atualiza, mas a situação da reserva não muda, para não
+   perder o comprovante. Mexe na FR-002 (nomes "Enviada" e "Cobrada") e na FR-015/FR-017 (lista,
+   filtros e detalhe).
+2. **Histórico sem limite de itens** (§6). O histórico da reserva mostra todos os itens de uma vez,
+   sem limite nem "Mostrar mais".
+
+As duas pendências foram resolvidas na própria feature (Fase 8, T057 a T065; clarificações de
+2026-11-16 e R-14) e homologadas na T066.
+
+### Homologação dos ajustes (T066, 2026-11-16)
+
+Mesmo ambiente de homologação, com o servidor e o app atualizados (migration 0008 aplicada ao
+subir) e os dados da primeira rodada. A reclassificação pelo Hunit foi simulada no banco de
+homologação (quickstart §6.1, passo 5).
+
+| Teste | Resultado |
+|---|---|
+| Coluna única "Situação da reserva": 100001 "Comprovante enviado", 100021 "Tratativa enviada", 100022 "Pendente de cobrança"; sem as colunas antigas | Aprovado |
+| Filtro único: "Pendente de cobrança" traz só as pendentes sem tratativa e sem comprovante; "Ativa ou cancelada"; atalho "A verificar" | Aprovado |
+| Detalhe: quadro "Status do Hunit"; histórico com 5 itens e "Mostrar mais" (20 itens: 5 → 15 → 20) | Aprovado |
+| Tratativa reclassificada pelo Hunit como "Já cobrada": "Já cobrada" com "Verificar" na lista; "A verificar" a encontra | Aprovado |
+| "Confirmar": o alerta some, a tratativa continua, o histórico mostra "Confirmou a verificação: Já cobrada" | Aprovado |
+| Perfil consulta: vê a coluna, o alerta e o "Status do Hunit", sem "Confirmar" nem ações de registro | Aprovado |

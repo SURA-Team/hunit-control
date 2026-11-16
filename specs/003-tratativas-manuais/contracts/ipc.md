@@ -64,7 +64,8 @@ interface ApplyResult {
 | `treatments.setManualAmount(input)` | `{ hotelCode, reservationNumber, amount }` (`"1234.56"`) | `Api.ReservationTreatment` | |
 | `treatments.clearManualAmount(input)` | `{ hotelCode, reservationNumber }` | `Api.ReservationTreatment` | |
 | `treatments.saveDocument(input)` | `{ documentId }` | `{ savedTo: string } \| null` | baixa e abre "Salvar como" com o nome original (FR-009), como `evidence.save` da 002; a interface não recebe o conteúdo |
-| `reservations.list(input)` | filtros da 002 + `treatmentStatus: TreatmentStatus[]` + `pendingCharge: boolean` ("Falta cobrar") | sem mudança | |
+| `treatments.confirmReview(input)` | `{ hotelCode, reservationNumber }` | `Api.ReservationTreatment` | confirma o alerta "Verificar" (FR-002a, R-14) |
+| `reservations.list(input)` | filtros da 002 + `situation: ReservationSituation[]` + `pendingCharge: boolean` ("Falta cobrar") + `needsReview: boolean` ("A verificar"); `treatmentStatus` continua aceito | sem mudança | |
 
 Limites da entrada: no máximo 2 000 reservas por pedido, o mesmo limite da seleção na tela
 (FR-006a); `selectionId` é um UUID que o principal emitiu e ainda guarda (senão

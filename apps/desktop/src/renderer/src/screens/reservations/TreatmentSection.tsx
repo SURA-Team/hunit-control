@@ -1,8 +1,10 @@
 /**
- * Tratativa de uma reserva, no detalhe (specs/003, US1, US2, US4, FR-017): situação, documentos
- * atuais e anteriores, valor cobrado informado à mão e histórico.
+ * Tratativa de uma reserva, no detalhe (specs/003, US1, US2, US4, FR-017): situação, alerta
+ * "Verificar" (FR-002a), documentos atuais e anteriores, valor cobrado informado à mão e histórico
+ * (os 5 mais recentes e "Mostrar mais", FR-017a).
  *
- * O perfil operador anexa, substitui, desfaz, reverte e informa o valor; o perfil consulta só vê
+ * O perfil operador anexa, substitui, desfaz, reverte, informa o valor e confirma o alerta; o
+ * perfil consulta só vê
  * e baixa (FR-014). O que cada reserva aceita, até quando um documento pode ser revertido e qual
  * valor vale vêm prontos do servidor.
  */
@@ -29,7 +31,7 @@ import type {
   TreatmentEvent,
 } from '../../../../shared/ipc-types';
 import { StatusBadge } from '../../components/StatusBadge';
-import { TreatmentBadge } from '../../components/TreatmentBadge';
+import { SituationBadge } from '../../components/SituationBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import {
   formatDate,
@@ -39,6 +41,7 @@ import {
   parseAmountInput,
 } from '../../presentation/format';
 import {
+  CLASSIFICATION_LABELS,
   DOCUMENT_STATE_LABELS,
   errorMessage,
   TREATMENT_EVENT_NAMES,
@@ -48,8 +51,13 @@ import {
 import { useConnection } from '../../state/connection';
 import { AttachDialog } from './AttachDialog';
 
+/** Itens do histórico mostrados de início e a cada "Mostrar mais" (FR-017a). */
+export const HISTORY_FIRST = 5;
+export const HISTORY_STEP = 10;
+
 function eventDescription(event: TreatmentEvent): string {
   const action = TREATMENT_EVENT_NAMES[event.type];
+  if (event.classification) return `${action}: ${CLASSIFICATION_LABELS[event.classification].name}`;
   if (event.kind) return `${action} ${TREATMENT_KIND_NAMES[event.kind].toLowerCase()}`;
   return event.amount ? `${action}: ${formatMoney(event.amount)}` : action;
 }
@@ -68,6 +76,7 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
   const [amountDraft, setAmountDraft] = useState('');
   const [message, setMessage] = useState<{ tone: 'red' | 'green'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [historyShown, setHistoryShown] = useState(HISTORY_FIRST);
 
   const detail = useQuery({
     queryKey: ['treatment', key.hotelCode, key.reservationNumber],
@@ -169,7 +178,7 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
       <Group justify="space-between" mb="xs">
         <Group gap="xs">
           <Title order={5}>Tratativa</Title>
-          <TreatmentBadge status={treatment.status} />
+          {treatment.status !== 'none' && <SituationBadge treatment={treatment} />}
           {treatment.status === 'none' && (
             <Text size="sm" c="dimmed">
               Sem tratativa
@@ -200,9 +209,34 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
       <Stack gap="sm">
         {isOperator && !treatment.acceptsDocuments && (
           <Text size="sm" c="dimmed">
-            A situação de cobrança desta reserva não exige cobrança, por isso ela não aceita novos
+            O status do Hunit desta reserva não exige cobrança, por isso ela não aceita novos
             documentos.
           </Text>
+        )}
+        {treatment.needsReview && (
+          <Alert color="yellow" title="Verificar" data-testid="review-alert">
+            <Stack gap="xs">
+              <Text size="sm">
+                Depois da tratativa, o Hunit passou a mostrar esta reserva como{' '}
+                <b>{CLASSIFICATION_LABELS[reservation.classification].name}</b>. Confira a reserva
+                {isOperator ? ' e confirme' : ''}. A tratativa continua registrada.
+              </Text>
+              {isOperator && (
+                <Group>
+                  <Button
+                    size="xs"
+                    color="yellow"
+                    disabled={!canWrite || busy}
+                    onClick={() =>
+                      void run(() => hunit.treatments.confirmReview(key), 'Verificação confirmada.')
+                    }
+                  >
+                    Confirmar
+                  </Button>
+                </Group>
+              )}
+            </Stack>
+          </Alert>
         )}
         {message && (
           <Alert color={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
@@ -313,7 +347,7 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
               Histórico
             </Text>
             <ul aria-label="Histórico da tratativa" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-              {detail.data?.events.map((event) => (
+              {detail.data?.events.slice(0, historyShown).map((event) => (
                 <li key={event.id}>
                   <Text size="sm" span>
                     {formatDateTime(event.at)} — {eventDescription(event)} — {event.client}
@@ -321,6 +355,16 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
                 </li>
               ))}
             </ul>
+            {(detail.data?.events.length ?? 0) > historyShown && (
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                mt={4}
+                onClick={() => setHistoryShown((shown) => shown + HISTORY_STEP)}
+              >
+                Mostrar mais
+              </Button>
+            )}
           </div>
         )}
       </Stack>

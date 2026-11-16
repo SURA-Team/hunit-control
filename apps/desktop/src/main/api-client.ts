@@ -376,6 +376,15 @@ export class ApiClient {
     );
   }
 
+  /** Confirma o alerta "Verificar" de uma reserva (specs/003, FR-002a). */
+  confirmTreatmentReview(key: ReservationKey): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/treatment/review', {
+        params: { path: key },
+      }),
+    );
+  }
+
   /** Baixa o arquivo de um documento, com o nome original; o conteúdo não vai para a interface. */
   async downloadTreatmentDocument(
     documentId: string,

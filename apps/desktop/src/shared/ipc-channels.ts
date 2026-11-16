@@ -41,6 +41,7 @@ export const INVOKE = {
   treatmentsRevert: 'treatments:revert',
   treatmentsSetManualAmount: 'treatments:setManualAmount',
   treatmentsClearManualAmount: 'treatments:clearManualAmount',
+  treatmentsConfirmReview: 'treatments:confirmReview',
   treatmentsSaveDocument: 'treatments:saveDocument',
 } as const;
 

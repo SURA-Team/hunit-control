@@ -44,6 +44,7 @@ const BRIDGE = {
     'apply',
     'check',
     'clearManualAmount',
+    'confirmReview',
     'discardFile',
     'get',
     'pickFile',

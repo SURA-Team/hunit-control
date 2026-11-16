@@ -2,9 +2,10 @@
  * Tratativas manuais de ponta a ponta (specs/003, T030, T035, T040, T048 e T051), com o app
  * compilado contra o servidor de teste:
  *
- * - US1: comprovante com pré-visualização → "Cobrada"; valor informado à mão; substituir e
+ * - US1: comprovante com pré-visualização → "Comprovante enviado"; valor informado à mão; substituir e
  *   reverter; recusas (reserva faturada, arquivo de 26 MB, executável renomeado); baixar;
- * - US2: tratativa `.eml` e `.msg` → "Enviada"; comprovante → "Cobrada"; desfazer → "Enviada";
+ * - US2: tratativa `.eml` e `.msg` → "Tratativa enviada"; comprovante → "Comprovante enviado";
+ *   desfazer → "Tratativa enviada";
  * - US3: 10 reservas marcadas em 10 pesquisas diferentes continuam marcadas; lote com aceitas e
  *   ignoradas;
  * - US4: com a chave de consulta, filtrar, ver documentos e baixar, sem ações de registro;
@@ -17,6 +18,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
+import { attach, emlFile as serverEmlFile } from '../../../server/test/helpers/treatments.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
 import { emlFile, msgFile, pdfFile, pngFile } from '../helpers/synthetic-files.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
@@ -261,21 +263,21 @@ describe('US1 — comprovante', () => {
     expect((await treatmentOf('R-PEND')).treatment.status).toBe('none');
   });
 
-  it('confirmar registra o comprovante e a reserva fica Cobrada (cenário 1)', async () => {
+  it('confirmar registra o comprovante e a reserva fica "Comprovante enviado" (cenário 1)', async () => {
     const { window } = launched;
 
     await startAttach(window, 'Anexar comprovante', 'comprovante.pdf');
     await confirmAttach(window, 'Comprovante registrado.');
 
-    await section(window).getByText('Cobrada', { exact: true }).waitFor();
+    await section(window).getByText('Comprovante enviado', { exact: true }).waitFor();
     const row = section(window).getByRole('row').filter({ hasText: 'comprovante.pdf' });
     await row.getByText('Atual', { exact: true }).waitFor();
     await row.getByText(`por ${server.operator.name}`).waitFor();
 
     await closeDetail(window);
-    await rowOf(window, 'R-PEND').getByText('Cobrada', { exact: true }).waitFor();
-    // A classificação calculada continua visível na lista.
-    await rowOf(window, 'R-PEND').getByText('Pendente de cobrança').waitFor();
+    await rowOf(window, 'R-PEND').getByText('Comprovante enviado', { exact: true }).waitFor();
+    // Uma coluna só (FR-002, FR-017): o status do Hunit fica no detalhe, não na lista.
+    expect(await rowOf(window, 'R-PEND').getByText('Pendente de cobrança').count()).toBe(0);
   });
 
   it('informa o valor cobrado à mão e volta ao valor do Hunit (cenário 3)', async () => {
@@ -392,7 +394,7 @@ describe('US1 — comprovante', () => {
 });
 
 describe('US2 — tratativa', () => {
-  it('e-mail .eml: mostra a mensagem isolada, sem carregar nada de fora, e a reserva fica Enviada', async () => {
+  it('e-mail .eml: mostra a mensagem isolada, sem carregar nada de fora, e a reserva fica "Tratativa enviada"', async () => {
     const { window } = launched;
     await openDetail(window, 'R-ENV');
 
@@ -412,11 +414,11 @@ describe('US2 — tratativa', () => {
 
     await confirmAttach(window, 'Tratativa registrada.');
 
-    await section(window).getByText('Enviada', { exact: true }).waitFor();
+    await section(window).getByText('Tratativa enviada', { exact: true }).waitFor();
+    // O status do Hunit continua no detalhe (US2 cenário 1).
+    await window.getByTestId('hunit-status').getByText('Pendente de cobrança').waitFor();
     await closeDetail(window);
-    // Continua pendente: a classificação aparece ao lado de "Enviada" (US2 cenário 1).
-    await rowOf(window, 'R-ENV').getByText('Enviada', { exact: true }).waitFor();
-    await rowOf(window, 'R-ENV').getByText('Pendente de cobrança').waitFor();
+    await rowOf(window, 'R-ENV').getByText('Tratativa enviada', { exact: true }).waitFor();
   });
 
   it('e-mail .msg do Outlook: mostra assunto e texto, e substitui a tratativa', async () => {
@@ -433,13 +435,13 @@ describe('US2 — tratativa', () => {
     expect((await treatmentOf('R-ENV')).treatment.request?.fileName).toBe('pedido.msg');
   });
 
-  it('comprovante depois da tratativa → Cobrada; desfazer o comprovante → Enviada (cenários 2 e 4)', async () => {
+  it('comprovante depois da tratativa → "Comprovante enviado"; desfazer → "Tratativa enviada" (cenários 2 e 4)', async () => {
     const { window } = launched;
 
     await startAttach(window, 'Anexar comprovante', 'tela.png');
     await attachDialog(window).getByRole('img', { name: 'Pré-visualização de tela.png' }).waitFor();
     await confirmAttach(window, 'Comprovante registrado.');
-    await section(window).getByText('Cobrada', { exact: true }).waitFor();
+    await section(window).getByText('Comprovante enviado', { exact: true }).waitFor();
 
     await section(window)
       .getByRole('row')
@@ -449,7 +451,7 @@ describe('US2 — tratativa', () => {
     const confirm = window.getByRole('dialog', { name: 'Desfazer o comprovante?' });
     await confirm.getByRole('button', { name: 'Desfazer' }).click();
     await section(window).getByText('Comprovante desfeito.').waitFor();
-    await section(window).getByText('Enviada', { exact: true }).waitFor();
+    await section(window).getByText('Tratativa enviada', { exact: true }).waitFor();
 
     const { treatment, documents, events } = await treatmentOf('R-ENV');
     expect(treatment.status).toBe('sent');
@@ -506,7 +508,7 @@ describe('US3 — lote com seleção entre pesquisas', () => {
     await list.waitFor({ state: 'detached' });
   });
 
-  it('aplica o comprovante: 8 Cobradas, 2 ignoradas com o motivo, seleção vazia (cenários 1, 2 e 6)', async () => {
+  it('aplica o comprovante: 8 com comprovante, 2 ignoradas com o motivo, seleção vazia (cenários 1, 2 e 6)', async () => {
     const { window } = launched;
     await stubOpenDialog(launched.app, fileOf('lote.pdf'));
 
@@ -605,6 +607,86 @@ describe('SC-011 — a pré-visualização não acessa a rede nem deixa cópia n
   });
 });
 
+describe('Verificar — o Hunit mudou a situação depois da tratativa (FR-002a, FR-017a)', () => {
+  beforeAll(async () => {
+    const execution = await server.insertExecution({
+      clientId: server.operator.id,
+      status: 'completed',
+      finishedAt: new Date(),
+    });
+    await server.insertReservation({
+      lastExecutionId: execution.id,
+      hotelCode: 'H1',
+      reservationNumber: 'R-VER',
+      totalAmount: '250.00',
+    });
+    // Seis registros da tratativa (o primeiro e cinco substituições): mais que os 5 do histórico.
+    const key = { hotelCode: 'H1', reservationNumber: 'R-VER' };
+    for (let index = 0; index < 6; index += 1) {
+      await attach(
+        server.test,
+        server.operator,
+        key,
+        'request',
+        'pedido.eml',
+        serverEmlFile(`v${index}`),
+      );
+    }
+    // Uma nova verificação no Hunit passou a reserva para "Já cobrada".
+    await server.test.database.pool.query(
+      `update reservations set classification = 'virtual_card_already_charged',
+         previous_classification = classification, status_changed = true, status_changed_at = now()
+       where hotel_code = 'H1' and reservation_number = 'R-VER'`,
+    );
+  });
+
+  it('a lista mostra a situação do Hunit com o alerta, e "A verificar" a encontra', async () => {
+    const { window } = launched;
+    await goTo(window, 'Reservas');
+    await searchFor(window, 'R-VER');
+
+    const row = rowOf(window, 'R-VER');
+    await row.getByText('Já cobrada', { exact: true }).waitFor();
+    await row.getByText('Verificar', { exact: true }).waitFor();
+    expect(await row.getByText('Tratativa enviada').count()).toBe(0);
+
+    await window.getByLabel('Busca livre').fill('');
+    const shortcut = window.getByRole('button', { name: 'A verificar' });
+    await shortcut.click();
+    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor({ state: 'detached' });
+    await window.getByRole('cell', { name: 'R-VER', exact: true }).waitFor();
+    expect(await window.locator('tbody tr').count()).toBe(1);
+    await shortcut.click();
+    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
+  });
+
+  it('confirmar tira o alerta e fica no histórico, que mostra 5 itens e "Mostrar mais"', async () => {
+    const { window } = launched;
+    await openDetail(window, 'R-VER');
+
+    const alert = section(window).getByTestId('review-alert');
+    await alert.getByText(/o Hunit passou a mostrar esta reserva como/).waitFor();
+    const history = section(window).getByRole('list', { name: 'Histórico da tratativa' });
+    await expect.poll(() => history.getByRole('listitem').count()).toBe(5);
+
+    await alert.getByRole('button', { name: 'Confirmar' }).click();
+    await section(window).getByText('Verificação confirmada.').waitFor();
+    await alert.waitFor({ state: 'detached' });
+    await history.getByText(/Confirmou a verificação: Já cobrada/).waitFor();
+
+    await section(window).getByRole('button', { name: 'Mostrar mais' }).click();
+    await expect.poll(() => history.getByRole('listitem').count()).toBe(7);
+    // A tratativa continua registrada (relatório de recuperadas).
+    expect((await treatmentOf('R-VER')).treatment.status).toBe('sent');
+
+    await closeDetail(window);
+    await rowOf(window, 'R-VER')
+      .getByText('Verificar', { exact: true })
+      .waitFor({ state: 'detached' });
+    await rowOf(window, 'R-VER').getByText('Já cobrada', { exact: true }).waitFor();
+  });
+});
+
 describe('US4 — consulta com a chave de perfil consulta', () => {
   let reader: LaunchedApp;
 
@@ -622,14 +704,14 @@ describe('US4 — consulta com a chave de perfil consulta', () => {
     await reader?.close();
   });
 
-  it('"Falta cobrar" traz as pendentes sem comprovante, inclusive a Enviada (FR-002)', async () => {
+  it('"Falta cobrar" traz as pendentes sem comprovante, inclusive a "Tratativa enviada" (FR-002)', async () => {
     const { window } = reader;
     await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
 
     await window.getByRole('button', { name: 'Falta cobrar' }).click();
 
     await window.getByRole('cell', { name: 'R-ENV', exact: true }).waitFor();
-    await rowOf(window, 'R-ENV').getByText('Enviada', { exact: true }).waitFor();
+    await rowOf(window, 'R-ENV').getByText('Tratativa enviada', { exact: true }).waitFor();
     // As cobradas (R-PEND e B01 a B08), a faturada e as já cobradas pelo Hunit ficam de fora.
     await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor({ state: 'detached' });
     expect(await window.locator('tbody tr').count()).toBe(1);
@@ -638,10 +720,12 @@ describe('US4 — consulta com a chave de perfil consulta', () => {
     await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
   });
 
-  it('filtra por "Cobrada", vê documentos e histórico e baixa, sem ações de registro (cenários 2 a 4)', async () => {
+  it('filtra por "Comprovante enviado", vê documentos e histórico e baixa, sem ações de registro (cenários 2 a 4)', async () => {
     const { window } = reader;
-    await window.getByPlaceholder('Com ou sem tratativa').click();
-    await window.getByRole('option', { name: 'Cobrada' }).click();
+    await window.getByPlaceholder('Todas as situações').click();
+    await window.getByRole('option', { name: 'Comprovante enviado' }).click();
+    // A lista de situações é longa: fechada, ela não cobre o botão "Buscar".
+    await window.keyboard.press('Escape');
     await window.getByRole('button', { name: 'Buscar', exact: true }).click();
 
     await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
@@ -652,7 +736,7 @@ describe('US4 — consulta com a chave de perfil consulta', () => {
 
     await window.getByRole('cell', { name: 'R-PEND', exact: true }).click();
     const treatment = section(window);
-    await treatment.getByText('Cobrada', { exact: true }).waitFor();
+    await treatment.getByText('Comprovante enviado', { exact: true }).waitFor();
     await treatment
       .getByRole('row')
       .filter({ hasText: 'comprovante-2.pdf' })

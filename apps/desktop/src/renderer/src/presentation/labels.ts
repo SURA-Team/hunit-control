@@ -11,6 +11,7 @@ import type {
   ExecutionStatus,
   HotelRunStatus,
   ReservationOutcome,
+  ReservationSituation,
   ReservationStatus,
   TreatmentDocumentKind,
   TreatmentDocumentState,
@@ -73,14 +74,41 @@ export const RESERVATION_STATUS_LABELS: Record<ReservationStatus, Label> = {
 // Tratativas manuais (specs/003, data-model §7)
 // ---------------------------------------------------------------------------
 
-/** Situação da tratativa: "Enviada" continua pendente; "Cobrada" tem comprovante (FR-002). */
+/** Situação dos documentos: "Tratativa enviada" continua pendente; "Comprovante enviado" não. */
 export const TREATMENT_STATUS_LABELS: Record<TreatmentStatus, Label> = {
   none: { name: 'Sem tratativa', tone: 'neutral' },
-  sent: { name: 'Enviada', tone: 'info' },
-  charged: { name: 'Cobrada', tone: 'success' },
+  sent: { name: 'Tratativa enviada', tone: 'info' },
+  charged: { name: 'Comprovante enviado', tone: 'success' },
 };
 
-export const TREATMENT_STATUS_ORDER: TreatmentStatus[] = ['none', 'sent', 'charged'];
+/**
+ * Situação da reserva (FR-002, FR-017): a coluna única da lista e o filtro. É a classificação
+ * (status do Hunit), a não ser que a reserva tenha comprovante ou tratativa.
+ */
+export const SITUATION_LABELS: Record<ReservationSituation, Label> = {
+  ...CLASSIFICATION_LABELS,
+  treatment_sent: TREATMENT_STATUS_LABELS.sent,
+  proof_sent: TREATMENT_STATUS_LABELS.charged,
+};
+
+/** Ordem no filtro: as que pedem ação primeiro, depois as tratadas e as que não exigem nada. */
+export const SITUATION_ORDER: ReservationSituation[] = [
+  'virtual_card_pending_charge',
+  'charge_at_terminal',
+  'virtual_card_validated_only',
+  'virtual_card_charge_error',
+  'analysis_error',
+  'treatment_sent',
+  'proof_sent',
+  'virtual_card_already_charged',
+  'invoiced',
+  'cancelled_no_charge',
+  'ignored_hotelbeds_258',
+  'not_virtual_card',
+];
+
+/** Alerta "Verificar" (FR-002a): o Hunit mudou a situação depois da tratativa. */
+export const REVIEW_LABEL: Label = { name: 'Verificar', tone: 'warning' };
 
 export const TREATMENT_KIND_NAMES: Record<TreatmentDocumentKind, string> = {
   request: 'Tratativa',
@@ -103,6 +131,7 @@ export const TREATMENT_EVENT_NAMES: Record<TreatmentEvent['type'], string> = {
   reverted: 'Reverteu',
   amount_set: 'Informou valor',
   amount_cleared: 'Removeu valor',
+  review_confirmed: 'Confirmou a verificação',
 };
 
 /** Por que uma reserva ficou de fora de um registro (data-model §5). */
