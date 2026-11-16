@@ -184,10 +184,10 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/003-tratativas-manuais/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas. A
-  cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua na
-  1.3.0 e a da 002 na 1.4.0, e não devem ser alteradas (specs/002, research R-15; specs/003,
-  research R-12).
+  `specs/004-importacao-historico/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
+  A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua
+  na 1.3.0, a da 002 na 1.4.0 e a da 003 na 1.5.0, e não devem ser alteradas (specs/002, research
+  R-15; specs/003, research R-12; specs/004, research R-12).
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 - Mudou o `docker-compose.yml`? O teste `apps/server/test/unit/compose-config.test.ts` confere que

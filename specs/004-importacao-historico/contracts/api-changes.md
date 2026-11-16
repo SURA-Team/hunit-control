@@ -31,7 +31,7 @@ legacy:
 ```yaml
 ReservationLegacyOrigin:
   type: object
-  required: [importedAt, originalClassification, firstVerifiedAt, lastVerifiedAt, verificationCount, merged]
+  required: [importedAt, originalClassification, originalPreviousClassification, firstVerifiedAt, lastVerifiedAt, verificationCount, merged]
   properties:
     importedAt: { type: string, format: date-time, description: Primeira importação que trouxe a reserva }
     originalClassification:

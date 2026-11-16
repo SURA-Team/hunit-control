@@ -503,8 +503,12 @@ export interface components {
          *     sem ação) ou `charge_at_terminal` (forma cartão de crédito: cobrar na maquininha), conforme
          *     a forma de pagamento informada pelo Hunit; sem forma informada, `cancelled_no_charge` se a
          *     reserva está cancelada (cancelamento antecipado ou no-show isento, desde a versão 1.3.0) ou
-         *     `analysis_error` se está ativa; forma desconhecida → `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
-         *     só aparece em registros gravados antes; a reserva muda de situação na próxima verificação.
+         *     `analysis_error` se está ativa; forma desconhecida → `analysis_error`.
+         *     `not_virtual_card` = "A revisar (sistema anterior)" (desde a versão 1.6.0; antes, obsoleta
+         *     desde a 1.2.0): não é produzida pelas execuções; só aparece em reservas importadas do
+         *     sistema anterior cuja classificação não tem correspondência (feature 004, FR-007a) e sai na
+         *     primeira verificação pelo HUNIT Control. Aceita tratativa e comprovante, não entra em
+         *     `pendingCharge` e não gera `needsReview`.
          * @enum {string}
          */
         Classification: "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "cancelled_no_charge" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
@@ -643,15 +647,49 @@ export interface components {
                  */
                 notFoundSince?: string | null;
             };
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Inclui as verificações do sistema anterior quando a reserva foi importada (feature 004, FR-010)
+             */
             firstVerifiedAt: string;
             /** Format: date-time */
             lastVerifiedAt: string;
+            /** @description Inclui as verificações do sistema anterior quando a reserva foi importada (feature 004, FR-010) */
             verificationCount: number;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Ausente = reserva só do sistema anterior, ainda não verificada pelo HUNIT Control (feature 004)
+             */
             lastExecutionId?: string;
             anonymized?: boolean;
             treatment: components["schemas"]["ReservationTreatment"];
+            /** @description Origem "Sistema anterior" (feature 004, FR-011). null = a reserva não veio da importação. */
+            legacy?: null | components["schemas"]["ReservationLegacyOrigin"];
+        };
+        /** @description O que o sistema anterior registrou sobre a reserva importada (feature 004) */
+        ReservationLegacyOrigin: {
+            /**
+             * Format: date-time
+             * @description Primeira importação que trouxe a reserva
+             */
+            importedAt: string;
+            /** @description "Codigo status" como estava no sistema anterior (ex.: virtual_card_pending_charge, not_virtual_card ou um código desconhecido). Só informativo: a classificação vale. */
+            originalClassification: string;
+            originalPreviousClassification: string | null;
+            /**
+             * Format: date-time
+             * @description Primeira verificação no sistema anterior
+             */
+            firstVerifiedAt: string;
+            /**
+             * Format: date-time
+             * @description Última verificação no sistema anterior
+             */
+            lastVerifiedAt: string;
+            /** @description Verificações feitas pelo sistema anterior */
+            verificationCount: number;
+            /** @description true = o HUNIT Control já conhecia a reserva quando ela foi importada; a classificação e os dados são os dele, e só a primeira verificação e a contagem incluíram o sistema anterior (FR-010). */
+            merged: boolean;
         };
         /**
          * @description request = tratativa (pedido de cobrança); proof = comprovante de cobrança
@@ -705,6 +743,8 @@ export interface components {
              * @description Preenchido só em documentos substituídos ou desfeitos ainda no prazo de 30 dias (FR-013a)
              */
             revertibleUntil?: string | null;
+            /** @description true = importado do sistema anterior (feature 004, FR-016): attachedAt é a data original e attachedBy é "sistema-anterior". Ausente = false. */
+            fromLegacy?: boolean;
         };
         /** @description Resumo da tratativa manual de uma reserva (feature 003) */
         ReservationTreatment: {
@@ -737,6 +777,8 @@ export interface components {
             client: string;
             /** Format: date-time */
             at: string;
+            /** @description true = importado do sistema anterior (feature 004, FR-016): at é a data original e client é "sistema-anterior". Ausente = false. */
+            fromLegacy?: boolean;
         };
         ReservationOutcome: {
             hotelCode: string;
@@ -1222,6 +1264,8 @@ export interface operations {
                 situation?: components["schemas"]["ReservationSituation"][];
                 /** @description true = só as reservas com o alerta "Verificar" (feature 003, FR-002a); false = o contrário. Omitido = sem esse filtro. */
                 needsReview?: boolean;
+                /** @description true = só as reservas importadas do sistema anterior, com ou sem verificação posterior pelo HUNIT Control (feature 004, FR-011); false = só as que não vieram de lá. Omitido = sem esse filtro. Combinável com os demais. */
+                fromLegacy?: boolean;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };

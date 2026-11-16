@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.5.0
+  version: 1.6.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -15,6 +15,10 @@ info:
     uma vez), desfazer e reverter, o valor cobrado informado à mão, o resumo da tratativa em cada
     reserva e os filtros `treatmentStatus` e `pendingCharge`; a situação da reserva (`situation`),
     o alerta "Verificar" (`needsReview`) e a confirmação dele. Nada disso acessa o Hunit.
+    A feature 004 (importação do histórico do sistema anterior) acrescenta, sem quebrar os
+    clientes existentes: a origem "Sistema anterior" das reservas (`Reservation.legacy`), o
+    filtro `fromLegacy` e a marcação `fromLegacy` nos documentos e no histórico das tratativas.
+    A importação em si é um comando administrativo do servidor, sem rota na API.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -400,6 +404,13 @@ paths:
           description: >-
             true = só as reservas com o alerta "Verificar" (feature 003, FR-002a); false = o
             contrário. Omitido = sem esse filtro.
+          schema: { type: boolean }
+        - name: fromLegacy
+          in: query
+          description: >-
+            true = só as reservas importadas do sistema anterior, com ou sem verificação posterior
+            pelo HUNIT Control (feature 004, FR-011); false = só as que não vieram de lá. Omitido =
+            sem esse filtro. Combinável com os demais.
           schema: { type: boolean }
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
@@ -956,8 +967,12 @@ components:
         sem ação) ou `charge_at_terminal` (forma cartão de crédito: cobrar na maquininha), conforme
         a forma de pagamento informada pelo Hunit; sem forma informada, `cancelled_no_charge` se a
         reserva está cancelada (cancelamento antecipado ou no-show isento, desde a versão 1.3.0) ou
-        `analysis_error` se está ativa; forma desconhecida → `analysis_error`. `not_virtual_card` é obsoleta desde a versão 1.2.0: não é mais produzida e
-        só aparece em registros gravados antes; a reserva muda de situação na próxima verificação.
+        `analysis_error` se está ativa; forma desconhecida → `analysis_error`.
+        `not_virtual_card` = "A revisar (sistema anterior)" (desde a versão 1.6.0; antes, obsoleta
+        desde a 1.2.0): não é produzida pelas execuções; só aparece em reservas importadas do
+        sistema anterior cuja classificação não tem correspondência (feature 004, FR-007a) e sai na
+        primeira verificação pelo HUNIT Control. Aceita tratativa e comprovante, não entra em
+        `pendingCharge` e não gera `needsReview`.
       enum:
         - ignored_hotelbeds_258
         - invoiced
@@ -1160,12 +1175,49 @@ components:
               type: [string, 'null']
               format: date-time
               description: Preenchido = "não encontrada na última verificação" (FR-018a)
-        firstVerifiedAt: { type: string, format: date-time }
+        firstVerifiedAt:
+          type: string
+          format: date-time
+          description: Inclui as verificações do sistema anterior quando a reserva foi importada (feature 004, FR-010)
         lastVerifiedAt: { type: string, format: date-time }
-        verificationCount: { type: integer, minimum: 1 }
-        lastExecutionId: { type: string, format: uuid }
+        verificationCount:
+          type: integer
+          minimum: 1
+          description: Inclui as verificações do sistema anterior quando a reserva foi importada (feature 004, FR-010)
+        lastExecutionId:
+          type: string
+          format: uuid
+          description: Ausente = reserva só do sistema anterior, ainda não verificada pelo HUNIT Control (feature 004)
         anonymized: { type: boolean }
         treatment: { $ref: '#/components/schemas/ReservationTreatment' }
+        legacy:
+          description: Origem "Sistema anterior" (feature 004, FR-011). null = a reserva não veio da importação.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ReservationLegacyOrigin'
+
+    ReservationLegacyOrigin:
+      type: object
+      description: O que o sistema anterior registrou sobre a reserva importada (feature 004)
+      required:
+        [importedAt, originalClassification, originalPreviousClassification, firstVerifiedAt, lastVerifiedAt, verificationCount, merged]
+      properties:
+        importedAt: { type: string, format: date-time, description: Primeira importação que trouxe a reserva }
+        originalClassification:
+          type: string
+          description: >-
+            "Codigo status" como estava no sistema anterior (ex.: virtual_card_pending_charge,
+            not_virtual_card ou um código desconhecido). Só informativo: a classificação vale.
+        originalPreviousClassification: { type: [string, 'null'] }
+        firstVerifiedAt: { type: string, format: date-time, description: Primeira verificação no sistema anterior }
+        lastVerifiedAt: { type: string, format: date-time, description: Última verificação no sistema anterior }
+        verificationCount: { type: integer, minimum: 1, description: Verificações feitas pelo sistema anterior }
+        merged:
+          type: boolean
+          description: >-
+            true = o HUNIT Control já conhecia a reserva quando ela foi importada; a classificação e
+            os dados são os dele, e só a primeira verificação e a contagem incluíram o sistema
+            anterior (FR-010).
 
     TreatmentDocumentKind:
       type: string
@@ -1242,6 +1294,11 @@ components:
           type: [string, 'null']
           format: date-time
           description: Preenchido só em documentos substituídos ou desfeitos ainda no prazo de 30 dias (FR-013a)
+        fromLegacy:
+          type: boolean
+          description: >-
+            true = importado do sistema anterior (feature 004, FR-016): attachedAt é a data original
+            e attachedBy é "sistema-anterior". Ausente = false.
 
     ReservationTreatment:
       type: object
@@ -1293,6 +1350,11 @@ components:
         batchId: { type: [string, 'null'], format: uuid }
         client: { type: string, description: Nome do cliente da API que fez a ação }
         at: { type: string, format: date-time }
+        fromLegacy:
+          type: boolean
+          description: >-
+            true = importado do sistema anterior (feature 004, FR-016): at é a data original e
+            client é "sistema-anterior". Ausente = false.
 
     ReservationOutcome:
       type: object
