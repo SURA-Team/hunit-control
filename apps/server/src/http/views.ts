@@ -308,7 +308,8 @@ export function toReservationView(
     firstVerifiedAt: iso(row.firstVerifiedAt),
     lastVerifiedAt: iso(row.lastVerifiedAt),
     verificationCount: row.verificationCount,
-    lastExecutionId: row.lastExecutionId,
+    // Ausente = reserva só do sistema anterior, ainda não verificada (specs/004, R-06).
+    ...(row.lastExecutionId === null ? {} : { lastExecutionId: row.lastExecutionId }),
     anonymized: row.anonymizedAt !== null,
     treatment: toReservationTreatmentView(row, treatment, now),
   };

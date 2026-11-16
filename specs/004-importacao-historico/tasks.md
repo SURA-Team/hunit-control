@@ -105,7 +105,7 @@ usam.
 
 ### Banco de dados
 
-- [ ] T010 Em `apps/server/src/persistence/schema.ts`:
+- [X] T010 Em `apps/server/src/persistence/schema.ts`:
   - **enums**: `legacy_import_kind` (`simulation`, `import`), `legacy_import_status` (`running`, `completed`, `failed`, `interrupted`) e `legacy_hotel_decision` (`proposed`, `confirmed`, `unmapped`);
   - **tabelas** `legacy_imports`, `legacy_hotel_mappings` e `legacy_reservations`, **exatamente** como em [data-model.md §1](./data-model.md), inclusive o `check` "`decision = 'confirmed'` exige `hotel_code`; `decision = 'unmapped'` exige `hotel_code` nulo", `verification_count >= 1`, a FK composta para `reservations` e a FK `simulation_id` para `legacy_imports`;
   - `reservations.last_execution_id` **anulável**;
