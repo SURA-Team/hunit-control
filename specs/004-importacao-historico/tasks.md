@@ -204,7 +204,7 @@ classificação convertida, `legacy` preenchido e as verificações; importar de
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T021 [P] [US2] Escrever `apps/server/test/integration/legacy-run-reservations.test.ts` (grupo `server-db`):
+- [X] T021 [P] [US2] Escrever `apps/server/test/integration/legacy-run-reservations.test.ts` (grupo `server-db`):
   - **importação**:
     - criação com os campos de data-model §3.1 (`reservation_status = 'unknown'`, `last_execution_id` nulo, `changed_fields = []`);
     - reserva já verificada pelo HUNIT Control: dados e classificação mantidos, primeira = mínimo, contagem somada, `merged = true` (SC-007).
@@ -217,13 +217,13 @@ classificação convertida, `legacy` preenchido e as verificações; importar de
   - **interrupção**: falha forçada no meio deixa as reservas anteriores completas, e um novo `run` completa o resto sem duplicar (FR-021).
   - **mais de 5 anos**: reserva gravada anonimizada (`guest_name` nulo, `anonymized_at` preenchido).
   - **acesso ao Hunit**: zero chamadas ao `HunitGateway` (SC-005)
-- [ ] T022 [P] [US2] Escrever `apps/server/test/integration/legacy-collector-interplay.test.ts` com o runner e o `FakeHunitGateway` (research R-06):
+- [X] T022 [P] [US2] Escrever `apps/server/test/integration/legacy-collector-interplay.test.ts` com o runner e o `FakeHunitGateway` (research R-06):
   - **ordem**: importar e depois coletar dá a mesma `verification_count` e o mesmo `first_verified_at` que coletar e depois importar;
   - **"A revisar"**:
     - uma `not_virtual_card` importada, coletada com resultado `invoiced`, passa a `invoiced` com `previous_classification = 'not_virtual_card'`, `status_changed_at` preenchido e `legacy` mantido;
     - importada fora do resultado de um hotel concluído → `not_found_since` preenchido e continua `not_virtual_card`;
   - **concorrência**: importação e `commitHotel` ao mesmo tempo na mesma reserva terminam sem erro e com o resultado esperado
-- [ ] T023 [P] [US2] Ampliar `apps/server/test/contract/reservations.test.ts` (respostas validadas contra o `openapi.yaml` 1.6.0):
+- [X] T023 [P] [US2] Escrever `apps/server/test/contract/reservations-legacy.test.ts` (arquivo próprio, com as reservas importadas pelo comando real) (respostas validadas contra o `openapi.yaml` 1.6.0):
   - reserva importada sem verificação → `legacy` preenchido e sem `lastExecutionId`;
   - reserva do HUNIT Control → `legacy: null`;
   - `pendingCharge=true` não traz `not_virtual_card`, e traz as importadas `virtual_card_pending_charge` sem comprovante, inclusive com tratativa, junto com as do HUNIT Control (SC-009);
@@ -232,23 +232,23 @@ classificação convertida, `legacy` preenchido e as verificações; importar de
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Implementar `apps/server/src/legacy-import/applier.ts` para as reservas (research R-06, R-09):
+- [X] T024 [US2] Implementar `apps/server/src/legacy-import/applier.ts` para as reservas (research R-06, R-09):
   - **uma transação por reserva**: `SELECT … FOR UPDATE` na reserva (ou `INSERT … ON CONFLICT DO NOTHING` e trava, se for nova), recalcula o plano dela com o estado travado e grava `reservations` e `legacy_reservations` (`first_import_id`, `last_import_id`, `row_hash`, `merged`, `applied_count`);
   - desfecho real devolvido por reserva;
   - andamento "N de M reservas" a cada 500. Depende de T018, T021, T022
-- [ ] T025 [US2] Acrescentar o subcomando `run --simulation <id> --xlsx --files` em `apps/server/src/legacy-import/command.ts`:
+- [X] T025 [US2] Acrescentar o subcomando `run --simulation <id> --xlsx --files` em `apps/server/src/legacy-import/command.ts`:
   - pega o lock e confere que o id é uma `simulation` `completed`;
   - recalcula a impressão digital e recusa se diferente, com a mensagem de research R-08;
   - cria a linha `import` (`running`), aplica (T024), grava contagens, `issues` e `differences` (desfechos diferentes dos da simulação) e fecha com `completed`, ou com `interrupted` ao receber `SIGINT`/`SIGTERM`;
   - a simulação seguinte avisa `previous_import_incomplete` se houver `import` `running` ou `interrupted`.
 
   Depende de T020, T024
-- [ ] T026 [US2] Em `apps/server/src/persistence/reservations-repo.ts`:
+- [X] T026 [US2] Em `apps/server/src/persistence/reservations-repo.ts`:
   - trocar `CLASSIFICATIONS_ACCEPTING_TREATMENT` por `CLASSIFICATIONS_REQUIRING_CHARGE` nos filtros `pendingCharge`, `needsReview` e `situation` (os três usos de research R-04);
   - em `listReservations` e `getReservation`, juntar `legacy_reservations` (com o `started_at` da `first_import_id` como `importedAt`) sem consulta por linha.
 
   Em `apps/server/src/http/views.ts`, montar `Reservation.legacy`. Os testes T023 passam. Depende de T008, T010, T023
-- [ ] T046 [US2] Em `apps/desktop/src/renderer/src/presentation/labels.ts`, renomear `not_virtual_card` para `{ name: 'A revisar (sistema anterior)', tone: 'warning' }` e colocá-la logo depois de `analysis_error` em `CLASSIFICATION_ORDER` e `SITUATION_ORDER`, para o app mostrar as importadas certo já na US2 (spec US2, Independent Test). Atualizar `apps/desktop/test/renderer/labels.test.ts`. Numerada depois das demais por ter vindo da análise. Depende de T003
+- [X] T046 [US2] Em `apps/desktop/src/renderer/src/presentation/labels.ts`, renomear `not_virtual_card` para `{ name: 'A revisar (sistema anterior)', tone: 'warning' }` e colocá-la logo depois de `analysis_error` em `CLASSIFICATION_ORDER` e `SITUATION_ORDER`, para o app mostrar as importadas certo já na US2 (spec US2, Independent Test). Atualizar `apps/desktop/test/renderer/labels.test.ts`. Numerada depois das demais por ter vindo da análise. Depende de T003
 
 **Checkpoint**: reservas importadas, consultáveis pela API e pelo app (com o nome "A revisar
 (sistema anterior)") e reimportáveis sem duplicar.
@@ -319,7 +319,7 @@ o histórico (spec US4).
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T030 [P] [US4] Ampliar `apps/server/test/contract/reservations.test.ts`: `fromLegacy=true` traz só as importadas, inclusive as verificadas depois; `fromLegacy=false` traz o complemento; combinado com `hotelCode`, `situation` e `pendingCharge`; liberado aos dois perfis
+- [X] T030 [P] [US4] Ampliar `apps/server/test/contract/reservations-legacy.test.ts`: `fromLegacy=true` traz só as importadas, inclusive as verificadas depois; `fromLegacy=false` traz o complemento; combinado com `hotelCode`, `situation` e `pendingCharge`; liberado aos dois perfis
 - [ ] T031 [P] [US4] Escrever `apps/desktop/test/renderer/legacy-origin.test.tsx` (o nome de `not_virtual_card` já vem da T046):
   - **lista**: selo "Sistema anterior" nas reservas com `legacy`;
   - **filtro "Origem"** (Todas / Sistema anterior / HUNIT Control): enviado como `fromLegacy` `undefined`/`true`/`false`;
@@ -329,7 +329,7 @@ o histórico (spec US4).
 
 ### Implementation for User Story 4
 
-- [ ] T032 [US4] Em `apps/server/src/persistence/reservations-repo.ts`, filtro `fromLegacy` (`EXISTS`/`NOT EXISTS` em `legacy_reservations`), e repassar o parâmetro em `apps/server/src/http/handlers/reservations.ts`. Os testes T030 passam. Depende de T026, T030
+- [X] T032 [US4] Em `apps/server/src/persistence/reservations-repo.ts`, filtro `fromLegacy` (`EXISTS`/`NOT EXISTS` em `legacy_reservations`), e repassar o parâmetro em `apps/server/src/http/handlers/reservations.ts`. Os testes T030 passam. Depende de T026, T030
 - [ ] T033 [P] [US4] Em `apps/desktop/src/shared/ipc-schemas.ts` (`fromLegacy: z.boolean().optional()`), `apps/desktop/src/shared/ipc-types.ts` (`fromLegacy?: boolean | undefined` e os tipos da API 1.6.0) e `apps/desktop/src/main/api-client.ts` (envia `fromLegacy` na query quando definido), conforme [contracts/ipc.md](./contracts/ipc.md); teste em `apps/desktop/test/main/api-client.test.ts`. Depende de T003
 - [ ] T034 [US4] Em `apps/desktop/src/renderer/src/presentation/labels.ts`, acrescentar os nomes da classificação original (data-model §6) e "Sistema anterior". Criar `apps/desktop/src/renderer/src/components/LegacyBadge.tsx`. Usar o selo em `ReservationsScreen.tsx`, o filtro "Origem" em `ReservationFilters.tsx`, a seção "Sistema anterior" em `ReservationDetail.tsx` e o autor "Sistema anterior" em `TreatmentSection.tsx` (todos em `apps/desktop/src/renderer/src/screens/reservations/`). Os testes T031 passam. Depende de T031, T033
 - [ ] T035 [US4] Em `apps/desktop/test/e2e/screens-capture.test.ts`, inserir no servidor de teste uma reserva importada (com `legacy_reservations`, uma "A revisar" e um documento `fromLegacy`), para as capturas mostrarem o selo, o filtro, a seção do detalhe e o histórico. Os demais testes `desktop-e2e` continuam verdes. Depende de T034

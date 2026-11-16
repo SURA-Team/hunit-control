@@ -4,7 +4,7 @@
  * cada simulação ou importação.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
 import type pg from 'pg';
 import type { Database } from './db.js';
 import {
@@ -201,8 +201,17 @@ export async function findImportRecord(db: Database, id: string): Promise<Legacy
   return row ?? null;
 }
 
-/** Importações que não terminaram (para o aviso `previous_import_incomplete`). */
+/**
+ * Importações que não terminaram depois da última concluída (aviso `previous_import_incomplete`):
+ * uma importação completa depois de uma interrompida já completou o que faltava.
+ */
 export async function countIncompleteImports(db: Database): Promise<number> {
+  const [lastCompleted] = await db
+    .select({ startedAt: legacyImports.startedAt })
+    .from(legacyImports)
+    .where(and(eq(legacyImports.kind, 'import'), eq(legacyImports.status, 'completed')))
+    .orderBy(desc(legacyImports.startedAt))
+    .limit(1);
   const rows = await db
     .select({ id: legacyImports.id })
     .from(legacyImports)
@@ -210,6 +219,7 @@ export async function countIncompleteImports(db: Database): Promise<number> {
       and(
         eq(legacyImports.kind, 'import'),
         inArray(legacyImports.status, ['running', 'interrupted', 'failed']),
+        lastCompleted ? gt(legacyImports.startedAt, lastCompleted.startedAt) : undefined,
       ),
     );
   return rows.length;
@@ -220,6 +230,57 @@ export async function countIncompleteImports(db: Database): Promise<number> {
 // ---------------------------------------------------------------------------
 
 export type LegacyReservationRow = typeof legacyReservations.$inferSelect;
+
+/** Origem "Sistema anterior" para a API (specs/004, `ReservationLegacyOrigin`). */
+export interface LegacyOriginSummary {
+  importedAt: Date;
+  originalClassification: string;
+  originalPreviousClassification: string | null;
+  firstVerifiedAt: Date;
+  lastVerifiedAt: Date;
+  verificationCount: number;
+  merged: boolean;
+}
+
+const originKey = (hotelCode: string, reservationNumber: string): string =>
+  `${hotelCode}\u0000${reservationNumber}`;
+
+/** Origem das reservas de uma página, pela mesma chave de `reservationKeyOf`, numa consulta só. */
+export async function loadLegacyOrigins(
+  db: Database,
+  keys: readonly { hotelCode: string; reservationNumber: string }[],
+): Promise<Map<string, LegacyOriginSummary>> {
+  const result = new Map<string, LegacyOriginSummary>();
+  if (keys.length === 0) return result;
+  const wanted = new Set(keys.map((key) => originKey(key.hotelCode, key.reservationNumber)));
+  const rows = await db
+    .select({
+      hotelCode: legacyReservations.hotelCode,
+      reservationNumber: legacyReservations.reservationNumber,
+      importedAt: legacyImports.startedAt,
+      originalClassification: legacyReservations.originalClassification,
+      originalPreviousClassification: legacyReservations.originalPreviousClassification,
+      firstVerifiedAt: legacyReservations.firstVerifiedAt,
+      lastVerifiedAt: legacyReservations.lastVerifiedAt,
+      verificationCount: legacyReservations.verificationCount,
+      merged: legacyReservations.merged,
+    })
+    .from(legacyReservations)
+    .innerJoin(legacyImports, eq(legacyImports.id, legacyReservations.firstImportId))
+    .where(
+      and(
+        inArray(legacyReservations.hotelCode, [...new Set(keys.map((key) => key.hotelCode))]),
+        inArray(legacyReservations.reservationNumber, [
+          ...new Set(keys.map((key) => key.reservationNumber)),
+        ]),
+      ),
+    );
+  for (const { hotelCode, reservationNumber, ...origin } of rows) {
+    const key = originKey(hotelCode, reservationNumber);
+    if (wanted.has(key)) result.set(key, origin);
+  }
+  return result;
+}
 
 export async function findLegacyOrigin(
   db: Database,

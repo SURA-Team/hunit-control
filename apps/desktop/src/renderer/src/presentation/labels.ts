@@ -47,7 +47,8 @@ export const CLASSIFICATION_LABELS: Record<Classification, Label> = {
   analysis_error: { name: 'Erro de análise', tone: 'error' },
   cancelled_no_charge: { name: 'Cancelada sem cobrança', tone: 'neutral' },
   ignored_hotelbeds_258: { name: 'Ignorada (Hotelbeds 258)', tone: 'neutral' },
-  not_virtual_card: { name: 'Não é cartão virtual (situação antiga)', tone: 'neutral' },
+  // Reserva importada sem classificação correspondente (specs/004, FR-007a).
+  not_virtual_card: { name: 'A revisar (sistema anterior)', tone: 'warning' },
 };
 
 /** Ordem de exibição das situações de cobrança (as que pedem ação primeiro). */
@@ -57,11 +58,11 @@ export const CLASSIFICATION_ORDER: Classification[] = [
   'virtual_card_validated_only',
   'virtual_card_charge_error',
   'analysis_error',
+  'not_virtual_card',
   'virtual_card_already_charged',
   'invoiced',
   'cancelled_no_charge',
   'ignored_hotelbeds_258',
-  'not_virtual_card',
 ];
 
 export const RESERVATION_STATUS_LABELS: Record<ReservationStatus, Label> = {
@@ -98,13 +99,13 @@ export const SITUATION_ORDER: ReservationSituation[] = [
   'virtual_card_validated_only',
   'virtual_card_charge_error',
   'analysis_error',
+  'not_virtual_card',
   'treatment_sent',
   'proof_sent',
   'virtual_card_already_charged',
   'invoiced',
   'cancelled_no_charge',
   'ignored_hotelbeds_258',
-  'not_virtual_card',
 ];
 
 /** Alerta "Verificar" (FR-002a): o Hunit mudou a situação depois da tratativa. */

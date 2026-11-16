@@ -21,6 +21,7 @@ import type {
   ExecutionWithClient,
 } from '../persistence/executions-repo.js';
 import type { HotelRow } from '../persistence/hotels-repo.js';
+import type { LegacyOriginSummary } from '../persistence/legacy-import-repo.js';
 import type { ReservationRow } from '../persistence/reservations-repo.js';
 import type { ClassificationCounts } from '../persistence/schema.js';
 import {
@@ -268,6 +269,7 @@ export function toReservationView(
   row: ReservationRow,
   treatment: TreatmentSummary = EMPTY_TREATMENT,
   now: Date = new Date(),
+  legacy: LegacyOriginSummary | null = null,
 ): ReservationView {
   return {
     hotelCode: row.hotelCode,
@@ -312,6 +314,16 @@ export function toReservationView(
     ...(row.lastExecutionId === null ? {} : { lastExecutionId: row.lastExecutionId }),
     anonymized: row.anonymizedAt !== null,
     treatment: toReservationTreatmentView(row, treatment, now),
+    // Origem "Sistema anterior" (specs/004, FR-011).
+    legacy: legacy && {
+      importedAt: iso(legacy.importedAt),
+      originalClassification: legacy.originalClassification,
+      originalPreviousClassification: legacy.originalPreviousClassification,
+      firstVerifiedAt: iso(legacy.firstVerifiedAt),
+      lastVerifiedAt: iso(legacy.lastVerifiedAt),
+      verificationCount: legacy.verificationCount,
+      merged: legacy.merged,
+    },
   };
 }
 
