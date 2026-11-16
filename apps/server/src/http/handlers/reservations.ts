@@ -7,6 +7,7 @@ import {
   listChannels,
   listReservations,
 } from '../../persistence/reservations-repo.js';
+import { loadTreatmentSummaries, reservationKeyOf } from '../../persistence/treatments-repo.js';
 import { ProblemError } from '../problem.js';
 import { toReservationView } from '../views.js';
 
@@ -30,8 +31,9 @@ function freeText(q: string | undefined): string | undefined {
   return text;
 }
 
-export function createReservationHandlers(dependencies: { db: Database }) {
+export function createReservationHandlers(dependencies: { db: Database; now?: () => Date }) {
   const { db } = dependencies;
+  const now = dependencies.now ?? (() => new Date());
 
   return {
     /** GET /v1/reservations — reservas com filtros combináveis (FR-020). */
@@ -57,10 +59,22 @@ export function createReservationHandlers(dependencies: { db: Database }) {
           q,
           channel: query.channel,
           amount: query.amount,
+          treatmentStatuses: query.treatmentStatus,
+          pendingCharge: query.pendingCharge,
+          situations: query.situation,
+          needsReview: query.needsReview,
           limit: query.limit ?? DEFAULT_PAGE_SIZE,
           cursor: query.cursor,
         });
-        return { items: page.items.map(toReservationView), nextCursor: page.nextCursor };
+        // Tratativas da página inteira de uma vez, sem consulta por reserva (specs/003).
+        const treatments = await loadTreatmentSummaries(db, page.items);
+        const at = now();
+        return {
+          items: page.items.map((row) =>
+            toReservationView(row, treatments.get(reservationKeyOf(row)), at),
+          ),
+          nextCursor: page.nextCursor,
+        };
       } catch (error) {
         if (error instanceof InvalidCursorError) {
           throw new ProblemError('validation_error', 'O parâmetro "cursor" é inválido.');
@@ -79,7 +93,8 @@ export function createReservationHandlers(dependencies: { db: Database }) {
       const { hotelCode, reservationNumber } = request.params as ReservationParams;
       const row = await findReservation(db, hotelCode, reservationNumber);
       if (!row) throw new ProblemError('not_found', 'Reserva não encontrada.');
-      return toReservationView(row);
+      const treatments = await loadTreatmentSummaries(db, [row]);
+      return toReservationView(row, treatments.get(reservationKeyOf(row)), now());
     },
   };
 }

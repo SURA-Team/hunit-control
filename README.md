@@ -197,8 +197,13 @@ de outra máquina, cópia em atraso depois de o PC ficar desligado e uma restaur
 ## App desktop
 
 O app desktop (`apps/desktop`) é como o Financeiro e a Controladoria usam o sistema: executar a
-consulta e responder ao token, acompanhar, cancelar e retomar execuções e consultar reservas e
-evidências. Ele só fala com a API, por HTTPS, confirmando o servidor pelo certificado raiz.
+consulta e responder ao token, acompanhar, cancelar e retomar execuções, consultar reservas e
+evidências e registrar as tratativas. Ele só fala com a API, por HTTPS, confirmando o servidor pelo
+certificado raiz.
+
+Perfis: as máquinas do Financeiro usam chave de perfil **operador** (executam e registram
+tratativas); a Controladoria usa chave de perfil **consulta** (vê tudo e baixa os documentos, sem
+executar nem registrar).
 
 ### Gerar o instalador
 
@@ -211,6 +216,11 @@ pnpm --filter @hunit/desktop dist
 
 O instalador fica em `apps/desktop/release/` (`HUNIT Control Setup <versão>.exe`). Ele instala só
 para o usuário do Windows, sem pedir administrador, e cria o atalho no Menu Iniciar.
+
+A versão vem do campo `version` de `apps/desktop/package.json` e aparece no rodapé da
+**Configuração** ("HUNIT Control — versão …"). Suba a versão a cada entrega com mudança no app
+(ex.: 0.2.0 para a feature 003): com o mesmo número, não dá para saber qual app está instalado
+numa máquina.
 
 ### Instalar numa máquina
 
@@ -251,11 +261,30 @@ Fechar a janela encerra o app. Se houver uma execução desta máquina em andame
 ela continua no servidor, mas o pedido de token não chega com o app fechado. Ao abrir de novo, um
 pedido de token ainda no prazo reaparece.
 
+### Tratativas manuais
+
+Para as reservas que exigem cobrança (pendente de cobrança, erro na cobrança, cartão validado,
+erro de análise e cobrar na maquininha), o Financeiro registra, no detalhe da reserva:
+
+- a **tratativa** — o pedido de cobrança ao Comercial (por exemplo, o e-mail): a reserva fica
+  **Enviada** e continua pendente;
+- o **comprovante** — a prova de que o Comercial cobrou: a reserva fica **Cobrada**.
+
+Aceita e-mail (.eml ou .msg), PDF e imagem (.png, .jpg), de até 25 MB. Antes de confirmar, o app
+mostra o arquivo; o servidor confere o conteúdo contra a extensão. Um documento substituído ou
+desfeito fica guardado por **30 dias** e pode ser revertido nesse prazo. O valor cobrado pode ser
+informado à mão quando o Hunit não traz o valor.
+
+Para aplicar o mesmo documento a várias reservas, marque-as na lista (a seleção se mantém entre
+pesquisas, até 2 000 reservas) e use **Anexar tratativa** ou **Anexar comprovante** na barra da
+seleção. O atalho **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm
+comprovante. Nada disso acessa o Hunit.
+
 ## Rotinas automáticas
 
 | Rotina | Quando | O que faz |
 |---|---|---|
-| Manutenção (no `server`) | Ao subir e a cada 24 h | Apaga evidências com mais de `EVIDENCE_RETENTION_DAYS` dias (padrão 30) e anonimiza o nome do hóspede das reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos (padrão 5) |
+| Manutenção (no `server`) | Ao subir e a cada 24 h | Apaga evidências com mais de `EVIDENCE_RETENTION_DAYS` dias (padrão 30), anonimiza o nome do hóspede das reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos (padrão 5) e apaga os arquivos das tratativas vencidos: substituídos ou desfeitos há 30 dias, os de reservas anonimizadas e os enviados e nunca registrados (o registro e o histórico ficam) |
 | Cópia de segurança (no `backup`) | Verifica a cada 15 min | Faz uma cópia quando a mais nova tem mais de `BACKUP_INTERVAL_HOURS` horas (padrão 24) e apaga as com mais de `BACKUP_RETENTION_DAYS` dias (padrão 30) |
 
 As duas olham o que está vencido, e não o horário: o que atrasou com o PC desligado é feito logo
@@ -263,7 +292,8 @@ que ele volta (FR-029).
 
 Para acompanhar: `docker compose logs backup` e `docker compose logs server`. As cópias ficam em
 `BACKUP_DIR` com o nome `hunit-AAAAMMDD-HHMMSS.dump.gpg` (horário UTC), cifradas com AES-256.
-Elas contêm reservas, histórico, execuções e clientes da API (só o hash das chaves); não contêm
+Elas contêm reservas, histórico, execuções, clientes da API (só o hash das chaves) e os documentos
+das tratativas, que ficam no próprio banco — por isso as cópias crescem com eles; não contêm
 credenciais nem token do Hunit, nem as evidências.
 
 ## Restaurar uma cópia de segurança

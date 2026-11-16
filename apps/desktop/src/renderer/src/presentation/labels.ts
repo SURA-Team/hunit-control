@@ -10,7 +10,13 @@ import type {
   ExecutionEndReason,
   ExecutionStatus,
   HotelRunStatus,
+  ReservationOutcome,
+  ReservationSituation,
   ReservationStatus,
+  TreatmentDocumentKind,
+  TreatmentDocumentState,
+  TreatmentEvent,
+  TreatmentStatus,
 } from '../../../shared/ipc-types';
 
 /** sucesso (verde), atenção (amarelo), erro (vermelho), informação (azul) e neutro (cinza). */
@@ -64,6 +70,84 @@ export const RESERVATION_STATUS_LABELS: Record<ReservationStatus, Label> = {
   unknown: { name: 'Não identificada', tone: 'warning' },
 };
 
+// ---------------------------------------------------------------------------
+// Tratativas manuais (specs/003, data-model §7)
+// ---------------------------------------------------------------------------
+
+/** Situação dos documentos: "Tratativa enviada" continua pendente; "Comprovante enviado" não. */
+export const TREATMENT_STATUS_LABELS: Record<TreatmentStatus, Label> = {
+  none: { name: 'Sem tratativa', tone: 'neutral' },
+  sent: { name: 'Tratativa enviada', tone: 'info' },
+  charged: { name: 'Comprovante enviado', tone: 'success' },
+};
+
+/**
+ * Situação da reserva (FR-002, FR-017): a coluna única da lista e o filtro. É a classificação
+ * (status do Hunit), a não ser que a reserva tenha comprovante ou tratativa.
+ */
+export const SITUATION_LABELS: Record<ReservationSituation, Label> = {
+  ...CLASSIFICATION_LABELS,
+  treatment_sent: TREATMENT_STATUS_LABELS.sent,
+  proof_sent: TREATMENT_STATUS_LABELS.charged,
+};
+
+/** Ordem no filtro: as que pedem ação primeiro, depois as tratadas e as que não exigem nada. */
+export const SITUATION_ORDER: ReservationSituation[] = [
+  'virtual_card_pending_charge',
+  'charge_at_terminal',
+  'virtual_card_validated_only',
+  'virtual_card_charge_error',
+  'analysis_error',
+  'treatment_sent',
+  'proof_sent',
+  'virtual_card_already_charged',
+  'invoiced',
+  'cancelled_no_charge',
+  'ignored_hotelbeds_258',
+  'not_virtual_card',
+];
+
+/** Alerta "Verificar" (FR-002a): o Hunit mudou a situação depois da tratativa. */
+export const REVIEW_LABEL: Label = { name: 'Verificar', tone: 'warning' };
+
+export const TREATMENT_KIND_NAMES: Record<TreatmentDocumentKind, string> = {
+  request: 'Tratativa',
+  proof: 'Comprovante',
+};
+
+export const TREATMENT_KIND_ORDER: TreatmentDocumentKind[] = ['request', 'proof'];
+
+export const DOCUMENT_STATE_LABELS: Record<TreatmentDocumentState, Label> = {
+  current: { name: 'Atual', tone: 'success' },
+  replaced: { name: 'Substituído', tone: 'neutral' },
+  removed: { name: 'Desfeito', tone: 'neutral' },
+  purged: { name: 'Arquivo apagado pelo prazo de retenção', tone: 'neutral' },
+};
+
+export const TREATMENT_EVENT_NAMES: Record<TreatmentEvent['type'], string> = {
+  attached: 'Anexou',
+  replaced: 'Substituiu',
+  removed: 'Desfez',
+  reverted: 'Reverteu',
+  amount_set: 'Informou valor',
+  amount_cleared: 'Removeu valor',
+  review_confirmed: 'Confirmou a verificação',
+};
+
+/** Por que uma reserva ficou de fora de um registro (data-model §5). */
+export const OUTCOME_REASON_MESSAGES: Record<NonNullable<ReservationOutcome['reason']>, string> = {
+  not_found: 'Reserva não encontrada.',
+  not_eligible: 'Esta reserva não exige cobrança.',
+  same_file: 'Esta reserva já tem este arquivo.',
+};
+
+export const OUTCOME_NAMES: Record<ReservationOutcome['outcome'], string> = {
+  registered: 'Registrado',
+  replaced: 'Substituiu o atual',
+  ignored: 'Ignorada',
+  failed: 'Falhou',
+};
+
 export const EXECUTION_STATUS_LABELS: Record<ExecutionStatus, Label> = {
   queued: { name: 'Na fila', tone: 'neutral' },
   running: { name: 'Em andamento', tone: 'info' },
@@ -106,6 +190,15 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   nothing_to_resume: 'Não há hotéis pendentes para retomar.',
   execution_already_resumed: 'Esta execução já foi retomada.',
   evidence_expired: 'A evidência expirou e não está mais disponível.',
+  empty_file: 'O arquivo está vazio.',
+  file_too_large: 'O arquivo tem mais de 25 MB.',
+  unsupported_file_type: 'Tipo não aceito. Use e-mail (.eml ou .msg), PDF ou imagem (.png, .jpg).',
+  file_not_found: 'O servidor não tem mais o arquivo enviado. Escolha o arquivo de novo.',
+  not_eligible_for_treatment: 'A situação desta reserva não exige cobrança.',
+  document_not_current: 'Este documento já foi substituído ou desfeito.',
+  document_not_revertible: 'Este documento não pode mais ser revertido.',
+  proof_required: 'O valor só pode ser informado numa reserva com comprovante.',
+  document_purged: 'O arquivo foi apagado pelo prazo de retenção.',
   internal_error: 'Erro interno do servidor.',
   offline: 'Servidor indisponível.',
   untrusted_server: 'Não foi possível confirmar a identidade do servidor.',

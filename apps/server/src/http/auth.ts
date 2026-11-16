@@ -29,6 +29,15 @@ export const OPERATOR_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   'sendTwoFactor',
   'cancelExecution',
   'resumeExecution',
+  // Tratativas manuais (specs/003, FR-014): o perfil consulta só vê e baixa.
+  'uploadTreatmentFile',
+  'checkTreatmentDocuments',
+  'registerTreatmentDocuments',
+  'removeTreatmentDocument',
+  'revertTreatmentDocument',
+  'setManualChargedAmount',
+  'clearManualChargedAmount',
+  'confirmTreatmentReview',
 ]);
 
 /** Gera uma chave de API nova, com 256 bits aleatórios. */

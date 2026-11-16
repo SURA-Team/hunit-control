@@ -22,6 +22,14 @@ export type ReservationStatus = Schemas['ReservationStatus'];
 export type Classification = Schemas['Classification'];
 export type ClassificationCounts = Schemas['ClassificationCounts'];
 export type EvidenceSummary = Schemas['EvidenceSummary'];
+export type TreatmentDocumentKind = Schemas['TreatmentDocumentKind'];
+export type TreatmentStatus = Schemas['TreatmentStatus'];
+export type ReservationSituation = Schemas['ReservationSituation'];
+export type TreatmentDocumentState = Schemas['TreatmentDocumentState'];
+export type TreatmentDocument = Schemas['TreatmentDocument'];
+export type ReservationTreatment = Schemas['ReservationTreatment'];
+export type TreatmentEvent = Schemas['TreatmentEvent'];
+export type ReservationOutcome = Schemas['ReservationOutcome'];
 
 /** Códigos de erro da API (`Problem.code`). */
 export type ApiErrorCode = Schemas['Problem']['code'];
@@ -186,6 +194,14 @@ export interface ReservationListInput {
   channel?: string | undefined;
   /** Formato da API: "1234.56". */
   amount?: string | undefined;
+  /** Situação dos documentos (specs/003): sem tratativa, só tratativa, com comprovante. */
+  treatmentStatus?: TreatmentStatus[] | undefined;
+  /** "Falta cobrar" (specs/003, FR-002): a regra é do servidor. */
+  pendingCharge?: boolean | undefined;
+  /** Situação da reserva (specs/003, FR-002, FR-015): a mesma da coluna da lista. */
+  situation?: ReservationSituation[] | undefined;
+  /** "A verificar" (specs/003, FR-002a): só as reservas com o alerta. */
+  needsReview?: boolean | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
 }
@@ -202,6 +218,102 @@ export interface EvidenceSaveInput {
   file: EvidenceFile;
   /** Hotel ou início do id da execução, para o nome padrão do arquivo. */
   label?: string | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Tratativas manuais (specs/003, contracts/ipc.md)
+// ---------------------------------------------------------------------------
+
+/** Anexo de um e-mail: só o que a lista mostra; o anexo nunca é aberto (FR-018a). */
+export interface EmailAttachmentInfo {
+  name: string | null;
+  mediaType: string | null;
+  sizeBytes: number | null;
+}
+
+/**
+ * O que a interface mostra do arquivo escolhido antes da confirmação (FR-018). Montado no
+ * processo principal, só em memória; a interface nunca recebe o caminho do arquivo.
+ */
+export type DocumentPreview =
+  | { type: 'pdf'; bytes: Uint8Array }
+  | { type: 'image'; bytes: Uint8Array; mediaType: 'image/png' | 'image/jpeg' }
+  | {
+      type: 'email';
+      from: string | null;
+      to: string[];
+      cc: string[];
+      subject: string | null;
+      /** ISO 8601, quando o e-mail tem data válida. */
+      date: string | null;
+      /** Corpo em texto, quando existe. */
+      text: string | null;
+      /** Corpo em HTML, só quando não há texto; exibido isolado (research R-08). */
+      html: string | null;
+      attachments: EmailAttachmentInfo[];
+    }
+  | { type: 'unavailable'; reason: 'unreadable' };
+
+/** Arquivo escolhido pelo operador, guardado na memória do principal até confirmar ou cancelar. */
+export interface PickedFile {
+  selectionId: string;
+  fileName: string;
+  sizeBytes: number;
+  mediaType: string;
+  preview: DocumentPreview;
+}
+
+/** Máximo de reservas num lote; é também o limite da seleção na tela (FR-006a). */
+export const MAX_TREATMENT_RESERVATIONS = 2000;
+
+export interface PickFileInput {
+  kind: TreatmentDocumentKind;
+}
+
+export interface TreatmentCheckInput {
+  kind: TreatmentDocumentKind;
+  reservations: ReservationKey[];
+}
+
+/** Resposta da conferência do servidor, somada entre as partes de 200 reservas. */
+export interface TreatmentCheck {
+  items: ReservationOutcome[];
+  acceptedCount: number;
+  replacingCount: number;
+  ignoredCount: number;
+  /** Soma do valor das aceitas, no formato da API: "1234.56". */
+  acceptedTotalAmount: string;
+}
+
+export interface TreatmentApplyInput {
+  selectionId: string;
+  kind: TreatmentDocumentKind;
+  reservations: ReservationKey[];
+}
+
+export interface TreatmentApplyResult {
+  /** Desfecho das reservas já processadas, de todas as partes. */
+  items: ReservationOutcome[];
+  /** Reservas que não ficaram com o documento por erro: continuam selecionadas (FR-006a). */
+  failedKeys: ReservationKey[];
+  /**
+   * `true` = o envio parou por falta de conexão; o arquivo continua na memória (mesmo
+   * `selectionId`) para "Tentar de novo" com as reservas de `failedKeys`.
+   */
+  retryable: boolean;
+  /** Erro que interrompeu o envio, quando `retryable`. */
+  error?: AppError | undefined;
+}
+
+export interface TreatmentDetail {
+  treatment: ReservationTreatment;
+  documents: TreatmentDocument[];
+  events: TreatmentEvent[];
+}
+
+export interface ManualAmountInput extends ReservationKey {
+  /** Formato da API: "1234.56", maior que zero. */
+  amount: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,5 +375,22 @@ export interface HunitApi {
     list: (input: ReservationListInput) => Promise<Result<Page<Reservation>>>;
     get: (input: ReservationKey) => Promise<Result<Reservation>>;
     channels: () => Promise<Result<string[]>>;
+  };
+  treatments: {
+    /** Abre "Abrir arquivo"; `null` = cancelado. O arquivo fica na memória do principal. */
+    pickFile: (input: PickFileInput) => Promise<Result<PickedFile | null>>;
+    /** Cancelar na pré-visualização: libera a memória; nada é enviado (FR-018). */
+    discardFile: (selectionId: string) => Promise<Result<void>>;
+    check: (input: TreatmentCheckInput) => Promise<Result<TreatmentCheck>>;
+    apply: (input: TreatmentApplyInput) => Promise<Result<TreatmentApplyResult>>;
+    get: (input: ReservationKey) => Promise<Result<TreatmentDetail>>;
+    remove: (documentId: string) => Promise<Result<void>>;
+    revert: (documentId: string) => Promise<Result<ReservationTreatment>>;
+    setManualAmount: (input: ManualAmountInput) => Promise<Result<ReservationTreatment>>;
+    clearManualAmount: (input: ReservationKey) => Promise<Result<ReservationTreatment>>;
+    /** Confirma o alerta "Verificar" (FR-002a): só tira o alerta e registra no histórico. */
+    confirmReview: (input: ReservationKey) => Promise<Result<ReservationTreatment>>;
+    /** Baixa e abre "Salvar como" com o nome original; `null` = cancelado. */
+    saveDocument: (documentId: string) => Promise<Result<{ savedTo: string } | null>>;
   };
 }

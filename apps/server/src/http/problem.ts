@@ -32,6 +32,28 @@ export const PROBLEMS: Readonly<Record<ProblemCode, ProblemDefinition>> = {
   nothing_to_resume: { status: 409, title: 'A execução não tem hotéis pendentes para retomar' },
   execution_already_resumed: { status: 409, title: 'A execução já foi retomada' },
   evidence_expired: { status: 410, title: 'Evidência expirada' },
+  // Tratativas manuais (specs/003, contracts/api-changes.md §1).
+  empty_file: { status: 400, title: 'O arquivo está vazio' },
+  file_too_large: { status: 413, title: 'O arquivo tem mais de 25 MB' },
+  unsupported_file_type: {
+    status: 415,
+    title: 'Tipo de arquivo não aceito ou conteúdo diferente da extensão',
+  },
+  file_not_found: { status: 422, title: 'O servidor não tem o arquivo informado' },
+  not_eligible_for_treatment: {
+    status: 409,
+    title: 'A situação da reserva não aceita tratativa nem comprovante',
+  },
+  document_not_current: { status: 409, title: 'O documento não é mais o atual' },
+  document_not_revertible: { status: 409, title: 'O documento não pode mais ser revertido' },
+  proof_required: {
+    status: 409,
+    title: 'O valor só pode ser informado numa reserva com comprovante',
+  },
+  document_purged: {
+    status: 410,
+    title: 'O arquivo foi apagado pelo prazo de retenção',
+  },
   internal_error: { status: 500, title: 'Erro interno' },
 };
 

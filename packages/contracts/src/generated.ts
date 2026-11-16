@@ -236,6 +236,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reservations/{hotelCode}/{reservationNumber}/treatment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        /** Tratativa de uma reserva — documentos (atuais e anteriores) e histórico (feature 003) */
+        get: operations["getReservationTreatment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reservations/{hotelCode}/{reservationNumber}/treatment/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma o alerta "Verificar" de uma reserva (feature 003, FR-002a)
+         * @description O operador conferiu a reserva que, depois da tratativa, o Hunit passou a mostrar numa
+         *     situação que não exige cobrança. Só tira o alerta e registra a confirmação no histórico,
+         *     com o status do Hunit confirmado; a tratativa continua registrada. Sem alerta, responde 200
+         *     sem gravar nada. Não acessa o Hunit.
+         */
+        post: operations["confirmTreatmentReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reservations/{hotelCode}/{reservationNumber}/manual-amount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Informa à mão o valor cobrado de uma reserva com comprovante (feature 003, FR-005) */
+        put: operations["setManualChargedAmount"];
+        post?: never;
+        /** Remove o valor informado à mão; volta a valer o do Hunit (feature 003, FR-005) */
+        delete: operations["clearManualChargedAmount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/treatment-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envia o arquivo de uma tratativa ou de um comprovante (feature 003, FR-008)
+         * @description Corpo: o arquivo puro, com até 26 214 400 bytes (25 MiB). Tipos aceitos: e-mail (.eml,
+         *     .msg), PDF e imagem (.png, .jpg, .jpeg); o servidor confere o conteúdo contra a extensão.
+         *     Enviar de novo um arquivo idêntico devolve o mesmo `fileId`, sem gravar outra cópia. O
+         *     arquivo só passa a valer quando é registrado em `POST /treatment-documents`.
+         */
+        post: operations["uploadTreatmentFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/treatment-documents/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Diz quais reservas aceitam o documento, sem gravar nada (feature 003, FR-006) */
+        post: operations["checkTreatmentDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/treatment-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registra a tratativa ou o comprovante em uma ou várias reservas (feature 003, FR-001, FR-006)
+         * @description Cada reserva é gravada por inteiro ou não é gravada (FR-011). A resposta é 200 mesmo com
+         *     reservas ignoradas ou com falha: o desfecho de cada uma está em `items`. Uma reserva que
+         *     já tem um documento atual desse tipo tem o documento substituído.
+         */
+        post: operations["registerTreatmentDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/treatment-documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Desfaz o documento atual; pode ser revertido por 30 dias (feature 003, FR-004) */
+        delete: operations["removeTreatmentDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/treatment-documents/{documentId}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Volta um documento substituído ou desfeito a documento atual (feature 003, FR-013a) */
+        post: operations["revertTreatmentDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/treatment-documents/{documentId}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        /** Baixa o arquivo de um documento, idêntico ao enviado (feature 003, FR-009) */
+        get: operations["getTreatmentDocumentFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/channels": {
         parameters: {
             query?: never;
@@ -287,7 +473,7 @@ export interface components {
              * @description Código estável para tratamento pelos clientes
              * @enum {string}
              */
-            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "execution_already_resumed" | "evidence_expired" | "internal_error";
+            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "execution_already_resumed" | "evidence_expired" | "empty_file" | "file_too_large" | "unsupported_file_type" | "file_not_found" | "not_eligible_for_treatment" | "document_not_current" | "document_not_revertible" | "proof_required" | "document_purged" | "internal_error";
         };
         HunitCredentials: {
             username: string;
@@ -465,6 +651,110 @@ export interface components {
             /** Format: uuid */
             lastExecutionId?: string;
             anonymized?: boolean;
+            treatment: components["schemas"]["ReservationTreatment"];
+        };
+        /**
+         * @description request = tratativa (pedido de cobrança); proof = comprovante de cobrança
+         * @enum {string}
+         */
+        TreatmentDocumentKind: "request" | "proof";
+        /**
+         * @description none = sem tratativa; sent = Enviada (só tratativa); charged = Cobrada (com comprovante)
+         * @enum {string}
+         */
+        TreatmentStatus: "none" | "sent" | "charged";
+        /**
+         * @description Situação da reserva (feature 003, FR-002): proof_sent = Comprovante enviado (com comprovante, qualquer que seja a classificação); treatment_sent = Tratativa enviada (só tratativa e a classificação ainda exige cobrança); os demais valores são a classificação (status do Hunit).
+         * @enum {string}
+         */
+        ReservationSituation: "proof_sent" | "treatment_sent" | "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "cancelled_no_charge" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
+        /**
+         * @description current = documento atual; replaced = substituído; removed = desfeito; purged = arquivo apagado pelo prazo de retenção (o registro fica)
+         * @enum {string}
+         */
+        TreatmentDocumentState: "current" | "replaced" | "removed" | "purged";
+        ReservationKey: {
+            hotelCode: string;
+            reservationNumber: string;
+        };
+        TreatmentFile: {
+            /** @description SHA-256 do conteúdo */
+            fileId: string;
+            sizeBytes: number;
+            /** @description Tipo decidido pelo servidor a partir do conteúdo */
+            mediaType: string;
+        };
+        TreatmentDocument: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["TreatmentDocumentKind"];
+            state: components["schemas"]["TreatmentDocumentState"];
+            /** @description null depois da purga */
+            fileName?: string | null;
+            sizeBytes: number;
+            mediaType: string;
+            /** Format: date-time */
+            attachedAt: string;
+            /** @description Nome do cliente da API que anexou */
+            attachedBy: string;
+            /** Format: date-time */
+            endedAt?: string | null;
+            endedBy?: string | null;
+            /**
+             * Format: date-time
+             * @description Preenchido só em documentos substituídos ou desfeitos ainda no prazo de 30 dias (FR-013a)
+             */
+            revertibleUntil?: string | null;
+        };
+        /** @description Resumo da tratativa manual de uma reserva (feature 003) */
+        ReservationTreatment: {
+            status: components["schemas"]["TreatmentStatus"];
+            situation: components["schemas"]["ReservationSituation"];
+            /** @description Alerta "Verificar" (FR-002a): só tratativa, a classificação deixou de exigir cobrança e ninguém confirmou depois da última mudança de situação no Hunit */
+            needsReview: boolean;
+            request: components["schemas"]["TreatmentDocument"] | null;
+            proof: components["schemas"]["TreatmentDocument"] | null;
+            manualChargedAmount: components["schemas"]["Money"];
+            effectiveChargedAmount: components["schemas"]["Money"];
+            /** @description A classificação atual aceita registrar, substituir e reverter (FR-003) */
+            acceptsDocuments: boolean;
+        };
+        TreatmentEvent: {
+            id: number;
+            /** @enum {string} */
+            type: "attached" | "replaced" | "removed" | "reverted" | "amount_set" | "amount_cleared" | "review_confirmed";
+            kind?: components["schemas"]["TreatmentDocumentKind"] | null;
+            /** Format: uuid */
+            documentId?: string | null;
+            /** Format: uuid */
+            previousDocumentId?: string | null;
+            amount?: components["schemas"]["Money"];
+            /** @description Só em review_confirmed — o status do Hunit que o operador confirmou (FR-002a) */
+            classification?: components["schemas"]["Classification"] | null;
+            /** Format: uuid */
+            batchId?: string | null;
+            /** @description Nome do cliente da API que fez a ação */
+            client: string;
+            /** Format: date-time */
+            at: string;
+        };
+        ReservationOutcome: {
+            hotelCode: string;
+            reservationNumber: string;
+            /**
+             * @description registered = documento novo; replaced = substituiu o atual; ignored = ficou de fora (ver reason); failed = erro inesperado, a reserva ficou como estava
+             * @enum {string}
+             */
+            outcome: "registered" | "replaced" | "ignored" | "failed";
+            /** @enum {string|null} */
+            reason?: "not_found" | "not_eligible" | "same_file" | null;
+            classification?: components["schemas"]["Classification"] | null;
+            totalAmount?: components["schemas"]["Money"];
+            /**
+             * Format: uuid
+             * @description Preenchido em registered e replaced (ausente na conferência)
+             */
+            documentId?: string | null;
         };
         /** @enum {string} */
         ClientRole: "operator" | "reader";
@@ -526,11 +816,21 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description A ação não é possível na situação atual (o `code` diz o motivo) */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
     };
     parameters: {
         ExecutionId: string;
         Limit: number;
         Cursor: string;
+        DocumentId: string;
     };
     requestBodies: never;
     headers: never;
@@ -908,8 +1208,20 @@ export interface operations {
                 q?: string;
                 /** @description Canal exatamente como em Reservation.channel (ver GET /channels) */
                 channel?: string;
-                /** @description Valor em BRL; encontra reservas cujo valor total OU valor cobrado seja igual */
+                /** @description Valor em BRL; encontra reservas cujo valor total, valor cobrado ou valor cobrado informado à mão (feature 003) seja igual */
                 amount?: string;
+                /** @description Situação da tratativa (feature 003, FR-002): none = sem tratativa; sent = Enviada; charged = Cobrada. Combinável com os demais filtros. */
+                treatmentStatus?: components["schemas"]["TreatmentStatus"][];
+                /**
+                 * @description true = "Falta cobrar" (feature 003, FR-002): classificação que exige cobrança e sem
+                 *     comprovante (treatmentStatus none ou sent). false = o contrário. Omitido = sem esse
+                 *     filtro. Combinável com os demais.
+                 */
+                pendingCharge?: boolean;
+                /** @description Situação da reserva (feature 003, FR-002): qualquer uma das informadas, exatamente como em ReservationTreatment.situation. Combinável com os demais filtros. */
+                situation?: components["schemas"]["ReservationSituation"][];
+                /** @description true = só as reservas com o alerta "Verificar" (feature 003, FR-002a); false = o contrário. Omitido = sem esse filtro. */
+                needsReview?: boolean;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -959,6 +1271,357 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getReservationTreatment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tratativa da reserva */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        treatment: components["schemas"]["ReservationTreatment"];
+                        /** @description Todos os documentos da reserva, do mais recente para o mais antigo */
+                        documents: components["schemas"]["TreatmentDocument"][];
+                        /** @description Histórico completo, do mais recente para o mais antigo */
+                        events: components["schemas"]["TreatmentEvent"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    confirmTreatmentReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tratativa atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setManualChargedAmount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Valor em BRL, maior que zero */
+                    amount: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Tratativa atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    clearManualChargedAmount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: string;
+                reservationNumber: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tratativa atualizada (sem mudança, se não havia valor) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    uploadTreatmentFile: {
+        parameters: {
+            query: {
+                /** @description Nome original do arquivo, com a extensão */
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": unknown;
+            };
+        };
+        responses: {
+            /** @description Arquivo recebido */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentFile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Arquivo acima de 25 MiB (`file_too_large`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Tipo não aceito ou conteúdo diferente da extensão (`unsupported_file_type`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    checkTreatmentDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    kind: components["schemas"]["TreatmentDocumentKind"];
+                    reservations: components["schemas"]["ReservationKey"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Desfecho previsto de cada reserva e os totais para a confirmação */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ReservationOutcome"][];
+                        acceptedCount: number;
+                        /** @description Das aceitas, quantas já têm um documento atual desse tipo */
+                        replacingCount: number;
+                        ignoredCount: number;
+                        /** @description Soma do valor total das reservas aceitas, em BRL */
+                        acceptedTotalAmount: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    registerTreatmentDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    kind: components["schemas"]["TreatmentDocumentKind"];
+                    fileId: string;
+                    fileName: string;
+                    reservations: components["schemas"]["ReservationKey"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Desfecho de cada reserva */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        items: components["schemas"]["ReservationOutcome"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description O nome informado não tem a extensão do tipo do arquivo (`unsupported_file_type`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description O servidor não tem o arquivo informado (`file_not_found`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    removeTreatmentDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Documento desfeito */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    revertTreatmentDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tratativa atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTreatmentDocumentFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Arquivo, com o nome original em content-disposition */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                    "image/png": unknown;
+                    "image/jpeg": unknown;
+                    "message/rfc822": unknown;
+                    "application/vnd.ms-outlook": unknown;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Arquivo apagado pelo prazo de retenção (`document_purged`) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listChannels: {

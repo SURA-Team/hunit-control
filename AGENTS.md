@@ -32,6 +32,7 @@ funcionar porque o Hunit mudou a UI.
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
 | `deploy/caddy/Caddyfile` | Proxy HTTPS com a autoridade certificadora interna do Caddy (research R-20) |
 | `deploy/backup/` | `backup.sh` (cópia cifrada do banco) e `restore.sh` (restauração), rodados no container `backup` (research R-21) |
+| `deploy/homolog/` | Ambiente de homologação no PC do servidor, separado da produção (projeto `hunit-homolog`, dados fictícios): acréscimo ao Compose e modelo do `.env.homolog`. Passo a passo em `specs/003-tratativas-manuais/quickstart.md` §2.1 |
 | `README.md` | Visão geral, implantação no PC de produção, cópia de segurança e restauração |
 | `.claude/skills/`, `skills-lock.json` | Skills do Claude Code versionados: os do Spec Kit e o `playwright-best-practices` (MIT, de `currents-dev`, instalado com `npx skills`; o lock guarda a origem e a versão). Atualize com `npx skills update -p` e revise o diff antes do commit. O `figma-screens-sync` é do próprio projeto (fora do lock): mantém o espelho do app no Figma (seção "Telas no Figma") |
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento. **Não é versionado** (está no `.gitignore`): existe só na máquina de quem desenvolve |
@@ -60,15 +61,19 @@ Regras:
 O arquivo [Hunit Control](https://www.figma.com/design/YCbxTAacFxbGuOF8uwoLtt/Hunit-Control) tem
 dois papéis, que não se misturam:
 
-- **Espelho do app** (páginas `Identidade visual`, `Telas — app atual (espelho)` e `Componentes`):
-  como o app desktop **está** no código. Mantido pelo agente com a skill `figma-screens-sync`, a
-  partir de prints do app real com dados fictícios.
-- **Design oficial**: a cópia de trabalho da UX. É a fonte da verdade de como o app **deve ser**. O
-  agente só lê; levar esse design para o código é trabalho de uma spec.
+- **Espelho do app, features 002 a 006**: uma página por feature, com o nome da branch
+  (`002-app-desktop`, `003-tratativas-manuais`, …), só com as telas que a feature criou ou mudou,
+  como ficaram no código. Uma tela substituída por uma feature seguinte fica com ❌ no nome e
+  oculta. As páginas `Identidade visual` e `Componentes` também são do espelho. Mantido pelo agente
+  com a skill `figma-screens-sync`, a partir de prints do app real com dados fictícios.
+- **Design oficial**: as páginas da UX. É a fonte da verdade de como o app **deve ser**. **A partir
+  da feature 007, a UX escreve as specs e desenha as telas antes do desenvolvimento**; não há
+  espelho para essas features. O agente só lê; levar o design para o código é trabalho da spec.
 
-Regra: mudou algo visível no app desktop (`apps/desktop/src/renderer`, rótulos em `presentation/`,
-ícone ou tema)? Ao concluir a task ou a feature, antes do PR, rode a skill `figma-screens-sync` para
-atualizar as telas afetadas do espelho e registrar a mudança no histórico dele.
+Regra: numa feature de 002 a 006, mudou algo visível no app desktop (`apps/desktop/src/renderer`,
+rótulos em `presentation/`, ícone ou tema)? Ao concluir a task ou a feature, antes do PR, rode a
+skill `figma-screens-sync` para atualizar a página da feature e registrar a mudança no histórico
+dela.
 
 ## Usando o legado como referência
 
@@ -179,9 +184,10 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/002-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas. A cópia
-  de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua na 1.3.0
-  e não deve ser alterada (specs/002, research R-15).
+  `specs/003-tratativas-manuais/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas. A
+  cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua na
+  1.3.0 e a da 002 na 1.4.0, e não devem ser alteradas (specs/002, research R-15; specs/003,
+  research R-12).
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 - Mudou o `docker-compose.yml`? O teste `apps/server/test/unit/compose-config.test.ts` confere que
@@ -210,3 +216,19 @@ e consulta reservas e evidências. O contrato da API passou para a 1.4.0 (só ac
 `requestedClient` e `active` na lista de execuções, `warnings` no estado da execução, `q`, `channel`
 e `amount` nas reservas, `/channels` e a lista de evidências da execução). A instalação do app está
 no `README.md`.
+
+Desde a feature 003 (`specs/003-tratativas-manuais/`), o Financeiro registra por reserva a
+tratativa (pedido de cobrança ao Comercial → "Enviada") e o comprovante (→ "Cobrada"), com
+pré-visualização no app, substituir, desfazer e reverter por 30 dias, valor cobrado informado à mão
+e aplicação em lote com a seleção mantida entre pesquisas. Os documentos ficam no PostgreSQL
+(`treatment_files`, `bytea`, deduplicados por SHA-256) e entram nas cópias de segurança. O
+contrato passou para a 1.5.0 (só acréscimos: `/treatment-files`, `/treatment-documents` e o
+`check`, `/reservations/{hotel}/{número}/treatment` e `manual-amount`, `Reservation.treatment`
+e os filtros `treatmentStatus` e `pendingCharge`). Depois da homologação, ainda na 1.5.0: a situação
+da reserva numa coluna só (`treatment.situation` e o filtro `situation`), o alerta "Verificar" quando
+o Hunit muda a situação de uma reserva só com tratativa (`treatment.needsReview`, o filtro
+`needsReview` e `POST …/treatment/review`) e o histórico com "Mostrar mais" (research R-14). A
+homologação roda num ambiente separado da produção, no mesmo PC (`deploy/homolog/`, quickstart
+§2.1 da 003). O envio de documentos é a única rota com corpo
+binário (até 25 MiB). O log do servidor registra as requisições sem a query (nome do arquivo e
+busca livre podem ter dados pessoais).

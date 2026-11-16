@@ -27,6 +27,38 @@ export {
   type ReservationRecord,
   type VerificationHistory,
 } from './verification.js';
+export {
+  ACCEPTED_TREATMENT_EXTENSIONS,
+  MAX_TREATMENT_FILE_BYTES,
+  MAX_TREATMENT_FILE_NAME_LENGTH,
+  TREATMENT_MEDIA_TYPES,
+  detectTreatmentFile,
+  fileNameMatchesMediaType,
+  isValidTreatmentFileName,
+  type TreatmentFileCheck,
+  type TreatmentFileExtension,
+  type TreatmentFileRejection,
+  type TreatmentMediaType,
+} from './document-type.js';
+export {
+  CLASSIFICATIONS_ACCEPTING_TREATMENT,
+  TREATMENT_DOCUMENT_KINDS,
+  TREATMENT_DOCUMENT_STATES,
+  TREATMENT_REVERT_DAYS,
+  TREATMENT_STATUSES,
+  acceptsTreatment,
+  effectiveChargedAmount,
+  isPendingCharge,
+  isRevertible,
+  needsReview,
+  reservationSituation,
+  revertDeadline,
+  treatmentStatus,
+  type ReservationSituation,
+  type TreatmentDocumentKind,
+  type TreatmentDocumentState,
+  type TreatmentStatus,
+} from './treatment.js';
 export { CLASSIFICATIONS, RESERVATION_STATUSES } from './types.js';
 export type {
   Classification,

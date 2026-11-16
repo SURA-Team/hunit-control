@@ -205,6 +205,65 @@ describe('validação das requisições contra o contrato (T016)', () => {
     },
   );
 
+  describe('corpo binário só no envio de documentos (specs/003, research R-03)', () => {
+    const binary = { 'content-type': 'application/octet-stream' };
+
+    it('recusa com 400 corpo binário numa operação que espera JSON', async () => {
+      const response = await test.app.inject({
+        method: 'POST',
+        url: '/v1/executions',
+        headers: { ...operator.headers, ...binary },
+        payload: Buffer.from(JSON.stringify(startExecutionBody())),
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(problem(response).code).toBe('validation_error');
+      expectMatchesContract('createExecution', response);
+    });
+
+    it('recusa com 400 corpo binário numa operação sem corpo, sem ler o conteúdo', async () => {
+      const response = await test.app.inject({
+        method: 'POST',
+        url: '/v1/treatment-documents/00000000-0000-4000-8000-000000000000/revert',
+        headers: { ...operator.headers, ...binary },
+        // Maior que o limite padrão de 1 MiB: se fosse lido, o erro seria outro.
+        payload: Buffer.alloc(2 * 1024 * 1024, 0x20),
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(problem(response).code).toBe('validation_error');
+    });
+
+    it('o envio de documentos exige corpo binário e diz qual tipo espera', async () => {
+      const response = await test.app.inject({
+        method: 'POST',
+        url: '/v1/treatment-files?name=comprovante.pdf',
+        headers: { ...operator.headers, 'content-type': 'application/json' },
+        payload: '{}',
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(problem(response)).toMatchObject({
+        code: 'validation_error',
+        detail: expect.stringContaining('application/octet-stream') as string,
+      });
+      expectMatchesContract('uploadTreatmentFile', response);
+    });
+
+    it('as operações com JSON continuam com o limite padrão de 1 MiB', async () => {
+      const response = await test.app.inject({
+        method: 'POST',
+        url: '/v1/executions',
+        headers: { ...operator.headers, 'content-type': 'application/json' },
+        payload: JSON.stringify(startExecutionBody({ extra: 'x'.repeat(1024 * 1024) })),
+      });
+
+      expect(response.statusCode).toBe(400);
+      // Corpo grande demais numa operação comum não usa o código do envio de documentos.
+      expect(problem(response).code).toBe('validation_error');
+    });
+  });
+
   it('recusa com 400 token 2FA fora do formato, sem repetir o valor na resposta', async () => {
     const response = await test.app.inject({
       method: 'POST',

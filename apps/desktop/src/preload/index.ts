@@ -85,6 +85,19 @@ const hunit: HunitApi = {
     get: (input) => invoke(INVOKE.reservationsGet, input),
     channels: () => invoke(INVOKE.reservationsChannels),
   },
+  treatments: {
+    pickFile: (input) => invoke(INVOKE.treatmentsPickFile, input),
+    discardFile: (selectionId) => invoke(INVOKE.treatmentsDiscardFile, selectionId),
+    check: (input) => invoke(INVOKE.treatmentsCheck, input),
+    apply: (input) => invoke(INVOKE.treatmentsApply, input),
+    get: (input) => invoke(INVOKE.treatmentsGet, input),
+    remove: (documentId) => invoke(INVOKE.treatmentsRemove, documentId),
+    revert: (documentId) => invoke(INVOKE.treatmentsRevert, documentId),
+    setManualAmount: (input) => invoke(INVOKE.treatmentsSetManualAmount, input),
+    clearManualAmount: (input) => invoke(INVOKE.treatmentsClearManualAmount, input),
+    confirmReview: (input) => invoke(INVOKE.treatmentsConfirmReview, input),
+    saveDocument: (documentId) => invoke(INVOKE.treatmentsSaveDocument, documentId),
+  },
 };
 
 contextBridge.exposeInMainWorld('hunit', hunit);

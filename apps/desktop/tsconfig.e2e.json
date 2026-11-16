@@ -13,6 +13,7 @@
   "include": [
     "test/e2e",
     "test/helpers",
+    "test/homolog",
     // Declara o valor `postgresAdminUrl` que o servidor de teste lê com `inject`.
     "../server/test/helpers/postgres-global-setup.ts"
   ]

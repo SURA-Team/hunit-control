@@ -1,21 +1,46 @@
 /**
- * Tela Reservas (specs/002, US3, FR-020 a FR-023, FR-005): consulta das reservas gravadas com
- * filtros combinados, busca livre e busca por valor, feitas pelo servidor; "carregar mais" mantém
- * os filtros; o detalhe abre num painel lateral. Nada é gravado: o que está na tela fica só em
- * memória (FR-008a).
+ * Tela Reservas (specs/002, US3, FR-020 a FR-023, FR-005; specs/003, US3 e US4): consulta das
+ * reservas gravadas com filtros combinados, busca livre e busca por valor, feitas pelo servidor;
+ * "carregar mais" mantém os filtros; o detalhe abre num painel lateral. Nada é gravado: o que
+ * está na tela fica só em memória (FR-008a).
+ *
+ * Tratativas (specs/003): cada linha mostra a situação da reserva numa coluna só — "Tratativa
+ * enviada", "Comprovante enviado" ou o status do Hunit, com o alerta "Verificar" quando houver
+ * (FR-002, FR-002a, FR-017); o perfil operador marca
+ * reservas para aplicar o mesmo documento a várias. A seleção fica fora desta tela
+ * (`state/selection`): pesquisar de novo, trocar filtros ou carregar mais não desmarca nada.
  */
-import { Alert, Button, Drawer, Group, Stack, Table, Text, Title } from '@mantine/core';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Drawer,
+  Group,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import type { Reservation, ReservationListInput } from '../../../../shared/ipc-types';
+import { useMemo, useState } from 'react';
+import type {
+  Reservation,
+  ReservationListInput,
+  TreatmentDocumentKind,
+} from '../../../../shared/ipc-types';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
 import { StatusBadge } from '../../components/StatusBadge';
+import { SituationBadge } from '../../components/SituationBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
-import { formatDate, formatMoney, parseAmountInput } from '../../presentation/format';
-import { CLASSIFICATION_LABELS, RESERVATION_STATUS_LABELS } from '../../presentation/labels';
+import { formatDate, formatMoney, parseAmountInput, sumMoney } from '../../presentation/format';
+import { RESERVATION_STATUS_LABELS } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
+import { SELECTION_LIMIT, useSelection } from '../../state/selection';
+import { AttachDialog } from './AttachDialog';
 import { GuestName, ReservationDetail } from './ReservationDetail';
 import { EMPTY_FILTERS, ReservationFilters, type FilterDraft } from './ReservationFilters';
+import { SelectionDrawer } from './SelectionDrawer';
 
 const PAGE_SIZE = 50;
 
@@ -27,12 +52,15 @@ function toQuery(draft: FilterDraft, q: string | undefined, amount: string | und
     ...(q !== undefined && { q }),
     ...(amount !== undefined && { amount }),
     ...(draft.hotelCodes.length > 0 && { hotelCode: draft.hotelCodes }),
-    ...(draft.classifications.length > 0 && {
-      classification: draft.classifications as Applied['classification'],
+    ...(draft.situations.length > 0 && {
+      situation: draft.situations as Applied['situation'],
     }),
     ...(draft.reservationStatuses.length > 0 && {
       reservationStatus: draft.reservationStatuses as Applied['reservationStatus'],
     }),
+    // "Falta cobrar" e "A verificar": a regra é do servidor; a tela só pede (specs/003).
+    ...(draft.pendingCharge && { pendingCharge: true }),
+    ...(draft.needsReview && { needsReview: true }),
     ...(draft.channel && { channel: draft.channel }),
     ...(draft.notFound && { notFound: true }),
     ...(draft.checkInFrom && { checkInFrom: draft.checkInFrom }),
@@ -47,19 +75,30 @@ export function ReservationsScreen({
   initialExecutionId?: string | null;
 }) {
   const hunit = useHunit();
-  const { state } = useConnection();
+  const { state, isOperator } = useConnection();
+  const selection = useSelection();
   const initial: FilterDraft = { ...EMPTY_FILTERS, executionId: initialExecutionId };
   const [draft, setDraft] = useState<FilterDraft>(initial);
   const [applied, setApplied] = useState<Applied>(() => toQuery(initial, undefined, undefined));
   const [errors, setErrors] = useState<{ q?: string; amount?: string; period?: string }>({});
   const [selected, setSelected] = useState<Reservation | null>(null);
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [limitReached, setLimitReached] = useState(false);
+  /** Lote em andamento: o tipo do documento e as reservas marcadas quando o diálogo abriu. */
+  const [batch, setBatch] = useState<{
+    kind: TreatmentDocumentKind;
+    reservations: Array<{ hotelCode: string; reservationNumber: string }>;
+  } | null>(null);
 
   const hotels = useQuery({ queryKey: ['hotels'], queryFn: () => unwrap(hunit.hotels.list()) });
   const channels = useQuery({
     queryKey: ['channels'],
     queryFn: () => unwrap(hunit.reservations.channels()),
   });
-  const hotelNames = new Map((hotels.data ?? []).map((hotel) => [hotel.code, hotel.name]));
+  const hotelNames = useMemo(
+    () => new Map((hotels.data ?? []).map((hotel) => [hotel.code, hotel.name])),
+    [hotels.data],
+  );
 
   const list = useInfiniteQuery({
     queryKey: ['reservations', applied],
@@ -75,36 +114,58 @@ export function ReservationsScreen({
     getNextPageParam: (page) => page.nextCursor,
   });
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const offline = state?.status === 'offline';
 
-  function search() {
-    const next: typeof errors = {};
-    const text = draft.q.trim();
-    if (text.length === 1) next.q = 'Digite ao menos 2 caracteres na busca.';
+  function applyDraft(next: FilterDraft) {
+    const found: typeof errors = {};
+    const text = next.q.trim();
+    if (text.length === 1) found.q = 'Digite ao menos 2 caracteres na busca.';
     let amount: string | undefined;
-    if (draft.amount.trim() !== '') {
-      amount = parseAmountInput(draft.amount) ?? undefined;
-      if (amount === undefined) next.amount = 'Valor inválido. Use, por exemplo, 1.234,56.';
+    if (next.amount.trim() !== '') {
+      amount = parseAmountInput(next.amount) ?? undefined;
+      if (amount === undefined) found.amount = 'Valor inválido. Use, por exemplo, 1.234,56.';
     }
     // O seletor de intervalo já ordena as datas; falta só o caso de escolher apenas o início.
-    if (Boolean(draft.checkInFrom) !== Boolean(draft.checkInTo)) {
-      next.period = 'Escolha também o fim do período (ou limpe o período).';
+    if (Boolean(next.checkInFrom) !== Boolean(next.checkInTo)) {
+      found.period = 'Escolha também o fim do período (ou limpe o período).';
     }
-    setErrors(next);
-    if (Object.keys(next).length > 0) return;
-    setApplied(toQuery(draft, text.length >= 2 ? text : undefined, amount));
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
+    setApplied(toQuery(next, text.length >= 2 ? text : undefined, amount));
   }
+
+  function addToSelection(reservations: Reservation[]) {
+    const { skipped } = selection.add(reservations);
+    setLimitReached(skipped > 0);
+  }
+
+  function toggle(reservation: Reservation, checked: boolean) {
+    if (checked) addToSelection([reservation]);
+    else {
+      selection.remove([reservation]);
+      setLimitReached(false);
+    }
+  }
+
+  const selectedOnPage = items.filter((reservation) => selection.has(reservation));
+  const allOnPageSelected = items.length > 0 && selectedOnPage.length === items.length;
+  const selectedCount = selection.items.length;
 
   return (
     <Stack gap="md">
       <Group justify="space-between">
         <Title order={2}>Reservas</Title>
-        <StaleDataNotice updatedAt={list.dataUpdatedAt} offline={state?.status === 'offline'} />
+        <StaleDataNotice updatedAt={list.dataUpdatedAt} offline={offline} />
       </Group>
       <ReservationFilters
-        disabled={state?.status === 'offline'}
+        disabled={offline}
         draft={draft}
         onChange={setDraft}
-        onSearch={search}
+        onSearch={() => applyDraft(draft)}
+        onQuickFilter={(next) => {
+          setDraft(next);
+          applyDraft(next);
+        }}
         onClear={() => {
           setDraft(EMPTY_FILTERS);
           setErrors({});
@@ -114,6 +175,54 @@ export function ReservationsScreen({
         channels={channels.data ?? []}
         errors={errors}
       />
+
+      {isOperator && selectedCount > 0 && (
+        <Paper withBorder p="sm" radius="md" data-testid="selection-bar">
+          <Group justify="space-between">
+            <Text size="sm">
+              <b>{selectedCount}</b>{' '}
+              {selectedCount === 1 ? 'reserva selecionada' : 'reservas selecionadas'} — total de{' '}
+              <b>{formatMoney(sumMoney(selection.items.map((item) => item.totalAmount)))}</b>
+            </Text>
+            <Group gap="xs">
+              <Button variant="default" size="xs" onClick={() => setSelectionOpen(true)}>
+                Ver seleção
+              </Button>
+              <Button
+                variant="default"
+                size="xs"
+                disabled={offline}
+                onClick={() => setBatch({ kind: 'request', reservations: selection.items })}
+              >
+                Anexar tratativa
+              </Button>
+              <Button
+                size="xs"
+                disabled={offline}
+                onClick={() => setBatch({ kind: 'proof', reservations: selection.items })}
+              >
+                Anexar comprovante
+              </Button>
+              <Button
+                variant="subtle"
+                size="xs"
+                onClick={() => {
+                  selection.clear();
+                  setLimitReached(false);
+                }}
+              >
+                Desmarcar todas
+              </Button>
+            </Group>
+          </Group>
+        </Paper>
+      )}
+      {limitReached && (
+        <Alert color="yellow" role="alert" withCloseButton onClose={() => setLimitReached(false)}>
+          Selecione no máximo {SELECTION_LIMIT.toLocaleString('pt-BR')} reservas. As que passaram do
+          limite não foram marcadas.
+        </Alert>
+      )}
 
       {list.isError && items.length === 0 && (
         <Alert color="red" role="alert">
@@ -127,6 +236,22 @@ export function ReservationsScreen({
         <Table highlightOnHover striped verticalSpacing={6}>
           <Table.Thead>
             <Table.Tr>
+              {isOperator && (
+                <Table.Th w={36}>
+                  <Checkbox
+                    aria-label="Selecionar todas as reservas listadas"
+                    checked={allOnPageSelected}
+                    indeterminate={selectedOnPage.length > 0 && !allOnPageSelected}
+                    onChange={(event) => {
+                      if (event.currentTarget.checked) addToSelection(items);
+                      else {
+                        selection.remove(items);
+                        setLimitReached(false);
+                      }
+                    }}
+                  />
+                </Table.Th>
+              )}
               <Table.Th>Hotel</Table.Th>
               <Table.Th>Número</Table.Th>
               <Table.Th>Hóspede</Table.Th>
@@ -134,7 +259,7 @@ export function ReservationsScreen({
               <Table.Th>Check-in</Table.Th>
               <Table.Th>Check-out</Table.Th>
               <Table.Th>Valor total</Table.Th>
-              <Table.Th>Situação de cobrança</Table.Th>
+              <Table.Th>Situação da reserva</Table.Th>
               <Table.Th>Reserva</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -145,6 +270,15 @@ export function ReservationsScreen({
                 onClick={() => setSelected(reservation)}
                 style={{ cursor: 'pointer' }}
               >
+                {isOperator && (
+                  <Table.Td onClick={(event) => event.stopPropagation()}>
+                    <Checkbox
+                      aria-label={`Selecionar a reserva ${reservation.reservationNumber}`}
+                      checked={selection.has(reservation)}
+                      onChange={(event) => toggle(reservation, event.currentTarget.checked)}
+                    />
+                  </Table.Td>
+                )}
                 <Table.Td>
                   {hotelNames.get(reservation.hotelCode) ?? reservation.hotelCode}
                 </Table.Td>
@@ -157,7 +291,7 @@ export function ReservationsScreen({
                 <Table.Td>{formatDate(reservation.checkOut)}</Table.Td>
                 <Table.Td>{formatMoney(reservation.totalAmount)}</Table.Td>
                 <Table.Td>
-                  <StatusBadge label={CLASSIFICATION_LABELS[reservation.classification]} />
+                  <SituationBadge treatment={reservation.treatment} />
                 </Table.Td>
                 <Table.Td>
                   <StatusBadge label={RESERVATION_STATUS_LABELS[reservation.reservationStatus]} />
@@ -172,7 +306,7 @@ export function ReservationsScreen({
           <Button
             variant="default"
             onClick={() => void list.fetchNextPage()}
-            disabled={state?.status === 'offline'}
+            disabled={offline}
             loading={list.isFetchingNextPage}
           >
             Carregar mais
@@ -191,6 +325,24 @@ export function ReservationsScreen({
       >
         {selected && <ReservationDetailLoader initial={selected} />}
       </Drawer>
+
+      <SelectionDrawer
+        opened={selectionOpen}
+        onClose={() => setSelectionOpen(false)}
+        hotelNames={hotelNames}
+      />
+
+      {batch && (
+        <AttachDialog
+          kind={batch.kind}
+          reservations={batch.reservations}
+          onClose={(result) => {
+            setBatch(null);
+            // Depois do lote, só as que falharam continuam marcadas, para repetir (FR-006a).
+            if (result) selection.keepOnly(result.failedKeys);
+          }}
+        />
+      )}
     </Stack>
   );
 }

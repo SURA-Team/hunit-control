@@ -9,7 +9,8 @@
  *
  * Mudou a lista de telas? Atualize também `.claude/skills/figma-screens-sync/references/screens.md`.
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { InvalidCredentialsError } from '../../../server/src/hunit/errors.js';
@@ -19,6 +20,7 @@ import {
   type FakeScenario,
 } from '../../../server/test/helpers/fake-hunit-gateway.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
+import { emlFile, pdfFile, pngFile } from '../helpers/synthetic-files.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
 import {
   daysFromToday,
@@ -210,7 +212,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('2.1', 'executar-vazio');
       await window.getByLabel('Usuário do Hunit').fill('operador@exemplo.com.br');
       await window.getByLabel('Senha do Hunit').fill('senha-ficticia');
-      await window.getByLabel('Período de check-in').click();
+      // O pickPeriod abre o calendário sozinho; o clique seguinte o reabre com o intervalo marcado.
       await pickPeriod(window, daysFromToday(0), daysFromToday(6));
       await window.getByLabel('Período de check-in').click();
       await shot('2.2', 'executar-escolhendo-o-periodo');
@@ -270,6 +272,160 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByText('Nenhuma reserva encontrada com estes filtros.').waitFor();
       await shot('4.3', 'reservas-nenhum-resultado');
       await window.getByRole('button', { name: 'Limpar' }).click();
+    });
+
+    // Tratativas (specs/003): documentos fictícios registrados pela API antes das telas.
+    await step('4.4 a 4.8 tratativas', async () => {
+      const files = await mkdtemp(path.join(tmpdir(), 'hunit-telas-arquivos-'));
+      const write = async (name: string, content: Buffer) => {
+        const target = path.join(files, name);
+        await writeFile(target, content);
+        return target;
+      };
+      const comprovante = await write('comprovante-cobranca.png', pngFile());
+      const pedido = await write(
+        'pedido-de-cobranca.eml',
+        emlFile({
+          subject: 'Pedido de cobrança — reserva 101-1005',
+          text:
+            'Olá, equipe do Comercial.\n\nFavor cobrar na maquininha a reserva 101-1005 ' +
+            '(Fábio Rocha), check-out amanhã.\n\nObrigado,\nFinanceiro',
+          attachment: { name: 'resumo-da-reserva.txt', content: 'Reserva 101-1005' },
+        }),
+      );
+
+      const api = (method: 'POST', url: string, payload: unknown, headers = {}) =>
+        server.test.app.inject({
+          method,
+          url,
+          headers: { ...server.operator.headers, ...headers },
+          payload: payload as string,
+        });
+      const register = async (
+        number: string,
+        kind: 'request' | 'proof',
+        name: string,
+        content: Buffer,
+      ) => {
+        const upload = await api(
+          'POST',
+          `/v1/treatment-files?name=${encodeURIComponent(name)}`,
+          content,
+          {
+            'content-type': 'application/octet-stream',
+          },
+        );
+        const { fileId } = upload.json<{ fileId: string }>();
+        await api('POST', '/v1/treatment-documents', {
+          kind,
+          fileId,
+          fileName: name,
+          reservations: [{ hotelCode: number.slice(0, 3), reservationNumber: number }],
+        });
+      };
+      await register(
+        '101-1000',
+        'request',
+        'pedido-ao-comercial.eml',
+        emlFile({ subject: 'Pedido 101-1000' }),
+      );
+      await register('101-1000', 'proof', 'comprovante-antigo.pdf', pdfFile('Comprovante antigo'));
+      await register(
+        '101-1000',
+        'proof',
+        'comprovante-101-1000.pdf',
+        pdfFile('Comprovante 101-1000'),
+      );
+      await register(
+        '101-1003',
+        'request',
+        'pedido-101-1003.eml',
+        emlFile({ subject: 'Pedido 101-1003' }),
+      );
+      // Valor informado, removido e informado de novo: o histórico passa de 5 itens e a tela
+      // 4.7 mostra "Mostrar mais" (FR-017a).
+      for (const method of ['PUT', 'DELETE', 'PUT'] as const) {
+        await server.test.app.inject({
+          method,
+          url: '/v1/reservations/101/101-1000/manual-amount',
+          headers: server.operator.headers,
+          ...(method === 'PUT' && { payload: { amount: '380.00' } }),
+        });
+      }
+      // Tratativa enviada e, depois, o Hunit passou a mostrar "Já cobrada": alerta "Verificar"
+      // (FR-002a, tela 4.9).
+      await register(
+        '102-1007',
+        'request',
+        'pedido-102-1007.eml',
+        emlFile({ subject: 'Pedido 102-1007' }),
+      );
+      await server.test.database.pool.query(
+        `update reservations set classification = 'virtual_card_already_charged',
+           previous_classification = classification, status_changed = true,
+           status_changed_at = now()
+         where hotel_code = '102' and reservation_number = '102-1007'`,
+      );
+
+      await goTo('Reservas');
+      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
+      for (const number of ['101-1002', '101-1003', '101-1005']) {
+        await window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).check();
+      }
+      await window.getByLabel('Busca livre').fill('104-1015');
+      await window.getByRole('button', { name: 'Buscar' }).click();
+      await window.getByRole('checkbox', { name: 'Selecionar a reserva 104-1015' }).check();
+      await window.getByLabel('Busca livre').fill('');
+      await window.getByRole('button', { name: 'Buscar' }).click();
+      await window.getByRole('checkbox', { name: 'Selecionar a reserva 101-1002' }).waitFor();
+      await shot('4.4', 'reservas-selecao-do-lote');
+
+      await window.getByRole('button', { name: 'Ver seleção' }).click();
+      await window.getByRole('table', { name: 'Reservas selecionadas' }).waitFor();
+      await shot('4.5', 'reservas-reservas-selecionadas');
+      await window.getByRole('button', { name: 'Fechar seleção' }).click();
+
+      await stubOpenDialog(launched.app, comprovante);
+      await window
+        .getByTestId('selection-bar')
+        .getByRole('button', { name: 'Anexar comprovante' })
+        .click();
+      const batch = window.getByRole('dialog', { name: /Anexar comprovante a 4 reservas/ });
+      await batch.getByTestId('attach-summary').waitFor({ timeout: 15_000 });
+      await shot('4.6', 'reservas-anexar-comprovante-em-lote', true);
+      await batch.getByRole('button', { name: 'Cancelar' }).click();
+      await batch.waitFor({ state: 'detached' });
+      await window
+        .getByTestId('selection-bar')
+        .getByRole('button', { name: 'Desmarcar todas' })
+        .click();
+
+      await window.getByRole('cell', { name: '101-1000', exact: true }).click();
+      await window
+        .getByTestId('treatment-section')
+        .getByText('Histórico')
+        .waitFor({ timeout: 15_000 });
+      await shot('4.7', 'reservas-detalhe-com-tratativa', true);
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+
+      await window.getByRole('cell', { name: '101-1005', exact: true }).click();
+      await stubOpenDialog(launched.app, pedido);
+      await window
+        .getByTestId('treatment-section')
+        .getByRole('button', { name: 'Anexar tratativa' })
+        .click();
+      const single = window.getByRole('dialog', { name: /Anexar tratativa/ });
+      await single.getByTestId('attach-summary').waitFor({ timeout: 15_000 });
+      await shot('4.8', 'reservas-anexar-tratativa-email');
+      await single.getByRole('button', { name: 'Cancelar' }).click();
+      await single.waitFor({ state: 'detached' });
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+
+      await window.getByRole('cell', { name: '102-1007', exact: true }).click();
+      await window.getByTestId('review-alert').waitFor({ timeout: 15_000 });
+      await shot('4.9', 'reservas-detalhe-verificar', true);
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
     });
 
     await step('1.3 configuração conectada', async () => {

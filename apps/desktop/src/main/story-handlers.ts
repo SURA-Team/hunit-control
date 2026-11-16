@@ -115,6 +115,7 @@ export function createStoryHandlers(services: StoryServices): InvokeHandlers {
           ...input,
           classification: input.classification as never,
           reservationStatus: input.reservationStatus as never,
+          situation: input.situation as never,
         }),
       ),
     ),

@@ -11,7 +11,10 @@ import {
   apiClients,
   evidence,
   executions,
+  reservationManualAmounts,
   reservationObservations,
+  treatmentDocuments,
+  treatmentFiles,
 } from '../../src/persistence/schema.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/db.js';
 import {
@@ -60,8 +63,12 @@ describe('migrations (T012)', () => {
       'execution_hotels',
       'executions',
       'hotels',
+      'reservation_manual_amounts',
       'reservation_observations',
       'reservations',
+      'treatment_documents',
+      'treatment_events',
+      'treatment_files',
     ]);
   });
 
@@ -258,5 +265,170 @@ describe('evidence (T011)', () => {
     await expect(
       database.db.insert(evidence).values({ ...base, responsePath: 'x/resposta.json' }),
     ).resolves.toBeDefined();
+  });
+});
+
+describe('tratativas (specs/003, data-model §1)', () => {
+  const SHA = 'c'.repeat(64);
+
+  async function setup(reservationNumber: string) {
+    const client = await insertClient(database.db);
+    const reservation = await insertReservation({ reservationNumber });
+    await database.db
+      .insert(treatmentFiles)
+      .values({
+        sha256: SHA,
+        content: Buffer.from('%PDF'),
+        sizeBytes: 4,
+        mediaType: 'application/pdf',
+        uploadedByClientId: client.id,
+      })
+      .onConflictDoNothing();
+    const document = {
+      hotelCode: reservation.hotelCode,
+      reservationNumber,
+      kind: 'proof' as const,
+      fileSha256: SHA,
+      originalName: 'c.pdf',
+      sizeBytes: 4,
+      mediaType: 'application/pdf',
+      attachedByClientId: client.id,
+    };
+    return { client, reservation, document };
+  }
+
+  it('o arquivo precisa ter o tamanho do conteúdo e um SHA-256 válido', async () => {
+    const client = await insertClient(database.db);
+    const file = {
+      content: Buffer.from('%PDF'),
+      mediaType: 'application/pdf',
+      uploadedByClientId: client.id,
+    };
+
+    expect(
+      await violation(
+        database.db
+          .insert(treatmentFiles)
+          .values({ ...file, sha256: 'd'.repeat(64), sizeBytes: 5 }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'treatment_files_size_check' });
+    expect(
+      await violation(
+        database.db.insert(treatmentFiles).values({ ...file, sha256: 'nao-e-sha', sizeBytes: 4 }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'treatment_files_sha256_check' });
+  });
+
+  it('permite no máximo um documento vigente por reserva e tipo', async () => {
+    const { document, client } = await setup('TRAT-1');
+    await database.db.insert(treatmentDocuments).values(document);
+
+    expect(await violation(database.db.insert(treatmentDocuments).values(document))).toEqual({
+      code: PG_UNIQUE_VIOLATION,
+      constraint: 'treatment_documents_one_current',
+    });
+
+    // O outro tipo e um documento já encerrado não contam.
+    await expect(
+      database.db.insert(treatmentDocuments).values({ ...document, kind: 'request' }),
+    ).resolves.toBeDefined();
+    await expect(
+      database.db.insert(treatmentDocuments).values({
+        ...document,
+        state: 'replaced',
+        endedAt: new Date(),
+        endedByClientId: client.id,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('o estado precisa combinar com o fim e com a purga', async () => {
+    const { document, client } = await setup('TRAT-2');
+    const ended = { endedAt: new Date(), endedByClientId: client.id };
+
+    // Atual com data de fim; substituído sem data de fim.
+    expect(
+      await violation(database.db.insert(treatmentDocuments).values({ ...document, ...ended })),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'treatment_documents_state_check' });
+    expect(
+      await violation(
+        database.db.insert(treatmentDocuments).values({ ...document, state: 'replaced' }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'treatment_documents_state_check' });
+
+    // Purgado ainda com arquivo; não purgado sem arquivo.
+    expect(
+      await violation(
+        database.db
+          .insert(treatmentDocuments)
+          .values({ ...document, ...ended, state: 'purged', purgedAt: new Date() }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'treatment_documents_purged_check' });
+    expect(
+      await violation(
+        database.db
+          .insert(treatmentDocuments)
+          .values({ ...document, fileSha256: null, originalName: null }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'treatment_documents_purged_check' });
+
+    // Fim sem quem encerrou.
+    expect(
+      await violation(
+        database.db
+          .insert(treatmentDocuments)
+          .values({ ...document, state: 'removed', endedAt: new Date() }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'treatment_documents_ended_by_check' });
+
+    // Purgado que continua vigente (reserva anonimizada, FR-016) é válido.
+    await expect(
+      database.db.insert(treatmentDocuments).values({
+        ...document,
+        state: 'purged',
+        fileSha256: null,
+        originalName: null,
+        purgedAt: new Date(),
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('só aceita documento e valor de reserva existente, e valor maior que zero', async () => {
+    const { document, client, reservation } = await setup('TRAT-3');
+
+    expect(
+      await violation(
+        database.db
+          .insert(treatmentDocuments)
+          .values({ ...document, reservationNumber: 'NAO-EXISTE' }),
+      ),
+    ).toEqual({
+      code: PG_FOREIGN_KEY_VIOLATION,
+      constraint: 'treatment_documents_reservation_fk',
+    });
+
+    const amount = {
+      hotelCode: reservation.hotelCode,
+      reservationNumber: 'TRAT-3',
+      setByClientId: client.id,
+    };
+    expect(
+      await violation(
+        database.db.insert(reservationManualAmounts).values({ ...amount, amount: '0.00' }),
+      ),
+    ).toEqual({
+      code: PG_CHECK_VIOLATION,
+      constraint: 'reservation_manual_amounts_amount_check',
+    });
+    expect(
+      await violation(
+        database.db
+          .insert(reservationManualAmounts)
+          .values({ ...amount, reservationNumber: 'NAO-EXISTE', amount: '10.00' }),
+      ),
+    ).toEqual({
+      code: PG_FOREIGN_KEY_VIOLATION,
+      constraint: 'reservation_manual_amounts_reservation_fk',
+    });
   });
 });

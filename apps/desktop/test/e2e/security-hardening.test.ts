@@ -39,6 +39,20 @@ const BRIDGE = {
   twoFactor: ['onClosed', 'onRequested'],
   evidence: ['list', 'save'],
   reservations: ['channels', 'get', 'list'],
+  // Tratativas manuais (specs/003, contracts/ipc.md).
+  treatments: [
+    'apply',
+    'check',
+    'clearManualAmount',
+    'confirmReview',
+    'discardFile',
+    'get',
+    'pickFile',
+    'remove',
+    'revert',
+    'saveDocument',
+    'setManualAmount',
+  ],
 };
 
 describe('janela endurecida', () => {

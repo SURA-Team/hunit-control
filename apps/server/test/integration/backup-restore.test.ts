@@ -9,6 +9,7 @@
  * Usa um container próprio (não o banco compartilhado dos testes), porque os scripts rodam
  * dentro dele.
  */
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { sql } from 'drizzle-orm';
@@ -18,6 +19,8 @@ import {
   runMigrations,
   type DatabaseConnection,
 } from '../../src/persistence/db.js';
+import { saveTreatmentFile } from '../../src/persistence/treatment-files-repo.js';
+import { registerDocuments, setManualAmount } from '../../src/persistence/treatments-repo.js';
 import { insertClient, insertExecution, insertReservation } from '../helpers/factories.js';
 
 const POSTGRES_IMAGE = 'postgres:17';
@@ -25,6 +28,15 @@ const SCRIPTS_DIR = fileURLToPath(new URL('../../../../deploy/backup', import.me
 const PASSPHRASE = 'frase-secreta-das-copias-de-teste';
 const GUEST_NAME = 'Hóspede Fictício da Cópia';
 const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * Documento de uma tratativa (specs/003, FR-010, SC-007): um "PDF" com todos os valores de byte,
+ * para conferir que o conteúdo binário atravessa a cópia e a restauração sem mudar.
+ */
+const DOCUMENT = Buffer.concat([
+  Buffer.from('%PDF-1.7\n'),
+  Buffer.from(Array.from({ length: 256 }, (_unused, index) => index)),
+]);
+const DOCUMENT_SHA256 = createHash('sha256').update(DOCUMENT).digest('hex');
 const BACKUP_NAME = /^hunit-\d{8}-\d{6}\.dump\.gpg$/;
 
 let container: StartedPostgreSqlContainer;
@@ -44,11 +56,32 @@ beforeAll(async () => {
     guestName: GUEST_NAME,
     lastExecutionId: execution.id,
   });
-  await insertReservation(source.db, {
+  const second = await insertReservation(source.db, {
     reservationNumber: '9002',
     guestName: null,
     lastExecutionId: execution.id,
   });
+
+  // Uma tratativa completa: arquivo, documento, evento e valor informado à mão (specs/003).
+  const key = { hotelCode: second.hotelCode, reservationNumber: second.reservationNumber };
+  const now = new Date();
+  const treatmentFile = await saveTreatmentFile(source.db, {
+    sha256: DOCUMENT_SHA256,
+    content: DOCUMENT,
+    mediaType: 'application/pdf',
+    clientId: client.id,
+    now,
+  });
+  await registerDocuments(source.db, {
+    kind: 'proof',
+    file: treatmentFile,
+    fileName: 'comprovante-ficticio.pdf',
+    keys: [key],
+    clientId: client.id,
+    batchId: '00000000-0000-4000-8000-000000000001',
+    now,
+  });
+  await setManualAmount(source.db, { key, amount: '123.45', clientId: client.id, now });
 }, 180_000);
 
 afterAll(async () => {
@@ -111,7 +144,13 @@ async function dumpOf(database: string) {
       `select hotel_code, reservation_number, coalesce(guest_name, '-'), total_amount ` +
       `from reservations order by reservation_number; ` +
       `select id, status from executions order by id; ` +
-      `select name, role from api_clients order by name"`,
+      `select name, role from api_clients order by name; ` +
+      // Tratativas (specs/003): o SHA-256 é recalculado sobre o conteúdo guardado.
+      `select sha256, encode(sha256(content), 'hex'), size_bytes, media_type from treatment_files; ` +
+      `select id, reservation_number, kind, state, original_name, file_sha256 ` +
+      `from treatment_documents; ` +
+      `select id, type, document_id, amount from treatment_events order by id; ` +
+      `select reservation_number, amount from reservation_manual_amounts"`,
   );
   return rows.trim();
 }
@@ -176,6 +215,12 @@ describe('backup.sh once (FR-030, SC-011)', () => {
     expect(restored.output).not.toContain(PASSPHRASE);
     const original = await dumpOf(container.getDatabase());
     expect(original).toContain(GUEST_NAME);
+    // O documento da tratativa está na cópia, com o conteúdo intacto (specs/003, SC-007).
+    expect(original).toContain(
+      `${DOCUMENT_SHA256}|${DOCUMENT_SHA256}|${DOCUMENT.length}|application/pdf`,
+    );
+    expect(original).toContain('comprovante-ficticio.pdf');
+    expect(original).toContain('9002|123.45');
     expect(await dumpOf('restaurado')).toBe(original);
   });
 
