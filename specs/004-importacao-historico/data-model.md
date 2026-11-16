@@ -23,6 +23,7 @@ Control já não guardaria para uma reserva verificada por ele (FR-018).
 | `issues` | `jsonb` | lista de `{ sheet, row, legacyHotel, reservationNumber, entity, outcome, reason }` (só ignorados e recusados) |
 | `differences` | `jsonb`, anulável | só em `import`: desfechos que mudaram em relação à simulação |
 | `warnings` | `jsonb` | avisos gerais (ex.: reservas com `not_virtual_card` sem origem, R-04; hotéis sem associação) |
+| `outcomes` | `jsonb` | desfecho de cada entidade por chave `código do hotel do sistema anterior\|reserva\|entidade` (ex.: `created`, `rejected:file_not_found`), para a importação apontar as diferenças em relação à simulação (FR-005a). Ajuste da implementação: só com as recusas não dava para ver, por exemplo, uma reserva criada na simulação e atualizada na importação |
 
 `issues` só tem códigos, números de linha, o código do hotel do sistema anterior e o número da
 reserva (FR-018). Guardada sem prazo: não tem dado pessoal.

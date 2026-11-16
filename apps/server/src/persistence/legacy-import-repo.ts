@@ -179,6 +179,7 @@ export async function finishImportRecord(
     issues?: LegacyImportIssue[];
     warnings?: LegacyImportWarningEntry[];
     differences?: LegacyImportDifference[];
+    outcomes?: Record<string, string>;
   },
 ): Promise<void> {
   await db
@@ -190,6 +191,7 @@ export async function finishImportRecord(
       ...(result.issues ? { issues: result.issues } : {}),
       ...(result.warnings ? { warnings: result.warnings } : {}),
       ...(result.differences ? { differences: result.differences } : {}),
+      ...(result.outcomes ? { outcomes: result.outcomes } : {}),
     })
     .where(eq(legacyImports.id, id));
 }

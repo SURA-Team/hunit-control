@@ -153,7 +153,7 @@ mostra as contagens e os motivos esperados, lista os hotéis com proposta e não
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T015 [P] [US1] Escrever `apps/server/test/integration/legacy-simulate.test.ts` (grupo `server-db`):
+- [X] T015 [P] [US1] Escrever `apps/server/test/integration/legacy-simulate.test.ts` (grupo `server-db`):
   - contagens exatas por entidade e desfecho para uma planilha com um caso de cada motivo de data-model §4;
   - zero linhas novas ou alteradas em `reservations`, `legacy_reservations`, `treatment_files`, `treatment_documents`, `treatment_events` e `reservation_manual_amounts` (SC-002), e só uma linha `simulation` em `legacy_imports`;
   - 100% das linhas da planilha em exatamente um desfecho (SC-001);
@@ -163,23 +163,23 @@ mostra as contagens e os motivos esperados, lista os hotéis com proposta e não
   - aviso `anonymized_on_import` com a contagem;
   - `unreferenced_files` com a contagem;
   - o `HunitGateway` falso registra zero chamadas (SC-005)
-- [ ] T016 [P] [US1] Escrever `apps/server/test/security/legacy-no-personal-data.test.ts` (grupo `server-db`, com o `log-capture` existente), research R-11:
+- [X] T016 [P] [US1] Escrever `apps/server/test/security/legacy-no-personal-data.test.ts` (grupo `server-db`, com o `log-capture` existente), research R-11:
   - uma planilha fictícia com marcadores em todas as colunas sensíveis e nos nomes de arquivo (`MARCADOR-HOSPEDE`, `MARCADOR-ARQUIVO.pdf`, `987654.32`, `MARCADOR-TRANSACAO`, a data `2031-01-02`), inclusive em linhas recusadas;
   - simular, importar e mostrar o `report`;
   - nenhum marcador aparece na saída, na saída de erro, no log nem nas colunas `issues`, `differences` e `warnings` de `legacy_imports` (SC-006)
-- [ ] T017 [P] [US1] Escrever `apps/server/test/integration/legacy-lock.test.ts`: duas simulações ao mesmo tempo → a segunda termina com código 1 e "Já existe uma importação em andamento" (FR-020); depois que a primeira termina, o lock está livre; um processo que cai solta o lock (conexão encerrada)
+- [X] T017 [P] [US1] Escrever `apps/server/test/integration/legacy-lock.test.ts`: duas simulações ao mesmo tempo → a segunda termina com código 1 e "Já existe uma importação em andamento" (FR-020); depois que a primeira termina, o lock está livre; um processo que cai solta o lock (conexão encerrada)
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Implementar `apps/server/src/legacy-import/planner.ts` (research R-08):
+- [X] T018 [US1] Implementar `apps/server/src/legacy-import/planner.ts` (research R-08):
   - `planImport(input, readState)`: recebe as linhas lidas (T011), o índice de anexos (T012), as associações e uma função de leitura do estado atual (reservas, `legacy_reservations`, documentos atuais com `legacy_import_id` e SHA-256, valores manuais);
   - devolve um plano por reserva (`create`, `update`, `merge`, `ignore`, `reject` com motivo, mais os documentos e o valor manual dela) e as contagens, `issues` e `warnings`, usando **só** as funções do domínio (T009);
   - as tratativas de uma reserva recusada ficam `reservation_rejected`; as de uma reserva fora da aba e fora do banco, `reservation_not_in_sheet`;
   - **não grava nada**.
 
   Depende de T011, T012, T013, T015
-- [ ] T019 [US1] Implementar `apps/server/src/legacy-import/report.ts`: texto de [contracts/cli.md](./contracts/cli.md) a partir de uma linha de `legacy_imports`: tabela de contagens, hotéis sem associação com a proposta, ignorados e recusados (aba, linha, código do hotel do sistema anterior, número, tipo, texto do motivo de data-model §4), avisos e a próxima instrução. Só códigos e números, nunca valores. Depende de T018
-- [ ] T020 [US1] Implementar `apps/server/src/legacy-import/command.ts` e ligar no `apps/server/src/cli.ts`:
+- [X] T019 [US1] Implementar `apps/server/src/legacy-import/report.ts`: texto de [contracts/cli.md](./contracts/cli.md) a partir de uma linha de `legacy_imports`: tabela de contagens, hotéis sem associação com a proposta, ignorados e recusados (aba, linha, código do hotel do sistema anterior, número, tipo, texto do motivo de data-model §4), avisos e a próxima instrução. Só códigos e números, nunca valores. Depende de T018
+- [X] T020 [US1] Implementar `apps/server/src/legacy-import/command.ts` e ligar no `apps/server/src/cli.ts`:
   - subcomandos `simulate --xlsx --files`, `hotels` (lista, `--set <código> --hotel <código>`, `--set <código> --none`, `--accept-proposals`), `report --id` e `--help`;
   - `simulate` pega o lock (T013), lê (T011), atualiza as propostas dos códigos novos (`proposeHotel` sobre `hotels`), planeja (T018), grava a linha `simulation` com a impressão digital (T014) e imprime o relatório (T019) com o id;
   - códigos de saída de cli.md;

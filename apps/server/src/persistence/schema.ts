@@ -691,6 +691,12 @@ export const legacyImports = pgTable(
     issues: jsonb('issues').$type<LegacyImportIssue[]>().notNull().default([]),
     differences: jsonb('differences').$type<LegacyImportDifference[]>(),
     warnings: jsonb('warnings').$type<LegacyImportWarningEntry[]>().notNull().default([]),
+    /**
+     * Desfecho de cada entidade, por chave `código do hotel|reserva|entidade` (ex.: `created`,
+     * `rejected:file_not_found`), para a importação apontar o que mudou desde a simulação
+     * (FR-005a). Só códigos e chaves (FR-018).
+     */
+    outcomes: jsonb('outcomes').$type<Record<string, string>>().notNull().default({}),
   },
   (table) => [
     check(

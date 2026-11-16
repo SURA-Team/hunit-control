@@ -23,6 +23,7 @@ CREATE TABLE "legacy_imports" (
 	"issues" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"differences" jsonb,
 	"warnings" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"outcomes" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	CONSTRAINT "legacy_imports_simulation_check" CHECK (("legacy_imports"."kind" = 'import') = ("legacy_imports"."simulation_id" is not null)),
 	CONSTRAINT "legacy_imports_finished_check" CHECK (("legacy_imports"."status" = 'running') = ("legacy_imports"."finished_at" is null))
 );

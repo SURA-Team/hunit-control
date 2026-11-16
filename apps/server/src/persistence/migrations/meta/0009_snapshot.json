@@ -1,5 +1,5 @@
 {
-  "id": "f6afa820-a1d8-4d4b-8c33-3ca2379c45eb",
+  "id": "2b872659-ec54-4a9a-bd38-9d96ac6b3fd4",
   "prevId": "f21a4c2e-773d-4117-b684-02744b6f1a50",
   "version": "7",
   "dialect": "postgresql",
@@ -836,6 +836,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'[]'::jsonb"
+        },
+        "outcomes": {
+          "name": "outcomes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         }
       },
       "indexes": {},
