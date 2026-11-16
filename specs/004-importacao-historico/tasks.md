@@ -115,20 +115,20 @@ usam.
 
 ### Peças do comando (grupo `server` e `server-db`)
 
-- [ ] T011 [P] Escrever `apps/server/test/integration/legacy-workbook.test.ts` e implementar `apps/server/src/legacy-import/workbook.ts`:
+- [X] T011 [P] Escrever `apps/server/test/integration/legacy-workbook.test.ts` e implementar `apps/server/src/legacy-import/workbook.ts`:
   - `readLegacyWorkbook(path)` lê com `read-excel-file/node` as abas "Reservas" e "Tratativas" pelo nome e devolve `{ sheet, row, cells: Record<coluna, valor> }` com o número da linha da planilha;
   - aba ausente ou coluna obrigatória faltando → erro tipado com o nome da aba ou da coluna;
   - qualquer erro da biblioteca vira `unreadable_workbook`, sem a mensagem original (research R-11).
 
   Teste com planilhas de T002. Depende de T002, T009
-- [ ] T012 [P] Escrever `apps/server/test/integration/legacy-attachments.test.ts` e implementar `apps/server/src/legacy-import/attachments.ts` (research R-07):
+- [X] T012 [P] Escrever `apps/server/test/integration/legacy-attachments.test.ts` e implementar `apps/server/src/legacy-import/attachments.ts` (research R-07):
   - `resolveAttachment(root, storedPath)`: primeiro o caminho relativo dentro da pasta; se não existir, busca pelo nome do arquivo num índice da pasta montado uma vez;
   - nome repetido na pasta, caminho absoluto, com `..` ou que sai da pasta (inclusive por link simbólico, conferido com `realpath`) → `file_not_found`, sem abrir nada fora da pasta;
   - `inspectAttachment(path, name)`: `stat` antes de ler, e acima de 26 214 400 bytes devolve `file_too_large` **sem ler** (espiar a leitura no teste); senão lê, calcula o SHA-256 e aplica `detectTreatmentFile` da 003 (`empty_file`, `unsupported_file_type`, `file_type_mismatch`);
   - `unreferencedCount()` conta os arquivos da pasta que nenhuma linha usou.
 
   Depende de T002
-- [ ] T013 Criar `apps/server/src/persistence/legacy-import-repo.ts` e o teste `apps/server/test/integration/legacy-import-repo.test.ts`:
+- [X] T013 Criar `apps/server/src/persistence/legacy-import-repo.ts` e o teste `apps/server/test/integration/legacy-import-repo.test.ts`:
   - `withImportLock(db, fn)`: `pg_try_advisory_lock` com chave fixa na conexão do comando; se o lock já está com outro processo, `ImportInProgressError`;
   - `ensureLegacyAuthor`: `api_clients` `sistema-anterior`, perfil `reader`, `revoked_at` = agora, `key_hash` = SHA-256 de 32 bytes aleatórios descartados; idempotente;
   - CRUD de `legacy_hotel_mappings` (lista, proposta, confirmar, sem associação, aceitar propostas);
@@ -136,7 +136,7 @@ usam.
   - ler `legacy_reservations` por chave.
 
   Em `apps/server/src/cli.ts`, o `create-client` passa a recusar o nome `sistema-anterior` ("Nome reservado"), com teste no `apps/server/test/integration/cli.test.ts` existente (grupo `server-db`). Depende de T010
-- [ ] T014 [P] Escrever `apps/server/test/unit/legacy-fingerprint.test.ts` e implementar `apps/server/src/legacy-import/fingerprint.ts`: SHA-256 de (SHA-256 da planilha + pares caminho/SHA-256 de cada arquivo referenciado, ordenados + associações confirmadas, ordenadas); qualquer mudança em um dos três muda a impressão digital (research R-08). Depende de T009
+- [X] T014 [P] Escrever `apps/server/test/unit/legacy-fingerprint.test.ts` e implementar `apps/server/src/legacy-import/fingerprint.ts`: SHA-256 de (SHA-256 da planilha + pares caminho/SHA-256 de cada arquivo referenciado, ordenados + associações confirmadas, ordenadas); qualquer mudança em um dos três muda a impressão digital (research R-08). Depende de T009
 
 **Checkpoint**: domínio, banco e peças do comando prontos. As histórias podem começar.
 

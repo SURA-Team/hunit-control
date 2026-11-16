@@ -14,6 +14,7 @@ import { generateApiKey, hashApiKey } from './http/auth.js';
 import { ClientNameTakenError, createClient, revokeClient } from './persistence/clients-repo.js';
 import { connectDatabase, runMigrations, type DatabaseConnection } from './persistence/db.js';
 import { findDatabaseError } from './persistence/errors.js';
+import { LEGACY_AUTHOR_NAME } from './persistence/legacy-import-repo.js';
 import { clientRoleEnum, type ClientRole } from './persistence/schema.js';
 
 const USAGE = `Uso:
@@ -43,6 +44,11 @@ function isClientRole(value: string): value is ClientRole {
 
 function readName(value: string | undefined): string {
   if (value === undefined) throw new UsageError('Informe o nome do cliente com --name.');
+  if (value === LEGACY_AUTHOR_NAME) {
+    throw new UsageError(
+      `Nome reservado: "${LEGACY_AUTHOR_NAME}" é o autor dos registros importados do sistema anterior.`,
+    );
+  }
   if (!CLIENT_NAME_PATTERN.test(value)) {
     throw new UsageError(
       'Nome inválido: use de 2 a 50 caracteres, só letras minúsculas, números, "-" e "_".',
