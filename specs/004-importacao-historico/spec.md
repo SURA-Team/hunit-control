@@ -50,6 +50,10 @@ notificação, concorrência de hotéis, desligamento dos containers).
   cartão virtual")? → A: Numa situação própria, **"A revisar (sistema anterior)"**, fora do "Falta
   cobrar" e com filtro próprio. Uma execução no Hunit que cubra o hotel e o período da reserva a
   reclassifica normalmente, tirando-a dessa situação (FR-007a).
+- Q: (Homologação, T043) O relatório da reimportação listava cada linha "já importada" e as
+  recusas se perdiam no meio. O que mostrar? → A: Os "já importados sem mudança" viram uma contagem
+  por tipo; as recusas e os demais ignorados continuam listados; `report --id <id> --all` mostra a
+  lista completa (FR-005).
 - Q: Os nomes de coluna listados na spec batem com o cabeçalho das duas abas da planilha real? → A:
   Sim, os 35 da aba "Reservas" e os 14 da aba "Tratativas", na mesma ordem. O "Codigo hotel" do
   sistema anterior não é o código numérico do Hunit: é um nome em minúsculas separado por "_",
@@ -272,7 +276,9 @@ pela API e pelo app, com chave de perfil operador e de perfil consulta.
   tratativas, comprovantes e valores manuais, quantos seriam **criados**, **atualizados**,
   **ignorados** (já importados sem mudança, duplicados ou com registro do HUNIT Control que
   prevalece) e **recusados**, e a lista dos ignorados e recusados com hotel, número da reserva e
-  motivo.
+  motivo. Os ignorados por já estarem importados sem mudança MUST aparecer resumidos numa contagem
+  por tipo, para as recusas não se perderem numa reimportação; a lista completa MUST continuar
+  guardada e ser mostrada a pedido.
 - **FR-005a**: A importação MUST só ser confirmada sobre uma simulação feita com a mesma planilha, a
   mesma pasta e a mesma associação de hotéis. O resultado da importação MUST usar o mesmo formato do
   relatório da simulação e apontar as diferenças em relação a ela.

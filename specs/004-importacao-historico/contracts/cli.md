@@ -30,7 +30,7 @@ pnpm --filter @hunit/server legacy-import <subcomando> [opções]
 | `hotels` | `--set <código> --none` | Deixa o hotel sem associação (as linhas dele são recusadas) |
 | `hotels` | `--accept-proposals` | Confirma todas as propostas |
 | `run` | `--simulation <id>` `--xlsx <arquivo>` `--files <pasta>` | Confere a impressão digital contra a simulação e importa; mostra o relatório e as diferenças |
-| `report` | `--id <id>` | Mostra de novo o relatório de uma simulação ou importação |
+| `report` | `--id <id>` `[--all]` | Mostra de novo o relatório de uma simulação ou importação; com `--all`, lista também cada linha "já importada, sem mudança" |
 | `--help` | — | Uso |
 
 ## Saída
@@ -60,6 +60,9 @@ Avisos:
 
 Para importar: legacy-import run --simulation 7f1c… --xlsx … --files …
 ```
+
+Os ignorados por "já importada(o), sem mudança" aparecem só como contagem (ex.: `Já importados,
+sem mudança: 1234 reservas, 56 tratativas`); `report --id <id> --all` mostra cada um (FR-005).
 
 Nunca aparecem: nome de hóspede, valores, datas, nomes de arquivo, conteúdo de célula (FR-018). O
 andamento durante a importação mostra só "N de M reservas".

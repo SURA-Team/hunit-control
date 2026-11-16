@@ -147,6 +147,11 @@ describe('legacy-import run (US2)', () => {
       ignored: 4,
       rejected: 0,
     });
+    // Os "já importados" aparecem resumidos; a lista completa só com --all (FR-005).
+    expect(run.stdout).toContain('Já importados, sem mudança: 4 reservas.');
+    expect(run.stdout).not.toContain('Já importada, sem mudança');
+    const full = await legacyImport(database, ['report', '--id', reportId(run.stdout), '--all']);
+    expect(full.stdout.match(/Já importada, sem mudança/g)).toHaveLength(4);
     const after = await writtenRows(database);
     expect({ ...after, legacyImports: 0 }).toEqual({ ...before, legacyImports: 0 });
     expect(await reservation('900010')).toEqual(before900010);

@@ -70,13 +70,26 @@ export interface ReportInput {
   catalogNames: ReadonlyMap<string, string>;
   /** Para a última linha: como importar (só nas simulações). */
   nextStep?: string;
+  /** Lista também cada "já importada(o), sem mudança" (`report --all`). */
+  all?: boolean;
 }
+
+/** Ignorados só por já estarem importados sem mudança: resumidos numa contagem (FR-005). */
+const UNCHANGED_REASONS = new Set(['unchanged', 'already_imported']);
+
+const PLURAL: Readonly<Record<LegacyImportEntity, [string, string]>> = {
+  reservation: ['reserva', 'reservas'],
+  request: ['tratativa', 'tratativas'],
+  proof: ['comprovante', 'comprovantes'],
+  manual_amount: ['valor manual', 'valores manuais'],
+};
 
 export function formatReport({
   record,
   pendingHotels,
   catalogNames,
   nextStep,
+  all = false,
 }: ReportInput): string {
   const lines: string[] = [];
   const title = record.kind === 'simulation' ? 'Simulação' : 'Importação';
@@ -126,9 +139,32 @@ export function formatReport({
     lines.push('');
   }
 
-  if (record.issues.length > 0) {
-    lines.push('Ignorados e recusados:');
-    for (const issue of record.issues) {
+  // Na ordem da planilha: aba "Reservas" primeiro, depois "Tratativas", por linha.
+  const sorted = [...record.issues].sort((a, b) =>
+    a.sheet === b.sheet ? a.row - b.row : a.sheet === 'Reservas' ? -1 : 1,
+  );
+  const unchanged = sorted.filter((issue) => UNCHANGED_REASONS.has(issue.reason));
+  const listed = all ? sorted : sorted.filter((issue) => !UNCHANGED_REASONS.has(issue.reason));
+
+  if (unchanged.length > 0) {
+    const byEntity = new Map<LegacyImportEntity, number>();
+    for (const issue of unchanged) {
+      byEntity.set(issue.entity, (byEntity.get(issue.entity) ?? 0) + 1);
+    }
+    const parts = (Object.keys(PLURAL) as LegacyImportEntity[])
+      .filter((entity) => byEntity.has(entity))
+      .map((entity) => {
+        const total = byEntity.get(entity) ?? 0;
+        return `${total} ${PLURAL[entity][total === 1 ? 0 : 1]}`;
+      });
+    lines.push(`Já importados, sem mudança: ${parts.join(', ')}.`);
+    if (!all) lines.push(`  (para ver cada um: legacy-import report --id ${record.id} --all)`);
+    lines.push('');
+  }
+
+  if (listed.length > 0) {
+    lines.push(all ? 'Ignorados e recusados (todos):' : 'Ignorados e recusados:');
+    for (const issue of listed) {
       lines.push(
         [
           `  ${issue.sheet} linha ${issue.row}`,

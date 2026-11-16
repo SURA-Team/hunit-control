@@ -309,7 +309,8 @@ que lê a pasta da importação só para leitura.
    docker compose run --rm -v "C:\importacao:/import:ro" server node dist/cli.js legacy-import run --simulation <id> --xlsx /import/planilha.xlsx --files /import/anexos
    ```
    Pode ser interrompida (Ctrl+C): o que entrou fica completo, e uma nova simulação e importação
-   completam o resto sem duplicar. `legacy-import report --id <id>` mostra o relatório de novo.
+   completam o resto sem duplicar. `legacy-import report --id <id>` mostra o relatório de novo
+   (`--all` lista também cada linha já importada, que normalmente aparece só como contagem).
 7. No app, confira por amostragem (filtro **Origem → Sistema anterior**). Depois, rode uma execução
    no Hunit cobrindo o período do sistema anterior: as reservas "A revisar (sistema anterior)"
    recebem a classificação do Hunit e as pendências antigas são atualizadas.

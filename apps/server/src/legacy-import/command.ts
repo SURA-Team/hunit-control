@@ -62,8 +62,9 @@ const USAGE = `Uso:
       Confirma, troca ou deixa sem associação; ou confirma todas as propostas.
   legacy-import run --simulation <id> --xlsx <arquivo> --files <pasta>
       Importa, se a planilha, a pasta e a associação forem as mesmas da simulação.
-  legacy-import report --id <id>
-      Mostra de novo o relatório de uma simulação ou importação.
+  legacy-import report --id <id> [--all]
+      Mostra de novo o relatório de uma simulação ou importação; --all lista também cada linha
+      já importada, sem mudança.
 `;
 
 const PROGRESS_EVERY = 500;
@@ -197,6 +198,7 @@ async function printReport(
   io: CliIo,
   id: string,
   nextStep?: string,
+  all = false,
 ): Promise<void> {
   const record = await findImportRecord(connection.db, id);
   if (!record) throw new LegacyImportError(`Não existe simulação nem importação com o id ${id}.`);
@@ -208,6 +210,7 @@ async function printReport(
       pendingHotels: mappings.filter((mapping) => mapping.decision !== 'confirmed'),
       catalogNames: new Map(catalog.map((hotel) => [hotel.code, hotel.name])),
       ...(nextStep ? { nextStep } : {}),
+      all,
     }),
   );
 }
@@ -500,12 +503,15 @@ export async function legacyImportCommand(
         await hotelsCommand(rest, io, connection);
         return 0;
       case 'report': {
-        const { values } = parseArgs({ args: rest, options: { id: { type: 'string' } } });
+        const { values } = parseArgs({
+          args: rest,
+          options: { id: { type: 'string' }, all: { type: 'boolean' } },
+        });
         const id = requireOption(values.id, '--id <id>');
         if (!/^[0-9a-f-]{36}$/i.test(id)) {
           throw new LegacyImportError(`Não existe simulação nem importação com o id ${id}.`);
         }
-        await printReport(connection, io, id);
+        await printReport(connection, io, id, undefined, values.all ?? false);
         return 0;
       }
       default:
