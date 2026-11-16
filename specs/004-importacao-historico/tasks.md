@@ -340,18 +340,18 @@ o histórico (spec US4).
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T036 [P] Ampliar o teste de cópia e restauração (grupo `server-db`, o que roda `deploy/backup/`) com uma reserva importada, com `legacy_reservations` e um documento importado: depois de restaurar, a origem, o documento e o download idêntico voltam (FR-023)
-- [ ] T037 [P] Escrever `apps/server/test/integration/legacy-retention.test.ts`: a rotina de `apps/server/src/maintenance/retention.ts` anonimiza uma importada quando o check-in passa de 5 anos (relógio fixo) e purga os documentos dela como os da 003, mantendo `legacy_reservations` (FR-022); nenhum ajuste no código é esperado: se for preciso, corrigir e registrar em research.md
+- [X] T036 [P] Ampliar o teste de cópia e restauração (grupo `server-db`, o que roda `deploy/backup/`) com uma reserva importada, com `legacy_reservations` e um documento importado: depois de restaurar, a origem, o documento e o download idêntico voltam (FR-023)
+- [X] T037 [P] Escrever `apps/server/test/integration/legacy-retention.test.ts`: a rotina de `apps/server/src/maintenance/retention.ts` anonimiza uma importada quando o check-in passa de 5 anos (relógio fixo) e purga os documentos dela como os da 003, mantendo `legacy_reservations` (FR-022); nenhum ajuste no código é esperado: se for preciso, corrigir e registrar em research.md
 - [ ] T038 [P] Escrever `apps/server/test/integration/legacy-import-perf.test.ts`, que só roda com `HUNIT_LEGACY_PERF=1`: simulação de 20 000 linhas e 2 000 anexos pequenos em até 5 min, e importação em até 15 min (SC-008); anotar os tempos medidos em research.md
-- [ ] T039 [P] Escrever `apps/server/test/integration/legacy-homolog-prepare.test.ts`, que só roda com `HUNIT_HOMOLOG_DATABASE_URL` e `HUNIT_LEGACY_HOMOLOG_DIR`:
+- [X] T039 [P] Escrever `apps/server/test/integration/legacy-homolog-prepare.test.ts`, que só roda com `HUNIT_HOMOLOG_DATABASE_URL` e `HUNIT_LEGACY_HOMOLOG_DIR`:
   - gera `planilha.xlsx` e `anexos\` fictícios para os hotéis `HML1` a `HML4` da homologação da 003 (códigos do sistema anterior `hml_um`… com nomes iguais aos do catálogo, mais um hotel sem correspondência);
   - cobre os casos do quickstart §2.2, inclusive reservas que já existem na homologação;
   - recusa um banco sem os hotéis `HML*`
-- [ ] T040 [P] Atualizar `AGENTS.md`:
+- [X] T040 [P] Atualizar `AGENTS.md`:
   - tabela de comandos com `legacy-import` (simulate, hotels, run, report) e o uso com `docker compose run --rm -v …:/import:ro`;
   - parágrafo "Desde a feature 004…" com a importação, a origem "Sistema anterior", "A revisar (sistema anterior)" e o contrato 1.6.0;
   - na tabela de estrutura, `apps/server/src/legacy-import/`
-- [ ] T041 [P] Em `README.md`, acrescentar a seção "Importar o histórico do sistema anterior" com o passo a passo de [quickstart.md §3](./quickstart.md): cópia em `C:\importacao`, simular, hotéis, simular de novo, importar, execução no Hunit do período e apagar a pasta
+- [X] T041 [P] Em `README.md`, acrescentar a seção "Importar o histórico do sistema anterior" com o passo a passo de [quickstart.md §3](./quickstart.md): cópia em `C:\importacao`, simular, hotéis, simular de novo, importar, execução no Hunit do período e apagar a pasta
 - [ ] T042 Rodar `pnpm typecheck`, `pnpm lint` e `pnpm test` (grupos `domain`, `server`, `server-db`, `desktop`, `desktop-ui` e `desktop-e2e`). Antes de cada commit, conferir `git diff --cached --name-only`: nenhum `.xlsx`, nenhum anexo e nenhuma pasta de importação. Depende de tudo
 - [ ] T043 ⛔ HOMOLOGAÇÃO: seguir [quickstart.md §2](./quickstart.md) na pilha `hunit-homolog` (com T039), registrando as contagens, o tamanho da cópia de segurança antes e depois e o que for observado em research.md. Depende de T042
 - [ ] T044 Atualizar o espelho no Figma com a skill `figma-screens-sync`: página `004-importacao-historico` com as telas mudadas (lista com selo e filtro "Origem", detalhe com a seção "Sistema anterior", histórico, "A revisar (sistema anterior)"), a partir das capturas de T035 com dados fictícios. Depende de T035, T043

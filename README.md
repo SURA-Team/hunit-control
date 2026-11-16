@@ -280,6 +280,42 @@ pesquisas, até 2 000 reservas) e use **Anexar tratativa** ou **Anexar comprovan
 seleção. O atalho **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm
 comprovante. Nada disso acessa o Hunit.
 
+## Importar o histórico do sistema anterior
+
+Feita uma vez, no PC de produção, por quem administra a implantação (specs/004). A importação nunca
+acessa o Hunit e não pede token. Os comandos rodam na pasta de produção, num container de uso único
+que lê a pasta da importação só para leitura.
+
+1. Confira que a cópia de segurança do dia foi feita (`docker compose logs backup`).
+2. Baixe a cópia **.xlsx** da planilha do sistema anterior (abas "Reservas" e "Tratativas") e copie
+   a pasta de anexos para `C:\importacao`, **fora de qualquer repositório**:
+   `C:\importacao\planilha.xlsx` e `C:\importacao\anexos\`.
+3. Simule. Nada é gravado; o relatório mostra o que seria criado, atualizado, ignorado ou recusado
+   e por quê, sem dados de hóspedes nem valores, e termina com o id da simulação:
+   ```powershell
+   docker compose run --rm -v "C:\importacao:/import:ro" server node dist/cli.js legacy-import simulate --xlsx /import/planilha.xlsx --files /import/anexos
+   ```
+4. Associe os hotéis do sistema anterior aos do catálogo. A simulação propõe pelo nome; confira e
+   confirme (ou troque, ou deixe sem associação):
+   ```powershell
+   docker compose run --rm server node dist/cli.js legacy-import hotels
+   docker compose run --rm server node dist/cli.js legacy-import hotels --accept-proposals
+   docker compose run --rm server node dist/cli.js legacy-import hotels --set <código antigo> --hotel <código do catálogo>
+   ```
+5. Simule de novo e revise as recusas com o Financeiro **antes** de importar.
+6. Importe a simulação conferida. Se a planilha, a pasta ou a associação mudaram depois dela, o
+   comando recusa e pede uma nova simulação:
+   ```powershell
+   docker compose run --rm -v "C:\importacao:/import:ro" server node dist/cli.js legacy-import run --simulation <id> --xlsx /import/planilha.xlsx --files /import/anexos
+   ```
+   Pode ser interrompida (Ctrl+C): o que entrou fica completo, e uma nova simulação e importação
+   completam o resto sem duplicar. `legacy-import report --id <id>` mostra o relatório de novo.
+7. No app, confira por amostragem (filtro **Origem → Sistema anterior**). Depois, rode uma execução
+   no Hunit cobrindo o período do sistema anterior: as reservas "A revisar (sistema anterior)"
+   recebem a classificação do Hunit e as pendências antigas são atualizadas.
+8. **Apague `C:\importacao`** e esvazie a lixeira. Os dados ficam só no banco e nas cópias de
+   segurança cifradas.
+
 ## Rotinas automáticas
 
 | Rotina | Quando | O que faz |

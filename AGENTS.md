@@ -25,7 +25,7 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/memory/constitution.md` | Princípios não negociáveis do projeto |
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
-| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle) |
+| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004) |
 | `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md` |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
@@ -169,6 +169,7 @@ processo do app sozinhos; para `pnpm --filter @hunit/desktop dev`, rode antes
 | `pnpm --filter @hunit/server hunit:login-check --save-dir test/fixtures/hunit/raw` | Verificação manual do login no Hunit **real**, rodada pelo operador num terminal interativo (depois do `pnpm build`): pede e-mail, senha e token (ocultos), mostra o resultado e as rotas barradas pela proteção e guarda as telas sanitizadas na pasta ignorada pelo Git |
 | `pnpm --filter @hunit/server hunit:reservations-check --hotel <código> --from AAAA-MM-DD --to AAAA-MM-DD --save-dir test/fixtures/hunit/raw` | Verificação manual da leitura das reservas no Hunit **real** (mesmo modo de uso do `login-check`): lê a listagem de 1 hotel com os filtros fixos, confere que o Hunit os respeitou, abre algumas reservas e mostra número, situação e classificação (nunca o hóspede); `--parallel-hotel <código>` testa a leitura de dois hotéis ao mesmo tempo; guarda as respostas JSON na pasta ignorada pelo Git. `--help` mostra as opções |
 | `pnpm --filter @hunit/server hunit:login-check --wait-token <segundos> --save-dir test/fixtures/hunit/raw` | Como o `login-check`, mas espera esse tempo com a tela do token aberta antes de pedir o token: mede quanto tempo a tela aceita e captura a tela de token expirado |
+| `docker compose run --rm -v "C:\importacao:/import:ro" server node dist/cli.js legacy-import simulate --xlsx /import/planilha.xlsx --files /import/anexos` | Simula a importação do histórico do sistema anterior (specs/004) a partir da cópia .xlsx e da pasta de anexos, montadas só para leitura num container de uso único. Não grava reservas nem documentos e mostra o relatório (só contagens, linhas, chaves e motivos) com o id da simulação. Os outros subcomandos: `hotels` (lista; `--set <código> --hotel <código>`, `--set <código> --none`, `--accept-proposals`), `run --simulation <id> --xlsx … --files …` (importa) e `report --id <id>`. Fora do Docker: `pnpm --filter @hunit/server legacy-import <subcomando>`. Nunca acessa o Hunit. Passo a passo no `README.md` |
 | `pnpm --filter @hunit/server hunit:anonymize-fixtures` | Gera as fixtures reais anonimizadas (`test/fixtures/hunit/{html,json}/real/` e `real/manifest.json`) a partir de `test/fixtures/hunit/raw/` (depois do `pnpm build`). Não mostra valores; se sobrar algum dado original, não grava nada. Revise o resultado antes do commit |
 
 Regras ao mexer em dependências e no contrato:
@@ -232,3 +233,17 @@ homologação roda num ambiente separado da produção, no mesmo PC (`deploy/hom
 §2.1 da 003). O envio de documentos é a única rota com corpo
 binário (até 25 MiB). O log do servidor registra as requisições sem a query (nome do arquivo e
 busca livre podem ter dados pessoais).
+
+Desde a feature 004 (`specs/004-importacao-historico/`), o comando `legacy-import` importa, uma vez
+e de forma repetível, o histórico do sistema anterior (cópia .xlsx da planilha, com as abas
+"Reservas" e "Tratativas", e a pasta de anexos). Antes de gravar, uma simulação mostra o que seria
+criado, atualizado, ignorado ou recusado; a importação só confirma uma simulação feita com a mesma
+planilha, os mesmos arquivos e a mesma associação de hotéis. As reservas importadas ficam com a
+origem "Sistema anterior" (`legacy_reservations`; `last_execution_id` nulo até o HUNIT Control
+verificá-las), e o HUNIT Control prevalece sobre as que ele já verificou. As tratativas e os
+comprovantes importados têm o autor reservado `sistema-anterior` (revogado, sem chave; o
+`create-client` recusa esse nome) e a data original. `not_virtual_card` passou a ser **"A revisar
+(sistema anterior)"**: aceita tratativa, fica fora do "Falta cobrar" e sai na primeira verificação.
+O contrato passou para a 1.6.0 (só acréscimos: `Reservation.legacy`, o filtro `fromLegacy` e
+`fromLegacy` nos documentos e no histórico). O comando é administrativo, só no servidor
+(constitution 1.2.0, princípio III).
