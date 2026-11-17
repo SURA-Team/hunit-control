@@ -355,7 +355,7 @@ o histórico (spec US4).
 - [X] T042 Rodar `pnpm typecheck`, `pnpm lint` e `pnpm test` (grupos `domain`, `server`, `server-db`, `desktop`, `desktop-ui` e `desktop-e2e`). Antes de cada commit, conferir `git diff --cached --name-only`: nenhum `.xlsx`, nenhum anexo e nenhuma pasta de importação. Depende de tudo
 - [X] T043 ⛔ HOMOLOGAÇÃO: seguir [quickstart.md §2](./quickstart.md) na pilha `hunit-homolog` (com T039), registrando as contagens, o tamanho da cópia de segurança antes e depois e o que for observado em research.md. Depende de T042
 - [x] T044 Atualizar o espelho no Figma com a skill `figma-screens-sync`: página `004-importacao-historico` com as telas mudadas (lista com selo e filtro "Origem", detalhe com a seção "Sistema anterior", histórico, "A revisar (sistema anterior)"), a partir das capturas de T035 com dados fictícios. Depende de T035, T043
-- [ ] T045 ⛔ PRODUÇÃO: com autorização do usuário, seguir [quickstart.md §3](./quickstart.md): simular com a planilha real, revisar recusas e hotéis com o Financeiro, importar, conferir por amostragem, rodar a execução do período do sistema anterior e **apagar `C:\importacao`**. Registrar só as contagens em research.md, nunca dados. Depende de T043 e do PR mesclado
+- [x] T045 ⛔ PRODUÇÃO: com autorização do usuário, seguir [quickstart.md §3](./quickstart.md): simular com a planilha real, revisar recusas e hotéis com o Financeiro, importar, conferir por amostragem, rodar a execução do período do sistema anterior e **apagar `C:\importacao`**. Registrar só as contagens em research.md, nunca dados. Depende de T043 e do PR mesclado
 
 ---
 
