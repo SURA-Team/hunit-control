@@ -23,6 +23,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type {
+  CommercialEvent,
   Reservation,
   ReservationKey,
   Result,
@@ -42,6 +43,7 @@ import {
 } from '../../presentation/format';
 import {
   CLASSIFICATION_LABELS,
+  COMMERCIAL_EVENT_NAMES,
   DOCUMENT_STATE_LABELS,
   errorMessage,
   LEGACY_ORIGIN_NAME,
@@ -51,6 +53,7 @@ import {
 } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
 import { AttachDialog } from './AttachDialog';
+import { commercialKey } from './CommercialSection';
 
 /** Itens do histórico mostrados de início e a cada "Mostrar mais" (FR-017a). */
 export const HISTORY_FIRST = 5;
@@ -61,6 +64,48 @@ function eventDescription(event: TreatmentEvent): string {
   if (event.classification) return `${action}: ${CLASSIFICATION_LABELS[event.classification].name}`;
   if (event.kind) return `${action} ${TREATMENT_KIND_NAMES[event.kind].toLowerCase()}`;
   return event.amount ? `${action}: ${formatMoney(event.amount)}` : action;
+}
+
+/** Quem fez um item do histórico do Comercial (FR-020): cliente da API, a planilha ou o sistema. */
+const COMMERCIAL_SHEET_ACTOR = 'Comercial (planilha)';
+
+function commercialDescription(event: CommercialEvent): string {
+  const action = COMMERCIAL_EVENT_NAMES[event.type];
+  if (event.reason) return `${action}: ${event.reason}`;
+  if (event.classification) return `${action}: ${CLASSIFICATION_LABELS[event.classification].name}`;
+  return action;
+}
+
+interface HistoryItem {
+  key: string;
+  at: string;
+  text: string;
+  who: string;
+}
+
+/**
+ * Histórico da tratativa e do Comercial juntos, do mais recente para o mais antigo (specs/005,
+ * FR-020; 003 FR-017a).
+ */
+export function mergedHistory(
+  treatment: readonly TreatmentEvent[],
+  commercial: readonly CommercialEvent[],
+): HistoryItem[] {
+  const items: HistoryItem[] = [
+    ...treatment.map((event) => ({
+      key: `t${event.id}`,
+      at: event.at,
+      text: eventDescription(event),
+      who: event.fromLegacy ? LEGACY_ORIGIN_NAME : event.client,
+    })),
+    ...commercial.map((event) => ({
+      key: `c${event.id}`,
+      at: event.at,
+      text: commercialDescription(event),
+      who: event.actor.kind === 'commercial_sheet' ? COMMERCIAL_SHEET_ACTOR : event.actor.name,
+    })),
+  ];
+  return items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }
 
 export function TreatmentSection({ reservation }: { reservation: Reservation }) {
@@ -83,6 +128,12 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
     queryKey: ['treatment', key.hotelCode, key.reservationNumber],
     queryFn: () => unwrap(hunit.treatments.get(key)),
   });
+  // O histórico do Comercial entra no mesmo histórico (specs/005, FR-020).
+  const commercial = useQuery({
+    queryKey: commercialKey(key),
+    queryFn: () => unwrap(hunit.commercial.get(key)),
+  });
+  const history = mergedHistory(detail.data?.events ?? [], commercial.data?.events ?? []);
   // Enquanto o detalhe não chega, vale o resumo que veio com a reserva.
   const treatment = detail.data?.treatment ?? reservation.treatment;
   const documents = detail.data?.documents ?? [];
@@ -335,29 +386,28 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
             </form>
           )}
         </Group>
-        {reservation.payment?.chargedAmount && treatment.manualChargedAmount && (
+        {treatment.chargedAmountOrigin === 'hunit' && treatment.manualChargedAmount && (
           <Text size="xs" c="dimmed">
-            O Hunit já informa o valor ({formatMoney(reservation.payment.chargedAmount)}); é ele que
+            O Hunit já informa o valor ({formatMoney(treatment.effectiveChargedAmount)}); é ele que
             vale.
           </Text>
         )}
 
-        {(detail.data?.events.length ?? 0) > 0 && (
+        {history.length > 0 && (
           <div>
             <Text size="sm" fw={600}>
               Histórico
             </Text>
             <ul aria-label="Histórico da tratativa" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-              {detail.data?.events.slice(0, historyShown).map((event) => (
-                <li key={event.id}>
+              {history.slice(0, historyShown).map((item) => (
+                <li key={item.key}>
                   <Text size="sm" span>
-                    {formatDateTime(event.at)} — {eventDescription(event)} —{' '}
-                    {event.fromLegacy ? LEGACY_ORIGIN_NAME : event.client}
+                    {formatDateTime(item.at)} — {item.text} — {item.who}
                   </Text>
                 </li>
               ))}
             </ul>
-            {(detail.data?.events.length ?? 0) > historyShown && (
+            {history.length > historyShown && (
               <Button
                 size="compact-xs"
                 variant="subtle"

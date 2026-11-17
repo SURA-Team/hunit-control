@@ -348,14 +348,14 @@ describe('tratativas na lista (US4, FR-015)', () => {
     // A tela não monta a lista de classificações por conta própria.
     expect(lastQuery()).not.toHaveProperty('classification');
     expect(lastQuery()).not.toHaveProperty('treatmentStatus');
-    expect(lastQuery()).not.toHaveProperty('situation');
+    expect(lastQuery()).not.toHaveProperty('detailedSituation');
     expect(shortcut).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(shortcut);
     await waitFor(() => expect(lastQuery()).not.toHaveProperty('pendingCharge'));
   });
 
-  it('o filtro único "Situação da reserva" aceita mais de uma e vai como situation (FR-015)', async () => {
+  it('o filtro único "Situação da reserva" aceita mais de uma e vai como detailedSituation (FR-015; specs/005)', async () => {
     renderWithApp(<ReservationsScreen />, hunit);
     const user = userEvent.setup();
     await screen.findByText('7001');
@@ -368,7 +368,7 @@ describe('tratativas na lista (US4, FR-015)', () => {
     await user.click(screen.getByRole('button', { name: /^buscar$/i }));
 
     await waitFor(() =>
-      expect(lastQuery()).toMatchObject({ situation: ['treatment_sent', 'proof_sent'] }),
+      expect(lastQuery()).toMatchObject({ detailedSituation: ['treatment_sent', 'proof_sent'] }),
     );
     expect(lastQuery()).not.toHaveProperty('classification');
     expect(lastQuery()).not.toHaveProperty('treatmentStatus');

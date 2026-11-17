@@ -16,6 +16,7 @@ import type {
   ConnectionState,
   CredentialsClearReason,
   CredentialsInput,
+  DispatchChanged,
   ExecutionChanged,
   HunitApi,
   PreferencesInput,
@@ -33,6 +34,7 @@ export interface FakeHunit {
     connectionState(state: ConnectionState): void;
     credentialsCleared(reason: CredentialsClearReason): void;
     executionChanged(event: ExecutionChanged): void;
+    dispatchChanged(event: DispatchChanged): void;
     twoFactorRequested(request: TwoFactorRequest): void;
     twoFactorClosed(event: TwoFactorClosed): void;
     playSound(): void;
@@ -68,6 +70,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
     connectionState: new Set<Listener<ConnectionState>>(),
     credentialsCleared: new Set<Listener<{ reason: CredentialsClearReason }>>(),
     executionChanged: new Set<Listener<ExecutionChanged>>(),
+    dispatchChanged: new Set<Listener<DispatchChanged>>(),
     twoFactorRequested: new Set<Listener<TwoFactorRequest>>(),
     twoFactorClosed: new Set<Listener<TwoFactorClosed>>(),
     playSound: new Set<Listener<void>>(),
@@ -134,6 +137,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       list: vi.fn(() => okResult({ items: [], nextCursor: null })),
       get: vi.fn(() => errorResult('not_found')),
       channels: vi.fn(() => okResult([])),
+      selectAll: vi.fn(() => okResult({ total: 0, truncated: false, items: [] })),
     },
     treatments: {
       pickFile: vi.fn(() => okResult(null)),
@@ -145,11 +149,14 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
           treatment: {
             status: 'none' as const,
             situation: 'virtual_card_pending_charge' as const,
+            detailedSituation: 'virtual_card_pending_charge' as const,
             needsReview: false,
             request: null,
             proof: null,
             manualChargedAmount: null,
+            commercialChargedAmount: null,
             effectiveChargedAmount: null,
+            chargedAmountOrigin: null,
             acceptsDocuments: true,
           },
           documents: [],
@@ -162,6 +169,33 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       clearManualAmount: vi.fn(() => errorResult('internal_error')),
       confirmReview: vi.fn(() => errorResult('internal_error')),
       saveDocument: vi.fn(() => okResult(null)),
+      confirmReviews: vi.fn(() => errorResult('internal_error')),
+    },
+    dispatches: {
+      check: vi.fn(() => errorResult('internal_error')),
+      start: vi.fn(() => errorResult('internal_error')),
+      list: vi.fn(() => okResult({ items: [], nextCursor: null })),
+      get: vi.fn(() => errorResult('not_found')),
+      resume: vi.fn(() => errorResult('internal_error')),
+      cancel: vi.fn(() => errorResult('internal_error')),
+      sendToken: vi.fn(() => okResult(undefined)),
+      watch: vi.fn(() => okResult(undefined)),
+      unwatch: vi.fn(() => okResult(undefined)),
+      onChanged: on(listeners.dispatchChanged),
+    },
+    commercial: {
+      get: vi.fn(() => okResult({ line: null, returns: [], events: [] })),
+      cancelLine: vi.fn(() => errorResult('internal_error')),
+      restoreLine: vi.fn(() => errorResult('internal_error')),
+      confirmReturn: vi.fn(() => errorResult('internal_error')),
+      rejectReturn: vi.fn(() => errorResult('internal_error')),
+      undoConfirmation: vi.fn(() => errorResult('internal_error')),
+      confirmReturns: vi.fn(() => errorResult('internal_error')),
+      sheetStatus: vi.fn(() => errorResult('internal_error')),
+      readNow: vi.fn(() => errorResult('internal_error')),
+    },
+    clipboard: {
+      copyReservations: vi.fn(() => errorResult('internal_error')),
     },
   };
 
@@ -175,6 +209,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       connectionState: (next) => emitTo(listeners.connectionState, next),
       credentialsCleared: (reason) => emitTo(listeners.credentialsCleared, { reason }),
       executionChanged: (event) => emitTo(listeners.executionChanged, event),
+      dispatchChanged: (event) => emitTo(listeners.dispatchChanged, event),
       twoFactorRequested: (request) => emitTo(listeners.twoFactorRequested, request),
       twoFactorClosed: (event) => emitTo(listeners.twoFactorClosed, event),
       playSound: () => emitTo(listeners.playSound, undefined),

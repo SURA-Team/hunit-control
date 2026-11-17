@@ -12,6 +12,8 @@ import path from 'node:path';
 import {
   app,
   BrowserWindow,
+  clipboard,
+  ClipboardItem,
   dialog,
   ipcMain,
   Notification,
@@ -25,6 +27,7 @@ import { Attention } from './attention.js';
 import { ConfigStore, DEFAULT_PREFERENCES } from './config-store.js';
 import { ConnectionManager } from './connection.js';
 import { CredentialsVault } from './credentials-vault.js';
+import { createCommercialHandlers } from './commercial-handlers.js';
 import { buildDocumentPreview } from './document-preview.js';
 import { saveEvidence } from './evidence-download.js';
 import { ExecutionWatcher } from './execution-watcher.js';
@@ -128,7 +131,10 @@ async function start(): Promise<void> {
 
   const watcher = new ExecutionWatcher({
     getApi: () => connection.getApi(),
-    onChanged: (executionId) => send(EVENTS.executionsChanged, { executionId }),
+    onChanged: (job) =>
+      job.kind === 'execution'
+        ? send(EVENTS.executionsChanged, { executionId: job.id })
+        : send(EVENTS.dispatchesChanged, { dispatchId: job.id }),
     onTwoFactorRequested: (request) => {
       attention.alertTwoFactor();
       send(EVENTS.twoFactorRequested, request);
@@ -189,6 +195,17 @@ async function start(): Promise<void> {
           showSaveDialog,
         }),
     }),
+    ...createCommercialHandlers({
+      getApi: () => connection.getApi(),
+      vault,
+      watcher,
+      reportFailure: (error) => connection.reportFailure(error),
+      // Só na memória: a cópia vai direto para a área de transferência (FR-027).
+      writeClipboard: (content) =>
+        clipboard.write([
+          new ClipboardItem({ 'text/html': content.html, 'text/plain': content.text }),
+        ]),
+    }),
     ...createTreatmentHandlers({
       getApi: () => connection.getApi(),
       reportFailure: (error) => connection.reportFailure(error),
@@ -225,8 +242,8 @@ async function start(): Promise<void> {
     mainWindow = null;
   });
 
-  // FR-026: fechar a janela encerra o app; com execução ativa desta máquina, avisa antes que o
-  // pedido de token não será recebido enquanto o app estiver fechado.
+  // FR-026: fechar a janela encerra o app; com execução ou envio ao Comercial ativo desta máquina,
+  // avisa antes que o pedido de token não será recebido enquanto o app estiver fechado.
   let closeConfirmed = false;
   mainWindow.on('close', (event) => {
     const window = mainWindow;
@@ -235,9 +252,9 @@ async function start(): Promise<void> {
     void dialog
       .showMessageBox(window, {
         type: 'warning',
-        title: 'Execução em andamento',
+        title: 'Execução ou envio em andamento',
         message:
-          'A execução continua no servidor, mas o pedido de token não será recebido enquanto o app estiver fechado.',
+          'A execução ou o envio ao Comercial continua no servidor, mas o pedido de token não será recebido enquanto o app estiver fechado.',
         detail:
           'Abra o app de novo antes de o Hunit pedir o token, ou informe o token por outra máquina.',
         buttons: ['Fechar o app', 'Continuar com o app aberto'],

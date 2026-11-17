@@ -118,7 +118,7 @@ describe('US3 — consultar reservas e evidências', () => {
     const { window } = launched;
     await resultRows(window).filter({ hasText: 'Maria Souza' }).click();
     const detail = window.getByTestId('reservation-detail');
-    await detail.getByText('Valor cobrado').waitFor();
+    await detail.getByText('Valor cobrado no Hunit').waitFor();
     expect(await detail.innerText()).toContain('987,65');
     await window.getByRole('button', { name: 'Fechar detalhe' }).click();
   });

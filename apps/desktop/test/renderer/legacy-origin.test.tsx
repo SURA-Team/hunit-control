@@ -47,7 +47,11 @@ function reservation(number: string, overrides: Partial<Reservation> = {}): Rese
     firstVerifiedAt: LEGACY.firstVerifiedAt,
     lastVerifiedAt: LEGACY.lastVerifiedAt,
     verificationCount: 3,
-    treatment: { ...NO_TREATMENT, situation: 'not_virtual_card' },
+    treatment: {
+      ...NO_TREATMENT,
+      situation: 'not_virtual_card',
+      detailedSituation: 'not_virtual_card',
+    },
     legacy: LEGACY,
     ...overrides,
   };

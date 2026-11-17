@@ -4,7 +4,7 @@
  * entrada inválida vira `invalid_input`, sem chamar a API nem tocar no disco.
  */
 import { z } from 'zod';
-import { MAX_TREATMENT_RESERVATIONS } from './ipc-types.js';
+import { MAX_COMMERCIAL_RESERVATIONS, MAX_TREATMENT_RESERVATIONS } from './ipc-types.js';
 
 /** Datas no formato da API (YYYY-MM-DD), com dia que existe no calendário. */
 const isoDate = z
@@ -122,6 +122,8 @@ export const reservationListInputSchema = z.strictObject({
   needsReview: z.boolean().optional(),
   // Origem "Sistema anterior" (specs/004, FR-011).
   fromLegacy: z.boolean().optional(),
+  // Situação com o detalhe do Comercial (specs/005): os valores aceitos são conferidos pelo servidor.
+  detailedSituation: z.array(z.string().min(1).max(64)).max(20).optional(),
   cursor: cursor.optional(),
   limit: limit.optional(),
 });
@@ -177,3 +179,70 @@ export const manualAmountInputSchema = z.strictObject({
     .regex(/^[0-9]+\.[0-9]{2}$/, 'valor no formato 1234.56')
     .refine((value) => Number(value) > 0, 'o valor deve ser maior que zero'),
 });
+
+// ---------------------------------------------------------------------------
+// Envio ao Comercial pela planilha (specs/005, contracts/ipc.md)
+// ---------------------------------------------------------------------------
+
+const commercialReservations = z
+  .array(reservationKeySchema)
+  .min(1)
+  .max(MAX_COMMERCIAL_RESERVATIONS, `no máximo ${MAX_COMMERCIAL_RESERVATIONS} reservas`);
+
+/** Envio, conferência e confirmações em lote: de 1 a 2 000 reservas. */
+export const reservationsInputSchema = z.strictObject({ reservations: commercialReservations });
+
+export const dispatchIdSchema = uuid;
+export const returnIdSchema = uuid;
+
+export const dispatchListInputSchema = z.strictObject({
+  active: z.boolean().optional(),
+  cursor: cursor.optional(),
+  limit: limit.optional(),
+});
+
+export const dispatchTokenInputSchema = z.strictObject({
+  dispatchId: uuid,
+  token: z.string().regex(/^[0-9]{4,10}$/, 'o token tem de 4 a 10 dígitos'),
+});
+
+export const rejectReturnInputSchema = z.strictObject({
+  returnId: uuid,
+  reason: z.string().trim().min(1, 'informe o motivo').max(500),
+});
+
+/** Filtros de "selecionar todas do filtro" e da cópia: os da lista, sem paginação. */
+export const reservationFiltersSchema = reservationListInputSchema.omit({
+  cursor: true,
+  limit: true,
+});
+
+const money = z.string().regex(/^-?[0-9]+\.[0-9]{2}$/, 'valor no formato 1234.56');
+
+/** Uma linha da cópia: só as colunas de FR-027. Qualquer campo a mais (ex.: o hóspede) é recusado. */
+export const copyRowSchema = z.strictObject({
+  hotelName: z.string().min(1).max(200),
+  reservationNumber: shortText,
+  checkIn: isoDate.nullable(),
+  channel: z.string().max(200).nullable(),
+  totalAmount: money.nullable(),
+  // Os nomes vêm do contrato; um valor desconhecido é recusado pela tabela da cópia.
+  classification: z.string().min(1).max(64),
+  reservationStatus: z.string().min(1).max(64),
+  detailedSituation: z.string().min(1).max(64),
+});
+
+export const copyReservationsInputSchema = z.discriminatedUnion('source', [
+  z.strictObject({
+    source: z.literal('selection'),
+    rows: z
+      .array(copyRowSchema)
+      .min(1)
+      .max(MAX_COMMERCIAL_RESERVATIONS, `no máximo ${MAX_COMMERCIAL_RESERVATIONS} reservas`),
+  }),
+  z.strictObject({
+    source: z.literal('filter'),
+    filters: reservationFiltersSchema,
+    description: z.string().max(500).optional(),
+  }),
+]);

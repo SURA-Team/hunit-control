@@ -6,6 +6,9 @@
  * Tratativas (specs/003, FR-002, FR-002a, FR-015): o filtro único "Situação da reserva" (os
  * mesmos valores da coluna da lista) e os atalhos "Falta cobrar" e "A verificar" — estes valem na
  * hora, e quem decide o que entra em cada um é o servidor.
+ *
+ * Envio ao Comercial (specs/005, FR-023): a situação inclui "Validar comprovante" (retorno do
+ * Comercial aguardando validação).
  */
 import {
   Badge,
@@ -23,8 +26,8 @@ import {
 import type { Hotel } from '../../../../shared/ipc-types';
 import {
   ORIGIN_OPTIONS,
+  DETAILED_SITUATION_LABELS,
   RESERVATION_STATUS_LABELS,
-  SITUATION_LABELS,
   SITUATION_ORDER,
   type OriginFilter,
 } from '../../presentation/labels';
@@ -148,7 +151,7 @@ export function ReservationFilters({
               placeholder={draft.situations.length === 0 ? 'Todas as situações' : undefined}
               data={SITUATION_ORDER.map((value) => ({
                 value,
-                label: SITUATION_LABELS[value].name,
+                label: DETAILED_SITUATION_LABELS[value].name,
               }))}
               value={draft.situations}
               onChange={(value) => set('situations', value)}

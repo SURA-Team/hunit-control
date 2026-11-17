@@ -84,6 +84,7 @@ const hunit: HunitApi = {
     list: (input) => invoke(INVOKE.reservationsList, input),
     get: (input) => invoke(INVOKE.reservationsGet, input),
     channels: () => invoke(INVOKE.reservationsChannels),
+    selectAll: (filters) => invoke(INVOKE.reservationsSelectAll, filters),
   },
   treatments: {
     pickFile: (input) => invoke(INVOKE.treatmentsPickFile, input),
@@ -97,6 +98,33 @@ const hunit: HunitApi = {
     clearManualAmount: (input) => invoke(INVOKE.treatmentsClearManualAmount, input),
     confirmReview: (input) => invoke(INVOKE.treatmentsConfirmReview, input),
     saveDocument: (documentId) => invoke(INVOKE.treatmentsSaveDocument, documentId),
+    confirmReviews: (input) => invoke(INVOKE.treatmentsConfirmReviews, input),
+  },
+  dispatches: {
+    check: (input) => invoke(INVOKE.dispatchesCheck, input),
+    start: (input) => invoke(INVOKE.dispatchesStart, input),
+    list: (input) => invoke(INVOKE.dispatchesList, input),
+    get: (dispatchId) => invoke(INVOKE.dispatchesGet, dispatchId),
+    resume: (dispatchId) => invoke(INVOKE.dispatchesResume, dispatchId),
+    cancel: (dispatchId) => invoke(INVOKE.dispatchesCancel, dispatchId),
+    sendToken: (input) => invoke(INVOKE.dispatchesSendToken, input),
+    watch: (dispatchId) => invoke(INVOKE.dispatchesWatch, dispatchId),
+    unwatch: (dispatchId) => invoke(INVOKE.dispatchesUnwatch, dispatchId),
+    onChanged: subscribe(EVENTS.dispatchesChanged),
+  },
+  commercial: {
+    get: (input) => invoke(INVOKE.commercialGet, input),
+    cancelLine: (input) => invoke(INVOKE.commercialCancelLine, input),
+    restoreLine: (input) => invoke(INVOKE.commercialRestoreLine, input),
+    confirmReturn: (returnId) => invoke(INVOKE.commercialConfirmReturn, returnId),
+    rejectReturn: (input) => invoke(INVOKE.commercialRejectReturn, input),
+    undoConfirmation: (returnId) => invoke(INVOKE.commercialUndoConfirmation, returnId),
+    confirmReturns: (input) => invoke(INVOKE.commercialConfirmReturns, input),
+    sheetStatus: () => invoke(INVOKE.commercialSheetStatus),
+    readNow: () => invoke(INVOKE.commercialReadNow),
+  },
+  clipboard: {
+    copyReservations: (input) => invoke(INVOKE.clipboardCopyReservations, input),
   },
 };
 

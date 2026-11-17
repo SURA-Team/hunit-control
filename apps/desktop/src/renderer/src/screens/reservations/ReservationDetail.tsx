@@ -2,11 +2,13 @@
  * Detalhe da reserva (specs/002, FR-022, US3 cenários 4 e 5): dados da cobrança, o status do Hunit
  * (classificação e motivo), o que mudou desde a verificação anterior e o histórico de verificação.
  * Tudo como o servidor informa; o app só formata. No topo, a situação da reserva (specs/003,
- * FR-002); a tratativa manual fica numa seção própria.
+ * FR-002); a tratativa manual fica numa seção própria, e o envio ao Comercial em outra (specs/005,
+ * FR-023), com o valor cobrado e a origem ao lado do valor total (FR-024).
  */
 import { Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import type { ReactNode } from 'react';
 import type { Reservation } from '../../../../shared/ipc-types';
+import { ChargedAmount } from '../../components/ChargedAmount';
 import { LegacyBadge } from '../../components/LegacyBadge';
 import { StatusBadge } from '../../components/StatusBadge';
 import { SituationBadge } from '../../components/SituationBadge';
@@ -16,6 +18,7 @@ import {
   RESERVATION_STATUS_LABELS,
   legacyClassificationName,
 } from '../../presentation/labels';
+import { CommercialSection } from './CommercialSection';
 import { TreatmentSection } from './TreatmentSection';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -78,6 +81,9 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
         <Field label="Check-in">{formatDate(reservation.checkIn)}</Field>
         <Field label="Check-out">{formatDate(reservation.checkOut)}</Field>
         <Field label="Valor total">{formatMoney(reservation.totalAmount)}</Field>
+        <Field label="Valor cobrado">
+          <ChargedAmount treatment={reservation.treatment} />
+        </Field>
       </SimpleGrid>
 
       <Paper withBorder p="sm" radius="sm" data-testid="hunit-status">
@@ -110,6 +116,8 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
 
       <TreatmentSection reservation={reservation} />
 
+      <CommercialSection reservation={reservation} />
+
       <Paper withBorder p="sm" radius="sm">
         <Title order={5} mb="xs">
           Cobrança
@@ -117,7 +125,7 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
         <SimpleGrid cols={3} spacing="sm">
           <Field label="Data">{payment?.chargedAt ? formatDateTime(payment.chargedAt) : '—'}</Field>
           <Field label="Responsável">{dash(payment?.chargedBy)}</Field>
-          <Field label="Valor cobrado">{formatMoney(payment?.chargedAmount)}</Field>
+          <Field label="Valor cobrado no Hunit">{formatMoney(payment?.chargedAmount)}</Field>
           <Field label="Transação">{dash(payment?.transactionId)}</Field>
           <Field label="Autorização">{dash(payment?.authorizationCode)}</Field>
           <Field label="Referência da operadora">{dash(payment?.processorReference)}</Field>

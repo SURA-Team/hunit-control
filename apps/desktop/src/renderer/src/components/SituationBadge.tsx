@@ -1,23 +1,24 @@
 /**
  * Situação da reserva (specs/003, FR-002, FR-002a, FR-017): o nome da situação e, quando o Hunit
  * mudou a situação depois da tratativa, o alerta "Verificar". A situação e o alerta vêm prontos do
- * servidor.
+ * servidor. Desde a 005, o nome é o da situação detalhada ("Validar comprovante" quando há retorno
+ * do Comercial aguardando validação).
  */
 import { Badge, Group } from '@mantine/core';
 import type { ReservationTreatment } from '../../../shared/ipc-types';
-import { REVIEW_LABEL, SITUATION_LABELS, TONE_COLORS } from '../presentation/labels';
+import { DETAILED_SITUATION_LABELS, REVIEW_LABEL, TONE_COLORS } from '../presentation/labels';
 import { StatusBadge } from './StatusBadge';
 
 export function SituationBadge({
   treatment,
   size = 'sm',
 }: {
-  treatment: Pick<ReservationTreatment, 'situation' | 'needsReview'>;
+  treatment: Pick<ReservationTreatment, 'detailedSituation' | 'needsReview'>;
   size?: 'xs' | 'sm' | 'md';
 }) {
   return (
     <Group gap={4} wrap="nowrap">
-      <StatusBadge label={SITUATION_LABELS[treatment.situation]} size={size} />
+      <StatusBadge label={DETAILED_SITUATION_LABELS[treatment.detailedSituation]} size={size} />
       {treatment.needsReview && (
         <Badge
           color={TONE_COLORS[REVIEW_LABEL.tone]}
