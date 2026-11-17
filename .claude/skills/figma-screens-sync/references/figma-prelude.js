@@ -16,6 +16,7 @@ const SECTIONS = {
   4: '4. Reservas',
   5: '5. Estados do sistema',
   6: '6. Perfil consulta (sem ações de operador)',
+  7: '7. Envio ao Comercial e área Comercial',
 };
 
 await Promise.all([['Noto Sans', 'Regular'], ['Noto Sans', 'Medium'], ['Noto Sans', 'SemiBold'], ['Noto Sans', 'Bold'], ['Roboto Mono', 'Regular']]
@@ -111,8 +112,9 @@ const STYLE = {
 // --- Construção
 const created = [];
 const SHADOW = [{ type: 'DROP_SHADOW', color: { r: 0, g: 0, b: 0, a: 0.12 }, offset: { x: 0, y: 6 }, radius: 24, spread: 0, visible: true, blendMode: 'NORMAL' }];
-const NAV_OP = ['Executar', 'Execuções', 'Reservas', 'Configuração'];
-const NAV_RD = ['Execuções', 'Reservas', 'Configuração'];
+// O item "Comercial" entrou com a 005 (App.tsx).
+const NAV_OP = ['Executar', 'Execuções', 'Reservas', 'Comercial', 'Configuração'];
+const NAV_RD = ['Execuções', 'Reservas', 'Comercial', 'Configuração'];
 const PERIOD = '13/11/2026 a 19/11/2026';
 
 async function I(component, props = {}) { const n = component.createInstance(); if (Object.keys(props).length) n.setProperties(props); return n; }
@@ -184,6 +186,8 @@ function modal(root, width, name) {
   m.fills = [paint('fundo/padrão')]; m.effects = SHADOW; root.appendChild(m); m.resize(width, m.height); m.counterAxisSizingMode = 'FIXED'; return m;
 }
 function center(root, m) { m.x = Math.round((root.width - m.width) / 2); m.y = Math.round((root.height - m.height) / 2); }
+/** Diálogo no alto da tela (a 45 px do topo), como os diálogos maiores do app. */
+function topOf(root, m) { m.x = Math.round((root.width - m.width) / 2); m.y = 45; }
 /** Gaveta de detalhe à direita (780 px), altura da tela. */
 function drawer(root, name) {
   const d = AL('VERTICAL', { name, itemSpacing: 16, paddingLeft: 16, paddingRight: 16, paddingTop: 16, paddingBottom: 16 });
@@ -317,7 +321,7 @@ async function featureHeader(featureTitle, appVersion) {
     `Espelho do app desktop ${appVersion}: as telas que a feature ${num} (${featureTitle}) acrescentou ou alterou, recriadas a partir de prints do app real com dados fictícios. As outras telas continuam como na página da feature anterior que as tem.`,
     'Quem mantém esta página é o agente de código (skill “figma-screens-sync”), enquanto a feature está em desenvolvimento. Depois do merge, ela fica congelada.',
     'O design oficial, que diz como o app deve ser, é o da UX (a partir da 007, a UX desenha as telas antes do desenvolvimento). Não altere esta página nem os componentes, as variáveis e os estilos que ela usa.',
-    'As telas são numeradas por área (1. Configuração … 6. Perfil consulta), com o mesmo número em todas as páginas. Para ver o app de hoje, use a versão mais recente de cada número.',
+    'As telas são numeradas por área (1. Configuração … 7. Envio ao Comercial e área Comercial), com o mesmo número em todas as páginas. Para ver o app de hoje, use a versão mais recente de cada número.',
   ]) put(notice, await T(p, 'corpo grande'), 'fill');
   if (!screensPage.children.some((n) => n.name === 'Histórico de atualizações da página')) {
     const hist = AL('VERTICAL', { name: 'Histórico de atualizações da página', itemSpacing: 12, paddingLeft: 32, paddingRight: 32, paddingTop: 28, paddingBottom: 28, cornerRadius: 12 });

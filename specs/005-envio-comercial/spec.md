@@ -90,6 +90,39 @@ arquivo) e os ajustes pós-homologação do app desktop.
   avisa quantas ficaram de fora. Com o lote do "Verificar", a revisão vira um ciclo: selecionar todas
   do filtro, confirmar, e as confirmadas saem do filtro "A verificar" (FR-030).
 
+### Session 2026-11-17 (análise)
+
+Decisões do `/speckit-analyze`.
+
+- Q: Uma reserva com retorno aguardando validação que o Hunit passa a mostrar como "já cobrada" (ou
+  que deixa de exigir cobrança): onde fica a linha e o que acontece com o retorno? → A: Vai para "A
+  verificar". A reserva fica com a situação do Hunit e o alerta "Verificar" (spec 003, FR-002a); a
+  linha vai para "Concluídas"; o retorno é encerrado sem validação e continua visível no histórico,
+  para o Financeiro conferir. Ele não pode mais ser confirmado nem recusado, e nenhuma recusa volta a
+  uma linha protegida (FR-009, FR-016).
+- Q: O filtro "Enviada ao Comercial" é necessário? → A: Não; foi retirado. A tratativa já conta como
+  enviada ao Comercial, tanto por e-mail (spec 003) quanto pela planilha, e o filtro "Tratativa
+  enviada" já a encontra (FR-023).
+- Q: O comando que prepara a planilha está descrito numa spec, como a constitution exige para os
+  comandos administrativos (princípio III)? → A: Passa a estar: FR-008a.
+
+### Session 2026-11-17 (homologação)
+
+Ajustes pedidos pelo usuário ao homologar a planilha de teste (T064).
+
+- Q: A planilha precisa de aparência de tabela? → A: Sim (FR-010a): cabeçalho das colunas do sistema
+  (A a J) preto com letra lima e o das colunas de retorno (K a N) lima com letra preta; linhas de
+  dados com listras claras alternadas e bordas tracejadas; o cabeçalho sem bordas.
+- Q: A coluna "Validação do Financeiro" vira uma lista suspensa (dropdown) colorida? → A: Não. O
+  Google não deixa o sistema escolher a cor de cada opção de uma lista suspensa, e a lista exigiria
+  valores fixos, tirando da célula o motivo da recusa e o que falta no retorno. A célula inteira
+  ganha a cor do status, com o texto completo: lima para a reserva enviada aguardando o retorno do
+  Comercial, laranja para o retorno aguardando validação e vermelho para recusa e retorno com
+  problema (FR-010a).
+- Q: O que a coluna "Validação do Financeiro" mostra numa linha enviada que ainda não tem retorno? →
+  A: "Aguardando retorno do Comercial" (antes ficava vazia), para a linha nova também ter a sua cor
+  (FR-010).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Enviar reservas ao Comercial com verificação no Hunit (Priority: P1)
@@ -204,7 +237,7 @@ confirmar a completa e conferir que ficou "Comprovante enviado" com o valor do C
 
 Quem consulta (o Financeiro, com perfil operador, ou a Controladoria, com perfil consulta) vê a lista
 de envios — quem enviou, quando, quantas reservas foram enviadas, retiradas e não verificadas — e o
-resultado de cada um, filtra as reservas por "Validar comprovante" e por enviadas ao Comercial, vê os
+resultado de cada um, filtra as reservas por "Validar comprovante", vê os
 retornos com problema e sabe se há atualizações da planilha pendentes. O perfil consulta não envia,
 não confirma, não recusa e não pede leitura.
 
@@ -212,8 +245,7 @@ não confirma, não recusa e não pede leitura.
 sem isso, a fila de validação e as pendências da planilha ficam invisíveis.
 
 **Independent Test**: com envios e retornos em várias situações, conferir a lista de envios e o
-resultado de cada um, os filtros "Validar comprovante" e "Enviada ao Comercial" combinados com hotel
-e período, e a lista de retornos com problema; deixar a planilha indisponível, enviar uma reserva e
+resultado de cada um, o filtro "Validar comprovante" combinado com hotel e período, e a lista de retornos com problema; deixar a planilha indisponível, enviar uma reserva e
 conferir que a pendência aparece no app e some sozinha quando a planilha volta; com uma chave de
 perfil consulta, conferir que tudo isso é visível e nenhuma ação é aceita.
 
@@ -224,8 +256,9 @@ perfil consulta, conferir que tudo isso é visível e nenhuma ação é aceita.
    envio, **Then** aparece o resultado de cada reserva, com o motivo das retiradas e das não
    verificadas.
 2. **Given** reservas em várias situações, **When** se filtra a situação "Validar comprovante",
-   **Then** aparecem só as que têm retorno aguardando validação; **When** se filtra "Enviada ao
-   Comercial", **Then** aparecem as que estão na planilha, em qualquer aba.
+   **Then** aparecem só as que têm retorno aguardando validação; **When** se filtra "Tratativa
+   enviada", **Then** aparecem as enviadas ao Comercial por qualquer caminho (e-mail anexado ou
+   planilha) que ainda não têm retorno aguardando validação.
 3. **Given** a planilha indisponível, **When** um envio, uma confirmação ou uma recusa acontece,
    **Then** o registro no sistema é feito normalmente, a atualização da planilha fica pendente e o app
    mostra quantas atualizações estão pendentes e desde quando; **When** a planilha volta, **Then** as
@@ -319,9 +352,11 @@ selecionadas em pesquisas diferentes e escolher "selecionadas".
 - **Reserva enviada que uma execução comum passa a mostrar como "já cobrada"** (ou que deixa de
   exigir cobrança): vale a regra da spec 003, FR-002a — a situação do Hunit prevalece, com o alerta
   "Verificar" —, e a linha vai para "Concluídas" com a situação do Hunit.
-- **Retorno aguardando validação e o Hunit passa a mostrar "já cobrada"**: a situação da reserva é a
-  do Hunit, com o alerta "Verificar"; o retorno continua disponível, e o Financeiro ainda pode
-  confirmá-lo (a reserva passa a "Comprovante enviado") ou recusá-lo.
+- **Retorno aguardando validação e o Hunit passa a mostrar "já cobrada"** (ou outra situação que não
+  exige cobrança): a reserva vai para "A verificar" — situação do Hunit com o alerta "Verificar"
+  (spec 003, FR-002a) —, a linha vai para "Concluídas" e o retorno é encerrado sem validação: continua
+  visível no histórico para a conferência, mas não pode mais ser confirmado nem recusado. Confirmar o
+  alerta segue a regra da spec 003.
 - **Comprovante anexado como arquivo (spec 003) numa reserva enviada**: a reserva passa a
   "Comprovante enviado" e a linha vai para "Concluídas"; um retorno que estivesse aguardando
   validação fica registrado no histórico como não validado.
@@ -415,28 +450,49 @@ selecionadas em pesquisas diferentes e escolher "selecionadas".
 - **FR-008**: O sistema MUST manter uma planilha do Comercial, criada para isso e controlada pelo
   sistema, com uma linha por reserva enviada, identificada por hotel + número da reserva, sem
   duplicadas. Reenviar uma reserva MUST atualizar a linha dela, mantendo o retorno.
+- **FR-008a**: A preparação da planilha (abas, cabeçalhos, formatos e proteções das FR-009 a FR-011)
+  MUST ser feita por um **comando administrativo de implantação**, rodado por quem administra o
+  servidor, no próprio computador do servidor (constitution, princípio III), depois de criar a
+  planilha no Google e compartilhá-la com o acesso do servidor. O comando MUST também permitir só
+  conferir o acesso e o formato, sem mudar nada. Ele MUST NOT ser usado pelos clientes (app, Sura),
+  MUST NOT acessar o Hunit, MUST NOT mostrar as credenciais da planilha, e o estado da planilha que
+  ele prepara MUST ficar visível pela API (FR-013). Se o formato for alterado na planilha (aba
+  renomeada, cabeçalho apagado), o sistema MUST parar de escrever, mostrar isso no app e voltar a
+  funcionar depois que o comando for rodado de novo.
 - **FR-009**: A planilha MUST ter duas abas: **"A cobrar"**, com as reservas enviadas que ainda não
   têm comprovante e ainda exigem cobrança (inclusive as "Validar comprovante" e as recusadas), e
   **"Concluídas"**, com as que passaram a "Comprovante enviado", deixaram de exigir cobrança no
   Hunit ou tiveram o envio desfeito pelo Financeiro (situação **"Pedido cancelado pelo
   Financeiro"**). A linha MUST mudar de aba sozinha quando a situação da reserva mudar, por qualquer
-  caminho (envio, execução, validação, ações da spec 003).
+  caminho (envio, execução, validação, ações da spec 003). Se a reserva deixar de exigir cobrança no
+  Hunit com um retorno aguardando validação, a linha vai para "Concluídas" e o retorno é encerrado
+  sem validação: a reserva fica "A verificar" (alerta "Verificar", spec 003 FR-002a) e o retorno
+  continua visível no histórico.
 - **FR-010**: A planilha MUST ter só estas colunas, nesta ordem, e MUST NOT conter o nome do hóspede
   nem outro dado pessoal do hóspede (nomes confirmados pelo usuário, sessão 2026-11-17):
   - preenchidas pelo sistema, protegidas contra edição: **Hotel**, **Reserva** (número), **Check-in**,
     **Canal**, **Valor a cobrar** (total da reserva no Hunit), **Motivo** (a classificação, ex.:
     "Pendente de cobrança"), **Ativa ou cancelada**, **Situação** (a situação da reserva no HUNIT
-    Control), **Enviada em** (último envio) e **Validação do Financeiro** (aguardando validação,
-    recusa e motivo, ou o problema do retorno);
+    Control), **Enviada em** (último envio) e **Validação do Financeiro** (aguardando o retorno do
+    Comercial, aguardando validação, recusa e motivo, confirmação ou o problema do retorno);
   - preenchidas pelo Comercial, as colunas de retorno: **Código de autorização**, **Hotel da
     cobrança**, **Valor cobrado** e **Responsável pela cobrança**.
+- **FR-010a**: A planilha MUST ter aparência de tabela, aplicada pelo comando de FR-008a nas duas
+  abas: cabeçalho das colunas do sistema preto com letra lima (`#D4F25A`) e o das colunas de retorno
+  lima com letra preta, sem bordas; linhas de dados com listras claras alternadas e bordas
+  tracejadas, também nas linhas que entram depois da preparação. A célula "Validação do Financeiro"
+  MUST ter a cor do status, com o texto completo: lima para "Aguardando retorno do Comercial",
+  laranja para "Aguardando validação do Financeiro" e vermelho para a recusa e o retorno com problema
+  (FR-017, FR-018). A aparência não é conferida pelo sistema: mudá-la na planilha não impede a
+  sincronização, e o comando a refaz.
 - **FR-011**: As colunas do sistema MUST ficar protegidas contra edição pelo Comercial, e as linhas
   de "Concluídas" MUST ficar inteiramente protegidas. Se uma célula do sistema estiver diferente do
   que o sistema tem (por edição, linha apagada ou movida), a atualização seguinte MUST restaurá-la e o
   caso MUST ser relatado no app.
 - **FR-012**: A planilha MUST ser uma projeção do sistema: pode ser refeita inteira a partir dos dados
   do sistema, e nada do que estiver nela MUST mudar uma reserva, a não ser o retorno validado pelo
-  Financeiro (FR-016).
+  Financeiro (FR-016). A leitura do retorno é entrada, nunca fonte da verdade (constitution,
+  princípio VI).
 - **FR-013**: Se a planilha estiver indisponível, os registros no sistema MUST acontecer normalmente,
   e as atualizações da planilha MUST ficar pendentes e ser refeitas sozinhas, na ordem, até darem
   certo, sem perda. O app MUST mostrar se há atualizações pendentes, quantas e desde quando, e quando
@@ -493,12 +549,14 @@ selecionadas em pesquisas diferentes e escolher "selecionadas".
 **Consulta e app desktop**
 
 - **FR-023**: A consulta de reservas (API e app) MUST oferecer "Validar comprovante" no filtro de
-  situação da reserva (spec 003, FR-015) e um filtro **"Enviada ao Comercial"**, combináveis com os
-  filtros existentes, e MUST mostrar, para cada reserva enviada, o último envio, a aba em que está e o
+  situação da reserva (spec 003, FR-015), combinável com os filtros existentes. Não há filtro próprio
+  de "enviada ao Comercial": a situação "Tratativa enviada" já reúne as enviadas por e-mail (spec
+  003) e pela planilha. A consulta MUST mostrar, para cada reserva enviada, o último envio, a aba em que está e o
   retorno (atual e histórico).
 - **FR-024**: A lista de reservas MUST mostrar, além do valor total, o **valor cobrado** quando
-  existir, com a origem: o do Hunit, se houver; senão, o manual (spec 003, FR-005); senão, o do
-  Comercial confirmado (FR-016). Todos continuam visíveis no detalhe, identificados pela origem.
+  existir, com a origem: o do Hunit, se houver (maior que zero: os R$ 0,00 que o Hunit registra na
+  validação do cartão não são cobrança); senão, o manual (spec 003, FR-005); senão, o do Comercial
+  confirmado (FR-016). Todos continuam visíveis no detalhe, identificados pela origem.
 - **FR-025**: O app MUST oferecer a ação "Enviar ao Comercial" ao lado das ações de lote da spec 003,
   o acompanhamento do envio, a lista de envios com o resultado de cada um, a validação do retorno
   (confirmar, confirmar em lote e recusar), a confirmação do alerta "Verificar" em lote (FR-029),
@@ -613,8 +671,8 @@ selecionadas em pesquisas diferentes e escolher "selecionadas".
   copiado como o Comercial escreveu.
 - O responsável pela cobrança é um funcionário do Comercial, não o hóspede; o nome dele pode ir para a
   planilha e para o sistema, como o "responsável pela cobrança" do Hunit (spec 001, FR-016).
-- A planilha é criada uma vez, na implantação, por quem administra o servidor; o compartilhamento com
-  o Comercial é feito no próprio Google, fora do sistema. O sistema não abre a planilha para o
+- A planilha é criada uma vez, na implantação, por quem administra o servidor, e preparada pelo
+  comando de FR-008a; o compartilhamento com o Comercial é feito no próprio Google, fora do sistema. O sistema não abre a planilha para o
   operador.
 - O intervalo de 10 minutos da leitura automática e os 90 dias das concluídas são valores iniciais,
   que a homologação pode ajustar.

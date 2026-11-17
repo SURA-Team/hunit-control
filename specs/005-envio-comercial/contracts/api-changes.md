@@ -22,7 +22,9 @@ verdade; este arquivo descreve o que entra nele. Na implementação, a cópia do
 | Parâmetro | Tipo | Significado |
 |---|---|---|
 | `detailedSituation` | array de `ReservationDetailedSituation` | como `situation`, com `return_pending` ("Validar comprovante") |
-| `sentToCommercial` | boolean | `true` = tem linha na planilha do Comercial (qualquer aba, inclusive cancelada); `false` = nunca enviada |
+
+Sem filtro próprio de "enviada ao Comercial" (análise de 2026-11-17): `treatment_sent` já reúne as
+enviadas por e-mail e pela planilha.
 
 `amount` passa a encontrar também o valor cobrado informado pelo Comercial.
 
@@ -40,10 +42,18 @@ verdade; este arquivo descreve o que entra nele. Na implementação, a cópia do
     inSheet: boolean            # false depois de sair da planilha (90 dias, anonimização)
     lastSentAt: date-time
     lastDispatchId: uuid
-    returnState: awaiting_validation | confirmed | rejected | null
+    returnState: awaiting_validation | confirmed | rejected | closed | null
+    currentReturn: CommercialReturnBrief | null   # acréscimo da implementação, ver abaixo
     returnProblem: string | null   # "Retorno incompleto: falta o valor cobrado"
     syncPending: boolean           # a linha tem atualização da planilha pendente
+  CommercialReturnBrief:           # o retorno atual, sem consulta por reserva
+    id, state, authorizationCode, chargeHotel, chargedAmount, chargedBy, readAt,
+    difference                     # valor cobrado menos o valor total da reserva
   ```
+
+  `currentReturn` entrou na implementação (T045, T050): a lista de revisão da confirmação em lote
+  (FR-016a) e a aba "Retornos a validar" mostram o código, o hotel da cobrança, os valores e a
+  diferença sem uma consulta por reserva.
 
 ### `GET /reservations/selection` — selecionar todas do filtro (FR-030, FR-027)
 
@@ -58,7 +68,8 @@ ordem da lista, com só os campos da seleção e da cópia:
 SelectionItem:
   hotelCode, hotelName, reservationNumber, guestName (null se anonimizada), channel, checkIn,
   totalAmount, reservationStatus, classification, situation, detailedSituation, needsReview,
-  treatmentStatus, effectiveChargedAmount, chargedAmountOrigin
+  treatmentStatus, effectiveChargedAmount, chargedAmountOrigin,
+  currentReturn                  # CommercialReturnBrief | null (lista de revisão, FR-016a)
 ```
 
 `guestName` serve só à lista da seleção no app; a cópia para e-mail nunca o usa (FR-027).
@@ -95,8 +106,9 @@ CommercialEvent:
 
 ### `POST /reservations/{h}/{n}/commercial/restore` — reverter o desfazer (**operador**)
 
-200 com `CommercialLine`. 409 `restore_expired` depois de 30 dias; 422 `not_eligible` (FR-003) com o
-motivo.
+200 com `CommercialLine`. 409 `restore_expired` depois de 30 dias; 409 `not_in_commercial_sheet` se a
+linha não estiver cancelada; 409 `not_eligible_for_treatment` (FR-003) se a reserva não aceita mais o
+envio (o código de recusa da 003, em vez de um 422 novo).
 
 ## Envios ao Comercial
 
@@ -129,7 +141,11 @@ CommercialDispatch:
   twoFactorDeadline, parentDispatchId, resumedByDispatchId,
   counts: { total, pending, sent, withdrawn, notVerified, ignored }
   current: { hotelCode, reservationNumber } | null
+  lastEventId: string | null     # acréscimo da implementação, ver abaixo
 ```
+
+`lastEventId` entrou na implementação (T036): o app abre o fluxo de eventos do envio a partir dele
+(`Last-Event-ID`), sem reprocessar o histórico — como faz nas execuções com `recentEvents`.
 
 ### `GET /commercial-dispatches`
 
@@ -161,7 +177,8 @@ Corpo `{ credentials }`. Cria o envio filho com os itens `not_verified`. 409 `no
 
 ### `POST /commercial-returns/{id}/confirm` (**operador**)
 
-200 com `ReservationTreatment`. 409 `return_not_awaiting_validation`.
+200 com `ReservationTreatment`. 409 `return_not_awaiting_validation` (inclusive retorno `closed`,
+encerrado porque o Hunit deixou de exigir cobrança ou por comprovante por arquivo).
 
 ### `POST /commercial-returns/{id}/reject` (**operador**)
 
@@ -213,6 +230,7 @@ Estado da integração (FR-013, FR-025). Visível aos dois perfis; nunca mostra 
 ### `POST /commercial-sheet/read` (**operador**)
 
 "Ler retornos agora": faz uma rodada completa (R-06) e responde quando ela termina (até 50 s; se
-passar, 202 e a rodada continua). 200 com o mesmo corpo de `GET /commercial-sheet` mais
-`round: { returnsReceived, returnsChanged, problems, linesWritten }`. 503 `commercial_sheet_unavailable`
+passar, 202 com o corpo de `GET /commercial-sheet` e a rodada continua). 200 com
+`{ sheet: <corpo de GET /commercial-sheet>, round: { returnsReceived, returnsChanged, problems,
+linesWritten } }` (`CommercialSheetRead`). 503 `commercial_sheet_unavailable`
 com a mensagem genérica, sem mudar nada no sistema. 409 `commercial_sheet_not_configured`.

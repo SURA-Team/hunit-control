@@ -39,6 +39,9 @@
   alerta "Verificar" em lote pela seleção). Revalidada: todos os itens continuam passando.
 - Acrescentado depois, a pedido do usuário: "selecionar todas do filtro" (FR-030, US3 cenário 7,
   SC-015). Revalidada: todos os itens continuam passando.
+- `/speckit-analyze` (2026-11-17): FR-008a (comando administrativo, constitution III); "A verificar"
+  quando o Hunit deixa de exigir cobrança com retorno aguardando (FR-009); filtro "Enviada ao
+  Comercial" retirado (FR-023). Revalidada: todos os itens continuam passando.
 - A cópia para e-mail não é "exportação de planilhas" (fora do escopo): não gera arquivo. Fica
   registrado na seção Clarifications da spec.
 - "Planilha", "API" e "app" aparecem como termos do negócio e das specs anteriores (o Comercial usa

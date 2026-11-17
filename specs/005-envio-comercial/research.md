@@ -91,10 +91,16 @@ script de instalação.
 
 ## R-04 — Credencial da planilha só no servidor
 
-**Decisão**: a chave JSON da conta de serviço é um **Docker secret** montado em
-`/run/secrets/commercial_sheet_key` (arquivo `deploy/secrets/commercial-sheet-key.json` na máquina de
-produção, ignorado pelo Git). Variáveis novas: `COMMERCIAL_SHEET_KEY_FILE` (caminho do segredo) e
-`COMMERCIAL_SHEET_ID` (identificador da planilha). Sem as duas, a integração fica **desligada**: o
+**Decisão**: a chave JSON da conta de serviço fica num arquivo da pasta `deploy/secrets/` do PC
+(ignorada pelo Git, menos o README), montada **só para leitura** no container em
+`/run/secrets/commercial-sheet` (`COMMERCIAL_SHEET_SECRETS_DIR` troca a pasta). Variáveis novas:
+`COMMERCIAL_SHEET_KEY_FILE` (caminho do arquivo dentro do container) e `COMMERCIAL_SHEET_ID`
+(identificador da planilha).
+
+*Ajuste na implementação (T002)*: o plano previa um `secret` do Compose (`secrets: file:`), mas o
+Compose recusa subir quando o arquivo não existe, o que quebraria toda instalação sem a planilha
+configurada (inclusive a produção atual). A pasta montada só para leitura tem o mesmo efeito — a
+chave não passa por variável de ambiente nem aparece no `docker inspect` — e existe sempre. Sem as duas, a integração fica **desligada**: o
 servidor sobe, o envio é recusado com `commercial_sheet_not_configured` e o estado da planilha mostra
 "não configurada". Com só uma das duas, o servidor não sobe (erro de configuração, como as outras
 variáveis).
@@ -122,9 +128,9 @@ não apareça em lugar nenhum: tratá-lo como segredo custa pouco.
 **Decisão**: quem administra o servidor cria uma planilha vazia na própria conta Google e a compartilha
 como **editor** com o e-mail da conta de serviço (contas de serviço não têm cota de armazenamento no
 Drive e não conseguem ser donas de arquivos novos). Depois roda o comando administrativo
-`commercial-sheet setup` (constitution III, exceção de comandos de implantação: não é usado pelos
-clientes, não acessa o Hunit e tudo o que o sistema grava fica visível pela API). Ele, de forma
-repetível:
+`commercial-sheet setup` (spec FR-008a; constitution III, exceção de comandos de implantação: não é
+usado pelos clientes, não acessa o Hunit e tudo o que o sistema grava fica visível pela API). Ele, de
+forma repetível:
 - cria as abas **"A cobrar"** e **"Concluídas"** e os cabeçalhos ([contracts/sheet-layout.md](./contracts/sheet-layout.md));
 - define a localidade `pt_BR` e o fuso `America/Sao_Paulo`, os formatos (Reserva como texto, datas
   `dd/mm/aaaa`, valores em reais) e congela a linha 1;
@@ -148,8 +154,10 @@ ninguém ver); rota na API para isso (rota de alto risco sem uso pelos clientes)
 
 **Decisão**: o banco guarda o estado desejado de cada linha (`commercial_lines`, uma por reserva
 enviada, com `version` e `synced_version`). Um **sincronizador** no processo do servidor
-(`apps/server/src/commercial-sheet/sync.ts`) faz rodadas, uma por vez (trava em memória +
-`pg_try_advisory_lock`). Cada rodada:
+(`apps/server/src/commercial-sheet/sync.ts`) faz rodadas, uma por vez (fila em memória; *ajuste
+na implementação, T025*: sem `pg_try_advisory_lock`, porque o servidor é um processo só —
+constitution V — e uma trava de sessão do banco precisaria de uma conexão presa durante as chamadas
+ao Google). Cada rodada:
 
 1. lê as duas abas inteiras numa chamada (`values.batchGet`);
 2. confere o formato (cabeçalhos e abas, R-05);
@@ -233,6 +241,13 @@ retorno `complete` diferente do último lido cria um retorno novo `awaiting_vali
 envio desfeito) registra o retorno no histórico como `return_ignored`, sem mudar a situação (spec,
 edge cases).
 
+Encerramento sem validação (análise 2026-11-17, "A verificar"): quando a linha deixa de estar aberta
+com um retorno `awaiting_validation` — comprovante por arquivo ou o Hunit deixou de exigir cobrança
+(desfazer o envio com retorno aguardando é recusado, R-11) —, o retorno vai para `closed` com o evento `return_closed` e o motivo. Não pode mais
+ser confirmado nem recusado (`return_not_awaiting_validation`), e nenhuma recusa chega a uma linha de
+"Concluídas". No caso do Hunit, a reserva fica com o alerta "Verificar" (R-09), e o Financeiro confere
+o retorno encerrado no histórico.
+
 **Justificativa**: as regras de interpretação são de negócio e precisam de testes unitários
 (constitution VII); o ESLint do domínio impede I/O.
 
@@ -248,7 +263,9 @@ edge cases).
   também quebraria com tipos novos de `TreatmentEvent`.
 
 No domínio, `treatmentStatus` passa a receber "tem tratativa" = documento de tratativa atual **ou**
-linha aberta na planilha, e "tem comprovante" = documento de comprovante atual **ou** retorno
+linha na planilha não cancelada (`open` ou `concluded`: o pedido ao Comercial continua registrado
+depois que a linha vai para "Concluídas", o que mantém o alerta "Verificar" quando o Hunit deixa de
+exigir cobrança, como na 003), e "tem comprovante" = documento de comprovante atual **ou** retorno
 confirmado. A função nova `detailedSituation(classification, status, hasReturnAwaiting)` devolve
 `return_pending` quando `reservationSituation` daria `treatment_sent` e há retorno aguardando
 validação. Isso implementa a ordem da spec (premissas): comprovante → status do Hunit que não exige
@@ -270,6 +287,13 @@ comprovante) → Comercial confirmado. Campo novo `treatment.chargedAmountOrigin
 (`hunit` | `manual` | `commercial` | `null`). A lista do app ganha a coluna "Valor cobrado" com a
 origem, ao lado de "Valor total". O filtro `amount` (002) passa a encontrar também o valor do
 Comercial.
+
+**Ajuste da implementação (T062)**: as capturas mostraram "R$ 0,00 (Hunit)" nas reservas com o cartão
+só validado — o Hunit registra a validação como uma cobrança de zero. Com a ordem acima, uma reserva
+dessas que o Comercial cobrou e o Financeiro confirmou continuaria mostrando R$ 0,00. Valor do Hunit
+igual a zero passou a não contar como valor cobrado (`effectiveChargedAmount` e
+`chargedAmountWithOrigin` no domínio; spec FR-024 atualizada): vale o manual ou o do Comercial. O
+filtro `amount` não muda (procurar "0,00" continua achando essas reservas).
 
 ## R-11 — Desfazer o envio e a confirmação são ações próprias, não documentos da 003
 
@@ -310,7 +334,8 @@ As regras de elegibilidade e de prazo ficam no domínio (`commercial-dispatch.ts
 (`/commercial-returns/...`), da planilha (`/commercial-sheet`, `/commercial-sheet/read`), do
 Comercial por reserva (`/reservations/{h}/{n}/commercial` e ações), `/treatment-reviews` (lote do
 "Verificar") e `/reservations/selection`; campos novos em `Reservation` e `ReservationTreatment`;
-filtros `detailedSituation` e `sentToCommercial`. A cópia do contrato vai para
+filtro `detailedSituation` (sem filtro próprio de "enviada ao Comercial": a análise de 2026-11-17 o
+retirou, porque "Tratativa enviada" já reúne os dois caminhos). A cópia do contrato vai para
 `specs/005-envio-comercial/contracts/openapi.yaml` na implementação; a da 004 fica congelada na 1.6.0.
 
 ## R-14 — App desktop: área "Comercial" e o envio no fluxo das execuções
@@ -318,7 +343,7 @@ filtros `detailedSituation` e `sentToCommercial`. A cópia do contrato vai para
 **Decisão**:
 - **Reservas**: ação "Enviar ao Comercial" ao lado de "Anexar tratativa/comprovante"; "Selecionar todas
   do filtro"; "Copiar para e-mail"; "Confirmar 'Verificar'" e "Confirmar retornos" no lote; coluna
-  "Valor cobrado"; "Validar comprovante" e "Enviada ao Comercial" nos filtros; seção "Comercial" no
+  "Valor cobrado"; "Validar comprovante" no filtro de situação; seção "Comercial" no
   detalhe (linha, retorno, validação, histórico mesclado com o da tratativa, por data).
 - **Envio**: diálogo com o resumo de elegibilidade (`/commercial-dispatches/check`), o mesmo formulário
   de credenciais das execuções (credenciais em memória até o app fechar, 002) e a tela de
@@ -367,3 +392,86 @@ A planilha real só é tocada na homologação (quickstart §3), com uma planilh
 **Decisão**: o ambiente de homologação (`deploy/homolog/`, 003) usa outra planilha e outra chave
 (`COMMERCIAL_SHEET_ID` e segredo próprios no `.env.homolog`), compartilhada só com quem homologa. Os
 dados são fictícios; nenhum dado real vai para a planilha de homologação.
+
+## R-18 — Aparência da planilha: formatação condicional e bordas por linha
+
+Pedido na homologação (spec, sessão 2026-11-17 "homologação"; FR-010a): aparência de tabela, cabeçalho
+preto e lima, bordas tracejadas fora do cabeçalho e a coluna "Validação do Financeiro" colorida pelo
+status.
+
+**Decisão**: o `setup` aplica a aparência com recursos clássicos da API do Google Sheets, sem a
+"tabela" do Google e sem lista suspensa:
+
+- cabeçalho por `repeatCell` (fundo, letra, negrito, sem bordas), larguras por
+  `updateDimensionProperties`;
+- cores da coluna J e listras alternadas por **formatação condicional** (`addConditionalFormatRule`):
+  valem para linhas novas e antigas sem o sincronizador escrever formato. As cores usam `TEXT_EQ` e
+  `TEXT_STARTS_WITH` com os textos do domínio (`FINANCE_VALIDATION_TONES`); as listras usam uma fórmula
+  sem separador de argumentos (`=ISEVEN(ROW())*($B2<>"")=1`), porque o separador muda com a
+  localidade `pt_BR`. As regras das duas abas são do sistema: o `setup` apaga as que houver e grava as
+  dele, e a ordem (cores antes das listras) decide qual vale numa célula;
+- bordas tracejadas (`DASHED`) por `updateBorders` nas linhas de dados existentes, e cada linha
+  acrescentada pelo sincronizador já leva bordas e formatos das colunas (`appendCells` com
+  `userEnteredFormat`). As atualizações continuam escrevendo só o valor.
+
+A coluna J passa a mostrar "Aguardando retorno do Comercial" na linha aberta sem retorno, para ter a
+cor de "nova tratativa". A migration 0012 marca as linhas abertas como pendentes (`version + 1`), para
+a primeira rodada depois da atualização reescrever a coluna J sem relatar "célula do sistema
+alterada".
+
+**Alternativas rejeitadas**:
+
+- *Tabela do Google* (`addTable`, colunas tipadas, `DROPDOWN`): a documentação não diz como a tabela se
+  comporta com as linhas que o sincronizador acrescenta (`appendCells` sem `tableId`) e apaga
+  (`deleteDimension`), nem com valores fora da lista numa coluna de lista suspensa. O risco cai numa
+  projeção que precisa ser refeita sozinha (R-06).
+- *Lista suspensa na coluna J*: nem `ConditionValue` nem a regra de validação da tabela têm campo de
+  cor por opção — as cores dos chips só são escolhidas à mão, no Google, e seriam perdidas quando o
+  `setup` regravasse a regra. A lista também exigiria valores fixos, e o motivo da recusa e o que falta
+  no retorno (FR-017, FR-018) iriam para uma nota, visível só ao passar o mouse.
+- *Faixas alternadas* (`addBanding`): a documentação não diz se a faixa cresce com linhas acrescentadas
+  pela API; a formatação condicional com intervalo aberto (`A2:N`) cobre isso sem depender do tamanho.
+
+## Homologação (T064, 2026-11-17)
+
+Ambiente de homologação (`deploy/homolog/`, quickstart §2.1 da 003) com a planilha de teste e a chave
+própria (R-17); dados fictícios. A homologação não acessa o Hunit: o envio fictício foi gravado pelo
+`homolog-commercial` (quickstart §3, passo 6), com 12 reservas por hotel em "A cobrar" e 3 em
+"Concluídas" com o alerta "Verificar".
+
+| Teste (quickstart §3) | Resultado |
+|---|---|
+| Preparação: servidor com as migrations da 005, `commercial-sheet setup` e `check` ("acesso OK", abas, cabeçalhos, proteções), colunas A:J de "A cobrar" e "Concluídas" bloqueadas para a segunda conta Google, envio fictício na planilha em até 30 s, sem nome de hóspede | Aprovado |
+| Retorno completo com hotel da cobrança diferente e "Ler retornos agora": "Validar comprovante" em até 1 min, hotel da cobrança destacado, valores e diferença no detalhe (SC-004) | Aprovado |
+| Retorno lido sozinho, sem "Ler retornos agora", em até 15 min (SC-004) | Aprovado |
+| Retorno só com o código e com valor ilegível: "Retornos com problema" e coluna J, sem mudar a reserva | Aprovado |
+| Confirmar: "Comprovante enviado", "Valor cobrado" com origem Comercial, linha em "Concluídas" | Aprovado |
+| Recusar com "Valor diferente" e corrigir: "Tratativa enviada" e a recusa na coluna J; depois da correção, "Validar comprovante" de novo e a recusa sai da linha | Aprovado |
+| "Confirmar retornos" em lote: lista de revisão com código, hotel da cobrança, valores e diferença; as sem retorno ficam de fora com o motivo | Aprovado |
+| Desfazer envio e reverter: "Pedido cancelado pelo Financeiro" em "Concluídas" e de volta a "A cobrar" | Aprovado |
+| Internet desligada por cerca de 5 min com uma confirmação no meio: gravada no app, "Com falha" com as pendências e desde quando; ao voltar, pendências zeradas e planilha atualizada sozinha (SC-010) | Aprovado |
+| "A verificar" → "Selecionar todas do filtro" → "Confirmar 'Verificar'": contagem por status do Hunit; filtro vazio depois | Aprovado |
+| "Copiar para e-mail" colado no cliente de e-mail (tabela com as 8 colunas, total, filtros e momento, sem hóspede) e no Bloco de Notas (colunas por tabulação) | Aprovado |
+| Perfil consulta: vê as quatro abas da área Comercial e o detalhe, sem nenhuma ação | Aprovado |
+| "Enviar ao Comercial" pelo app sem Hunit: falha no acesso e nada vai para a planilha | Aprovado (esperado) |
+| Logs do servidor sem o ID da planilha, o e-mail da conta de serviço, a chave e nomes de hóspede | Aprovado |
+
+SC-002 (20 reservas na planilha em até 5 min depois do token) depende do Hunit real: medir na
+primeira semana da produção (T066).
+
+**Ajustes pedidos**: aparência da planilha — formatação de tabela, bordas tracejadas fora do
+cabeçalho, cabeçalho preto e lima e a coluna "Validação do Financeiro" colorida pelo status (lima,
+laranja, vermelho). Viraram a FR-010a e a R-18, implementados em T067 a T070 e homologados em T071.
+
+### Homologação dos ajustes da planilha (T071, 2026-11-17)
+
+Mesmo ambiente, com o servidor atualizado (migration 0012 aplicada ao subir) e o `commercial-sheet
+setup` rodado de novo na planilha de teste.
+
+| Teste | Resultado |
+|---|---|
+| `setup` com a linha "Aparência" na saída | Aprovado |
+| Cabeçalho de A a J preto com letra lima e de K a N lima com letra preta, sem bordas; listras e bordas tracejadas nas linhas de dados; coluna J em lima nas linhas abertas, sem casos de "célula alterada" em Problemas | Aprovado |
+| Retorno completo e "Ler retornos agora": coluna J em laranja | Aprovado |
+| Recusa e retorno só com o código: coluna J em vermelho | Aprovado |
+| Desfazer o envio e reverter: as linhas acrescentadas em "Concluídas" e de volta em "A cobrar" chegam com as bordas | Aprovado |

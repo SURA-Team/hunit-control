@@ -32,16 +32,21 @@ commercial: {
   undoConfirmation: (returnId: string) => Promise<Result<ReservationTreatment>>;
   confirmReturns: (input: { reservations: ReservationKey[] }) => Promise<Result<BatchResult>>;
   sheetStatus: () => Promise<Result<CommercialSheetStatus>>;
-  readNow: () => Promise<Result<CommercialSheetRead>>;
+  /** `round` nulo = passou de 50 s (202) e a rodada continua no servidor. */
+  readNow: () => Promise<Result<{ sheet: CommercialSheetStatus; round: Round | null }>>;
 };
 clipboard: {
   /** Monta a tabela (HTML + texto com tabulação) no principal e grava na área de transferência. */
-  copyReservations: (input: CopyReservationsInput) => Promise<Result<{ copied: number }>>;
+  copyReservations: (input: CopyReservationsInput) =>
+    Promise<Result<{ copied: number; total: number; truncated: boolean }>>;
 };
 ```
 
-`CopyReservationsInput` = `{ source: 'selection'; reservations: CopyRow[] }` ou
-`{ source: 'filter'; filters: ReservationFilters }` (o principal chama `GET /reservations/selection`).
+`CopyReservationsInput` = `{ source: 'selection'; rows: CopyRow[] }` ou
+`{ source: 'filter'; filters: ReservationFilters; description?: string }` (o principal chama
+`GET /reservations/selection`; `description` são os filtros em português, para a linha acima da
+tabela). A tabela é montada com `copyTable` de `@hunit/domain` (os nomes da planilha), em
+`main/clipboard.ts`; o app passou a ter `@hunit/domain` nas `devDependencies` (empacotado pelo Vite).
 `CopyRow` só tem as colunas da cópia (FR-027): hotel, reserva, check-in, canal, valor, motivo, ativa ou
 cancelada, situação. Não existe campo de hóspede no tipo; um teste confere que o HTML e o texto
 gerados não têm o nome de nenhuma reserva de teste.
@@ -52,8 +57,8 @@ gerados não têm o nome de nenhuma reserva de teste.
 |---|---|
 | `reservations` | `selectAll: (filters: ReservationFilters) => Promise<Result<SelectionResult>>` (`GET /reservations/selection`) |
 | `treatments` | `confirmReviews: (input: { reservations: ReservationKey[] }) => Promise<Result<BatchResult>>` (`POST /treatment-reviews`) |
-| `twoFactor.onRequested` | `TwoFactorRequest` ganha `job: { kind: 'execution' \| 'dispatch'; id }`; o aviso (`attention`) é o mesmo |
-| `ipc-schemas.ts` — filtros | `detailedSituation: z.array(...)`, `sentToCommercial: z.boolean().optional()` |
+| `twoFactor.onRequested` / `onClosed` | `TwoFactorRequest` e `TwoFactorClosed` trocam `executionId` por `job: { kind: 'execution' \| 'dispatch'; id }`; o aviso (`attention`) é o mesmo |
+| `ipc-schemas.ts` — filtros | `detailedSituation: z.array(...)` |
 | `ipc-types.ts` | tipos gerados da API 1.7.0 (`detailedSituation`, `chargedAmountOrigin`, `commercial` etc.) |
 | `main/execution-watcher.ts` | observa também os envios iniciados nesta máquina (pedido de token, término) |
 

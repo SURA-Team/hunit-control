@@ -35,7 +35,7 @@ async function dialogButtons(parent) {
 
 SCREENS['4.4'] = { name: 'Reservas — seleção do lote', h: 900, profile: 'Operador', nav: NAV_OP, active: 'Reservas',
   async build({ main }) {
-    await reservationsPage(main, { treatments: TREATED, checked: SELECTED, selection: SELECTION, count: 10 });
+    await reservationsPage(main, { treatments: TREATED, charged: TREATED_CHARGED, checked: SELECTED, selection: SELECTION, count: 10 });
   } };
 
 SCREENS['4.5'] = { name: 'Reservas — reservas selecionadas', h: 900, profile: 'Operador', nav: NAV_OP, active: 'Reservas',
@@ -79,7 +79,7 @@ SCREENS['4.7'] = { name: 'Reservas — detalhe com tratativa', h: 900, profile: 
     overlay(root);
     const d = drawer(root, 'Gaveta — detalhe com tratativa');
     await detailHead(d, '101-1000', [['Verde', 'Comprovante enviado'], ['Cinza', 'Ativa']],
-      [['Hóspede', 'Ana Ribeiro'], ['Canal', 'Booking.com'], ['Forma de pagamento', '—'], ['Check-in', '17/11/2026'], ['Check-out', '19/11/2026'], ['Valor total', 'R$ 380,00']],
+      [['Hóspede', 'Ana Ribeiro'], ['Canal', 'Booking.com'], ['Forma de pagamento', '—'], ['Check-in', '17/11/2026'], ['Check-out', '19/11/2026'], ['Valor total', 'R$ 380,00'], ['Valor cobrado', [['R$ 380,00'], [' (manual)', 'dimsm']]]],
       ['Amarelo', 'Pendente de cobrança'], 'Pré-pagamento sem registro de cobrança e com a ação de cobrar disponível.');
     await treatmentSection(d, {
       status: ['Verde', 'Comprovante enviado'],
@@ -128,7 +128,7 @@ SCREENS['4.9'] = { name: 'Reservas — detalhe com o alerta "Verificar"', h: 900
     overlay(root);
     const d = drawer(root, 'Gaveta — detalhe com o alerta Verificar');
     await detailHead(d, '102-1007', [['Verde', 'Já cobrada', true], ['Cinza', 'Ativa']],
-      [['Hóspede', 'Henrique Alves'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '19/11/2026'], ['Check-out', '21/11/2026'], ['Valor total', 'R$ 1.342,50']],
+      [['Hóspede', 'Henrique Alves'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '19/11/2026'], ['Check-out', '21/11/2026'], ['Valor total', 'R$ 1.342,50'], ['Valor cobrado', '—']],
       ['Verde', 'Já cobrada'], 'Pré-pagamento sem registro de cobrança e com a ação de cobrar disponível.', ['Amarelo', 'Pendente de cobrança']);
     await treatmentSection(d, {
       status: ['Verde', 'Já cobrada', true],

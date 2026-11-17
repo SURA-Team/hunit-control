@@ -9,10 +9,10 @@ const LEGACY_ROWS = [
 ];
 // O número ganha o selo ao lado: coluna mais larga; as outras estreitam para "Não identificada"
 // caber inteira na última coluna.
-const LEGACY_COLS = [[' ', 36], ['Hotel', 125], ['Número', 185], ['Hóspede', 120], ['Canal', 100], ['Check-in', 90], ['Check-out', 90], ['Valor total', 95], ['Situação da reserva', 205], ['Reserva', 'fill']];
-const legacyNumber = (number) => ({ build: async (cell) => { cell.itemSpacing = 6; cell.appendChild(await T(number)); await legacyBadge(cell); } });
+// A 005 acrescentou a coluna "Valor cobrado".
+const LEGACY_COLS = [[' ', 36], ['Hotel', 125], ['Número', 185], ['Hóspede', 110], ['Canal', 95], ['Check-in', 88], ['Check-out', 88], ['Valor total', 92], ['Valor cobrado', 95], ['Situação da reserva', 180], ['Reserva', 'fill']];
 const legacyRows = () => LEGACY_ROWS.map(([number, guest, [tone, situation]]) => [
-  { check: false }, 'Hotel Praia Azul', legacyNumber(number), guest, 'Canal Fictício', '10/05/2026', '12/05/2026', 'R$ 1.234,56',
+  { check: false }, 'Hotel Praia Azul', legacyNumberCell(number), guest, 'Canal Fictício', '10/05/2026', '12/05/2026', 'R$ 1.234,56', '—',
   { badge: tone, text: situation }, { badge: 'Amarelo', text: 'Não identificada' },
 ]);
 
@@ -30,7 +30,7 @@ SCREENS['4.11'] = { name: 'Reservas — detalhe da reserva do sistema anterior',
     tl.appendChild(await T('Reserva SA-2002', 'título seção')); tl.appendChild(await T('hotel 101', 'corpo', 'texto/apagado'));
     const tr = AL('HORIZONTAL', { name: 'Situações', itemSpacing: 8 }); t.appendChild(tr);
     await legacyBadge(tr); await badge(tr, 'Amarelo', 'A revisar (sistema anterior)'); await badge(tr, 'Amarelo', 'Não identificada');
-    await kvGrid(d, [['Hóspede', 'Marcos Teixeira'], ['Canal', 'Canal Fictício'], ['Forma de pagamento', '—'], ['Check-in', '10/05/2026'], ['Check-out', '12/05/2026'], ['Valor total', 'R$ 1.234,56']], 'Dados da reserva');
+    await kvGrid(d, [['Hóspede', 'Marcos Teixeira'], ['Canal', 'Canal Fictício'], ['Forma de pagamento', '—'], ['Check-in', '10/05/2026'], ['Check-out', '12/05/2026'], ['Valor total', 'R$ 1.234,56'], ['Valor cobrado', '—']], 'Dados da reserva');
     await hunitStatus(d, ['Amarelo', 'A revisar (sistema anterior)'], 'Sistema anterior: "Sem cartão virtual" sem correspondência (o sistema anterior não guardava a forma de pagamento); a revisar na próxima verificação no Hunit');
     await treatmentSection(d, {
       status: ['Amarelo', 'A revisar (sistema anterior)'],
@@ -43,7 +43,7 @@ SCREENS['4.11'] = { name: 'Reservas — detalhe da reserva do sistema anterior',
       history: ['02/05/2026 09:30 — Anexou tratativa — Sistema anterior'],
     });
     const cb = await card(d, null, 'fill', 12); cb.name = 'Card — Cobrança'; put(cb, await T('Cobrança', 'corpo forte'));
-    await kvGrid(cb, [['Data', '—'], ['Responsável', '—'], ['Valor cobrado', '—'], ['Transação', '—'], ['Autorização', '—'], ['Referência da operadora', '—'], ['Parcelamento', '—'], ['Estado do pré-pagamento', '—'], ['Mensagem do pré-pagamento', '—']], 'Dados da cobrança');
+    await kvGrid(cb, [['Data', '—'], ['Responsável', '—'], ['Valor cobrado no Hunit', '—'], ['Transação', '—'], ['Autorização', '—'], ['Referência da operadora', '—'], ['Parcelamento', '—'], ['Estado do pré-pagamento', '—'], ['Mensagem do pré-pagamento', '—']], 'Dados da cobrança');
     const vf = await card(d, null, 'fill', 12); vf.name = 'Card — Verificações'; put(vf, await T('Verificações', 'corpo forte'));
     await kvGrid(vf, [['Primeira', '01/05/2026 10:00'], ['Última', '08/05/2026 10:00'], ['Quantidade', '3']], 'Verificações');
     put(vf, await T('Ainda não verificada pelo HUNIT Control: os dados são os do sistema anterior.', 'corpo', 'texto/apagado'), 'fill');

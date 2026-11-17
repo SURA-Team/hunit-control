@@ -17,7 +17,8 @@ dos dois por argumento (não ficam no histórico do terminal).
 ## `setup`
 
 Prepara a planilha de forma repetível ([sheet-layout.md](./sheet-layout.md)): abas, cabeçalhos,
-localidade, fuso, formatos, linha congelada e proteções. Não apaga linhas existentes. Se a planilha já
+localidade, fuso, formatos, linha congelada, aparência (cores, listras, bordas e larguras) e
+proteções. Não apaga linhas existentes. Se a planilha já
 tiver abas com outros nomes, elas ficam como estão (o sincronizador só usa as duas abas do formato).
 
 Saída (sem a chave, o e-mail da conta de serviço completo nem o ID):
@@ -27,6 +28,7 @@ Planilha do Comercial: acesso OK (conta de serviço co…@….iam.gserviceaccoun
 Aba "A cobrar": criada | já existia
 Aba "Concluídas": criada | já existia
 Cabeçalhos: gravados
+Aparência: cabeçalho preto e lima, listras, bordas tracejadas e cores da Validação do Financeiro
 Proteções: colunas A:J de "A cobrar" e "Concluídas" inteira (só a conta de serviço edita)
 Pronto. Compartilhe a planilha com o Comercial como editor, no Google.
 ```

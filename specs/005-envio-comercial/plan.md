@@ -45,7 +45,7 @@ de versão)
 Sheets por `fetch`. Já existentes: Fastify, Drizzle, Playwright, Zod. App — nenhuma nova (área de
 transferência pelo `clipboard` do Electron)
 
-**Storage**: PostgreSQL — 7 tabelas novas, 5 enums novos e `reservations.last_dispatch_id`, numa
+**Storage**: PostgreSQL — 7 tabelas novas, 4 enums novos e `reservations.last_dispatch_id`, numa
 migration do `db:generate` ([data-model.md](./data-model.md)). Nenhum arquivo em disco além do Docker
 secret com a chave da planilha
 
@@ -151,10 +151,10 @@ apps/server/src/
 ├── config.ts                       # COMMERCIAL_SHEET_ID, COMMERCIAL_SHEET_KEY_FILE, COMMERCIAL_SHEET_DONE_RETENTION_DAYS
 ├── main.ts                         # inicia o sincronizador
 ├── persistence/
-│   ├── schema.ts                   # 7 tabelas, 5 enums, reservations.last_dispatch_id
+│   ├── schema.ts                   # 7 tabelas, 4 enums, reservations.last_dispatch_id
 │   ├── dispatches-repo.ts          # NOVO
 │   ├── commercial-repo.ts          # NOVO — linhas, retornos, eventos, estado da planilha
-│   ├── reservations-repo.ts        # commitVerifiedReservation; filtros detailedSituation, sentToCommercial; seleção
+│   ├── reservations-repo.ts        # commitVerifiedReservation; filtro detailedSituation; seleção
 │   ├── treatments-repo.ts          # situação com linha e retorno; "Verificar" em lote
 │   └── migrations/                 # 0011 gerada pelo db:generate
 ├── legacy-import/applier.ts        # "verificada pelo HUNIT Control" inclui last_dispatch_id (R-02)

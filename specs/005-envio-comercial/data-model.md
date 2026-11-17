@@ -31,12 +31,14 @@ tabela guarda o nome do hóspede além do que a 001 já guarda em `reservations`
 | `dispatch_id` | uuid → `commercial_dispatches` | PK com a reserva |
 | `hotel_code`, `reservation_number` | text | FK → `reservations` |
 | `position` | integer | ordem de processamento (a da seleção) |
-| `outcome` | enum `dispatch_item_outcome` | `pending`, `sent`, `withdrawn`, `not_verified` |
+| `outcome` | enum `dispatch_item_outcome` | `pending`, `sent`, `withdrawn`, `not_verified`, `ignored` |
 | `classification_before` | `classification` | no momento da confirmação |
 | `classification_after` | `classification`, nulo | lida na verificação |
-| `reason` | text, nulo | motivo de `withdrawn` (a classificação) ou de `not_verified` (sem dado pessoal) |
+| `reason` | text, nulo | motivo de `withdrawn` (a classificação), de `not_verified` (sem dado pessoal) ou de `ignored` (código de elegibilidade: `not_found`, `not_accepting`, `has_proof`, `return_awaiting_validation`) |
 | `processed_at` | timestamptz, nulo | |
 
+`ignored` = a reserva não passou na conferência de elegibilidade feita ao criar o envio (spec FR-003);
+nasce já `ignored`, com `processed_at` = criação, sem passar por `pending` e sem acessar o Hunit.
 `pending` → (`sent` \| `withdrawn` \| `not_verified`). Cancelamento ou falha do envio: os `pending`
 viram `not_verified` com "envio cancelado" ou o motivo da falha. A retomada copia **todos** os
 `not_verified` para o envio filho (inclusive "não encontrada": a decisão de repetir é do operador).
@@ -132,7 +134,8 @@ códigos de R-04), `last_error_at`, `consecutive_failures`, `next_attempt_at`.
 ### 3.3 `treatment.ts` (alterado, R-09, R-10)
 
 - `treatmentStatus({ hasCurrentRequest, hasCurrentProof })` — chamado com
-  `hasCurrentRequest = documento de tratativa atual || linha open` e
+  `hasCurrentRequest = documento de tratativa atual || linha open ou concluded` (não cancelada; o
+  pedido continua registrado em "Concluídas" e mantém o alerta "Verificar") e
   `hasCurrentProof = documento de comprovante atual || retorno confirmed`.
 - `detailedSituation(classification, status, hasReturnAwaiting)` → `ReservationSituation | 'return_pending'`.
 - `effectiveChargedAmount(hunit, manual, commercial, hasCurrentProof)` → `{ amount, origin }`.
@@ -157,8 +160,13 @@ sistema (sem o nome do hóspede); `copyRows(...)` para a cópia para e-mail (FR-
      (Comercial muda) │   │     └──recusar──► rejected  └─desfazer confirmação─► awaiting_validation
                       ▼   │                     │
                  superseded ◄─(Comercial muda)──┘
-   awaiting_validation ──(comprovante por arquivo ou envio desfeito)──► closed
+   awaiting_validation ──(comprovante por arquivo, ou o Hunit deixou de exigir cobrança)──► closed
 ```
+
+`closed` encerra o retorno sem validação (spec FR-009, análise "A verificar"): não aceita mais
+confirmar nem recusar, fica no histórico (evento `return_closed` com o motivo) e, no caso do Hunit, a
+reserva fica com o alerta "Verificar". Desfazer o envio com retorno aguardando é recusado (R-11), por
+isso não encerra retorno.
 
 ### Linha
 
