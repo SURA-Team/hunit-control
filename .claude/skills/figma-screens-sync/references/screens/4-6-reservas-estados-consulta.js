@@ -152,7 +152,8 @@ async function hunitStatus(parent, [tone, text], reason, previous) {
   const m = AL('VERTICAL', { name: 'Status do Hunit', itemSpacing: 4, paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12, cornerRadius: 8 });
   m.strokes = [paint('borda/padrão')]; put(parent, m, 'fill');
   const t = row(m, 'Título', { itemSpacing: 8 }); t.appendChild(await T('Status do Hunit', 'corpo forte')); await badge(t, tone, text);
-  m.appendChild(await T('Motivo da classificação', 'descrição', 'texto/apagado')); m.appendChild(await T(reason));
+  // O motivo quebra a linha (o da reserva importada é longo); a caixa cresce junto.
+  m.appendChild(await T('Motivo da classificação', 'descrição', 'texto/apagado')); put(m, await T(reason), 'fill');
   if (previous) { const p = row(m, 'Classificação anterior', { itemSpacing: 8 }); p.appendChild(await T('Classificação anterior:')); await badge(p, previous[0], previous[1]); }
 }
 /** Pares rótulo/valor em 3 colunas. */

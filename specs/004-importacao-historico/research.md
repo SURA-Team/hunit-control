@@ -381,3 +381,39 @@ Pilha `hunit-homolog`, com os dados fictícios da 003 e a planilha gerada pelo
   conferência rápida, a lista deveria mostrar o valor efetivamente cobrado. Fica para uma correção
   própria (mudança de tela da 003).
 - **Tamanho da cópia de segurança antes e depois:** não medido nesta rodada.
+
+## Importação real (T045, 2026-11-16)
+
+No PC de produção, com a cópia .xlsx da planilha original e a pasta de anexos (1 878 arquivos),
+na master com os ajustes da importação real (R-03, R-08 e R-09). Só contagens, sem dados.
+
+- **Simulações anteriores, que não gravaram nada e revelaram os ajustes:**
+  - uma com inteiros gravados como `3.0` (R-03);
+  - duas com 631 reservas sem "Total da reserva" (R-06, FR-008);
+  - a última, cuja importação parou com falha depois de ~24 mil reservas por um valor manual
+    zerado (R-09, FR-015).
+- **Primeira importação (com falha):** o que entrou ficou gravado e apareceu como "já importado"
+  na seguinte. Foram 24 325 reservas (23 603 criadas, 722 atualizadas), 160 tratativas e 22
+  comprovantes.
+- **Segunda importação (concluída, "Nenhuma diferença em relação à simulação"):**
+
+  | | criadas | atualizadas | ignoradas | recusadas |
+  |---|---|---|---|---|
+  | Reservas | 52 952 | 36 775 | 24 325 | 0 |
+  | Tratativas | 1 001 | 0 | 160 | 0 |
+  | Comprovantes | 670 | 0 | 22 | 0 |
+  | Valores manuais | 159 | 0 | 0 | 6 |
+
+  Os ignorados são exatamente o que a primeira importação gravou. As 6 recusas são "Valor manual
+  igual a zero"; a reserva e os documentos dessas linhas entraram.
+- **Total das duas:**
+  - 114 052 reservas (76 555 criadas, 37 497 atualizadas);
+  - 1 161 tratativas;
+  - 692 comprovantes;
+  - 159 valores manuais.
+- **Avisos:** 25 arquivos da pasta sem referência. Nenhuma "Não é cartão virtual" gravada antes,
+  nenhum registro sem data original, nenhuma reserva anonimizada na entrada.
+- **Associação de hotéis:** 79 hotéis do sistema anterior confirmados.
+- **Cópia de segurança:** uma feita antes de importar, como ponto de volta.
+- **Conferência no app e execução no Hunit:** a conferência por amostragem e a execução do período
+  do sistema anterior (quickstart §3, passos 11 e 12) não acharam problema.

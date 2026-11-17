@@ -7,8 +7,9 @@ const LEGACY_ROWS = [
   ['SA-2001', 'Lúcia Barros', ['Amarelo', 'Pendente de cobrança']],
   ['SA-2002', 'Marcos Teixeira', ['Amarelo', 'A revisar (sistema anterior)']],
 ];
-// O número ganha o selo ao lado: coluna mais larga, a situação um pouco mais estreita.
-const LEGACY_COLS = [[' ', 36], ['Hotel', 130], ['Número', 185], ['Hóspede', 130], ['Canal', 105], ['Check-in', 90], ['Check-out', 90], ['Valor total', 95], ['Situação da reserva', 215], ['Reserva', 'fill']];
+// O número ganha o selo ao lado: coluna mais larga; as outras estreitam para "Não identificada"
+// caber inteira na última coluna.
+const LEGACY_COLS = [[' ', 36], ['Hotel', 125], ['Número', 185], ['Hóspede', 120], ['Canal', 100], ['Check-in', 90], ['Check-out', 90], ['Valor total', 95], ['Situação da reserva', 205], ['Reserva', 'fill']];
 const legacyNumber = (number) => ({ build: async (cell) => { cell.itemSpacing = 6; cell.appendChild(await T(number)); await legacyBadge(cell); } });
 const legacyRows = () => LEGACY_ROWS.map(([number, guest, [tone, situation]]) => [
   { check: false }, 'Hotel Praia Azul', legacyNumber(number), guest, 'Canal Fictício', '10/05/2026', '12/05/2026', 'R$ 1.234,56',
@@ -18,7 +19,7 @@ const legacyRows = () => LEGACY_ROWS.map(([number, guest, [tone, situation]]) =>
 SCREENS['4.10'] = { name: 'Reservas — filtro "Sistema anterior"', h: 900, profile: 'Operador', nav: NAV_OP, active: 'Reservas',
   async build({ main }) { await reservationsPage(main, { origin: 'Sistema anterior', rows: legacyRows(), cols: LEGACY_COLS }); } };
 
-SCREENS['4.11'] = { name: 'Reservas — detalhe da reserva do sistema anterior', h: 1640, profile: 'Operador', nav: NAV_OP, active: 'Reservas',
+SCREENS['4.11'] = { name: 'Reservas — detalhe da reserva do sistema anterior', h: 1300, profile: 'Operador', nav: NAV_OP, active: 'Reservas',
   async build({ root, main }) {
     await reservationsPage(main, { origin: 'Sistema anterior', rows: legacyRows(), cols: LEGACY_COLS });
     overlay(root);
