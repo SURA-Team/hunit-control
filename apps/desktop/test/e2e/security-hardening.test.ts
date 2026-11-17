@@ -38,13 +38,14 @@ const BRIDGE = {
   ],
   twoFactor: ['onClosed', 'onRequested'],
   evidence: ['list', 'save'],
-  reservations: ['channels', 'get', 'list'],
+  reservations: ['channels', 'get', 'list', 'selectAll'],
   // Tratativas manuais (specs/003, contracts/ipc.md).
   treatments: [
     'apply',
     'check',
     'clearManualAmount',
     'confirmReview',
+    'confirmReviews',
     'discardFile',
     'get',
     'pickFile',
@@ -53,6 +54,31 @@ const BRIDGE = {
     'saveDocument',
     'setManualAmount',
   ],
+  // Envio ao Comercial (specs/005, contracts/ipc.md).
+  dispatches: [
+    'cancel',
+    'check',
+    'get',
+    'list',
+    'onChanged',
+    'resume',
+    'sendToken',
+    'start',
+    'unwatch',
+    'watch',
+  ],
+  commercial: [
+    'cancelLine',
+    'confirmReturn',
+    'confirmReturns',
+    'get',
+    'readNow',
+    'rejectReturn',
+    'restoreLine',
+    'sheetStatus',
+    'undoConfirmation',
+  ],
+  clipboard: ['copyReservations'],
 };
 
 describe('janela endurecida', () => {

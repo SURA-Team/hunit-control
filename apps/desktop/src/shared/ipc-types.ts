@@ -30,6 +30,28 @@ export type TreatmentDocument = Schemas['TreatmentDocument'];
 export type ReservationTreatment = Schemas['ReservationTreatment'];
 export type TreatmentEvent = Schemas['TreatmentEvent'];
 export type ReservationOutcome = Schemas['ReservationOutcome'];
+export type ReservationDetailedSituation = Schemas['ReservationDetailedSituation'];
+// Envio ao Comercial (specs/005).
+export type CommercialSummary = Schemas['CommercialSummary'];
+export type CommercialReturnBrief = Schemas['CommercialReturnBrief'];
+export type CommercialLine = Schemas['CommercialLine'];
+export type CommercialLineState = Schemas['CommercialLineState'];
+export type CommercialReturn = Schemas['CommercialReturn'];
+export type CommercialReturnState = Schemas['CommercialReturnState'];
+export type CommercialEvent = Schemas['CommercialEvent'];
+export type CommercialDetail = Schemas['CommercialDetail'];
+export type CommercialDispatch = Schemas['CommercialDispatch'];
+export type CommercialDispatchSummary = Schemas['CommercialDispatchSummary'];
+export type CommercialDispatchItem = Schemas['CommercialDispatchItem'];
+export type CommercialDispatchCheck = Schemas['CommercialDispatchCheck'];
+export type CommercialDispatchIgnored = Schemas['CommercialDispatchIgnored'];
+export type CommercialSheetStatus = Schemas['CommercialSheetStatus'];
+export type CommercialSheetProblem = Schemas['CommercialSheetProblem'];
+export type CommercialSheetRead = Schemas['CommercialSheetRead'];
+export type ConfirmationBatchResult = Schemas['ConfirmationBatchResult'];
+export type ReservationSelection = Schemas['ReservationSelection'];
+export type SelectionItem = Schemas['SelectionItem'];
+export type ChargedAmountOrigin = NonNullable<ReservationTreatment['chargedAmountOrigin']>;
 
 /** Códigos de erro da API (`Problem.code`). */
 export type ApiErrorCode = Schemas['Problem']['code'];
@@ -158,8 +180,16 @@ export interface SendTokenInput {
   token: string;
 }
 
+/** Execução ou envio ao Comercial: os dois pedem o token do Hunit (specs/005, research R-14). */
+export type JobKind = 'execution' | 'dispatch';
+
+export interface JobRef {
+  kind: JobKind;
+  id: string;
+}
+
 export interface TwoFactorRequest {
-  executionId: string;
+  job: JobRef;
   /** `twoFactorDeadline` do servidor (ISO 8601). */
   deadline: string;
   /** Relógio do servidor menos o relógio local, em milissegundos. */
@@ -170,7 +200,7 @@ export type TwoFactorCloseReason =
   'accepted' | 'rejected' | 'expired' | 'finished' | 'answered_elsewhere';
 
 export interface TwoFactorClosed {
-  executionId: string;
+  job: JobRef;
   reason: TwoFactorCloseReason;
 }
 
@@ -204,9 +234,17 @@ export interface ReservationListInput {
   needsReview?: boolean | undefined;
   /** Origem (specs/004, FR-011): `true` = só as do sistema anterior; `false` = só as outras. */
   fromLegacy?: boolean | undefined;
+  /**
+   * Situação com o detalhe do Comercial (specs/005): os valores de `situation` e "Validar
+   * comprovante" (`return_pending`). A tela usa este no lugar de `situation`.
+   */
+  detailedSituation?: ReservationDetailedSituation[] | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
 }
+
+/** Os filtros da lista, sem paginação: "selecionar todas do filtro" e a cópia (specs/005). */
+export type ReservationFilters = Omit<ReservationListInput, 'cursor' | 'limit'>;
 
 export interface ReservationKey {
   hotelCode: string;
@@ -319,6 +357,80 @@ export interface ManualAmountInput extends ReservationKey {
 }
 
 // ---------------------------------------------------------------------------
+// Envio ao Comercial pela planilha (specs/005, contracts/ipc.md)
+// ---------------------------------------------------------------------------
+
+/** Máximo de reservas num envio, numa confirmação em lote e numa cópia (FR-001, FR-029). */
+export const MAX_COMMERCIAL_RESERVATIONS = 2000;
+
+export interface ReservationsInput {
+  reservations: ReservationKey[];
+}
+
+export interface CommercialDispatchListInput {
+  active?: boolean | undefined;
+  cursor?: string | undefined;
+  limit?: number | undefined;
+}
+
+export interface DispatchTokenInput {
+  dispatchId: string;
+  token: string;
+}
+
+/** "Ler retornos agora": `round` nulo = passou de 50 s e a rodada continua no servidor (202). */
+export interface SheetReadResult {
+  sheet: CommercialSheetStatus;
+  round: CommercialSheetRead['round'] | null;
+}
+
+export interface DispatchChanged {
+  dispatchId: string;
+}
+
+export interface RejectReturnInput {
+  returnId: string;
+  /** Aparece para o Comercial na planilha (FR-017). */
+  reason: string;
+}
+
+/**
+ * Uma reserva copiada para o e-mail (FR-027): só as colunas da cópia. Não existe campo de hóspede
+ * de propósito; o principal recusa qualquer campo a mais.
+ */
+export interface CopyRow {
+  hotelName: string;
+  reservationNumber: string;
+  checkIn: string | null;
+  channel: string | null;
+  totalAmount: string | null;
+  classification: Classification;
+  reservationStatus: ReservationStatus;
+  detailedSituation: ReservationDetailedSituation;
+}
+
+export type CopyReservationsInput =
+  | {
+      source: 'selection';
+      rows: CopyRow[];
+    }
+  | {
+      source: 'filter';
+      filters: ReservationFilters;
+      /** Os filtros em português, para a linha de descrição da cópia. */
+      description?: string | undefined;
+    };
+
+export interface CopyResult {
+  /** Reservas copiadas. */
+  copied: number;
+  /** Quantas o filtro encontrou (`source: 'filter'`); igual a `copied` na seleção. */
+  total: number;
+  /** `true` = o filtro trouxe mais de 2 000; só as 2 000 primeiras foram copiadas. */
+  truncated: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // A ponte: window.hunit
 // ---------------------------------------------------------------------------
 
@@ -377,6 +489,8 @@ export interface HunitApi {
     list: (input: ReservationListInput) => Promise<Result<Page<Reservation>>>;
     get: (input: ReservationKey) => Promise<Result<Reservation>>;
     channels: () => Promise<Result<string[]>>;
+    /** "Selecionar todas do filtro" (specs/005, FR-030): até 2 000, na ordem da lista. */
+    selectAll: (filters: ReservationFilters) => Promise<Result<ReservationSelection>>;
   };
   treatments: {
     /** Abre "Abrir arquivo"; `null` = cancelado. O arquivo fica na memória do principal. */
@@ -394,5 +508,37 @@ export interface HunitApi {
     confirmReview: (input: ReservationKey) => Promise<Result<ReservationTreatment>>;
     /** Baixa e abre "Salvar como" com o nome original; `null` = cancelado. */
     saveDocument: (documentId: string) => Promise<Result<{ savedTo: string } | null>>;
+    /** "Verificar" em lote (specs/005, FR-029): até 2 000 reservas. */
+    confirmReviews: (input: ReservationsInput) => Promise<Result<ConfirmationBatchResult>>;
+  };
+  dispatches: {
+    /** Quem aceita o envio, sem gravar nada e sem acessar o Hunit (FR-001). */
+    check: (input: ReservationsInput) => Promise<Result<CommercialDispatchCheck>>;
+    /** Usa as credenciais do cofre, como `executions.start`. */
+    start: (input: ReservationsInput) => Promise<Result<CommercialDispatch>>;
+    list: (input: CommercialDispatchListInput) => Promise<Result<Page<CommercialDispatchSummary>>>;
+    get: (dispatchId: string) => Promise<Result<CommercialDispatch>>;
+    resume: (dispatchId: string) => Promise<Result<CommercialDispatch>>;
+    cancel: (dispatchId: string) => Promise<Result<CommercialDispatch>>;
+    sendToken: (input: DispatchTokenInput) => Promise<Result<void>>;
+    watch: (dispatchId: string) => Promise<Result<void>>;
+    unwatch: (dispatchId: string) => Promise<Result<void>>;
+    onChanged(callback: (event: DispatchChanged) => void): Unsubscribe;
+  };
+  commercial: {
+    /** Linha, retornos e histórico do Comercial de uma reserva. */
+    get: (input: ReservationKey) => Promise<Result<CommercialDetail>>;
+    cancelLine: (input: ReservationKey) => Promise<Result<CommercialLine>>;
+    restoreLine: (input: ReservationKey) => Promise<Result<CommercialLine>>;
+    confirmReturn: (returnId: string) => Promise<Result<ReservationTreatment>>;
+    rejectReturn: (input: RejectReturnInput) => Promise<Result<ReservationTreatment>>;
+    undoConfirmation: (returnId: string) => Promise<Result<ReservationTreatment>>;
+    confirmReturns: (input: ReservationsInput) => Promise<Result<ConfirmationBatchResult>>;
+    sheetStatus: () => Promise<Result<CommercialSheetStatus>>;
+    readNow: () => Promise<Result<SheetReadResult>>;
+  };
+  clipboard: {
+    /** Monta a tabela (HTML e texto com tabulação) no principal e grava na área de transferência. */
+    copyReservations: (input: CopyReservationsInput) => Promise<Result<CopyResult>>;
   };
 }

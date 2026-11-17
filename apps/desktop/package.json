@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@hunit/contracts": "workspace:*",
+    "@hunit/domain": "workspace:*",
     "@kenjiuno/msgreader": "^1.29.0",
     "@mantine/core": "^9.8.0",
     "@mantine/dates": "^9.8.0",

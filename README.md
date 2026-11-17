@@ -16,6 +16,8 @@ servidor.
 - Validação ponta a ponta: [quickstart.md](specs/001-consulta-reservas-hunit/quickstart.md)
 - App desktop: [specs/002-app-desktop/spec.md](specs/002-app-desktop/spec.md),
   [plan.md](specs/002-app-desktop/plan.md) e [quickstart.md](specs/002-app-desktop/quickstart.md)
+- Envio ao Comercial pela planilha do Google: [specs/005-envio-comercial/spec.md](specs/005-envio-comercial/spec.md),
+  [plan.md](specs/005-envio-comercial/plan.md) e [quickstart.md](specs/005-envio-comercial/quickstart.md)
 - Guia para agentes de código, estrutura do repositório e todos os comandos: [AGENTS.md](AGENTS.md)
 
 ## Desenvolvimento
@@ -284,6 +286,70 @@ pesquisas, até 2 000 reservas) e use **Anexar tratativa** ou **Anexar comprovan
 seleção. O atalho **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm
 comprovante. Nada disso acessa o Hunit.
 
+### Envio ao Comercial
+
+Com a planilha do Comercial configurada no servidor ("Planilha do Comercial", abaixo), o
+Financeiro envia os pedidos de cobrança direto para ela:
+
+- **Enviar ao Comercial**, na barra da seleção: o app mostra quais reservas aceitam o envio e o
+  total; pede o acesso ao Hunit (o mesmo das execuções) e o token. Antes de ir para a planilha, cada
+  reserva é verificada no Hunit (só leitura): a que não exige mais cobrança é retirada, e a que não
+  pode ser verificada não é enviada. A enviada fica como **Tratativa enviada**, como a tratativa por
+  e-mail.
+- O Comercial preenche, na aba "A cobrar", o código de autorização, o hotel da cobrança (o que
+  aparece na maquininha), o valor cobrado e o responsável. O servidor lê os retornos a cada
+  10 minutos (ou na hora, com **Ler retornos agora**, na área **Comercial**) e a reserva passa a
+  **Validar comprovante**.
+- O Financeiro confere o retorno no detalhe da reserva ou na aba **Retornos a validar** e
+  **confirma** (vale como comprovante, e o valor cobrado do Comercial passa a valer) ou **recusa**
+  com o motivo, que o Comercial vê na planilha. A confirmação pode ser em lote, com uma lista de
+  revisão antes; a recusa é sempre uma a uma.
+- A lista de reservas mostra o **valor cobrado** com a origem (Hunit, manual ou Comercial).
+- **Selecionar todas do filtro** marca até 2 000 reservas de todas as páginas; **Confirmar
+  "Verificar"** tira o alerta de várias de uma vez; **Copiar para e-mail** copia o resultado da
+  pesquisa (ou a seleção) numa tabela com as colunas da planilha, sem o nome do hóspede, para colar
+  no corpo do e-mail.
+
+## Planilha do Comercial
+
+Feita uma vez, no PC de produção, por quem administra a implantação (specs/005, FR-008a). A planilha
+é uma planilha do Google com duas abas ("A cobrar" e "Concluídas"); o servidor escreve nela com uma
+**conta de serviço** do Google, e a chave dessa conta fica só no servidor, numa pasta montada só para
+leitura. Sem as duas variáveis da planilha, o envio ao Comercial fica desligado e o resto funciona.
+
+1. No Google Cloud (console.cloud.google.com), num projeto da empresa: ative a **API do Google
+   Sheets**, crie uma **conta de serviço** (sem papéis no projeto) e, nela, uma **chave JSON**.
+2. Salve a chave como `deploy\secrets\commercial-sheet-key.json` na pasta de produção
+   (`C:\Dev\producao\hunit-control`). A pasta é ignorada pelo Git (menos o README dela). Nunca
+   envie a chave por e-mail ou chat nem a cole no `.env`.
+3. Crie a planilha vazia no Google Drive da empresa (ex.: "HUNIT Comercial") e compartilhe-a com o
+   e-mail da conta de serviço (`...@....iam.gserviceaccount.com`, no JSON) como **Editor**.
+4. No `.env`, preencha as duas juntas:
+   - `COMMERCIAL_SHEET_ID`: o ID da planilha (o trecho do endereço entre `/d/` e `/edit`);
+   - `COMMERCIAL_SHEET_KEY_FILE=/run/secrets/commercial-sheet/commercial-sheet-key.json`.
+5. Suba de novo e prepare a planilha (cria as abas, os cabeçalhos, a aparência e as proteções;
+   pode rodar de novo sem estragar nada) e confira:
+   ```powershell
+   docker compose up -d
+   docker compose exec server node dist/cli.js commercial-sheet setup
+   docker compose exec server node dist/cli.js commercial-sheet check
+   ```
+   O `check` deve dizer "acesso OK", as duas abas, os cabeçalhos e as proteções. Ele não muda
+   nada; se alguém alterar o formato da planilha, ele aponta o que mudou (rode o `setup` de novo).
+   A aparência (cabeçalho preto e lima, listras, bordas tracejadas e a coluna "Validação do
+   Financeiro" em lima, laranja ou vermelho, conforme o status) não é conferida: se alguém mudá-la,
+   o `setup` a refaz. As regras de formatação condicional das duas abas são do sistema: o `setup`
+   apaga as que alguém tiver criado ali.
+6. Compartilhe a planilha com as contas do Comercial no Google, como **Editor**: as colunas do
+   sistema (A a J de "A cobrar") e a aba "Concluídas" ficam protegidas; o Comercial só preenche as
+   colunas de retorno (K a N).
+7. No app, a área **Comercial → Planilha** deve mostrar "Funcionando".
+
+Se a planilha ficar fora do ar, nada se perde: o servidor guarda as atualizações e as aplica quando
+ela volta (a área **Comercial → Planilha** mostra as pendências e desde quando). As linhas de
+"Concluídas" saem da planilha 90 dias depois (`COMMERCIAL_SHEET_DONE_RETENTION_DAYS`) e continuam
+no banco. Variáveis e opções: `.env.example`; comando: [contracts/cli.md](specs/005-envio-comercial/contracts/cli.md).
+
 ## Importar o histórico do sistema anterior
 
 Feita uma vez, no PC de produção, por quem administra a implantação (specs/004). A importação nunca
@@ -326,6 +392,7 @@ que lê a pasta da importação só para leitura.
 | Rotina | Quando | O que faz |
 |---|---|---|
 | Manutenção (no `server`) | Ao subir e a cada 24 h | Apaga evidências com mais de `EVIDENCE_RETENTION_DAYS` dias (padrão 30), anonimiza o nome do hóspede das reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos (padrão 5) e apaga os arquivos das tratativas vencidos: substituídos ou desfeitos há 30 dias, os de reservas anonimizadas e os enviados e nunca registrados (o registro e o histórico ficam) |
+| Planilha do Comercial (no `server`, quando configurada) | Segundos depois de cada mudança; confere pendências a cada 30 s e lê os retornos a cada 10 min | Escreve as linhas novas e as mudanças, move as concluídas para "Concluídas", lê os retornos do Comercial e tira da planilha as concluídas há mais de `COMMERCIAL_SHEET_DONE_RETENTION_DAYS` dias (padrão 90). Com a planilha fora do ar, tenta de novo sozinha |
 | Cópia de segurança (no `backup`) | Verifica a cada 15 min | Faz uma cópia quando a mais nova tem mais de `BACKUP_INTERVAL_HOURS` horas (padrão 24) e apaga as com mais de `BACKUP_RETENTION_DAYS` dias (padrão 30) |
 
 As duas olham o que está vencido, e não o horário: o que atrasou com o PC desligado é feito logo
@@ -335,7 +402,9 @@ Para acompanhar: `docker compose logs backup` e `docker compose logs server`. As
 `BACKUP_DIR` com o nome `hunit-AAAAMMDD-HHMMSS.dump.gpg` (horário UTC), cifradas com AES-256.
 Elas contêm reservas, histórico, execuções, clientes da API (só o hash das chaves) e os documentos
 das tratativas, que ficam no próprio banco — por isso as cópias crescem com eles; não contêm
-credenciais nem token do Hunit, nem as evidências.
+credenciais nem token do Hunit, nem as evidências. Também têm os envios e os retornos do Comercial;
+depois de uma restauração, a primeira rodada reconstrói a planilha a partir do banco. A chave da
+planilha (`deploy/secrets`) não entra nas cópias: guarde-a fora do PC, como o `.env`.
 
 ## Restaurar uma cópia de segurança
 
@@ -376,5 +445,8 @@ seção 5 do quickstart.
   servidor grava (SC-004).
 - Nunca envie credenciais do Hunit por chat, e-mail ou arquivo; elas são digitadas só no app ou no
   terminal do operador.
+- A chave da conta de serviço da planilha do Comercial fica só em `deploy/secrets` do PC do
+  servidor; o ID da planilha e a chave nunca aparecem no app, na API, nos logs nem nas mensagens de
+  erro. A planilha nunca recebe o nome do hóspede.
 - Os dados de reservas são pessoais e financeiros: não copie o banco, as cópias decifradas, as
   evidências nem planilhas para fora dos locais previstos.

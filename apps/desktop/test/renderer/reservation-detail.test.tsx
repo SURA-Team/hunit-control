@@ -59,6 +59,7 @@ function reservation(overrides: Partial<Reservation> = {}): Reservation {
     treatment: {
       ...NO_TREATMENT,
       situation: 'virtual_card_already_charged',
+      detailedSituation: 'virtual_card_already_charged',
       acceptsDocuments: false,
     },
     ...overrides,
@@ -94,7 +95,12 @@ describe('ReservationDetail (FR-022)', () => {
       <ReservationDetail
         reservation={reservation({
           classification: 'cancelled_no_charge',
-          treatment: { ...NO_TREATMENT, situation: 'proof_sent', status: 'charged' },
+          treatment: {
+            ...NO_TREATMENT,
+            situation: 'proof_sent',
+            detailedSituation: 'proof_sent',
+            status: 'charged',
+          },
         })}
       />,
     );

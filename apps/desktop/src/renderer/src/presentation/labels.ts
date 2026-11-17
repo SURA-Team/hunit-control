@@ -5,11 +5,22 @@
  */
 import type {
   AppError,
+  ChargedAmountOrigin,
   Classification,
+  CommercialDispatchIgnored,
+  CommercialDispatchItem,
+  CommercialEvent,
+  CommercialLine,
+  CommercialLineState,
+  CommercialReturnState,
+  CommercialSheetProblem,
+  CommercialSheetStatus,
+  ConfirmationBatchResult,
   ErrorCode,
   ExecutionEndReason,
   ExecutionStatus,
   HotelRunStatus,
+  ReservationDetailedSituation,
   ReservationOutcome,
   ReservationSituation,
   ReservationStatus,
@@ -92,8 +103,17 @@ export const SITUATION_LABELS: Record<ReservationSituation, Label> = {
   proof_sent: TREATMENT_STATUS_LABELS.charged,
 };
 
+/**
+ * Situação com o detalhe do Comercial (specs/005, FR-019): "Validar comprovante" = retorno do
+ * Comercial aguardando a validação do Financeiro. É a coluna da lista e o filtro desde a 005.
+ */
+export const DETAILED_SITUATION_LABELS: Record<ReservationDetailedSituation, Label> = {
+  ...SITUATION_LABELS,
+  return_pending: { name: 'Validar comprovante', tone: 'warning' },
+};
+
 /** Ordem no filtro: as que pedem ação primeiro, depois as tratadas e as que não exigem nada. */
-export const SITUATION_ORDER: ReservationSituation[] = [
+export const SITUATION_ORDER: ReservationDetailedSituation[] = [
   'virtual_card_pending_charge',
   'charge_at_terminal',
   'virtual_card_validated_only',
@@ -101,6 +121,7 @@ export const SITUATION_ORDER: ReservationSituation[] = [
   'analysis_error',
   'not_virtual_card',
   'treatment_sent',
+  'return_pending',
   'proof_sent',
   'virtual_card_already_charged',
   'invoiced',
@@ -212,6 +233,111 @@ export const END_REASON_MESSAGES: Record<ExecutionEndReason, string> = {
   internal_error: 'Erro interno do servidor.',
 };
 
+// ---------------------------------------------------------------------------
+// Envio ao Comercial pela planilha (specs/005, data-model §6)
+// ---------------------------------------------------------------------------
+
+/** Origem do valor cobrado (FR-024), ao lado do valor na lista e no detalhe. */
+export const CHARGED_AMOUNT_ORIGIN_NAMES: Record<ChargedAmountOrigin, string> = {
+  hunit: 'Hunit',
+  manual: 'manual',
+  commercial: 'Comercial',
+};
+
+/** Desfecho de cada reserva num envio (FR-005 a FR-007). */
+export const DISPATCH_OUTCOME_LABELS: Record<CommercialDispatchItem['outcome'], Label> = {
+  pending: { name: 'Aguardando verificação', tone: 'neutral' },
+  sent: { name: 'Enviada', tone: 'success' },
+  withdrawn: { name: 'Retirada', tone: 'info' },
+  not_verified: { name: 'Não verificada', tone: 'error' },
+  ignored: { name: 'Fora do envio', tone: 'neutral' },
+};
+
+/** Por que uma reserva ficou fora do envio (FR-001). */
+export const DISPATCH_IGNORED_REASONS: Record<CommercialDispatchIgnored['reason'], string> = {
+  not_found: 'Reserva não encontrada.',
+  not_accepting: 'A situação desta reserva não exige cobrança.',
+  has_proof: 'Já tem comprovante.',
+  return_awaiting_validation: 'Há retorno do Comercial aguardando validação.',
+};
+
+/** Estado do envio: os mesmos nomes das execuções, no masculino. */
+export const DISPATCH_STATUS_LABELS: Record<ExecutionStatus, Label> = {
+  queued: { name: 'Na fila', tone: 'neutral' },
+  running: { name: 'Em andamento', tone: 'info' },
+  awaiting_2fa: { name: 'Aguardando token', tone: 'warning' },
+  completed: { name: 'Concluído', tone: 'success' },
+  failed: { name: 'Falhou', tone: 'error' },
+  cancelled: { name: 'Cancelado', tone: 'neutral' },
+};
+
+/** Onde está a linha da reserva na planilha. */
+export const LINE_STATE_LABELS: Record<CommercialLineState, Label> = {
+  open: { name: 'A cobrar', tone: 'info' },
+  concluded: { name: 'Concluída', tone: 'success' },
+  cancelled: { name: 'Pedido cancelado pelo Financeiro', tone: 'neutral' },
+};
+
+export const SHEET_TAB_NAMES: Record<NonNullable<CommercialLine['tab']>, string> = {
+  to_charge: 'A cobrar',
+  done: 'Concluídas',
+};
+
+export const RETURN_STATE_LABELS: Record<CommercialReturnState, Label> = {
+  awaiting_validation: { name: 'Aguardando validação', tone: 'warning' },
+  confirmed: { name: 'Confirmado', tone: 'success' },
+  rejected: { name: 'Recusado', tone: 'error' },
+  superseded: { name: 'Substituído pelo Comercial', tone: 'neutral' },
+  closed: { name: 'Encerrado sem validação', tone: 'neutral' },
+};
+
+export const COMMERCIAL_EVENT_NAMES: Record<CommercialEvent['type'], string> = {
+  dispatched: 'Enviou ao Comercial',
+  withdrawn: 'Retirou do envio (o Hunit não exige mais cobrança)',
+  line_cancelled: 'Desfez o envio',
+  line_restored: 'Reverteu o envio desfeito',
+  line_concluded: 'Linha concluída',
+  return_received: 'Retorno do Comercial recebido',
+  return_changed: 'Retorno alterado pelo Comercial',
+  return_ignored: 'Retorno ignorado',
+  return_confirmed: 'Confirmou o retorno',
+  return_rejected: 'Recusou o retorno',
+  return_confirmation_undone: 'Desfez a confirmação do retorno',
+  return_closed: 'Retorno encerrado sem validação',
+};
+
+/** Sugestões do motivo da recusa (FR-017); o texto continua livre. */
+export const REJECTION_SUGGESTIONS = [
+  'Código de autorização errado',
+  'Valor diferente',
+  'Pagamento não encontrado',
+] as const;
+
+/** Por que uma reserva ficou de fora de uma confirmação em lote (FR-016a, FR-029). */
+export const BATCH_REASON_MESSAGES: Record<
+  NonNullable<ConfirmationBatchResult['items'][number]['reason']>,
+  string
+> = {
+  not_found: 'Reserva não encontrada.',
+  no_return_awaiting_validation: 'Sem retorno do Comercial aguardando validação.',
+  no_review_alert: 'Sem o alerta "Verificar".',
+};
+
+export const SHEET_STATUS_LABELS: Record<CommercialSheetStatus['status'], Label> = {
+  ok: { name: 'Funcionando', tone: 'success' },
+  failing: { name: 'Com falha', tone: 'error' },
+  layout_invalid: { name: 'Formato alterado', tone: 'error' },
+  not_configured: { name: 'Não configurada', tone: 'neutral' },
+};
+
+export const SHEET_PROBLEM_NAMES: Record<CommercialSheetProblem['kind'], string> = {
+  incomplete: 'Retorno incompleto',
+  illegible: 'Valor não entendido',
+  orphan_line: 'Linha sem envio',
+  duplicate_line: 'Linha repetida',
+  restored_line: 'Linha restaurada',
+};
+
 /** Mensagens dos erros (data-model §6.5). Nenhuma repete senha, token ou chave (FR-007). */
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   validation_error: 'Algum dado foi recusado pelo servidor.',
@@ -233,6 +359,19 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   document_not_revertible: 'Este documento não pode mais ser revertido.',
   proof_required: 'O valor só pode ser informado numa reserva com comprovante.',
   document_purged: 'O arquivo foi apagado pelo prazo de retenção.',
+  account_busy:
+    'A conta do Hunit está em uso por outra execução ou envio. Espere terminar e tente de novo.',
+  commercial_sheet_not_configured: 'O servidor não tem a planilha do Comercial configurada.',
+  commercial_sheet_unavailable:
+    'A planilha do Comercial não respondeu. Nada foi perdido: o servidor tenta de novo sozinho.',
+  no_eligible_reservations: 'Nenhuma das reservas aceita o envio ao Comercial.',
+  dispatch_already_finished: 'O envio já terminou.',
+  dispatch_already_resumed: 'Este envio já foi retomado.',
+  return_awaiting_validation: 'Há retorno do Comercial aguardando validação nesta reserva.',
+  return_not_awaiting_validation: 'Este retorno não aguarda mais validação.',
+  return_not_confirmed: 'Este retorno não está confirmado.',
+  not_in_commercial_sheet: 'Esta reserva não está na planilha do Comercial.',
+  restore_expired: 'O prazo de 30 dias para reverter terminou.',
   internal_error: 'Erro interno do servidor.',
   offline: 'Servidor indisponível.',
   untrusted_server: 'Não foi possível confirmar a identidade do servidor.',

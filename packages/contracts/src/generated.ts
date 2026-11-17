@@ -459,6 +459,397 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reservations/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Todas as reservas de um filtro, até 2 000, para a seleção e a cópia para e-mail (feature 005, FR-030)
+         * @description Mesmos filtros de GET /reservations, sem paginação. Devolve até 2 000 reservas na ordem da
+         *     lista (hotel e número), só com os campos que a seleção e a cópia para e-mail usam, e o total
+         *     que o filtro encontrou. `truncated` = o total passou de 2 000; as primeiras foram devolvidas.
+         */
+        get: operations["selectReservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reservations/{hotelCode}/{reservationNumber}/commercial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: components["parameters"]["HotelCode"];
+                reservationNumber: components["parameters"]["ReservationNumber"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Linha da reserva na planilha do Comercial, retornos e histórico do Comercial (feature 005)
+         * @description O histórico das tratativas (feature 003) continua em `.../treatment`; o app mescla os dois
+         *     por data. Os retornos vêm do mais recente para o mais antigo.
+         */
+        get: operations["getReservationCommercial"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reservations/{hotelCode}/{reservationNumber}/commercial/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: components["parameters"]["HotelCode"];
+                reservationNumber: components["parameters"]["ReservationNumber"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desfaz o envio da reserva ao Comercial (feature 005) — somente operador
+         * @description A linha vai para "Concluídas" com a situação "Pedido cancelado pelo Financeiro" e pode ser
+         *     revertida por 30 dias. Recusado com retorno do Comercial aguardando validação
+         *     (`return_awaiting_validation`) ou sem linha aberta (`not_in_commercial_sheet`). Não acessa o
+         *     Hunit.
+         */
+        post: operations["cancelCommercialLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reservations/{hotelCode}/{reservationNumber}/commercial/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: components["parameters"]["HotelCode"];
+                reservationNumber: components["parameters"]["ReservationNumber"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverte o envio desfeito, em até 30 dias (feature 005) — somente operador
+         * @description A linha volta para "A cobrar". Recusado depois de 30 dias (`restore_expired`), se a linha não
+         *     está cancelada (`not_in_commercial_sheet`) ou se a reserva não aceita mais o envio
+         *     (`not_eligible_for_treatment`). Não acessa o Hunit.
+         */
+        post: operations["restoreCommercialLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-dispatches/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Diz quais reservas aceitam o envio ao Comercial, sem gravar nada e sem acessar o Hunit (feature 005, FR-001) */
+        post: operations["checkCommercialDispatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-dispatches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Envios ao Comercial, dos mais recentes para os mais antigos (feature 005, FR-020) */
+        get: operations["listCommercialDispatches"];
+        put?: never;
+        /**
+         * Envia reservas ao Comercial, com login no Hunit e verificação de cada uma (feature 005, FR-001 a FR-007) — somente operador
+         * @description Cria o envio e o executa em segundo plano, com os mesmos estados de uma execução: o login
+         *     pede o token (`awaiting_2fa`), e depois cada reserva é verificada no Hunit (só leitura), uma
+         *     por vez. As que ainda exigem cobrança entram na planilha do Comercial e ficam "Tratativa
+         *     enviada"; as que deixaram de exigir são retiradas; as que não puderam ser verificadas ficam de
+         *     fora. A elegibilidade é conferida de novo aqui: as que não aceitam ficam como `ignored`.
+         *     Credenciais só em memória, como em POST /executions.
+         */
+        post: operations["createCommercialDispatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-dispatches/{dispatchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        /** Estado do envio e o resultado de cada reserva (feature 005, FR-007) */
+        get: operations["getCommercialDispatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-dispatches/{dispatchId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Stream de eventos do envio em tempo real (Server-Sent Events)
+         * @description Como /executions/{executionId}/events: cada mensagem tem `id` (sequencial), `event` (tipo) e
+         *     `data` (JSON de CommercialDispatchEvent); `Last-Event-ID` reenvia os posteriores; o stream
+         *     termina depois do `status_changed` com estado final.
+         */
+        get: operations["streamCommercialDispatchEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-dispatches/{dispatchId}/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Envia o token 2FA do envio (feature 005, FR-002) — somente operador */
+        post: operations["sendCommercialDispatchTwoFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-dispatches/{dispatchId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancela o envio (feature 005, FR-007) — somente operador
+         * @description As reservas já processadas ficam como estão; as restantes ficam "não verificadas: envio
+         *     cancelado" e podem ser retomadas.
+         */
+        post: operations["cancelCommercialDispatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-dispatches/{dispatchId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retoma o envio com as reservas não verificadas, com novo login e token (feature 005, FR-007) — somente operador */
+        post: operations["resumeCommercialDispatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-returns/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma de uma vez os retornos aguardando validação de várias reservas (feature 005, FR-016a) — somente operador
+         * @description Uma transação por reserva. Reservas sem retorno aguardando validação ficam de fora, com o
+         *     motivo. A resposta é 200 mesmo com reservas ignoradas ou com falha. Não acessa o Hunit.
+         */
+        post: operations["confirmCommercialReturns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-returns/{returnId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                returnId: components["parameters"]["ReturnId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma o retorno do Comercial; a reserva passa a "Comprovante enviado" (feature 005, FR-016) — somente operador */
+        post: operations["confirmCommercialReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-returns/{returnId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                returnId: components["parameters"]["ReturnId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recusa o retorno do Comercial com o motivo; a reserva volta a "Tratativa enviada" (feature 005, FR-017) — somente operador
+         * @description O motivo aparece para o Comercial na planilha ("Recusado pelo Financeiro: <motivo>"): não
+         *     escreva dado pessoal do hóspede.
+         */
+        post: operations["rejectCommercialReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-returns/{returnId}/undo-confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                returnId: components["parameters"]["ReturnId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desfaz a confirmação do retorno; ele volta a aguardar validação (feature 005) — somente operador */
+        post: operations["undoCommercialReturnConfirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/treatment-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma o alerta "Verificar" de várias reservas de uma vez (feature 005, FR-029) — somente operador
+         * @description Para cada reserva, a mesma regra de POST .../treatment/review (feature 003, FR-002a): só tira
+         *     o alerta e registra a confirmação no histórico, com o status do Hunit confirmado. Uma
+         *     transação por reserva; sem alerta, a reserva fica de fora (`no_review_alert`). Não acessa o
+         *     Hunit.
+         */
+        post: operations["confirmTreatmentReviews"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado da planilha do Comercial — pendências, última leitura, falha e retornos com problema (feature 005, FR-013)
+         * @description Nunca mostra o identificador da planilha nem a chave de acesso (FR-022).
+         */
+        get: operations["getCommercialSheetStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commercial-sheet/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lê os retornos e atualiza a planilha agora (feature 005, FR-014) — somente operador
+         * @description Faz uma rodada completa (leitura dos retornos e atualização da planilha) e responde quando
+         *     ela termina; se passar de 50 s, responde 202 e a rodada continua. Com a planilha
+         *     indisponível, responde 503 sem mudar nada no sistema.
+         */
+        post: operations["readCommercialSheet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -473,7 +864,7 @@ export interface components {
              * @description Código estável para tratamento pelos clientes
              * @enum {string}
              */
-            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "execution_already_resumed" | "evidence_expired" | "empty_file" | "file_too_large" | "unsupported_file_type" | "file_not_found" | "not_eligible_for_treatment" | "document_not_current" | "document_not_revertible" | "proof_required" | "document_purged" | "internal_error";
+            code: "validation_error" | "unauthorized" | "forbidden_for_role" | "not_found" | "execution_already_active" | "not_awaiting_two_factor" | "execution_already_finished" | "nothing_to_resume" | "execution_already_resumed" | "evidence_expired" | "empty_file" | "file_too_large" | "unsupported_file_type" | "file_not_found" | "not_eligible_for_treatment" | "document_not_current" | "document_not_revertible" | "proof_required" | "document_purged" | "account_busy" | "commercial_sheet_not_configured" | "commercial_sheet_unavailable" | "no_eligible_reservations" | "dispatch_already_finished" | "dispatch_already_resumed" | "return_awaiting_validation" | "return_not_awaiting_validation" | "return_not_confirmed" | "not_in_commercial_sheet" | "restore_expired" | "internal_error";
         };
         HunitCredentials: {
             username: string;
@@ -665,6 +1056,8 @@ export interface components {
             treatment: components["schemas"]["ReservationTreatment"];
             /** @description Origem "Sistema anterior" (feature 004, FR-011). null = a reserva não veio da importação. */
             legacy?: null | components["schemas"]["ReservationLegacyOrigin"];
+            /** @description Envio ao Comercial pela planilha (feature 005). null = a reserva nunca foi enviada pela planilha (pode ter tratativa por e-mail, feature 003). */
+            commercial?: null | components["schemas"]["CommercialSummary"];
         };
         /** @description O que o sistema anterior registrou sobre a reserva importada (feature 004) */
         ReservationLegacyOrigin: {
@@ -697,7 +1090,7 @@ export interface components {
          */
         TreatmentDocumentKind: "request" | "proof";
         /**
-         * @description none = sem tratativa; sent = Enviada (só tratativa); charged = Cobrada (com comprovante)
+         * @description none = sem tratativa; sent = Enviada (só tratativa); charged = Cobrada (com comprovante). Desde a 1.7.0 (feature 005), a tratativa inclui o envio ao Comercial pela planilha (não cancelado) e o comprovante inclui o retorno do Comercial confirmado pelo Financeiro.
          * @enum {string}
          */
         TreatmentStatus: "none" | "sent" | "charged";
@@ -706,6 +1099,11 @@ export interface components {
          * @enum {string}
          */
         ReservationSituation: "proof_sent" | "treatment_sent" | "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "cancelled_no_charge" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
+        /**
+         * @description Situação da reserva com o detalhe do Comercial (feature 005): os mesmos valores de ReservationSituation, mais return_pending = "Validar comprovante" (retorno do Comercial aguardando a validação do Financeiro; ainda conta em pendingCharge). Onde há return_pending, ReservationSituation continua treatment_sent (clientes até a 1.6.0).
+         * @enum {string}
+         */
+        ReservationDetailedSituation: "return_pending" | "proof_sent" | "treatment_sent" | "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "cancelled_no_charge" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
         /**
          * @description current = documento atual; replaced = substituído; removed = desfeito; purged = arquivo apagado pelo prazo de retenção (o registro fica)
          * @enum {string}
@@ -750,6 +1148,13 @@ export interface components {
         ReservationTreatment: {
             status: components["schemas"]["TreatmentStatus"];
             situation: components["schemas"]["ReservationSituation"];
+            detailedSituation: components["schemas"]["ReservationDetailedSituation"];
+            commercialChargedAmount: components["schemas"]["Money"];
+            /**
+             * @description De onde vem effectiveChargedAmount (feature 005, FR-024): hunit (o Hunit informa), manual (informado à mão, feature 003) ou commercial (retorno confirmado); null = sem valor cobrado.
+             * @enum {string|null}
+             */
+            chargedAmountOrigin: "hunit" | "manual" | "commercial" | null;
             /** @description Alerta "Verificar" (FR-002a): só tratativa, a classificação deixou de exigir cobrança e ninguém confirmou depois da última mudança de situação no Hunit */
             needsReview: boolean;
             request: components["schemas"]["TreatmentDocument"] | null;
@@ -820,6 +1225,337 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        /**
+         * @description open = na aba "A cobrar"; concluded = na aba "Concluídas" (comprovante ou o Hunit não exige mais cobrança); cancelled = envio desfeito pelo Financeiro ("Pedido cancelado pelo Financeiro", também em "Concluídas")
+         * @enum {string}
+         */
+        CommercialLineState: "open" | "concluded" | "cancelled";
+        /**
+         * @description awaiting_validation = lido da planilha, aguardando o Financeiro; confirmed = confirmado (vale como comprovante); rejected = recusado (ver rejectionReason); superseded = substituído por um retorno alterado pelo Comercial; closed = encerrado sem validação (comprovante por arquivo, ou o Hunit deixou de exigir cobrança: a reserva fica com o alerta "Verificar")
+         * @enum {string}
+         */
+        CommercialReturnState: "awaiting_validation" | "confirmed" | "rejected" | "superseded" | "closed";
+        /** @description Resumo do envio ao Comercial de uma reserva (feature 005) */
+        CommercialSummary: {
+            lineState: components["schemas"]["CommercialLineState"];
+            /** @description false = a linha já saiu da planilha (90 dias depois de concluída, ou anonimização) */
+            inSheet: boolean;
+            /** Format: date-time */
+            lastSentAt: string;
+            /** Format: uuid */
+            lastDispatchId: string;
+            /**
+             * @description Estado do retorno atual (o mais recente que não foi substituído); null = sem retorno
+             * @enum {string|null}
+             */
+            returnState: "awaiting_validation" | "confirmed" | "rejected" | "closed" | null;
+            /** @description O retorno atual (o mesmo de returnState), para a lista de revisão da confirmação em lote (FR-016a) e a lista de retornos a validar, sem uma consulta por reserva; null = sem retorno */
+            currentReturn: null | components["schemas"]["CommercialReturnBrief"];
+            /** @description Problema do retorno preenchido na planilha, por exemplo "Retorno incompleto: falta o valor cobrado" */
+            returnProblem: string | null;
+            /** @description A linha tem atualização da planilha ainda não aplicada (FR-013) */
+            syncPending: boolean;
+        };
+        /** @description Resumo do retorno atual de uma reserva (feature 005), na lista de reservas */
+        CommercialReturnBrief: {
+            /** Format: uuid */
+            id: string;
+            state: components["schemas"]["CommercialReturnState"];
+            authorizationCode: string;
+            /** @description Estabelecimento que aparece na maquininha, como o Comercial escreveu (texto livre) */
+            chargeHotel: string;
+            chargedAmount: components["schemas"]["Money"];
+            chargedBy: string;
+            /** Format: date-time */
+            readAt: string;
+            /** @description Valor cobrado menos o valor total da reserva (o valor a cobrar) */
+            difference: components["schemas"]["Money"];
+        };
+        /** @description Linha da reserva na planilha do Comercial (feature 005) */
+        CommercialLine: {
+            state: components["schemas"]["CommercialLineState"];
+            inSheet: boolean;
+            /**
+             * @description to_charge = "A cobrar"; done = "Concluídas"; null = fora da planilha
+             * @enum {string|null}
+             */
+            tab: "to_charge" | "done" | null;
+            /** Format: date-time */
+            firstSentAt: string;
+            /** Format: date-time */
+            lastSentAt: string;
+            /** Format: uuid */
+            lastDispatchId: string;
+            /** @description Nome do cliente da API que fez o último envio */
+            lastSentBy: string;
+            /** Format: date-time */
+            concludedAt: string | null;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            cancelledBy: string | null;
+            /**
+             * Format: date-time
+             * @description Preenchido só em linha cancelada que ainda pode ser revertida (30 dias)
+             */
+            restorableUntil: string | null;
+            returnProblem: string | null;
+            /** @description Último caso relatado na linha, por exemplo uma célula do sistema restaurada */
+            sheetIssue: string | null;
+            syncPending: boolean;
+        };
+        /** @description Retorno preenchido pelo Comercial na planilha (feature 005) */
+        CommercialReturn: {
+            /** Format: uuid */
+            id: string;
+            authorizationCode: string;
+            /** @description Estabelecimento que aparece na maquininha, como o Comercial escreveu (texto livre) */
+            chargeHotel: string;
+            chargedAmount: components["schemas"]["Money"];
+            /** @description Responsável pela cobrança no Comercial */
+            chargedBy: string;
+            /** Format: date-time */
+            readAt: string;
+            state: components["schemas"]["CommercialReturnState"];
+            /** Format: date-time */
+            decidedAt: string | null;
+            /** @description Cliente da API que confirmou ou recusou */
+            decidedBy: string | null;
+            rejectionReason: string | null;
+            expectedAmount: components["schemas"]["Money"];
+            difference: components["schemas"]["Money"];
+        };
+        /** @description Item do histórico do Comercial de uma reserva (feature 005, FR-020) */
+        CommercialEvent: {
+            id: number;
+            /** @enum {string} */
+            type: "dispatched" | "withdrawn" | "line_cancelled" | "line_restored" | "line_concluded" | "return_received" | "return_changed" | "return_ignored" | "return_confirmed" | "return_rejected" | "return_confirmation_undone" | "return_closed";
+            actor: {
+                /**
+                 * @description client = um cliente da API; commercial_sheet = o Comercial, pela planilha; system = o próprio HUNIT Control (ex.: linha concluída porque uma execução mostrou a reserva como cobrada)
+                 * @enum {string}
+                 */
+                kind: "client" | "commercial_sheet" | "system";
+                name: string;
+            };
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            dispatchId: string | null;
+            /** Format: uuid */
+            returnId: string | null;
+            classification: components["schemas"]["Classification"] | null;
+            reason: string | null;
+            /** Format: uuid */
+            batchId: string | null;
+        };
+        CommercialDetail: {
+            line: null | components["schemas"]["CommercialLine"];
+            returns: components["schemas"]["CommercialReturn"][];
+            events: components["schemas"]["CommercialEvent"][];
+        };
+        CommercialDispatchCheck: {
+            eligible: {
+                hotelCode: string;
+                reservationNumber: string;
+                totalAmount: components["schemas"]["Money"];
+                /** @description A reserva já está na planilha; o envio atualiza a linha */
+                resend: boolean;
+            }[];
+            ignored: components["schemas"]["CommercialDispatchIgnored"][];
+            /** @description Soma do valor total das reservas aceitas, em BRL */
+            totalAmount: string;
+        };
+        CommercialDispatchIgnored: {
+            hotelCode: string;
+            reservationNumber: string;
+            /**
+             * @description not_found = reserva não encontrada; not_accepting = a situação não aceita tratativa; has_proof = já tem comprovante; return_awaiting_validation = há retorno do Comercial aguardando validação
+             * @enum {string}
+             */
+            reason: "not_found" | "not_accepting" | "has_proof" | "return_awaiting_validation";
+        };
+        CommercialDispatchCounts: {
+            total: number;
+            pending: number;
+            sent: number;
+            withdrawn: number;
+            notVerified: number;
+            ignored: number;
+        };
+        CommercialDispatchSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @description Cliente da API que fez o envio */
+            requestedClient: string;
+            /** Format: uuid */
+            parentDispatchId: string | null;
+            status: components["schemas"]["ExecutionStatus"];
+            endReason: components["schemas"]["ExecutionEndReason"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
+            counts: components["schemas"]["CommercialDispatchCounts"];
+        };
+        CommercialDispatchItem: {
+            hotelCode: string;
+            reservationNumber: string;
+            position: number;
+            /**
+             * @description pending = ainda não verificada; sent = enviada; withdrawn = retirada (o Hunit não exige mais cobrança; reason = a classificação); not_verified = não verificada (reason diz por quê); ignored = não aceitou o envio (reason = o código de elegibilidade)
+             * @enum {string}
+             */
+            outcome: "pending" | "sent" | "withdrawn" | "not_verified" | "ignored";
+            classificationBefore: components["schemas"]["Classification"] | null;
+            classificationAfter: components["schemas"]["Classification"] | null;
+            reason: string | null;
+            /** Format: date-time */
+            processedAt: string | null;
+        };
+        CommercialDispatch: {
+            /** Format: uuid */
+            id: string;
+            requestedClient: string;
+            /** Format: uuid */
+            parentDispatchId: string | null;
+            /** Format: uuid */
+            resumedByDispatchId: string | null;
+            status: components["schemas"]["ExecutionStatus"];
+            endReason: components["schemas"]["ExecutionEndReason"] | null;
+            /** @description Mensagem do último status_changed, por exemplo o motivo da falha */
+            endMessage: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt: string | null;
+            /** Format: date-time */
+            finishedAt: string | null;
+            /** Format: date-time */
+            twoFactorDeadline: string | null;
+            counts: components["schemas"]["CommercialDispatchCounts"];
+            /** @description Reserva em verificação agora; null fora do andamento */
+            current: null | components["schemas"]["ReservationKey"];
+            items: components["schemas"]["CommercialDispatchItem"][];
+            /** @description Id do evento mais recente do envio; null = nenhum. O acompanhamento abre o fluxo de eventos a partir dele (Last-Event-ID), sem reprocessar o histórico */
+            lastEventId: string | null;
+        };
+        CommercialDispatchEvent: {
+            id: string;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            type: "status_changed" | "item_processed" | "warning";
+            status?: components["schemas"]["ExecutionStatus"];
+            hotelCode?: string | null;
+            reservationNumber?: string | null;
+            message: string;
+        };
+        /** @description Resultado de uma confirmação em lote (retornos do Comercial ou alerta "Verificar") */
+        ConfirmationBatchResult: {
+            /** Format: uuid */
+            batchId: string;
+            items: {
+                hotelCode: string;
+                reservationNumber: string;
+                /**
+                 * @description confirmed = confirmada; ignored = ficou de fora (ver reason); failed = erro inesperado, nada mudou
+                 * @enum {string}
+                 */
+                outcome: "confirmed" | "ignored" | "failed";
+                /** @enum {string|null} */
+                reason: "not_found" | "no_return_awaiting_validation" | "no_review_alert" | null;
+            }[];
+            countsByClassification: components["schemas"]["ClassificationCounts"];
+        };
+        /** @description Reserva da seleção e da cópia para e-mail (feature 005, FR-027, FR-030) */
+        SelectionItem: {
+            hotelCode: string;
+            hotelName: string;
+            reservationNumber: string;
+            /** @description Só para a lista da seleção no app; a cópia para e-mail nunca o usa. null após anonimização */
+            guestName: string | null;
+            channel: string | null;
+            /** Format: date */
+            checkIn: string | null;
+            totalAmount: components["schemas"]["Money"];
+            reservationStatus: components["schemas"]["ReservationStatus"];
+            classification: components["schemas"]["Classification"];
+            treatmentStatus: components["schemas"]["TreatmentStatus"];
+            situation: components["schemas"]["ReservationSituation"];
+            detailedSituation: components["schemas"]["ReservationDetailedSituation"];
+            needsReview: boolean;
+            effectiveChargedAmount: components["schemas"]["Money"];
+            /** @enum {string|null} */
+            chargedAmountOrigin: "hunit" | "manual" | "commercial" | null;
+            /** @description O retorno atual do Comercial (lista de revisão da confirmação em lote, FR-016a); null = sem retorno */
+            currentReturn: null | components["schemas"]["CommercialReturnBrief"];
+        };
+        ReservationSelection: {
+            /** @description Quantas reservas o filtro encontrou */
+            total: number;
+            /** @description true = total maior que 2 000; vieram as 2 000 primeiras */
+            truncated: boolean;
+            items: components["schemas"]["SelectionItem"][];
+        };
+        CommercialSheetProblem: {
+            /** @description null quando a linha não tem um hotel do catálogo */
+            hotelCode: string | null;
+            reservationNumber: string | null;
+            /**
+             * @description incomplete = retorno com coluna faltando; illegible = valor não entendido; orphan_line = linha sem envio correspondente; duplicate_line = linha repetida (apagada); restored_line = linha ou célula do sistema restaurada
+             * @enum {string}
+             */
+            kind: "incomplete" | "illegible" | "orphan_line" | "duplicate_line" | "restored_line";
+            /** @description Em português e sem dado pessoal do hóspede */
+            message: string;
+            /** Format: date-time */
+            at: string;
+        };
+        /** @description Estado da integração com a planilha do Comercial (feature 005, FR-013); nunca traz o identificador da planilha nem a chave */
+        CommercialSheetStatus: {
+            configured: boolean;
+            /**
+             * @description ok = última rodada concluída; failing = a última rodada falhou (ver lastError); layout_invalid = o formato da planilha foi alterado (rode o comando de preparação); not_configured = integração desligada no servidor
+             * @enum {string}
+             */
+            status: "ok" | "failing" | "layout_invalid" | "not_configured";
+            /** Format: date-time */
+            lastRoundOkAt: string | null;
+            /** Format: date-time */
+            lastReadOkAt: string | null;
+            lastError: null | {
+                /** @enum {string} */
+                code: "sheet_unavailable" | "sheet_forbidden" | "sheet_not_found" | "sheet_layout_invalid" | "sheet_rate_limited";
+                /** @description Mensagem genérica em português */
+                message: string;
+                /** Format: date-time */
+                at: string;
+            };
+            /** Format: date-time */
+            nextAttemptAt: string | null;
+            pending: {
+                /** @description Linhas com atualização ainda não aplicada na planilha */
+                count: number;
+                /** Format: date-time */
+                oldestChangeAt: string | null;
+            };
+            /** @description Retornos aguardando a validação do Financeiro */
+            awaitingValidation: number;
+            problems: components["schemas"]["CommercialSheetProblem"][];
+        };
+        CommercialSheetRead: {
+            sheet: components["schemas"]["CommercialSheetStatus"];
+            round: {
+                /** @description Retornos novos lidos nesta rodada */
+                returnsReceived: number;
+                /** @description Retornos alterados pelo Comercial nesta rodada */
+                returnsChanged: number;
+                /** @description Retornos com problema encontrados nesta rodada */
+                problems: number;
+                /** @description Linhas escritas ou movidas nesta rodada */
+                linesWritten: number;
+            };
+        };
     };
     responses: {
         /** @description Requisição inválida (parâmetro, corpo ou formato fora do contrato) */
@@ -873,6 +1609,10 @@ export interface components {
         Limit: number;
         Cursor: string;
         DocumentId: string;
+        HotelCode: string;
+        ReservationNumber: string;
+        DispatchId: string;
+        ReturnId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1266,6 +2006,8 @@ export interface operations {
                 needsReview?: boolean;
                 /** @description true = só as reservas importadas do sistema anterior, com ou sem verificação posterior pelo HUNIT Control (feature 004, FR-011); false = só as que não vieram de lá. Omitido = sem esse filtro. Combinável com os demais. */
                 fromLegacy?: boolean;
+                /** @description Situação detalhada da reserva (feature 005): qualquer uma das informadas, exatamente como em ReservationTreatment.detailedSituation — os valores de `situation` mais return_pending ("Validar comprovante"). Combinável com os demais filtros. */
+                detailedSituation?: components["schemas"]["ReservationDetailedSituation"][];
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -1719,6 +2461,647 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description Evidência expirada (retenção de 30 dias — FR-025) */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    selectReservations: {
+        parameters: {
+            query?: {
+                executionId?: string;
+                hotelCode?: string[];
+                classification?: components["schemas"]["Classification"][];
+                reservationStatus?: components["schemas"]["ReservationStatus"][];
+                notFound?: boolean;
+                checkInFrom?: string;
+                checkInTo?: string;
+                q?: string;
+                channel?: string;
+                amount?: string;
+                treatmentStatus?: components["schemas"]["TreatmentStatus"][];
+                pendingCharge?: boolean;
+                situation?: components["schemas"]["ReservationSituation"][];
+                needsReview?: boolean;
+                fromLegacy?: boolean;
+                detailedSituation?: components["schemas"]["ReservationDetailedSituation"][];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reservas do filtro, até 2 000 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationSelection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getReservationCommercial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: components["parameters"]["HotelCode"];
+                reservationNumber: components["parameters"]["ReservationNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linha, retornos e histórico */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelCommercialLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: components["parameters"]["HotelCode"];
+                reservationNumber: components["parameters"]["ReservationNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linha atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    restoreCommercialLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hotelCode: components["parameters"]["HotelCode"];
+                reservationNumber: components["parameters"]["ReservationNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linha atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    checkCommercialDispatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reservations: components["schemas"]["ReservationKey"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Reservas aceitas, as que ficam de fora e o total dos valores das aceitas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialDispatchCheck"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listCommercialDispatches: {
+        parameters: {
+            query?: {
+                /** @description true = só os ativos (fila, em andamento, aguardando token); false = só os encerrados */
+                active?: boolean;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página de envios */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CommercialDispatchSummary"][];
+                        nextCursor?: string | null;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createCommercialDispatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    credentials: components["schemas"]["HunitCredentials"];
+                    reservations: components["schemas"]["ReservationKey"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Envio criado */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialDispatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description Já há execução ou envio ativo na mesma conta do Hunit (`account_busy`) ou a planilha do
+             *     Comercial não está configurada no servidor (`commercial_sheet_not_configured`)
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Nenhuma das reservas aceita o envio (`no_eligible_reservations`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCommercialDispatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Envio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialDispatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    streamCommercialDispatchEvents: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Last-Event-ID"?: string;
+            };
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stream aberto */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["CommercialDispatchEvent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    sendCommercialDispatchTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Token entregue ao envio; o resultado chega pelo estado/eventos */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description O envio não está aguardando o token (`not_awaiting_two_factor`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    cancelCommercialDispatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelamento solicitado */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialDispatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Envio já encerrado (`dispatch_already_finished`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeCommercialDispatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dispatchId: components["parameters"]["DispatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    credentials: components["schemas"]["HunitCredentials"];
+                };
+            };
+        };
+        responses: {
+            /** @description Novo envio criado (parentDispatchId = envio original) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialDispatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description Envio ainda ativo ou conta ocupada (`account_busy`), sem reservas não verificadas
+             *     (`nothing_to_resume`), já retomado (`dispatch_already_resumed`) ou planilha não
+             *     configurada (`commercial_sheet_not_configured`)
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirmCommercialReturns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reservations: components["schemas"]["ReservationKey"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Desfecho de cada reserva */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationBatchResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    confirmCommercialReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                returnId: components["parameters"]["ReturnId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tratativa atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description O retorno não está aguardando validação (`return_not_awaiting_validation`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rejectCommercialReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                returnId: components["parameters"]["ReturnId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Tratativa atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description O retorno não está aguardando validação (`return_not_awaiting_validation`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    undoCommercialReturnConfirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                returnId: components["parameters"]["ReturnId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tratativa atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationTreatment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description O retorno não está confirmado (`return_not_confirmed`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirmTreatmentReviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reservations: components["schemas"]["ReservationKey"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Desfecho de cada reserva e a contagem das confirmadas por status do Hunit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationBatchResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getCommercialSheetStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Estado da planilha */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialSheetStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    readCommercialSheet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rodada concluída */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialSheetRead"];
+                };
+            };
+            /** @description A rodada continua em segundo plano; o resultado aparece em GET /commercial-sheet */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialSheetStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description A planilha do Comercial não está configurada (`commercial_sheet_not_configured`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A planilha está indisponível (`commercial_sheet_unavailable`); nada mudou */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

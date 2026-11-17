@@ -23,6 +23,14 @@ import {
 import type {
   AppError,
   ClientIdentity,
+  CommercialDetail,
+  CommercialDispatch,
+  CommercialDispatchCheck,
+  CommercialDispatchListInput,
+  CommercialDispatchSummary,
+  CommercialLine,
+  CommercialSheetStatus,
+  ConfirmationBatchResult,
   EvidenceFile,
   EvidenceSummary,
   Execution,
@@ -31,11 +39,14 @@ import type {
   Hotel,
   Page,
   Reservation,
+  ReservationFilters,
   ReservationKey,
   ReservationListInput,
   ReservationOutcome,
+  ReservationSelection,
   ReservationTreatment,
   Result,
+  SheetReadResult,
   TreatmentCheck,
   TreatmentDetail,
   TreatmentDocumentKind,
@@ -67,6 +78,12 @@ const OFFLINE_DETAIL = 'O servidor não respondeu.';
 
 /** Tempo máximo do envio de um documento (até 25 MB pela rede local). */
 const UPLOAD_TIMEOUT_MS = 120_000;
+
+/**
+ * Tempo máximo das operações longas do Comercial: "Ler retornos agora" responde em até 50 s
+ * (depois disso, 202 e a rodada continua no servidor) e os lotes de até 2 000 reservas.
+ */
+const LONG_TIMEOUT_MS = 150_000;
 
 export interface ApiClientOptions {
   /** Origem do servidor, sem barra no fim (ex.: "https://192.168.0.50"). */
@@ -125,6 +142,17 @@ const API_ERROR_CODES = new Set<string>([
   'document_not_revertible',
   'proof_required',
   'document_purged',
+  'account_busy',
+  'commercial_sheet_not_configured',
+  'commercial_sheet_unavailable',
+  'no_eligible_reservations',
+  'dispatch_already_finished',
+  'dispatch_already_resumed',
+  'return_awaiting_validation',
+  'return_not_awaiting_validation',
+  'return_not_confirmed',
+  'not_in_commercial_sheet',
+  'restore_expired',
   'internal_error',
 ] satisfies Schemas['Problem']['code'][]);
 
@@ -160,6 +188,8 @@ export function httpError(status: number, body: unknown): AppError {
 export class ApiClient {
   private readonly agent: Agent;
   private readonly http: Client<paths>;
+  /** Mesmo cliente, com o tempo das operações longas do Comercial. */
+  private readonly slowHttp: Client<paths>;
   private readonly timeoutMs: number;
   private offsetMs = 0;
 
@@ -173,6 +203,13 @@ export class ApiClient {
       headers: { authorization: `Bearer ${options.apiKey}` },
       Request: UndiciRequest as unknown as typeof Request,
       fetch: (request) => this.send(request as unknown as UndiciRequest, this.timeoutMs),
+    });
+    this.slowHttp = createClient<paths>({
+      baseUrl: `${options.serverUrl}/v1`,
+      headers: { authorization: `Bearer ${options.apiKey}` },
+      Request: UndiciRequest as unknown as typeof Request,
+      fetch: (request) =>
+        this.send(request as unknown as UndiciRequest, Math.max(this.timeoutMs, LONG_TIMEOUT_MS)),
     });
   }
 
@@ -407,6 +444,174 @@ export class ApiClient {
     } catch (error) {
       return { ok: false, error: networkError(error) };
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Envio ao Comercial pela planilha (specs/005, contracts/api-changes.md)
+  // -------------------------------------------------------------------------
+
+  /** "Selecionar todas do filtro": até 2 000 reservas, na ordem da lista (FR-030). */
+  selectReservations(filters: ReservationFilters): Promise<Result<ReservationSelection>> {
+    return this.call(() =>
+      this.slowHttp.GET('/reservations/selection', { params: { query: filters } }),
+    );
+  }
+
+  /** "Verificar" em lote (FR-029). */
+  confirmTreatmentReviews(
+    reservations: ReservationKey[],
+  ): Promise<Result<ConfirmationBatchResult>> {
+    return this.call(() => this.slowHttp.POST('/treatment-reviews', { body: { reservations } }));
+  }
+
+  checkCommercialDispatch(
+    reservations: ReservationKey[],
+  ): Promise<Result<CommercialDispatchCheck>> {
+    return this.call(() =>
+      this.slowHttp.POST('/commercial-dispatches/check', { body: { reservations } }),
+    );
+  }
+
+  startCommercialDispatch(body: {
+    credentials: CredentialsBody;
+    reservations: ReservationKey[];
+  }): Promise<Result<CommercialDispatch>> {
+    return this.call(() => this.slowHttp.POST('/commercial-dispatches', { body }));
+  }
+
+  async listCommercialDispatches(
+    input: CommercialDispatchListInput,
+  ): Promise<Result<Page<CommercialDispatchSummary>>> {
+    const result = await this.call(() =>
+      this.http.GET('/commercial-dispatches', { params: { query: input } }),
+    );
+    return result.ok ? { ok: true, data: page(result.data) } : result;
+  }
+
+  getCommercialDispatch(dispatchId: string): Promise<Result<CommercialDispatch>> {
+    return this.call(() =>
+      this.http.GET('/commercial-dispatches/{dispatchId}', { params: { path: { dispatchId } } }),
+    );
+  }
+
+  resumeCommercialDispatch(
+    dispatchId: string,
+    credentials: CredentialsBody,
+  ): Promise<Result<CommercialDispatch>> {
+    return this.call(() =>
+      this.http.POST('/commercial-dispatches/{dispatchId}/resume', {
+        params: { path: { dispatchId } },
+        body: { credentials },
+      }),
+    );
+  }
+
+  cancelCommercialDispatch(dispatchId: string): Promise<Result<CommercialDispatch>> {
+    return this.call(() =>
+      this.http.POST('/commercial-dispatches/{dispatchId}/cancel', {
+        params: { path: { dispatchId } },
+      }),
+    );
+  }
+
+  async sendDispatchToken(dispatchId: string, token: string): Promise<Result<void>> {
+    const result = await this.call(() =>
+      this.http.POST('/commercial-dispatches/{dispatchId}/two-factor', {
+        params: { path: { dispatchId } },
+        body: { token },
+      }),
+    );
+    return result.ok ? { ok: true, data: undefined } : result;
+  }
+
+  getReservationCommercial(key: ReservationKey): Promise<Result<CommercialDetail>> {
+    return this.call(() =>
+      this.http.GET('/reservations/{hotelCode}/{reservationNumber}/commercial', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  /** Desfaz o envio: a linha vai para "Concluídas" como "Pedido cancelado pelo Financeiro". */
+  cancelCommercialLine(key: ReservationKey): Promise<Result<CommercialLine>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/commercial/cancel', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  restoreCommercialLine(key: ReservationKey): Promise<Result<CommercialLine>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/commercial/restore', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  confirmCommercialReturn(returnId: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/commercial-returns/{returnId}/confirm', {
+        params: { path: { returnId } },
+      }),
+    );
+  }
+
+  rejectCommercialReturn(returnId: string, reason: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/commercial-returns/{returnId}/reject', {
+        params: { path: { returnId } },
+        body: { reason },
+      }),
+    );
+  }
+
+  undoCommercialReturnConfirmation(returnId: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/commercial-returns/{returnId}/undo-confirmation', {
+        params: { path: { returnId } },
+      }),
+    );
+  }
+
+  confirmCommercialReturns(
+    reservations: ReservationKey[],
+  ): Promise<Result<ConfirmationBatchResult>> {
+    return this.call(() =>
+      this.slowHttp.POST('/commercial-returns/confirm', { body: { reservations } }),
+    );
+  }
+
+  getCommercialSheetStatus(): Promise<Result<CommercialSheetStatus>> {
+    return this.call(() => this.http.GET('/commercial-sheet'));
+  }
+
+  /**
+   * "Ler retornos agora": rodada completa. Passou de 50 s, o servidor responde 202 com o estado e
+   * a rodada continua lá (`round` nulo).
+   */
+  async readCommercialSheet(): Promise<Result<SheetReadResult>> {
+    const result = await this.call(() => this.slowHttp.POST('/commercial-sheet/read'));
+    if (!result.ok) return result;
+    const body = result.data as SheetReadResult | CommercialSheetStatus;
+    return {
+      ok: true,
+      data: 'round' in body ? body : { sheet: body, round: null },
+    };
+  }
+
+  /** Fluxo de eventos (SSE) de um envio ao Comercial; mesmas regras do fluxo das execuções. */
+  openDispatchEventStream(
+    dispatchId: string,
+    options: { lastEventId?: string | undefined; signal?: AbortSignal | undefined },
+  ): Promise<Result<UndiciResponse>> {
+    const headers: Record<string, string> = { accept: 'text/event-stream' };
+    if (options.lastEventId !== undefined) headers['last-event-id'] = options.lastEventId;
+    return this.raw(
+      `/commercial-dispatches/${encodeURIComponent(dispatchId)}/events`,
+      { headers, signal: options.signal },
+      null,
+    );
   }
 
   /**

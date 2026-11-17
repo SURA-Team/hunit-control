@@ -9,7 +9,10 @@ import {
   TREATMENT_REVERT_DAYS,
   TREATMENT_STATUSES,
   acceptsTreatment,
+  chargedAmountWithOrigin,
+  detailedSituation,
   effectiveChargedAmount,
+  lineState,
   CLASSIFICATIONS_REQUIRING_CHARGE,
   isPendingCharge,
   isRevertible,
@@ -201,5 +204,166 @@ describe('effectiveChargedAmount', () => {
     expect(effectiveChargedAmount(null, '90.00', true)).toBe('90.00');
     expect(effectiveChargedAmount(null, '90.00', false)).toBeNull();
     expect(effectiveChargedAmount(null, null, true)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 005 — envio ao Comercial (research R-09, R-10; data-model §3.3) — tasks.md, T008
+// ---------------------------------------------------------------------------
+
+describe('treatmentStatus com o envio ao Comercial (specs/005, R-09)', () => {
+  it('linha aberta ou concluída conta como tratativa; retorno confirmado, como comprovante', () => {
+    // Quem chama já junta o documento e a planilha (data-model §3.3).
+    expect(treatmentStatus({ hasCurrentRequest: true, hasCurrentProof: false })).toBe('sent');
+    expect(treatmentStatus({ hasCurrentRequest: true, hasCurrentProof: true })).toBe('charged');
+  });
+
+  it('linha concluída porque o Hunit diz "já cobrada", sem comprovante → alerta "Verificar"', () => {
+    expect(
+      needsReview({
+        classification: 'virtual_card_already_charged',
+        status: treatmentStatus({ hasCurrentRequest: true, hasCurrentProof: false }),
+        statusChangedAt: new Date('2026-11-17T10:00:00Z'),
+        lastReviewAt: null,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('detailedSituation (specs/005, R-09)', () => {
+  it('"Validar comprovante" só onde a situação seria "Tratativa enviada"', () => {
+    expect(detailedSituation('virtual_card_pending_charge', 'sent', true)).toBe('return_pending');
+    expect(detailedSituation('virtual_card_pending_charge', 'sent', false)).toBe('treatment_sent');
+  });
+
+  it('segue a ordem da spec: comprovante → Hunit sem cobrança → Validar → Tratativa → Hunit', () => {
+    expect(detailedSituation('virtual_card_pending_charge', 'charged', true)).toBe('proof_sent');
+    expect(detailedSituation('virtual_card_already_charged', 'sent', true)).toBe(
+      'virtual_card_already_charged',
+    );
+    expect(detailedSituation('virtual_card_pending_charge', 'none', false)).toBe(
+      'virtual_card_pending_charge',
+    );
+  });
+
+  it('é igual a reservationSituation sem retorno aguardando', () => {
+    for (const classification of CLASSIFICATIONS) {
+      for (const status of TREATMENT_STATUSES) {
+        expect(detailedSituation(classification, status, false)).toBe(
+          reservationSituation(classification, status),
+        );
+      }
+    }
+  });
+
+  it('"Validar comprovante" continua em "Falta cobrar" (clarify Q1)', () => {
+    expect(isPendingCharge('virtual_card_pending_charge', 'sent')).toBe(true);
+  });
+});
+
+describe('chargedAmountWithOrigin (specs/005, FR-024, R-10)', () => {
+  const none = { hunitAmount: null, manualAmount: null, commercialAmount: null };
+
+  it('ordem: Hunit → manual (com comprovante) → Comercial', () => {
+    expect(
+      chargedAmountWithOrigin({
+        hunitAmount: '100.00',
+        manualAmount: '90.00',
+        commercialAmount: '80.00',
+        hasCurrentProof: true,
+      }),
+    ).toEqual({ amount: '100.00', origin: 'hunit' });
+    expect(
+      chargedAmountWithOrigin({
+        ...none,
+        manualAmount: '90.00',
+        commercialAmount: '80.00',
+        hasCurrentProof: true,
+      }),
+    ).toEqual({ amount: '90.00', origin: 'manual' });
+    expect(
+      chargedAmountWithOrigin({ ...none, commercialAmount: '80.00', hasCurrentProof: true }),
+    ).toEqual({ amount: '80.00', origin: 'commercial' });
+  });
+
+  it('manual sem comprovante não vale; sem nenhum valor, nada', () => {
+    expect(
+      chargedAmountWithOrigin({ ...none, manualAmount: '90.00', hasCurrentProof: false }),
+    ).toEqual({ amount: null, origin: null });
+    expect(chargedAmountWithOrigin({ ...none, hasCurrentProof: true })).toEqual({
+      amount: null,
+      origin: null,
+    });
+  });
+
+  it('zero do Hunit (cartão só validado) não é valor cobrado: vale o manual ou o do Comercial', () => {
+    expect(
+      chargedAmountWithOrigin({
+        ...none,
+        hunitAmount: '0.00',
+        commercialAmount: '80.00',
+        hasCurrentProof: true,
+      }),
+    ).toEqual({ amount: '80.00', origin: 'commercial' });
+    expect(
+      chargedAmountWithOrigin({
+        ...none,
+        hunitAmount: '0.00',
+        manualAmount: '90.00',
+        hasCurrentProof: true,
+      }),
+    ).toEqual({ amount: '90.00', origin: 'manual' });
+    expect(
+      chargedAmountWithOrigin({ ...none, hunitAmount: '0.00', hasCurrentProof: true }),
+    ).toEqual({
+      amount: null,
+      origin: null,
+    });
+    expect(effectiveChargedAmount('0.00', '90.00', true)).toBe('90.00');
+    expect(effectiveChargedAmount('0.01', '90.00', true)).toBe('0.01');
+  });
+
+  it('o valor é o mesmo de effectiveChargedAmount quando não há valor do Comercial', () => {
+    expect(
+      chargedAmountWithOrigin({ ...none, manualAmount: '90.00', hasCurrentProof: true }).amount,
+    ).toBe(effectiveChargedAmount(null, '90.00', true));
+  });
+});
+
+describe('lineState (specs/005, FR-009, data-model §3.3)', () => {
+  it('cancelada continua cancelada', () => {
+    expect(
+      lineState({
+        cancelled: true,
+        classification: 'virtual_card_pending_charge',
+        hasCurrentProof: false,
+      }),
+    ).toBe('cancelled');
+  });
+
+  it('concluída com comprovante ou quando a classificação não aceita mais tratativa', () => {
+    expect(
+      lineState({
+        cancelled: false,
+        classification: 'virtual_card_pending_charge',
+        hasCurrentProof: true,
+      }),
+    ).toBe('concluded');
+    for (const classification of CLASSIFICATIONS) {
+      expect(
+        lineState({ cancelled: false, classification, hasCurrentProof: false }),
+        classification,
+      ).toBe(acceptsTreatment(classification) ? 'open' : 'concluded');
+    }
+  });
+
+  it('volta a aberta quando o Hunit volta a exigir cobrança ou a confirmação é desfeita', () => {
+    expect(
+      lineState({
+        cancelled: false,
+        classification: 'virtual_card_charge_error',
+        hasCurrentProof: false,
+      }),
+    ).toBe('open');
   });
 });

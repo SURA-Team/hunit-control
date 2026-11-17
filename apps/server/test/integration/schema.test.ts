@@ -55,9 +55,18 @@ describe('migrations (T012)', () => {
       where table_schema = 'public' order by table_name
     `);
 
-    expect(result.rows.map((row) => row.table_name)).toEqual([
+    // Comparadas em ordem do JavaScript: a colação do banco ignora o "_" e ordenaria
+    // "commercial_dispatches" antes de "commercial_dispatch_events".
+    expect(result.rows.map((row) => row.table_name).sort()).toEqual([
       'account_hotels',
       'api_clients',
+      'commercial_dispatch_events',
+      'commercial_dispatch_items',
+      'commercial_dispatches',
+      'commercial_events',
+      'commercial_lines',
+      'commercial_returns',
+      'commercial_sheet_state',
       'evidence',
       'execution_events',
       'execution_hotels',

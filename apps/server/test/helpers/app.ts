@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { MemorySheetGateway } from '../../src/commercial-sheet/memory-sheet-gateway.js';
+import { createReturnsProcessor } from '../../src/commercial-sheet/returns.js';
+import { CommercialSheetSync } from '../../src/commercial-sheet/sync.js';
 import { buildApp, type AppDependencies } from '../../src/http/app.js';
 import { generateApiKey, hashApiKey } from '../../src/http/auth.js';
 import { createClient } from '../../src/persistence/clients-repo.js';
@@ -26,6 +29,12 @@ export interface TestApp {
   secrets: SecretRegistry;
   /** Executor, Hunit simulado e eventos usados pela aplicação. */
   harness: RunnerHarness;
+  /**
+   * Planilha do Comercial em memória e o sincronizador (specs/005), quando pedidos em
+   * `commercialSheet`. O sincronizador não roda sozinho: o teste chama `runRound()`.
+   */
+  sheet: MemorySheetGateway | null;
+  sync: CommercialSheetSync | null;
   /** Cadastra um cliente da API e devolve a chave dele. */
   createClient(role: ClientRole): Promise<TestClient>;
   close(): Promise<void>;
@@ -37,6 +46,8 @@ export interface TestAppOptions {
   twoFactorTimeoutMs?: number;
   /** Relógio da API (prazos das tratativas, specs/003). */
   now?: AppDependencies['now'];
+  /** Liga a planilha do Comercial em memória (specs/005). Padrão: desligada. */
+  commercialSheet?: boolean;
 }
 
 /**
@@ -48,12 +59,26 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const secrets = new SecretRegistry();
   const logs = captureLogs({ secrets });
   const harness = await createRunnerHarness(database, { ...options, secrets, logs });
+  const sheet = options.commercialSheet ? new MemorySheetGateway() : null;
+  const sync = sheet
+    ? new CommercialSheetSync({
+        db: database.db,
+        gateway: sheet,
+        logger: logs.logger,
+        doneRetentionDays: 90,
+        processReturns: createReturnsProcessor(database.db),
+        ...(options.now && { now: options.now }),
+      })
+    : null;
   const app = await buildApp({
     db: database.db,
     logger: logs.logger,
     events: harness.events,
     runner: harness.runner,
     evidence: harness.evidence,
+    commercialSheet: sync,
+    dispatches: harness.dispatches,
+    dispatchEvents: harness.dispatchEvents,
     ...(options.now && { now: options.now }),
   });
   await app.ready();
@@ -64,6 +89,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     logs,
     secrets,
     harness,
+    sheet,
+    sync,
     async createClient(role) {
       const apiKey = generateApiKey();
       const client = await createClient(database.db, {
@@ -76,6 +103,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     async close() {
       await app.close();
       await harness.close();
+      await sync?.stop();
       await database.close();
     },
   };

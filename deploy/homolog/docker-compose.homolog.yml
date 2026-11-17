@@ -3,7 +3,9 @@
 # Acrescentado ao docker-compose.yml pelo COMPOSE_FILE do arquivo de variáveis da homologação
 # (deploy/homolog/homolog.env.example → .env.homolog). Sobe uma pilha separada da de produção, no
 # mesmo PC: outro nome de projeto (volumes, rede e containers próprios), outras portas e outra
-# pasta de cópias. Nunca use este arquivo com o .env de produção.
+# pasta de cópias e, desde a 005, outra planilha do Comercial e outra pasta da chave dela
+# (homolog.env.example; passo a passo no quickstart §3 da specs/005-envio-comercial). Nunca use
+# este arquivo com o .env de produção.
 name: hunit-homolog
 
 services:

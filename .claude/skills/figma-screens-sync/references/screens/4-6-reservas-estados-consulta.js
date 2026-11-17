@@ -7,13 +7,18 @@ const CHANNELS = ['Booking.com', 'Expedia', 'Decolar', 'Site próprio', 'Airbnb'
 const CLASS = [['Amarelo', 'Pendente de cobrança'], ['Verde', 'Já cobrada'], ['Vermelho', 'Erro na cobrança'], ['Amarelo', 'Cartão validado (não cobrado)'], ['Verde', 'Faturada'], ['Amarelo', 'Cobrar na maquininha'], ['Vermelho', 'Erro de análise']];
 const HOTELS = [['101', 'Hotel Praia Azul', 6], ['102', 'Pousada Serra Verde', 4], ['103', 'Hotel Centro Histórico', 5], ['104', 'Resort Lagoa Clara', 7]];
 const money = (v) => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+/** Valor cobrado com a origem (specs/005, FR-024): "R$ 1.280,00 (Hunit)". */
+const chargedCell = (value, origin) => ({ rich: [[value], [` (${origin})`, 'dimsm']] });
+// As "Já cobrada" do roteiro têm o valor cobrado no Hunit (R$ 1.280,00); as outras, nenhum.
 const RESERVATIONS = [];
-{ let n = 0; for (const [code, name, count] of HOTELS) for (let i = 0; i < count; i++, n++) RESERVATIONS.push([name, `${code}-${1000 + n}`, GUESTS[n % 10], CHANNELS[n % 5], `${17 + (n % 5)}/11/2026`, `${19 + (n % 5)}/11/2026`, money(380 + n * 137.5), { badge: CLASS[n % 7][0], text: CLASS[n % 7][1] }, { badge: 'Cinza', text: 'Ativa' }]); }
-// Colunas da lista: a situação da reserva numa coluna só (specs/003, FR-002, FR-017); o operador
-// ganha a caixa de seleção na frente.
-const RES_COLS = [['Hotel', 150], ['Número', 80], ['Hóspede', 130], ['Canal', 105], ['Check-in', 95], ['Check-out', 95], ['Valor total', 95], ['Situação da reserva', 245], ['Reserva', 'fill']];
+{ let n = 0; for (const [code, name, count] of HOTELS) for (let i = 0; i < count; i++, n++) RESERVATIONS.push([name, `${code}-${1000 + n}`, GUESTS[n % 10], CHANNELS[n % 5], `${17 + (n % 5)}/11/2026`, `${19 + (n % 5)}/11/2026`, money(380 + n * 137.5), CLASS[n % 7][1] === 'Já cobrada' ? chargedCell('R$ 1.280,00', 'Hunit') : '—', { badge: CLASS[n % 7][0], text: CLASS[n % 7][1] }, { badge: 'Cinza', text: 'Ativa' }]); }
+// Colunas da lista: a situação da reserva numa coluna só (specs/003, FR-002, FR-017) e o valor
+// cobrado com a origem (specs/005, FR-024); o operador ganha a caixa de seleção na frente.
+const RES_COLS = [['Hotel', 150], ['Número', 80], ['Hóspede', 120], ['Canal', 100], ['Check-in', 92], ['Check-out', 92], ['Valor total', 92], ['Valor cobrado', 150], ['Situação da reserva', 205], ['Reserva', 'fill']];
 /** Situação das reservas com tratativa no roteiro de captura, depois dos registros: [tom, nome, alerta "Verificar"]. */
 const TREATED = { '101-1000': ['Verde', 'Comprovante enviado'], '101-1003': ['Azul', 'Tratativa enviada'], '102-1007': ['Verde', 'Já cobrada', true] };
+/** Valor informado à mão na 101-1000 do roteiro (aparece com o comprovante). */
+const TREATED_CHARGED = { '101-1000': ['R$ 380,00', 'manual'] };
 /** Cor local na instância (sobreposição, sem mudar o componente compartilhado): fundo e texto. */
 function recolor(inst, fill, text) {
   inst.fills = fill ? [paint(fill)] : [];
@@ -24,12 +29,13 @@ function recolor(inst, fill, text) {
 async function reviewBadge(parent) { return recolor(await badge(parent, 'Amarelo', 'Verificar'), 'amarelo/8', 'texto/inverso'); }
 /** Célula da situação da reserva, com o alerta quando houver. */
 const situationCell = ([tone, text, review]) => ({ build: async (cell) => { cell.itemSpacing = 4; await badge(cell, tone, text); if (review) await reviewBadge(cell); } });
-/** Linhas da lista: situação por número (TREATED) e caixas marcadas. */
-function reservationRows({ count = 12, treatments = {}, checked = [], operator = true } = {}) {
+/** Linhas da lista: situação por número (TREATED), valor cobrado e caixas marcadas. */
+function reservationRows({ count = 12, treatments = {}, charged = {}, checked = [], operator = true } = {}) {
   return RESERVATIONS.slice(0, count).map((r) => {
     const row = [...r];
     const t = treatments[r[1]];
-    if (t) row[7] = situationCell(t);
+    if (t) row[8] = situationCell(t);
+    if (charged[r[1]]) row[7] = chargedCell(...charged[r[1]]);
     return operator ? [{ check: checked.includes(r[1]) }, ...row] : row;
   });
 }
@@ -61,22 +67,52 @@ async function reservationFilters(main, q = '', origin = 'Todas') {
   quick.appendChild(await I(K.checkbox, { [P.checkbox]: 'Só as não encontradas na última verificação' }));
   const b = AL('HORIZONTAL', { name: 'Botões', itemSpacing: 12 }); r4.appendChild(b); await btn(b, 'Limpar', 'Contorno'); await btn(b, 'Buscar');
 }
-/** Barra da seleção do lote (specs/003, FR-006a). */
-async function selectionBar(main, count, total) {
-  const c = await card(main, null, 'fill', 0); c.name = 'Card — Seleção do lote'; c.paddingTop = c.paddingBottom = 12;
-  const r = row(c, 'Seleção', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
-  r.appendChild(await rich([[String(count), 'b'], [` reservas selecionadas — total de `], [total, 'b']]));
-  const b = AL('HORIZONTAL', { name: 'Ações do lote', itemSpacing: 10, counterAxisAlignItems: 'CENTER' }); r.appendChild(b);
-  await btn(b, 'Ver seleção', 'Contorno xs'); await btn(b, 'Anexar tratativa', 'Contorno xs');
-  await btn(b, 'Anexar comprovante', 'Preenchido xs'); await btn(b, 'Desmarcar todas', 'Leve xs');
+/** Badge laranja (specs/005): "Diferente do hotel da reserva". */
+async function orangeBadge(parent, label) { return recolor(await badge(parent, 'Amarelo', label), 'laranja/1', 'laranja/8'); }
+/** Hotel da cobrança (specs/005, FR-016a): em laranja e com o badge quando difere do hotel da reserva. */
+async function chargeHotelBlock(parent, name, differs) {
+  put(parent, await T(name, differs ? 'corpo forte' : 'corpo', differs ? 'laranja/8' : 'texto/padrão'), 'fill');
+  if (differs) await orangeBadge(parent, 'Diferente do hotel da reserva');
+  put(parent, await T('Hotel da reserva: Hotel Praia Azul', 'descrição', 'texto/apagado'), 'fill');
 }
-async function reservationsPage(main, { q = '', empty = false, operator = true, treatments = {}, checked = [], selection = null, count = 12, origin = 'Todas', rows: customRows = null, cols: customCols = null } = {}) {
-  put(main, await T('Reservas', 'título página'));
+/** Linhas (e cabeçalho) da tabela com altura automática, para os textos que quebram, como no app. */
+function autoRows(t) {
+  for (const r of t.children) {
+    for (const cell of r.children) {
+      cell.paddingTop = cell.paddingBottom = 8; cell.layoutSizingVertical = 'HUG';
+      for (const n of cell.children) if (n.type === 'TEXT') { n.layoutSizingHorizontal = 'FILL'; n.textAutoResize = 'HEIGHT'; }
+    }
+    r.layoutSizingVertical = 'HUG';
+    for (const cell of r.children) cell.layoutSizingVertical = 'FILL';
+  }
+  return t;
+}
+/** Barra da seleção do lote (specs/003, FR-006a; ações da 005: enviar, confirmar retornos e "Verificar"). */
+async function selectionBar(main, count, total) {
+  const c = await card(main, null, 'fill', 12); c.name = 'Card — Seleção do lote'; c.paddingTop = c.paddingBottom = 12;
+  put(c, await rich([[String(count), 'b'], [count === 1 ? ' reserva selecionada — total de ' : ' reservas selecionadas — total de '], [total, 'b']]));
+  const b = row(c, 'Ações do lote', { itemSpacing: 10 });
+  await btn(b, 'Ver seleção', 'Contorno xs'); await btn(b, 'Anexar tratativa', 'Contorno xs');
+  await btn(b, 'Anexar comprovante', 'Preenchido xs');
+  recolor(await btn(b, 'Enviar ao Comercial', 'Preenchido xs'), 'verde-azulado/6', 'texto/inverso');
+  await btn(b, 'Confirmar retornos', 'Contorno xs'); await btn(b, 'Confirmar "Verificar"', 'Contorno xs');
+  await btn(b, 'Desmarcar todas', 'Leve xs');
+}
+async function reservationsPage(main, { q = '', empty = false, operator = true, treatments = {}, charged = {}, checked = [], selection = null, notice = null, count = 12, origin = 'Todas', rows: customRows = null, cols: customCols = null } = {}) {
+  // "Copiar para e-mail" (specs/005, FR-027): também no perfil consulta.
+  const head = row(main, 'Título', { primaryAxisAlignItems: 'SPACE_BETWEEN' });
+  head.appendChild(await T('Reservas', 'título página')); await btn(head, 'Copiar para e-mail', 'Contorno xs');
   await reservationFilters(main, q, origin);
   if (selection) await selectionBar(main, selection[0], selection[1]);
+  if (notice) await alert(main, 'Azul', null, notice);
+  if (operator && !empty) { // "Selecionar todas do filtro" (specs/005, FR-030)
+    const all = row(main, 'Selecionar todas do filtro', { itemSpacing: 12 });
+    await btn(all, 'Selecionar todas do filtro', 'Leve xs');
+    all.appendChild(await T('Todas as páginas, até 2.000 reservas, na ordem da lista.', 'descrição', 'texto/apagado'));
+  }
   if (empty) put(main, await T('Nenhuma reserva encontrada com estes filtros.', 'corpo grande', 'texto/apagado'));
   else {
-    const rows = customRows ?? reservationRows({ count, treatments, checked, operator });
+    const rows = customRows ?? reservationRows({ count, treatments, charged, checked, operator });
     const t = await table(main, customCols ?? resCols(operator), rows);
     if (operator) { // caixa do cabeçalho: parcial quando só parte da página está marcada
       const head = t.children[0].children[0];
@@ -161,10 +197,13 @@ async function kvGrid(parent, pairs, name) {
   const g = AL('VERTICAL', { name, itemSpacing: 12 }); put(parent, g, 'fill');
   for (let i = 0; i < pairs.length; i += 3) {
     const r = AL('HORIZONTAL', { itemSpacing: 16, name: 'Linha' }); put(g, r, 'fill');
-    for (const [k, v] of pairs.slice(i, i + 3)) {
+    const line = pairs.slice(i, i + 3);
+    for (const [k, v] of line) {
       const c = AL('VERTICAL', { name: k, itemSpacing: 2 }); r.appendChild(c); c.layoutSizingHorizontal = 'FILL';
-      c.appendChild(await T(k, 'descrição', 'texto/apagado')); c.appendChild(await T(v));
+      // Valor em trechos (ex.: o valor cobrado e a origem apagada) ou texto simples.
+      c.appendChild(await T(k, 'descrição', 'texto/apagado')); c.appendChild(Array.isArray(v) ? await rich(v) : await T(v));
     }
+    for (let j = line.length; j < 3; j++) spacer(r); // a grade continua com 3 colunas
   }
 }
 
@@ -181,11 +220,11 @@ SCREENS['4.2'] = { name: 'Reservas — detalhe da reserva', h: 900, profile: 'Op
     const tl = AL('HORIZONTAL', { name: 'Título', itemSpacing: 8, counterAxisAlignItems: 'BASELINE' }); t.appendChild(tl);
     tl.appendChild(await T('Reserva 101-1002', 'título seção')); tl.appendChild(await T('hotel 101', 'corpo', 'texto/apagado'));
     const tr = AL('HORIZONTAL', { name: 'Situações', itemSpacing: 8 }); t.appendChild(tr); await badge(tr, 'Vermelho', 'Erro na cobrança'); await badge(tr, 'Cinza', 'Ativa');
-    await kvGrid(d, [['Hóspede', 'Carla Mendes'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '18/11/2026'], ['Check-out', '20/11/2026'], ['Valor total', 'R$ 655,00']], 'Dados da reserva');
+    await kvGrid(d, [['Hóspede', 'Carla Mendes'], ['Canal', 'Decolar'], ['Forma de pagamento', '—'], ['Check-in', '18/11/2026'], ['Check-out', '20/11/2026'], ['Valor total', 'R$ 655,00'], ['Valor cobrado', '—']], 'Dados da reserva');
     await hunitStatus(d, ['Vermelho', 'Erro na cobrança'], 'O estado atual do pré-pagamento indica falha na cobrança.');
     await treatmentSection(d, { buttons: ['Anexar tratativa', 'Anexar comprovante'], docs: [['Tratativa'], ['Comprovante']] });
     const cb = await card(d, null, 'fill', 12); cb.name = 'Card — Cobrança'; put(cb, await T('Cobrança', 'corpo forte'));
-    await kvGrid(cb, [['Data', '—'], ['Responsável', '—'], ['Valor cobrado', '—'], ['Transação', '—'], ['Autorização', '—'], ['Referência da operadora', '—'], ['Parcelamento', '—'], ['Estado do pré-pagamento', 'Fail'], ['Mensagem do pré-pagamento', 'Cartão recusado pela operadora']], 'Dados da cobrança');
+    await kvGrid(cb, [['Data', '—'], ['Responsável', '—'], ['Valor cobrado no Hunit', '—'], ['Transação', '—'], ['Autorização', '—'], ['Referência da operadora', '—'], ['Parcelamento', '—'], ['Estado do pré-pagamento', 'Fail'], ['Mensagem do pré-pagamento', 'Cartão recusado pela operadora']], 'Dados da cobrança');
     const vf = await card(d, null, 'fill', 12); vf.name = 'Card — Verificações'; put(vf, await T('Verificações', 'corpo forte'));
     await kvGrid(vf, [['Primeira', '13/11/2026 15:46'], ['Última', '13/11/2026 15:46'], ['Quantidade', '1']], 'Verificações');
   } };
@@ -216,5 +255,14 @@ SCREENS['6.1'] = { name: 'Consulta — execuções', h: 900, profile: 'Consulta'
     ]);
   } };
 
+// Perfil consulta na 005: retornos aguardando validação ("Validar comprovante"), tratativas
+// enviadas pela planilha e as duas reservas do sistema anterior (roteiro de captura, passo 6.2).
+const CONSULT_COLS = [['Hotel', 125], ['Número', 185], ['Hóspede', 110], ['Canal', 100], ['Check-in', 88], ['Check-out', 88], ['Valor total', 90], ['Valor cobrado', 135], ['Situação da reserva', 175], ['Reserva', 'fill']];
+const legacyNumberCell = (number) => ({ build: async (cell) => { cell.itemSpacing = 6; cell.appendChild(await T(number)); await legacyBadge(cell); } });
 SCREENS['6.2'] = { name: 'Consulta — reservas', h: 900, profile: 'Consulta', nav: NAV_RD, active: 'Reservas',
-  async build({ main }) { await reservationsPage(main, { operator: false, treatments: TREATED }); } };
+  async build({ main }) {
+    const rows = reservationRows({ count: 7, operator: false, charged: TREATED_CHARGED, treatments: { '101-1000': ['Verde', 'Comprovante enviado'], '101-1002': ['Amarelo', 'Validar comprovante'], '101-1003': ['Amarelo', 'Validar comprovante'], '101-1005': ['Azul', 'Tratativa enviada'], '102-1006': ['Azul', 'Tratativa enviada'] } });
+    const legacy = [['SA-2001', 'Lúcia Barros', 'Pendente de cobrança'], ['SA-2002', 'Marcos Teixeira', 'A revisar (sistema anterior)']].map(([n, guest, situation]) =>
+      ['Hotel Praia Azul', legacyNumberCell(n), guest, 'Canal Fictício', '10/05/2026', '12/05/2026', 'R$ 1.234,56', '—', { badge: 'Amarelo', text: situation }, { badge: 'Amarelo', text: 'Não identificada' }]);
+    await reservationsPage(main, { operator: false, rows: [...rows.slice(0, 6), ...legacy, rows[6]], cols: CONSULT_COLS });
+  } };

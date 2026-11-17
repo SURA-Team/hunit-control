@@ -18,6 +18,9 @@ import {
   OUTCOME_REASON_MESSAGES,
   RESERVATION_STATUS_LABELS,
   REVIEW_LABEL,
+  DETAILED_SITUATION_LABELS,
+  LINE_STATE_LABELS,
+  RETURN_STATE_LABELS,
   SITUATION_LABELS,
   SITUATION_ORDER,
   TONES,
@@ -49,6 +52,9 @@ describe('todo valor dos enums da API tem nome e tom', () => {
     ['TreatmentStatus', TREATMENT_STATUS_LABELS],
     ['TreatmentDocumentState', DOCUMENT_STATE_LABELS],
     ['ReservationSituation', SITUATION_LABELS],
+    ['ReservationDetailedSituation', DETAILED_SITUATION_LABELS],
+    ['CommercialLineState', LINE_STATE_LABELS],
+    ['CommercialReturnState', RETURN_STATE_LABELS],
   ] as const)('%s', (name, labels) => {
     const table = labels as Record<string, { name: string; tone: string }>;
     for (const value of enumOf(name)) {
@@ -84,7 +90,12 @@ describe('todo valor dos enums da API tem nome e tom', () => {
     expect(SITUATION_LABELS.treatment_sent.name).toBe('Tratativa enviada');
     expect(SITUATION_LABELS.proof_sent.name).toBe('Comprovante enviado');
     expect(SITUATION_LABELS.virtual_card_already_charged.name).toBe('Já cobrada');
-    expect([...SITUATION_ORDER].sort()).toEqual([...enumOf('ReservationSituation')].sort());
+    // Desde a 005, o filtro usa a situação detalhada: "Validar comprovante" depois de "Tratativa
+    // enviada" (specs/005, FR-023).
+    expect([...SITUATION_ORDER].sort()).toEqual([...enumOf('ReservationDetailedSituation')].sort());
+    expect(SITUATION_ORDER.indexOf('return_pending')).toBe(
+      SITUATION_ORDER.indexOf('treatment_sent') + 1,
+    );
     expect(REVIEW_LABEL.name).toBe('Verificar');
     expect(TREATMENT_EVENT_NAMES.review_confirmed).toBe('Confirmou a verificação');
   });

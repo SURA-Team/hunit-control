@@ -35,7 +35,11 @@ export async function loadReservationState(
   const [row] = forUpdate ? await query.for('update') : await query;
 
   const existing: ExistingReservation | null = row
-    ? { ...toReservationRecord(row), verifiedByHunitControl: row.lastExecutionId !== null }
+    ? {
+        ...toReservationRecord(row),
+        // Verificada por uma execução ou por um envio ao Comercial (specs/005, research R-02).
+        verifiedByHunitControl: row.lastExecutionId !== null || row.lastDispatchId !== null,
+      }
     : null;
 
   const [origin] = await db

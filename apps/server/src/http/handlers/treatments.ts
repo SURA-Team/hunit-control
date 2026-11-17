@@ -26,6 +26,7 @@ import {
   checkDocuments,
   clearManualAmount,
   confirmReview,
+  confirmReviewsBatch,
   findDocument,
   getTreatmentDetail,
   loadTreatmentSummary,
@@ -38,6 +39,7 @@ import {
   type ReservationOutcome,
 } from '../../persistence/treatments-repo.js';
 import { ProblemError } from '../problem.js';
+import { batchResult } from './commercial.js';
 import {
   toReservationOutcomeView,
   toReservationTreatmentView,
@@ -53,6 +55,8 @@ type RegisterBody =
   operations['registerTreatmentDocuments']['requestBody']['content']['application/json'];
 type DocumentParams = operations['removeTreatmentDocument']['parameters']['path'];
 type ReservationParams = operations['getReservationTreatment']['parameters']['path'];
+type ReviewsBody =
+  operations['confirmTreatmentReviews']['requestBody']['content']['application/json'];
 type ManualAmountBody =
   operations['setManualChargedAmount']['requestBody']['content']['application/json'];
 
@@ -341,6 +345,34 @@ export function createTreatmentHandlers(dependencies: TreatmentHandlerDependenci
       const result = await confirmReview(db, { key, clientId: clientOf(request).id, now: now() });
       if (result === 'not_found') throw new ProblemError('not_found', 'Reserva não encontrada.');
       return treatmentOf(key);
+    },
+
+    /**
+     * POST /v1/treatment-reviews — confirma o alerta "Verificar" de várias reservas de uma vez
+     * (specs/005, FR-029). Não acessa o Hunit.
+     */
+    async confirmTreatmentReviews(request: FastifyRequest) {
+      const { reservations } = request.body as ReviewsBody;
+      const batchId = randomUUID();
+      const results = await confirmReviewsBatch(db, {
+        keys: uniqueKeys(reservations),
+        clientId: clientOf(request).id,
+        batchId,
+        now: now(),
+      });
+      for (const result of results) {
+        if (result.outcome !== 'failed') continue;
+        request.log.error(
+          {
+            err: result.error,
+            hotelCode: result.hotelCode,
+            reservationNumber: result.reservationNumber,
+            batchId,
+          },
+          'falha ao confirmar o alerta de uma reserva',
+        );
+      }
+      return batchResult(batchId, results);
     },
 
     /** DELETE .../manual-amount — remove o valor informado à mão; volta a valer o do Hunit. */

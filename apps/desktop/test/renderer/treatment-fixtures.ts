@@ -15,11 +15,14 @@ import type {
 export const NO_TREATMENT: ReservationTreatment = {
   status: 'none',
   situation: 'virtual_card_pending_charge',
+  detailedSituation: 'virtual_card_pending_charge',
   needsReview: false,
   request: null,
   proof: null,
   manualChargedAmount: null,
+  commercialChargedAmount: null,
   effectiveChargedAmount: null,
+  chargedAmountOrigin: null,
   acceptsDocuments: true,
 };
 
@@ -49,7 +52,8 @@ const SITUATION_OF: Record<ReservationTreatment['status'], ReservationTreatment[
 
 export function treatment(overrides: Partial<ReservationTreatment> = {}): ReservationTreatment {
   const status = overrides.status ?? NO_TREATMENT.status;
-  return { ...NO_TREATMENT, situation: SITUATION_OF[status], ...overrides };
+  const situation = overrides.situation ?? SITUATION_OF[status];
+  return { ...NO_TREATMENT, situation, detailedSituation: situation, ...overrides };
 }
 
 export function detail(overrides: Partial<TreatmentDetail> = {}): TreatmentDetail {

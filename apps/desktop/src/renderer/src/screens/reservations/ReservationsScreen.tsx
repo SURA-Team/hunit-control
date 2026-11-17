@@ -9,6 +9,11 @@
  * (FR-002, FR-002a, FR-017); o perfil operador marca
  * reservas para aplicar o mesmo documento a várias. A seleção fica fora desta tela
  * (`state/selection`): pesquisar de novo, trocar filtros ou carregar mais não desmarca nada.
+ *
+ * Envio ao Comercial (specs/005): "Enviar ao Comercial", "Confirmar retornos" e "Confirmar
+ * 'Verificar'" na barra da seleção; "Selecionar todas do filtro" (até 2 000, FR-030); a coluna
+ * "Valor cobrado" com a origem (FR-024); e "Copiar para e-mail" (FR-027), também para o perfil
+ * consulta.
  */
 import {
   Alert,
@@ -26,9 +31,11 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type {
   Reservation,
+  ReservationKey,
   ReservationListInput,
   TreatmentDocumentKind,
 } from '../../../../shared/ipc-types';
+import { ChargedAmount } from '../../components/ChargedAmount';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
 import { LegacyBadge } from '../../components/LegacyBadge';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -38,7 +45,10 @@ import { formatDate, formatMoney, parseAmountInput, sumMoney } from '../../prese
 import { RESERVATION_STATUS_LABELS } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
 import { SELECTION_LIMIT, useSelection } from '../../state/selection';
+import { DispatchDialog } from '../dispatch/DispatchDialog';
 import { AttachDialog } from './AttachDialog';
+import { ConfirmBatchDialog, type BatchKind } from './ConfirmBatchDialog';
+import { CopyDialog } from './CopyDialog';
 import { GuestName, ReservationDetail } from './ReservationDetail';
 import { EMPTY_FILTERS, ReservationFilters, type FilterDraft } from './ReservationFilters';
 import { SelectionDrawer } from './SelectionDrawer';
@@ -53,8 +63,9 @@ function toQuery(draft: FilterDraft, q: string | undefined, amount: string | und
     ...(q !== undefined && { q }),
     ...(amount !== undefined && { amount }),
     ...(draft.hotelCodes.length > 0 && { hotelCode: draft.hotelCodes }),
+    // A situação com o detalhe do Comercial ("Validar comprovante", specs/005, FR-023).
     ...(draft.situations.length > 0 && {
-      situation: draft.situations as Applied['situation'],
+      detailedSituation: draft.situations as Applied['detailedSituation'],
     }),
     ...(draft.reservationStatuses.length > 0 && {
       reservationStatus: draft.reservationStatuses as Applied['reservationStatus'],
@@ -90,6 +101,15 @@ export function ReservationsScreen({
   const [batch, setBatch] = useState<{
     kind: TreatmentDocumentKind;
     reservations: Array<{ hotelCode: string; reservationNumber: string }>;
+  } | null>(null);
+  /** Envio ao Comercial em andamento: as reservas marcadas quando o diálogo abriu (specs/005). */
+  const [dispatching, setDispatching] = useState<ReservationKey[] | null>(null);
+  const [confirming, setConfirming] = useState<BatchKind | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [selectAllNotice, setSelectAllNotice] = useState<{
+    tone: 'blue' | 'yellow' | 'red';
+    text: string;
   } | null>(null);
 
   const hotels = useQuery({ queryKey: ['hotels'], queryFn: () => unwrap(hunit.hotels.list()) });
@@ -141,6 +161,37 @@ export function ReservationsScreen({
     setLimitReached(skipped > 0);
   }
 
+  /** "Selecionar todas do filtro" (FR-030): soma à seleção as 2 000 primeiras, na ordem da lista. */
+  async function selectAllFromFilter() {
+    setSelectingAll(true);
+    setSelectAllNotice(null);
+    try {
+      const found = await unwrap(hunit.reservations.selectAll(applied));
+      const { added, skipped } = selection.add(found.items);
+      const parts = [
+        `${added.toLocaleString('pt-BR')} ${added === 1 ? 'reserva selecionada' : 'reservas selecionadas'} do filtro`,
+      ];
+      if (found.truncated) {
+        parts.push(
+          `o filtro tem ${found.total.toLocaleString('pt-BR')}: só as ${found.items.length.toLocaleString('pt-BR')} primeiras da lista entram (limite de ${SELECTION_LIMIT.toLocaleString('pt-BR')}); ${(found.total - found.items.length).toLocaleString('pt-BR')} ficaram de fora`,
+        );
+      }
+      if (skipped > 0) {
+        parts.push(
+          `${skipped.toLocaleString('pt-BR')} não couberam na seleção, que já tinha outras reservas`,
+        );
+      }
+      setSelectAllNotice({
+        tone: found.truncated || skipped > 0 ? 'yellow' : 'blue',
+        text: `${parts.join('; ')}.`,
+      });
+    } catch (caught) {
+      setSelectAllNotice({ tone: 'red', text: messageOf(caught) });
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
   function toggle(reservation: Reservation, checked: boolean) {
     if (checked) addToSelection([reservation]);
     else {
@@ -157,7 +208,17 @@ export function ReservationsScreen({
     <Stack gap="md">
       <Group justify="space-between">
         <Title order={2}>Reservas</Title>
-        <StaleDataNotice updatedAt={list.dataUpdatedAt} offline={offline} />
+        <Group gap="sm">
+          <StaleDataNotice updatedAt={list.dataUpdatedAt} offline={offline} />
+          <Button
+            variant="default"
+            size="xs"
+            disabled={items.length === 0 || offline}
+            onClick={() => setCopying(true)}
+          >
+            Copiar para e-mail
+          </Button>
+        </Group>
       </Group>
       <ReservationFilters
         disabled={offline}
@@ -206,6 +267,38 @@ export function ReservationsScreen({
                 Anexar comprovante
               </Button>
               <Button
+                size="xs"
+                color="teal"
+                disabled={offline}
+                onClick={() =>
+                  setDispatching(
+                    selection.items.map(({ hotelCode, reservationNumber }) => ({
+                      hotelCode,
+                      reservationNumber,
+                    })),
+                  )
+                }
+              >
+                Enviar ao Comercial
+              </Button>
+              <Button
+                variant="default"
+                size="xs"
+                disabled={offline}
+                onClick={() => setConfirming('returns')}
+              >
+                Confirmar retornos
+              </Button>
+              <Button
+                variant="default"
+                size="xs"
+                color="yellow"
+                disabled={offline}
+                onClick={() => setConfirming('reviews')}
+              >
+                Confirmar &quot;Verificar&quot;
+              </Button>
+              <Button
                 variant="subtle"
                 size="xs"
                 onClick={() => {
@@ -224,6 +317,34 @@ export function ReservationsScreen({
           Selecione no máximo {SELECTION_LIMIT.toLocaleString('pt-BR')} reservas. As que passaram do
           limite não foram marcadas.
         </Alert>
+      )}
+
+      {selectAllNotice && (
+        <Alert
+          color={selectAllNotice.tone}
+          role={selectAllNotice.tone === 'red' ? 'alert' : 'status'}
+          withCloseButton
+          onClose={() => setSelectAllNotice(null)}
+        >
+          {selectAllNotice.text}
+        </Alert>
+      )}
+      {isOperator && items.length > 0 && (
+        <Group gap="sm">
+          <Button
+            variant="light"
+            size="xs"
+            loading={selectingAll}
+            disabled={offline}
+            onClick={() => void selectAllFromFilter()}
+          >
+            Selecionar todas do filtro
+          </Button>
+          <Text size="xs" c="dimmed">
+            Todas as páginas, até {SELECTION_LIMIT.toLocaleString('pt-BR')} reservas, na ordem da
+            lista.
+          </Text>
+        </Group>
       )}
 
       {list.isError && items.length === 0 && (
@@ -261,6 +382,7 @@ export function ReservationsScreen({
               <Table.Th>Check-in</Table.Th>
               <Table.Th>Check-out</Table.Th>
               <Table.Th>Valor total</Table.Th>
+              <Table.Th>Valor cobrado</Table.Th>
               <Table.Th>Situação da reserva</Table.Th>
               <Table.Th>Reserva</Table.Th>
             </Table.Tr>
@@ -297,6 +419,9 @@ export function ReservationsScreen({
                 <Table.Td>{formatDate(reservation.checkIn)}</Table.Td>
                 <Table.Td>{formatDate(reservation.checkOut)}</Table.Td>
                 <Table.Td>{formatMoney(reservation.totalAmount)}</Table.Td>
+                <Table.Td>
+                  <ChargedAmount treatment={reservation.treatment} />
+                </Table.Td>
                 <Table.Td>
                   <SituationBadge treatment={reservation.treatment} />
                 </Table.Td>
@@ -350,12 +475,46 @@ export function ReservationsScreen({
           }}
         />
       )}
+
+      {dispatching && (
+        <DispatchDialog
+          reservations={dispatching}
+          hotelNames={hotelNames}
+          onClose={(result) => {
+            setDispatching(null);
+            // Depois do envio, só as não verificadas continuam marcadas, para tentar de novo.
+            if (result) selection.keepOnly(result.notVerified);
+          }}
+        />
+      )}
+
+      {confirming && (
+        <ConfirmBatchDialog
+          kind={confirming}
+          items={selection.items}
+          hotelNames={hotelNames}
+          onClose={(result) => {
+            setConfirming(null);
+            if (result) selection.keepOnly(result.failed);
+          }}
+        />
+      )}
+
+      {copying && (
+        <CopyDialog
+          filters={applied}
+          hotels={hotels.data ?? []}
+          hotelNames={hotelNames}
+          selected={isOperator ? selection.items : []}
+          onClose={() => setCopying(false)}
+        />
+      )}
     </Stack>
   );
 }
 
 /** O detalhe busca a reserva atualizada no servidor; enquanto isso, mostra a linha da lista. */
-function ReservationDetailLoader({ initial }: { initial: Reservation }) {
+export function ReservationDetailLoader({ initial }: { initial: Reservation }) {
   const hunit = useHunit();
   const key = { hotelCode: initial.hotelCode, reservationNumber: initial.reservationNumber };
   const detail = useQuery({

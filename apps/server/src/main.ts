@@ -8,7 +8,15 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import type { DestinationStream } from 'pino';
+import type { CommercialSheetGateway } from './commercial-sheet/gateway.js';
+import { GoogleSheetGateway } from './commercial-sheet/google-sheet-gateway.js';
+import { loadServiceAccountKey, ServiceAccountKeyError } from './commercial-sheet/key.js';
+import { createReturnsProcessor } from './commercial-sheet/returns.js';
+import { CommercialSheetSync } from './commercial-sheet/sync.js';
+import { DispatchEventBus } from './dispatches/events.js';
+import { DispatchRunner, failInterruptedDispatches } from './dispatches/runner.js';
 import { ConfigError, loadConfig, type AppConfig } from './config.js';
+import type { Database } from './persistence/db.js';
 import { EvidenceStore } from './evidence/store.js';
 import { ExecutionEventBus } from './executions/events.js';
 import { ExecutionRunner, failInterruptedExecutions } from './executions/runner.js';
@@ -24,6 +32,11 @@ export interface ServerOptions {
   config: AppConfig;
   /** Sessão do Hunit de cada execução. Padrão: o Hunit real (Playwright). */
   createGateway?: CreateHunitGateway;
+  /**
+   * Planilha do Comercial (specs/005). Padrão: o Google Sheets, se a planilha estiver
+   * configurada. Os testes de ponta a ponta passam a planilha em memória.
+   */
+  commercialSheetGateway?: CommercialSheetGateway;
   /** Destino do log. Padrão: a saída padrão. */
   logDestination?: DestinationStream;
   /** Endereço em que o servidor escuta. Padrão: todas as interfaces (necessário no container). */
@@ -73,18 +86,19 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       retentionDays: config.evidence.retentionDays,
       secrets,
     });
+    const hunitGateway =
+      options.createGateway ??
+      createPlaywrightGatewayFactory({
+        webUrl: config.hunit.webUrl,
+        apiUrl: config.hunit.apiUrl,
+        logger,
+      });
     const runner = new ExecutionRunner({
       db: database.db,
       events,
       evidence,
       secrets,
-      createGateway:
-        options.createGateway ??
-        createPlaywrightGatewayFactory({
-          webUrl: config.hunit.webUrl,
-          apiUrl: config.hunit.apiUrl,
-          logger,
-        }),
+      createGateway: hunitGateway,
       accountKeySecret: config.accountKeySecret,
       twoFactorTimeoutMs: config.hunit.twoFactorTimeoutSeconds * 1000,
       maxPeriodDays: config.hunit.maxPeriodDays,
@@ -92,7 +106,40 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       logger,
     });
 
-    const app = await buildApp({ db: database.db, logger, events, runner, evidence });
+    // Planilha do Comercial (specs/005, research R-04, R-06): desligada sem configuração.
+    const commercialSheet = await startCommercialSheet(options, database.db, secrets, logger);
+
+    // Envios ao Comercial (specs/005, research R-01): os ativos quando o servidor parou falham.
+    const dispatchEvents = new DispatchEventBus({ db: database.db, secrets, logger });
+    const interruptedDispatches = await failInterruptedDispatches(database.db, dispatchEvents);
+    if (interruptedDispatches.length > 0) {
+      logger.warn(
+        { dispatches: interruptedDispatches.map((dispatch) => dispatch.id) },
+        'envios interrompidos pelo reinício do servidor marcados como falhas',
+      );
+    }
+    const dispatches = new DispatchRunner({
+      db: database.db,
+      events: dispatchEvents,
+      evidence,
+      secrets,
+      createGateway: hunitGateway,
+      accountKeySecret: config.accountKeySecret,
+      twoFactorTimeoutMs: config.hunit.twoFactorTimeoutSeconds * 1000,
+      logger,
+      onLinesChanged: () => commercialSheet?.requestRound(),
+    });
+
+    const app = await buildApp({
+      db: database.db,
+      logger,
+      events,
+      runner,
+      evidence,
+      commercialSheet,
+      dispatches,
+      dispatchEvents,
+    });
     const url = await app.listen({ port: config.port, host: options.host ?? '0.0.0.0' });
 
     // Roda já ao subir, para recuperar o que venceu com o servidor desligado (FR-029).
@@ -112,6 +159,8 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
         closing ??= (async () => {
           await app.close();
           await runner.shutdown();
+          await dispatches.shutdown();
+          await commercialSheet?.stop();
           await maintenance.stop();
           await database.close();
         })();
@@ -122,6 +171,39 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     await database.close().catch(() => undefined);
     throw error;
   }
+}
+
+/**
+ * Liga a sincronização da planilha do Comercial: com a planilha injetada (testes) ou com a chave e
+ * o identificador configurados. Sem nenhum dos dois, a integração fica desligada (`null`).
+ *
+ * @throws ServiceAccountKeyError se o arquivo da chave não puder ser lido.
+ */
+async function startCommercialSheet(
+  options: ServerOptions,
+  db: Database,
+  secrets: SecretRegistry,
+  logger: Logger,
+): Promise<CommercialSheetSync | null> {
+  const access = options.config.commercialSheet.access;
+  let gateway = options.commercialSheetGateway ?? null;
+  if (gateway === null && access !== null) {
+    const key = await loadServiceAccountKey(access.keyFile, secrets, access.spreadsheetId);
+    gateway = new GoogleSheetGateway({ spreadsheetId: access.spreadsheetId, key });
+  }
+  if (gateway === null) {
+    logger.info('planilha do Comercial não configurada: envio ao Comercial desligado');
+    return null;
+  }
+  const sync = new CommercialSheetSync({
+    db,
+    gateway,
+    logger,
+    doneRetentionDays: options.config.commercialSheet.doneRetentionDays,
+    processReturns: createReturnsProcessor(db),
+  });
+  sync.start();
+  return sync;
 }
 
 function isMainModule(): boolean {
@@ -147,7 +229,17 @@ async function main(): Promise<void> {
     throw error;
   }
 
-  const server = await startServer({ config });
+  let server: RunningServer;
+  try {
+    server = await startServer({ config });
+  } catch (error) {
+    if (error instanceof ServiceAccountKeyError) {
+      process.stderr.write(`${error.message}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
   server.logger.info({ url: server.url }, 'servidor no ar');
 
   const shutdown = (signal: string) => {

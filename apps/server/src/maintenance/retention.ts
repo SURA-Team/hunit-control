@@ -14,13 +14,16 @@
  */
 import { rm, rmdir } from 'node:fs/promises';
 import { TREATMENT_REVERT_DAYS } from '@hunit/domain';
-import { and, eq, inArray, isNull, lte, ne, sql } from 'drizzle-orm';
-import type { EvidenceStore } from '../evidence/store.js';
+import { and, eq, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
+import { evidenceFolderOf, type EvidenceStore } from '../evidence/store.js';
 import type { Logger } from '../logging.js';
 import type { Database } from '../persistence/db.js';
 import {
   evidence,
   reservations,
+  commercialEvents,
+  commercialLines,
+  commercialReturns,
   treatmentDocuments,
   treatmentFiles,
 } from '../persistence/schema.js';
@@ -56,6 +59,11 @@ export interface RetentionResult {
   treatmentDocumentsPurged: number;
   /** Arquivos de tratativas apagados por não terem mais nenhum documento. */
   treatmentFilesRemoved: number;
+  /**
+   * Linhas da planilha do Comercial de reservas anonimizadas que tiveram os textos livres apagados
+   * e vão sair da planilha na próxima rodada (specs/005, research R-15).
+   */
+  commercialLinesAnonymized: number;
 }
 
 /** Data (AAAA-MM-DD) de `date` no fuso de São Paulo. */
@@ -72,6 +80,7 @@ async function removeExpiredEvidence(
     .select({
       id: evidence.id,
       executionId: evidence.executionId,
+      dispatchId: evidence.dispatchId,
       screenshotPath: evidence.screenshotPath,
       htmlPath: evidence.htmlPath,
       responsePath: evidence.responsePath,
@@ -89,7 +98,8 @@ async function removeExpiredEvidence(
         if (file) await rm(options.evidence.resolve(file), { force: true });
       }
       await db.delete(evidence).where(eq(evidence.id, row.id));
-      folders.add(row.executionId);
+      // A pasta é a do dono: a execução ou o envio ao Comercial (specs/005).
+      folders.add(evidenceFolderOf(row));
       evidenceRemoved += 1;
     } catch (error) {
       evidenceFailed += 1;
@@ -169,6 +179,43 @@ async function removeOrphanTreatmentFiles(db: Database, now: Date): Promise<numb
   return result.rowCount ?? 0;
 }
 
+/**
+ * Envio ao Comercial das reservas anonimizadas (specs/005, research R-15): apaga os textos livres
+ * que podem ter dado pessoal — o motivo da recusa (no retorno e no histórico) e o último retorno
+ * lido — e deixa a linha pendente, para a rodada a tirar da planilha. O código de autorização, o
+ * valor e o responsável ficam, como os dados de cobrança do Hunit.
+ */
+async function anonymizeCommercialData(db: Database, now: Date): Promise<number> {
+  const anonymizedReservation = (table: { hotelCode: unknown; reservationNumber: unknown }) =>
+    sql`exists (select 1 from ${reservations} r where r.hotel_code = ${table.hotelCode} and r.reservation_number = ${table.reservationNumber} and r.anonymized_at is not null)`;
+  await db
+    .update(commercialReturns)
+    .set({ rejectionReason: null })
+    .where(
+      and(isNotNull(commercialReturns.rejectionReason), anonymizedReservation(commercialReturns)),
+    );
+  await db
+    .update(commercialEvents)
+    .set({ reason: null })
+    .where(
+      and(
+        eq(commercialEvents.type, 'return_rejected'),
+        isNotNull(commercialEvents.reason),
+        anonymizedReservation(commercialEvents),
+      ),
+    );
+  const lines = await db
+    .update(commercialLines)
+    .set({
+      lastReadReturn: null,
+      returnProblem: null,
+      version: sql`${commercialLines.version} + 1`,
+      changedAt: now,
+    })
+    .where(and(isNull(commercialLines.removedFromSheetAt), anonymizedReservation(commercialLines)));
+  return lines.rowCount ?? 0;
+}
+
 /** Faz uma rodada da manutenção. */
 export async function runRetention(options: RetentionOptions): Promise<RetentionResult> {
   const now = (options.now ?? (() => new Date()))();
@@ -177,11 +224,13 @@ export async function runRetention(options: RetentionOptions): Promise<Retention
   // Depois da anonimização: os documentos das reservas anonimizadas nesta rodada já entram.
   const treatmentDocumentsPurged = await purgeTreatmentDocuments(options.db, now);
   const treatmentFilesRemoved = await removeOrphanTreatmentFiles(options.db, now);
+  const commercialLinesAnonymized = await anonymizeCommercialData(options.db, now);
   return {
     ...evidenceResult,
     reservationsAnonymized,
     treatmentDocumentsPurged,
     treatmentFilesRemoved,
+    commercialLinesAnonymized,
   };
 }
 

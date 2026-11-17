@@ -190,7 +190,12 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
   beforeAll(async () => {
     await mkdir(outDir, { recursive: true });
     certificates = await createTestCertificates();
-    server = await startE2eServer({ scenario: SCENARIO, twoFactorTimeoutMs: 120_000 });
+    // Planilha do Comercial em memória (specs/005): telas do envio e da área Comercial.
+    server = await startE2eServer({
+      scenario: SCENARIO,
+      twoFactorTimeoutMs: 120_000,
+      commercialSheet: true,
+    });
     for (const item of SCENARIO.hotels ?? []) await server.insertHotel(item.code, item.name ?? '');
     const pool = server.test.database.pool;
     const rename = 'update api_clients set name = $1 where id = $2';
@@ -503,6 +508,141 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('4.11', 'reservas-detalhe-sistema-anterior', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
       await window.getByRole('button', { name: 'Limpar' }).first().click();
+    });
+
+    // Envio ao Comercial (specs/005): envio com token, retornos na planilha em memória, validação,
+    // área "Comercial" e as ações novas da lista de reservas.
+    await step('7.1 a 7.4 envio ao Comercial', async () => {
+      await goTo('Reservas');
+      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      await window.getByRole('button', { name: 'Falta cobrar' }).click();
+      await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
+      await window.getByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }).check();
+      await window.getByRole('button', { name: 'Enviar ao Comercial' }).click();
+      const dialog = window.getByRole('dialog', { name: 'Enviar ao Comercial' });
+      await dialog.getByTestId('dispatch-summary').waitFor({ timeout: 15_000 });
+      const username = dialog.getByLabel('Usuário do Hunit');
+      if (await username.isVisible()) {
+        await username.fill('operador@exemplo.com.br');
+        await dialog.getByLabel('Senha do Hunit').fill('senha-ficticia');
+      }
+      await shot('7.1', 'envio-conferencia');
+
+      // A leitura de uma reserva do hotel 103 fica travada para mostrar o envio em andamento.
+      let release: () => void = () => undefined;
+      let reached: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      const reachedHotel = new Promise<void>((resolve) => (reached = resolve));
+      gate = { reached, released };
+      await dialog.getByRole('button', { name: /^Enviar \d+ ao Comercial$/ }).click();
+      const token = window.getByRole('dialog', { name: 'O Hunit pediu o token' });
+      await token.waitFor({ timeout: 15_000 });
+      await shot('7.3', 'envio-pedido-de-token');
+      await token.getByLabel('Token do autenticador').fill(TOKEN);
+      await token.getByRole('button', { name: 'Enviar token' }).click();
+      await token.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
+      await token.getByRole('button', { name: 'Fechar' }).click();
+      await Promise.race([reachedHotel, window.waitForTimeout(15_000)]);
+      await window.waitForTimeout(1000);
+      await shot('7.2', 'envio-em-andamento', true);
+      gate = null;
+      release();
+      await dialog.getByTestId('dispatch-view').getByText('Concluído', { exact: true }).waitFor({
+        timeout: 30_000,
+      });
+      await shot('7.4', 'envio-concluido', true);
+      await dialog.getByRole('button', { name: 'Fechar' }).last().click();
+    });
+
+    await step('7.5 a 7.10 retornos e área Comercial', async () => {
+      // A planilha recebe as linhas; o Comercial preenche dois retornos (um completo, com a
+      // maquininha de outro estabelecimento, e um incompleto).
+      await server.test.sync?.runRound();
+      const lines = await server.test.database.pool.query<{ number: string; hotel: string }>(
+        `select l.reservation_number as number, h.name as hotel from commercial_lines l
+         join hotels h on h.code = l.hotel_code where l.state = 'open'
+         order by l.reservation_number limit 3`,
+      );
+      const [first, second, third] = lines.rows;
+      if (first) {
+        server.sheet?.fillReturn(first.hotel, first.number, [
+          'AUT-55210',
+          'Maquininha Centro de Convenções',
+          '1280,00',
+          'Paula (Comercial)',
+        ]);
+      }
+      if (second) {
+        server.sheet?.fillReturn(second.hotel, second.number, [
+          'AUT-55211',
+          second.hotel,
+          '515,00',
+          'Paula (Comercial)',
+        ]);
+      }
+      if (third) server.sheet?.fillReturn(third.hotel, third.number, ['AUT-55212', '', '', '']);
+      await server.test.sync?.runRound();
+
+      await goTo('Reservas');
+      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      if (first) await window.getByLabel('Busca livre').fill(first.number);
+      await window.getByRole('button', { name: 'Buscar' }).click();
+      await window.locator('tbody tr').first().click();
+      await window.getByTestId('commercial-return').waitFor({ timeout: 15_000 });
+      await shot('7.5', 'reservas-detalhe-validar-comprovante', true);
+      await window
+        .getByTestId('commercial-return')
+        .getByRole('button', { name: 'Recusar' })
+        .click();
+      await window.getByText('Valor diferente').click();
+      await shot('7.6', 'reservas-recusar-retorno');
+      // Fecha o diálogo e a gaveta do detalhe.
+      await closeOverlays();
+
+      await goTo('Comercial');
+      await window.getByRole('table', { name: 'Envios ao Comercial' }).waitFor();
+      await shot('7.7', 'comercial-envios');
+      await window.getByRole('tab', { name: 'Retornos a validar' }).click();
+      await window.getByRole('table', { name: 'Retornos a validar' }).waitFor({ timeout: 15_000 });
+      await shot('7.8', 'comercial-retornos-a-validar');
+      await window.getByRole('tab', { name: 'Retornos com problema' }).click();
+      await window
+        .getByRole('table', { name: 'Retornos com problema' })
+        .waitFor({ timeout: 15_000 });
+      await shot('7.9', 'comercial-retornos-com-problema');
+      await window.getByRole('tab', { name: 'Planilha' }).click();
+      await window.getByTestId('sheet-status').waitFor({ timeout: 15_000 });
+      await shot('7.10', 'comercial-planilha');
+    });
+
+    await step('7.11 a 7.14 ações da seleção e cópia para e-mail', async () => {
+      await goTo('Reservas');
+      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      await window.getByRole('button', { name: 'Buscar' }).click();
+      await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
+      await window
+        .getByRole('button', { name: 'Desmarcar todas' })
+        .click()
+        .catch(() => undefined);
+      await window.getByRole('button', { name: 'Selecionar todas do filtro' }).click();
+      await window.getByText(/selecionadas do filtro/).waitFor({ timeout: 15_000 });
+      await shot('7.11', 'reservas-selecionar-todas-do-filtro');
+
+      await window.getByRole('button', { name: 'Confirmar retornos' }).click();
+      await window.getByTestId('batch-summary').waitFor();
+      await shot('7.12', 'reservas-confirmar-retornos-em-lote');
+      await closeOverlays();
+
+      await window.getByRole('button', { name: 'Confirmar "Verificar"' }).click();
+      await window.getByTestId('batch-summary').waitFor();
+      await shot('7.13', 'reservas-confirmar-verificar-em-lote');
+      await closeOverlays();
+
+      await window.getByRole('button', { name: 'Copiar para e-mail' }).click();
+      await window.getByRole('dialog', { name: 'Copiar para e-mail' }).waitFor();
+      await shot('7.14', 'reservas-copiar-para-email');
+      await closeOverlays();
+      await window.getByRole('button', { name: 'Desmarcar todas' }).click();
     });
 
     await step('1.3 configuração conectada', async () => {

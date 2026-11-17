@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.6.0
+  version: 1.7.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -19,6 +19,15 @@ info:
     clientes existentes: a origem "Sistema anterior" das reservas (`Reservation.legacy`), o
     filtro `fromLegacy` e a marcação `fromLegacy` nos documentos e no histórico das tratativas.
     A importação em si é um comando administrativo do servidor, sem rota na API.
+    A feature 005 (envio dos pedidos de cobrança ao Comercial pela planilha) acrescenta, sem
+    quebrar os clientes existentes: os envios ao Comercial (`/commercial-dispatches`, com token,
+    acompanhamento, cancelamento e retomada, como as execuções), a linha da reserva na planilha e o
+    retorno do Comercial (`/reservations/{hotelCode}/{reservationNumber}/commercial`,
+    `/commercial-returns`), o estado da planilha (`/commercial-sheet`), a confirmação do alerta
+    "Verificar" em lote (`/treatment-reviews`), a seleção de todas as reservas de um filtro
+    (`/reservations/selection`), a situação detalhada com "Validar comprovante"
+    (`detailedSituation`, que não muda os valores de `situation`) e a origem do valor cobrado.
+    O envio só lê o Hunit; os demais acréscimos não acessam o Hunit.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -44,6 +53,8 @@ tags:
     description: O cliente da API dono da chave usada (feature 002)
   - name: treatments
     description: Tratativas manuais das reservas — documentos, valor informado à mão e histórico (feature 003)
+  - name: commercial
+    description: Envio dos pedidos de cobrança ao Comercial pela planilha e retorno validado pelo Financeiro (feature 005)
 
 paths:
   /health:
@@ -412,6 +423,15 @@ paths:
             pelo HUNIT Control (feature 004, FR-011); false = só as que não vieram de lá. Omitido =
             sem esse filtro. Combinável com os demais.
           schema: { type: boolean }
+        - name: detailedSituation
+          in: query
+          description: >-
+            Situação detalhada da reserva (feature 005): qualquer uma das informadas, exatamente
+            como em ReservationTreatment.detailedSituation — os valores de `situation` mais
+            return_pending ("Validar comprovante"). Combinável com os demais filtros.
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationDetailedSituation' } }
+          style: form
+          explode: true
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -820,6 +840,591 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /reservations/selection:
+    get:
+      tags: [reservations]
+      operationId: selectReservations
+      summary: Todas as reservas de um filtro, até 2 000, para a seleção e a cópia para e-mail (feature 005, FR-030)
+      description: |
+        Mesmos filtros de GET /reservations, sem paginação. Devolve até 2 000 reservas na ordem da
+        lista (hotel e número), só com os campos que a seleção e a cópia para e-mail usam, e o total
+        que o filtro encontrou. `truncated` = o total passou de 2 000; as primeiras foram devolvidas.
+      parameters:
+        - name: executionId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: hotelCode
+          in: query
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+        - name: classification
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/Classification' } }
+          style: form
+          explode: true
+        - name: reservationStatus
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationStatus' } }
+          style: form
+          explode: true
+        - name: notFound
+          in: query
+          schema: { type: boolean }
+        - name: checkInFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: checkInTo
+          in: query
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          schema: { type: string, minLength: 2, maxLength: 100 }
+        - name: channel
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: amount
+          in: query
+          schema: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        - name: treatmentStatus
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/TreatmentStatus' } }
+          style: form
+          explode: true
+        - name: pendingCharge
+          in: query
+          schema: { type: boolean }
+        - name: situation
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationSituation' } }
+          style: form
+          explode: true
+        - name: needsReview
+          in: query
+          schema: { type: boolean }
+        - name: fromLegacy
+          in: query
+          schema: { type: boolean }
+        - name: detailedSituation
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationDetailedSituation' } }
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Reservas do filtro, até 2 000
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationSelection' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reservations/{hotelCode}/{reservationNumber}/commercial:
+    parameters:
+      - $ref: '#/components/parameters/HotelCode'
+      - $ref: '#/components/parameters/ReservationNumber'
+    get:
+      tags: [commercial]
+      operationId: getReservationCommercial
+      summary: Linha da reserva na planilha do Comercial, retornos e histórico do Comercial (feature 005)
+      description: |
+        O histórico das tratativas (feature 003) continua em `.../treatment`; o app mescla os dois
+        por data. Os retornos vêm do mais recente para o mais antigo.
+      responses:
+        '200':
+          description: Linha, retornos e histórico
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservations/{hotelCode}/{reservationNumber}/commercial/cancel:
+    parameters:
+      - $ref: '#/components/parameters/HotelCode'
+      - $ref: '#/components/parameters/ReservationNumber'
+    post:
+      tags: [commercial]
+      operationId: cancelCommercialLine
+      summary: Desfaz o envio da reserva ao Comercial (feature 005) — somente operador
+      description: |
+        A linha vai para "Concluídas" com a situação "Pedido cancelado pelo Financeiro" e pode ser
+        revertida por 30 dias. Recusado com retorno do Comercial aguardando validação
+        (`return_awaiting_validation`) ou sem linha aberta (`not_in_commercial_sheet`). Não acessa o
+        Hunit.
+      responses:
+        '200':
+          description: Linha atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialLine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /reservations/{hotelCode}/{reservationNumber}/commercial/restore:
+    parameters:
+      - $ref: '#/components/parameters/HotelCode'
+      - $ref: '#/components/parameters/ReservationNumber'
+    post:
+      tags: [commercial]
+      operationId: restoreCommercialLine
+      summary: Reverte o envio desfeito, em até 30 dias (feature 005) — somente operador
+      description: |
+        A linha volta para "A cobrar". Recusado depois de 30 dias (`restore_expired`), se a linha não
+        está cancelada (`not_in_commercial_sheet`) ou se a reserva não aceita mais o envio
+        (`not_eligible_for_treatment`). Não acessa o Hunit.
+      responses:
+        '200':
+          description: Linha atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialLine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /commercial-dispatches/check:
+    post:
+      tags: [commercial]
+      operationId: checkCommercialDispatch
+      summary: Diz quais reservas aceitam o envio ao Comercial, sem gravar nada e sem acessar o Hunit (feature 005, FR-001)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservations]
+              additionalProperties: false
+              properties:
+                reservations:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  items: { $ref: '#/components/schemas/ReservationKey' }
+      responses:
+        '200':
+          description: Reservas aceitas, as que ficam de fora e o total dos valores das aceitas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialDispatchCheck' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /commercial-dispatches:
+    get:
+      tags: [commercial]
+      operationId: listCommercialDispatches
+      summary: Envios ao Comercial, dos mais recentes para os mais antigos (feature 005, FR-020)
+      parameters:
+        - name: active
+          in: query
+          description: true = só os ativos (fila, em andamento, aguardando token); false = só os encerrados
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Página de envios
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CommercialDispatchSummary' }
+                  nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [commercial]
+      operationId: createCommercialDispatch
+      summary: Envia reservas ao Comercial, com login no Hunit e verificação de cada uma (feature 005, FR-001 a FR-007) — somente operador
+      description: |
+        Cria o envio e o executa em segundo plano, com os mesmos estados de uma execução: o login
+        pede o token (`awaiting_2fa`), e depois cada reserva é verificada no Hunit (só leitura), uma
+        por vez. As que ainda exigem cobrança entram na planilha do Comercial e ficam "Tratativa
+        enviada"; as que deixaram de exigir são retiradas; as que não puderam ser verificadas ficam de
+        fora. A elegibilidade é conferida de novo aqui: as que não aceitam ficam como `ignored`.
+        Credenciais só em memória, como em POST /executions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credentials, reservations]
+              additionalProperties: false
+              properties:
+                credentials: { $ref: '#/components/schemas/HunitCredentials' }
+                reservations:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  items: { $ref: '#/components/schemas/ReservationKey' }
+      responses:
+        '202':
+          description: Envio criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialDispatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            Já há execução ou envio ativo na mesma conta do Hunit (`account_busy`) ou a planilha do
+            Comercial não está configurada no servidor (`commercial_sheet_not_configured`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Nenhuma das reservas aceita o envio (`no_eligible_reservations`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /commercial-dispatches/{dispatchId}:
+    parameters:
+      - $ref: '#/components/parameters/DispatchId'
+    get:
+      tags: [commercial]
+      operationId: getCommercialDispatch
+      summary: Estado do envio e o resultado de cada reserva (feature 005, FR-007)
+      responses:
+        '200':
+          description: Envio
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialDispatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /commercial-dispatches/{dispatchId}/events:
+    parameters:
+      - $ref: '#/components/parameters/DispatchId'
+    get:
+      tags: [commercial]
+      operationId: streamCommercialDispatchEvents
+      summary: Stream de eventos do envio em tempo real (Server-Sent Events)
+      description: |
+        Como /executions/{executionId}/events: cada mensagem tem `id` (sequencial), `event` (tipo) e
+        `data` (JSON de CommercialDispatchEvent); `Last-Event-ID` reenvia os posteriores; o stream
+        termina depois do `status_changed` com estado final.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Stream aberto
+          content:
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/CommercialDispatchEvent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /commercial-dispatches/{dispatchId}/two-factor:
+    parameters:
+      - $ref: '#/components/parameters/DispatchId'
+    post:
+      tags: [commercial]
+      operationId: sendCommercialDispatchTwoFactor
+      summary: Envia o token 2FA do envio (feature 005, FR-002) — somente operador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                  pattern: '^[0-9]{4,10}$'
+                  writeOnly: true
+      responses:
+        '202':
+          description: Token entregue ao envio; o resultado chega pelo estado/eventos
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: O envio não está aguardando o token (`not_awaiting_two_factor`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /commercial-dispatches/{dispatchId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/DispatchId'
+    post:
+      tags: [commercial]
+      operationId: cancelCommercialDispatch
+      summary: Cancela o envio (feature 005, FR-007) — somente operador
+      description: |
+        As reservas já processadas ficam como estão; as restantes ficam "não verificadas: envio
+        cancelado" e podem ser retomadas.
+      responses:
+        '202':
+          description: Cancelamento solicitado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialDispatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Envio já encerrado (`dispatch_already_finished`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /commercial-dispatches/{dispatchId}/resume:
+    parameters:
+      - $ref: '#/components/parameters/DispatchId'
+    post:
+      tags: [commercial]
+      operationId: resumeCommercialDispatch
+      summary: Retoma o envio com as reservas não verificadas, com novo login e token (feature 005, FR-007) — somente operador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credentials]
+              additionalProperties: false
+              properties:
+                credentials: { $ref: '#/components/schemas/HunitCredentials' }
+      responses:
+        '202':
+          description: Novo envio criado (parentDispatchId = envio original)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialDispatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Envio ainda ativo ou conta ocupada (`account_busy`), sem reservas não verificadas
+            (`nothing_to_resume`), já retomado (`dispatch_already_resumed`) ou planilha não
+            configurada (`commercial_sheet_not_configured`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /commercial-returns/confirm:
+    post:
+      tags: [commercial]
+      operationId: confirmCommercialReturns
+      summary: Confirma de uma vez os retornos aguardando validação de várias reservas (feature 005, FR-016a) — somente operador
+      description: |
+        Uma transação por reserva. Reservas sem retorno aguardando validação ficam de fora, com o
+        motivo. A resposta é 200 mesmo com reservas ignoradas ou com falha. Não acessa o Hunit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservations]
+              additionalProperties: false
+              properties:
+                reservations:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  items: { $ref: '#/components/schemas/ReservationKey' }
+      responses:
+        '200':
+          description: Desfecho de cada reserva
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfirmationBatchResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /commercial-returns/{returnId}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ReturnId'
+    post:
+      tags: [commercial]
+      operationId: confirmCommercialReturn
+      summary: Confirma o retorno do Comercial; a reserva passa a "Comprovante enviado" (feature 005, FR-016) — somente operador
+      responses:
+        '200':
+          description: Tratativa atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationTreatment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: O retorno não está aguardando validação (`return_not_awaiting_validation`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /commercial-returns/{returnId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/ReturnId'
+    post:
+      tags: [commercial]
+      operationId: rejectCommercialReturn
+      summary: Recusa o retorno do Comercial com o motivo; a reserva volta a "Tratativa enviada" (feature 005, FR-017) — somente operador
+      description: |
+        O motivo aparece para o Comercial na planilha ("Recusado pelo Financeiro: <motivo>"): não
+        escreva dado pessoal do hóspede.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Tratativa atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationTreatment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: O retorno não está aguardando validação (`return_not_awaiting_validation`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /commercial-returns/{returnId}/undo-confirmation:
+    parameters:
+      - $ref: '#/components/parameters/ReturnId'
+    post:
+      tags: [commercial]
+      operationId: undoCommercialReturnConfirmation
+      summary: Desfaz a confirmação do retorno; ele volta a aguardar validação (feature 005) — somente operador
+      responses:
+        '200':
+          description: Tratativa atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationTreatment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: O retorno não está confirmado (`return_not_confirmed`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /treatment-reviews:
+    post:
+      tags: [treatments]
+      operationId: confirmTreatmentReviews
+      summary: Confirma o alerta "Verificar" de várias reservas de uma vez (feature 005, FR-029) — somente operador
+      description: |
+        Para cada reserva, a mesma regra de POST .../treatment/review (feature 003, FR-002a): só tira
+        o alerta e registra a confirmação no histórico, com o status do Hunit confirmado. Uma
+        transação por reserva; sem alerta, a reserva fica de fora (`no_review_alert`). Não acessa o
+        Hunit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservations]
+              additionalProperties: false
+              properties:
+                reservations:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  items: { $ref: '#/components/schemas/ReservationKey' }
+      responses:
+        '200':
+          description: Desfecho de cada reserva e a contagem das confirmadas por status do Hunit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfirmationBatchResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /commercial-sheet:
+    get:
+      tags: [commercial]
+      operationId: getCommercialSheetStatus
+      summary: Estado da planilha do Comercial — pendências, última leitura, falha e retornos com problema (feature 005, FR-013)
+      description: Nunca mostra o identificador da planilha nem a chave de acesso (FR-022).
+      responses:
+        '200':
+          description: Estado da planilha
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialSheetStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /commercial-sheet/read:
+    post:
+      tags: [commercial]
+      operationId: readCommercialSheet
+      summary: Lê os retornos e atualiza a planilha agora (feature 005, FR-014) — somente operador
+      description: |
+        Faz uma rodada completa (leitura dos retornos e atualização da planilha) e responde quando
+        ela termina; se passar de 50 s, responde 202 e a rodada continua. Com a planilha
+        indisponível, responde 503 sem mudar nada no sistema.
+      responses:
+        '200':
+          description: Rodada concluída
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialSheetRead' }
+        '202':
+          description: A rodada continua em segundo plano; o resultado aparece em GET /commercial-sheet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialSheetStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: A planilha do Comercial não está configurada (`commercial_sheet_not_configured`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503':
+          description: A planilha está indisponível (`commercial_sheet_unavailable`); nada mudou
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
 components:
   securitySchemes:
     apiKey:
@@ -843,6 +1448,26 @@ components:
       schema: { type: string }
     DocumentId:
       name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    HotelCode:
+      name: hotelCode
+      in: path
+      required: true
+      schema: { type: string }
+    ReservationNumber:
+      name: reservationNumber
+      in: path
+      required: true
+      schema: { type: string }
+    DispatchId:
+      name: dispatchId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReturnId:
+      name: returnId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -907,6 +1532,17 @@ components:
             - document_not_revertible
             - proof_required
             - document_purged
+            - account_busy
+            - commercial_sheet_not_configured
+            - commercial_sheet_unavailable
+            - no_eligible_reservations
+            - dispatch_already_finished
+            - dispatch_already_resumed
+            - return_awaiting_validation
+            - return_not_awaiting_validation
+            - return_not_confirmed
+            - not_in_commercial_sheet
+            - restore_expired
             - internal_error
 
     HunitCredentials:
@@ -1195,6 +1831,13 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/ReservationLegacyOrigin'
+        commercial:
+          description: >-
+            Envio ao Comercial pela planilha (feature 005). null = a reserva nunca foi enviada pela
+            planilha (pode ter tratativa por e-mail, feature 003).
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CommercialSummary'
 
     ReservationLegacyOrigin:
       type: object
@@ -1226,7 +1869,10 @@ components:
 
     TreatmentStatus:
       type: string
-      description: none = sem tratativa; sent = Enviada (só tratativa); charged = Cobrada (com comprovante)
+      description: >-
+        none = sem tratativa; sent = Enviada (só tratativa); charged = Cobrada (com comprovante).
+        Desde a 1.7.0 (feature 005), a tratativa inclui o envio ao Comercial pela planilha (não
+        cancelado) e o comprovante inclui o retorno do Comercial confirmado pelo Financeiro.
       enum: [none, sent, charged]
 
     ReservationSituation:
@@ -1237,6 +1883,28 @@ components:
         tratativa e a classificação ainda exige cobrança); os demais valores são a classificação
         (status do Hunit).
       enum:
+        - proof_sent
+        - treatment_sent
+        - ignored_hotelbeds_258
+        - invoiced
+        - charge_at_terminal
+        - cancelled_no_charge
+        - not_virtual_card
+        - virtual_card_charge_error
+        - virtual_card_already_charged
+        - virtual_card_validated_only
+        - virtual_card_pending_charge
+        - analysis_error
+
+    ReservationDetailedSituation:
+      type: string
+      description: >-
+        Situação da reserva com o detalhe do Comercial (feature 005): os mesmos valores de
+        ReservationSituation, mais return_pending = "Validar comprovante" (retorno do Comercial
+        aguardando a validação do Financeiro; ainda conta em pendingCharge). Onde há
+        return_pending, ReservationSituation continua treatment_sent (clientes até a 1.6.0).
+      enum:
+        - return_pending
         - proof_sent
         - treatment_sent
         - ignored_hotelbeds_258
@@ -1304,10 +1972,29 @@ components:
       type: object
       description: Resumo da tratativa manual de uma reserva (feature 003)
       required:
-        [status, situation, needsReview, request, proof, manualChargedAmount, effectiveChargedAmount, acceptsDocuments]
+        - status
+        - situation
+        - detailedSituation
+        - needsReview
+        - request
+        - proof
+        - manualChargedAmount
+        - commercialChargedAmount
+        - effectiveChargedAmount
+        - chargedAmountOrigin
+        - acceptsDocuments
       properties:
         status: { $ref: '#/components/schemas/TreatmentStatus' }
         situation: { $ref: '#/components/schemas/ReservationSituation' }
+        detailedSituation: { $ref: '#/components/schemas/ReservationDetailedSituation' }
+        commercialChargedAmount: { $ref: '#/components/schemas/Money' }
+        chargedAmountOrigin:
+          type: [string, 'null']
+          description: >-
+            De onde vem effectiveChargedAmount (feature 005, FR-024): hunit (o Hunit informa),
+            manual (informado à mão, feature 003) ou commercial (retorno confirmado); null = sem
+            valor cobrado.
+          enum: [hunit, manual, commercial, null]
         needsReview:
           type: boolean
           description: >-
@@ -1412,3 +2099,521 @@ components:
           description: Arquivos disponíveis para GET /evidence/{evidenceId}/{file}
         createdAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time }
+
+    # ---------------------------------------------------------------------------------------
+    # Feature 005 — envio ao Comercial pela planilha
+    # ---------------------------------------------------------------------------------------
+
+    CommercialLineState:
+      type: string
+      description: >-
+        open = na aba "A cobrar"; concluded = na aba "Concluídas" (comprovante ou o Hunit não exige
+        mais cobrança); cancelled = envio desfeito pelo Financeiro ("Pedido cancelado pelo
+        Financeiro", também em "Concluídas")
+      enum: [open, concluded, cancelled]
+
+    CommercialReturnState:
+      type: string
+      description: >-
+        awaiting_validation = lido da planilha, aguardando o Financeiro; confirmed = confirmado
+        (vale como comprovante); rejected = recusado (ver rejectionReason); superseded = substituído
+        por um retorno alterado pelo Comercial; closed = encerrado sem validação (comprovante por
+        arquivo, ou o Hunit deixou de exigir cobrança: a reserva fica com o alerta "Verificar")
+      enum: [awaiting_validation, confirmed, rejected, superseded, closed]
+
+    CommercialSummary:
+      type: object
+      description: Resumo do envio ao Comercial de uma reserva (feature 005)
+      required:
+        [lineState, inSheet, lastSentAt, lastDispatchId, returnState, currentReturn, returnProblem, syncPending]
+      properties:
+        lineState: { $ref: '#/components/schemas/CommercialLineState' }
+        inSheet:
+          type: boolean
+          description: false = a linha já saiu da planilha (90 dias depois de concluída, ou anonimização)
+        lastSentAt: { type: string, format: date-time }
+        lastDispatchId: { type: string, format: uuid }
+        returnState:
+          type: [string, 'null']
+          description: Estado do retorno atual (o mais recente que não foi substituído); null = sem retorno
+          enum: [awaiting_validation, confirmed, rejected, closed, null]
+        currentReturn:
+          description: >-
+            O retorno atual (o mesmo de returnState), para a lista de revisão da confirmação em lote
+            (FR-016a) e a lista de retornos a validar, sem uma consulta por reserva; null = sem retorno
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CommercialReturnBrief'
+        returnProblem:
+          type: [string, 'null']
+          description: >-
+            Problema do retorno preenchido na planilha, por exemplo "Retorno incompleto: falta o
+            valor cobrado"
+        syncPending:
+          type: boolean
+          description: A linha tem atualização da planilha ainda não aplicada (FR-013)
+
+    CommercialReturnBrief:
+      type: object
+      description: Resumo do retorno atual de uma reserva (feature 005), na lista de reservas
+      required: [id, state, authorizationCode, chargeHotel, chargedAmount, chargedBy, readAt, difference]
+      properties:
+        id: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/CommercialReturnState' }
+        authorizationCode: { type: string }
+        chargeHotel:
+          type: string
+          description: Estabelecimento que aparece na maquininha, como o Comercial escreveu (texto livre)
+        chargedAmount: { $ref: '#/components/schemas/Money' }
+        chargedBy: { type: string }
+        readAt: { type: string, format: date-time }
+        difference:
+          description: Valor cobrado menos o valor total da reserva (o valor a cobrar)
+          $ref: '#/components/schemas/Money'
+
+    CommercialLine:
+      type: object
+      description: Linha da reserva na planilha do Comercial (feature 005)
+      required:
+        - state
+        - inSheet
+        - tab
+        - firstSentAt
+        - lastSentAt
+        - lastDispatchId
+        - lastSentBy
+        - concludedAt
+        - cancelledAt
+        - cancelledBy
+        - restorableUntil
+        - returnProblem
+        - sheetIssue
+        - syncPending
+      properties:
+        state: { $ref: '#/components/schemas/CommercialLineState' }
+        inSheet: { type: boolean }
+        tab:
+          type: [string, 'null']
+          description: to_charge = "A cobrar"; done = "Concluídas"; null = fora da planilha
+          enum: [to_charge, done, null]
+        firstSentAt: { type: string, format: date-time }
+        lastSentAt: { type: string, format: date-time }
+        lastDispatchId: { type: string, format: uuid }
+        lastSentBy: { type: string, description: Nome do cliente da API que fez o último envio }
+        concludedAt: { type: [string, 'null'], format: date-time }
+        cancelledAt: { type: [string, 'null'], format: date-time }
+        cancelledBy: { type: [string, 'null'] }
+        restorableUntil:
+          type: [string, 'null']
+          format: date-time
+          description: Preenchido só em linha cancelada que ainda pode ser revertida (30 dias)
+        returnProblem: { type: [string, 'null'] }
+        sheetIssue:
+          type: [string, 'null']
+          description: Último caso relatado na linha, por exemplo uma célula do sistema restaurada
+        syncPending: { type: boolean }
+
+    CommercialReturn:
+      type: object
+      description: Retorno preenchido pelo Comercial na planilha (feature 005)
+      required:
+        - id
+        - authorizationCode
+        - chargeHotel
+        - chargedAmount
+        - chargedBy
+        - readAt
+        - state
+        - decidedAt
+        - decidedBy
+        - rejectionReason
+        - expectedAmount
+        - difference
+      properties:
+        id: { type: string, format: uuid }
+        authorizationCode: { type: string }
+        chargeHotel:
+          type: string
+          description: Estabelecimento que aparece na maquininha, como o Comercial escreveu (texto livre)
+        chargedAmount: { $ref: '#/components/schemas/Money' }
+        chargedBy: { type: string, description: Responsável pela cobrança no Comercial }
+        readAt: { type: string, format: date-time }
+        state: { $ref: '#/components/schemas/CommercialReturnState' }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decidedBy: { type: [string, 'null'], description: Cliente da API que confirmou ou recusou }
+        rejectionReason: { type: [string, 'null'] }
+        expectedAmount:
+          $ref: '#/components/schemas/Money'
+        difference:
+          $ref: '#/components/schemas/Money'
+
+    CommercialEvent:
+      type: object
+      description: Item do histórico do Comercial de uma reserva (feature 005, FR-020)
+      required: [id, type, actor, at, dispatchId, returnId, classification, reason, batchId]
+      properties:
+        id: { type: integer }
+        type:
+          type: string
+          enum:
+            - dispatched
+            - withdrawn
+            - line_cancelled
+            - line_restored
+            - line_concluded
+            - return_received
+            - return_changed
+            - return_ignored
+            - return_confirmed
+            - return_rejected
+            - return_confirmation_undone
+            - return_closed
+        actor:
+          type: object
+          required: [kind, name]
+          properties:
+            kind:
+              type: string
+              description: >-
+                client = um cliente da API; commercial_sheet = o Comercial, pela planilha; system = o
+                próprio HUNIT Control (ex.: linha concluída porque uma execução mostrou a reserva
+                como cobrada)
+              enum: [client, commercial_sheet, system]
+            name: { type: string }
+        at: { type: string, format: date-time }
+        dispatchId: { type: [string, 'null'], format: uuid }
+        returnId: { type: [string, 'null'], format: uuid }
+        classification:
+          oneOf:
+            - $ref: '#/components/schemas/Classification'
+            - type: 'null'
+        reason: { type: [string, 'null'] }
+        batchId: { type: [string, 'null'], format: uuid }
+
+    CommercialDetail:
+      type: object
+      required: [line, returns, events]
+      properties:
+        line:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CommercialLine'
+        returns:
+          type: array
+          items: { $ref: '#/components/schemas/CommercialReturn' }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/CommercialEvent' }
+
+    CommercialDispatchCheck:
+      type: object
+      required: [eligible, ignored, totalAmount]
+      properties:
+        eligible:
+          type: array
+          items:
+            type: object
+            required: [hotelCode, reservationNumber, totalAmount, resend]
+            properties:
+              hotelCode: { type: string }
+              reservationNumber: { type: string }
+              totalAmount: { $ref: '#/components/schemas/Money' }
+              resend: { type: boolean, description: A reserva já está na planilha; o envio atualiza a linha }
+        ignored:
+          type: array
+          items: { $ref: '#/components/schemas/CommercialDispatchIgnored' }
+        totalAmount:
+          type: string
+          pattern: '^[0-9]+\.[0-9]{2}$'
+          description: Soma do valor total das reservas aceitas, em BRL
+
+    CommercialDispatchIgnored:
+      type: object
+      required: [hotelCode, reservationNumber, reason]
+      properties:
+        hotelCode: { type: string }
+        reservationNumber: { type: string }
+        reason:
+          type: string
+          description: >-
+            not_found = reserva não encontrada; not_accepting = a situação não aceita tratativa;
+            has_proof = já tem comprovante; return_awaiting_validation = há retorno do Comercial
+            aguardando validação
+          enum: [not_found, not_accepting, has_proof, return_awaiting_validation]
+
+    CommercialDispatchCounts:
+      type: object
+      required: [total, pending, sent, withdrawn, notVerified, ignored]
+      properties:
+        total: { type: integer }
+        pending: { type: integer }
+        sent: { type: integer }
+        withdrawn: { type: integer }
+        notVerified: { type: integer }
+        ignored: { type: integer }
+
+    CommercialDispatchSummary:
+      type: object
+      required:
+        [id, requestedClient, parentDispatchId, status, endReason, createdAt, finishedAt, counts]
+      properties:
+        id: { type: string, format: uuid }
+        requestedClient: { type: string, description: Cliente da API que fez o envio }
+        parentDispatchId: { type: [string, 'null'], format: uuid }
+        status: { $ref: '#/components/schemas/ExecutionStatus' }
+        endReason:
+          oneOf:
+            - $ref: '#/components/schemas/ExecutionEndReason'
+            - type: 'null'
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        counts: { $ref: '#/components/schemas/CommercialDispatchCounts' }
+
+    CommercialDispatchItem:
+      type: object
+      required:
+        [hotelCode, reservationNumber, position, outcome, classificationBefore, classificationAfter, reason, processedAt]
+      properties:
+        hotelCode: { type: string }
+        reservationNumber: { type: string }
+        position: { type: integer, minimum: 1 }
+        outcome:
+          type: string
+          description: >-
+            pending = ainda não verificada; sent = enviada; withdrawn = retirada (o Hunit não exige
+            mais cobrança; reason = a classificação); not_verified = não verificada (reason diz por
+            quê); ignored = não aceitou o envio (reason = o código de elegibilidade)
+          enum: [pending, sent, withdrawn, not_verified, ignored]
+        classificationBefore:
+          oneOf:
+            - $ref: '#/components/schemas/Classification'
+            - type: 'null'
+        classificationAfter:
+          oneOf:
+            - $ref: '#/components/schemas/Classification'
+            - type: 'null'
+        reason: { type: [string, 'null'] }
+        processedAt: { type: [string, 'null'], format: date-time }
+
+    CommercialDispatch:
+      type: object
+      required:
+        - id
+        - requestedClient
+        - parentDispatchId
+        - resumedByDispatchId
+        - status
+        - endReason
+        - endMessage
+        - createdAt
+        - startedAt
+        - finishedAt
+        - twoFactorDeadline
+        - counts
+        - current
+        - items
+        - lastEventId
+      properties:
+        id: { type: string, format: uuid }
+        requestedClient: { type: string }
+        parentDispatchId: { type: [string, 'null'], format: uuid }
+        resumedByDispatchId: { type: [string, 'null'], format: uuid }
+        status: { $ref: '#/components/schemas/ExecutionStatus' }
+        endReason:
+          oneOf:
+            - $ref: '#/components/schemas/ExecutionEndReason'
+            - type: 'null'
+        endMessage:
+          type: [string, 'null']
+          description: Mensagem do último status_changed, por exemplo o motivo da falha
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        twoFactorDeadline: { type: [string, 'null'], format: date-time }
+        counts: { $ref: '#/components/schemas/CommercialDispatchCounts' }
+        current:
+          description: Reserva em verificação agora; null fora do andamento
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ReservationKey'
+        items:
+          type: array
+          maxItems: 2000
+          items: { $ref: '#/components/schemas/CommercialDispatchItem' }
+        lastEventId:
+          type: [string, 'null']
+          description: >-
+            Id do evento mais recente do envio; null = nenhum. O acompanhamento abre o fluxo de
+            eventos a partir dele (Last-Event-ID), sem reprocessar o histórico
+
+    CommercialDispatchEvent:
+      type: object
+      required: [id, at, type, message]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        type:
+          type: string
+          enum: [status_changed, item_processed, warning]
+        status: { $ref: '#/components/schemas/ExecutionStatus' }
+        hotelCode: { type: [string, 'null'] }
+        reservationNumber: { type: [string, 'null'] }
+        message: { type: string }
+
+    ConfirmationBatchResult:
+      type: object
+      description: Resultado de uma confirmação em lote (retornos do Comercial ou alerta "Verificar")
+      required: [batchId, items, countsByClassification]
+      properties:
+        batchId: { type: string, format: uuid }
+        items:
+          type: array
+          items:
+            type: object
+            required: [hotelCode, reservationNumber, outcome, reason]
+            properties:
+              hotelCode: { type: string }
+              reservationNumber: { type: string }
+              outcome:
+                type: string
+                description: confirmed = confirmada; ignored = ficou de fora (ver reason); failed = erro inesperado, nada mudou
+                enum: [confirmed, ignored, failed]
+              reason:
+                type: [string, 'null']
+                enum: [not_found, no_return_awaiting_validation, no_review_alert, null]
+        countsByClassification:
+          $ref: '#/components/schemas/ClassificationCounts'
+
+    SelectionItem:
+      type: object
+      description: Reserva da seleção e da cópia para e-mail (feature 005, FR-027, FR-030)
+      required:
+        - hotelCode
+        - hotelName
+        - reservationNumber
+        - guestName
+        - channel
+        - checkIn
+        - totalAmount
+        - reservationStatus
+        - classification
+        - treatmentStatus
+        - situation
+        - detailedSituation
+        - needsReview
+        - effectiveChargedAmount
+        - chargedAmountOrigin
+        - currentReturn
+      properties:
+        hotelCode: { type: string }
+        hotelName: { type: string }
+        reservationNumber: { type: string }
+        guestName:
+          type: [string, 'null']
+          description: Só para a lista da seleção no app; a cópia para e-mail nunca o usa. null após anonimização
+        channel: { type: [string, 'null'] }
+        checkIn: { type: [string, 'null'], format: date }
+        totalAmount: { $ref: '#/components/schemas/Money' }
+        reservationStatus: { $ref: '#/components/schemas/ReservationStatus' }
+        classification: { $ref: '#/components/schemas/Classification' }
+        treatmentStatus: { $ref: '#/components/schemas/TreatmentStatus' }
+        situation: { $ref: '#/components/schemas/ReservationSituation' }
+        detailedSituation: { $ref: '#/components/schemas/ReservationDetailedSituation' }
+        needsReview: { type: boolean }
+        effectiveChargedAmount: { $ref: '#/components/schemas/Money' }
+        chargedAmountOrigin:
+          type: [string, 'null']
+          enum: [hunit, manual, commercial, null]
+        currentReturn:
+          description: O retorno atual do Comercial (lista de revisão da confirmação em lote, FR-016a); null = sem retorno
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CommercialReturnBrief'
+
+    ReservationSelection:
+      type: object
+      required: [total, truncated, items]
+      properties:
+        total: { type: integer, description: Quantas reservas o filtro encontrou }
+        truncated: { type: boolean, description: true = total maior que 2 000; vieram as 2 000 primeiras }
+        items:
+          type: array
+          maxItems: 2000
+          items: { $ref: '#/components/schemas/SelectionItem' }
+
+    CommercialSheetProblem:
+      type: object
+      required: [hotelCode, reservationNumber, kind, message, at]
+      properties:
+        hotelCode: { type: [string, 'null'], description: null quando a linha não tem um hotel do catálogo }
+        reservationNumber: { type: [string, 'null'] }
+        kind:
+          type: string
+          description: >-
+            incomplete = retorno com coluna faltando; illegible = valor não entendido; orphan_line =
+            linha sem envio correspondente; duplicate_line = linha repetida (apagada); restored_line =
+            linha ou célula do sistema restaurada
+          enum: [incomplete, illegible, orphan_line, duplicate_line, restored_line]
+        message: { type: string, description: Em português e sem dado pessoal do hóspede }
+        at: { type: string, format: date-time }
+
+    CommercialSheetStatus:
+      type: object
+      description: Estado da integração com a planilha do Comercial (feature 005, FR-013); nunca traz o identificador da planilha nem a chave
+      required:
+        - configured
+        - status
+        - lastRoundOkAt
+        - lastReadOkAt
+        - lastError
+        - nextAttemptAt
+        - pending
+        - awaitingValidation
+        - problems
+      properties:
+        configured: { type: boolean }
+        status:
+          type: string
+          description: >-
+            ok = última rodada concluída; failing = a última rodada falhou (ver lastError);
+            layout_invalid = o formato da planilha foi alterado (rode o comando de preparação);
+            not_configured = integração desligada no servidor
+          enum: [ok, failing, layout_invalid, not_configured]
+        lastRoundOkAt: { type: [string, 'null'], format: date-time }
+        lastReadOkAt: { type: [string, 'null'], format: date-time }
+        lastError:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [code, message, at]
+              properties:
+                code:
+                  type: string
+                  enum: [sheet_unavailable, sheet_forbidden, sheet_not_found, sheet_layout_invalid, sheet_rate_limited]
+                message: { type: string, description: Mensagem genérica em português }
+                at: { type: string, format: date-time }
+        nextAttemptAt: { type: [string, 'null'], format: date-time }
+        pending:
+          type: object
+          required: [count, oldestChangeAt]
+          properties:
+            count: { type: integer, description: Linhas com atualização ainda não aplicada na planilha }
+            oldestChangeAt: { type: [string, 'null'], format: date-time }
+        awaitingValidation: { type: integer, description: Retornos aguardando a validação do Financeiro }
+        problems:
+          type: array
+          items: { $ref: '#/components/schemas/CommercialSheetProblem' }
+
+    CommercialSheetRead:
+      type: object
+      required: [sheet, round]
+      properties:
+        sheet: { $ref: '#/components/schemas/CommercialSheetStatus' }
+        round:
+          type: object
+          required: [returnsReceived, returnsChanged, problems, linesWritten]
+          properties:
+            returnsReceived: { type: integer, description: Retornos novos lidos nesta rodada }
+            returnsChanged: { type: integer, description: Retornos alterados pelo Comercial nesta rodada }
+            problems: { type: integer, description: Retornos com problema encontrados nesta rodada }
+            linesWritten: { type: integer, description: Linhas escritas ou movidas nesta rodada }

@@ -188,7 +188,7 @@ describe('filtros (FR-020 a FR-020b)', () => {
     await waitFor(() =>
       expect(lastQuery()).toMatchObject({
         hotelCode: ['32'],
-        situation: ['virtual_card_pending_charge'],
+        detailedSituation: ['virtual_card_pending_charge'],
         reservationStatus: ['cancelled'],
         channel: 'Expedia',
         notFound: true,

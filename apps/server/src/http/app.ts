@@ -9,6 +9,11 @@ import fastify, {
   type RouteOptions,
 } from 'fastify';
 import openapiGlue from 'fastify-openapi-glue';
+import type { CommercialSheetSync } from '../commercial-sheet/sync.js';
+import type { DispatchEventBus } from '../dispatches/events.js';
+import type { DispatchRunner } from '../dispatches/runner.js';
+import { createCommercialHandlers } from './handlers/commercial.js';
+import { createDispatchHandlers } from './handlers/dispatches.js';
 import type { EvidenceStore } from '../evidence/store.js';
 import type { ExecutionEventBus } from '../executions/events.js';
 import type { ExecutionRunner } from '../executions/runner.js';
@@ -51,6 +56,14 @@ export interface AppDependencies {
   runner: ExecutionRunner;
   /** Arquivos de evidência, para o download (FR-024). */
   evidence: EvidenceStore;
+  /**
+   * Sincronização da planilha do Comercial (specs/005); `null` ou ausente = planilha não
+   * configurada (os envios são recusados com `commercial_sheet_not_configured`).
+   */
+  commercialSheet?: CommercialSheetSync | null;
+  /** Executor e eventos dos envios ao Comercial (specs/005). */
+  dispatches?: DispatchRunner;
+  dispatchEvents?: DispatchEventBus;
   /** Relógio das respostas e dos registros; os testes informam um fixo. */
   now?: () => Date;
 }
@@ -147,6 +160,7 @@ export function createOperationHandlers(dependencies: AppDependencies): {
   closeStreams: () => void;
 } {
   const executionEvents = createExecutionEventsHandlers(dependencies);
+  const dispatches = createDispatchHandlers(dependencies);
   return {
     handlers: {
       ...createHealthHandlers(dependencies),
@@ -157,8 +171,13 @@ export function createOperationHandlers(dependencies: AppDependencies): {
       ...createEvidenceHandlers(dependencies),
       ...createTreatmentHandlers(dependencies),
       ...executionEvents.handlers,
+      ...dispatches.handlers,
+      ...createCommercialHandlers(dependencies),
     },
-    closeStreams: () => executionEvents.closeAll(),
+    closeStreams: () => {
+      executionEvents.closeAll();
+      dispatches.closeAll();
+    },
   };
 }
 

@@ -25,14 +25,15 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/memory/constitution.md` | Princípios não negociáveis do projeto |
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
-| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004) |
+| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios) |
 | `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md` |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
 | `deploy/caddy/Caddyfile` | Proxy HTTPS com a autoridade certificadora interna do Caddy (research R-20) |
 | `deploy/backup/` | `backup.sh` (cópia cifrada do banco) e `restore.sh` (restauração), rodados no container `backup` (research R-21) |
-| `deploy/homolog/` | Ambiente de homologação no PC do servidor, separado da produção (projeto `hunit-homolog`, dados fictícios): acréscimo ao Compose e modelo do `.env.homolog`. Passo a passo em `specs/003-tratativas-manuais/quickstart.md` §2.1 |
+| `deploy/homolog/` | Ambiente de homologação no PC do servidor, separado da produção (projeto `hunit-homolog`, dados fictícios): acréscimo ao Compose e modelo do `.env.homolog` (com a planilha de teste do Comercial). Passo a passo em `specs/003-tratativas-manuais/quickstart.md` §2.1 e, para a planilha, `specs/005-envio-comercial/quickstart.md` §3 |
+| `deploy/secrets/` | Chave da conta de serviço da planilha do Comercial, montada só para leitura no `server` (specs/005). **Ignorada pelo Git**, menos o `README.md` dela; nunca leia nem copie o que houver ali |
 | `README.md` | Visão geral, implantação no PC de produção, cópia de segurança e restauração |
 | `.claude/skills/`, `skills-lock.json` | Skills do Claude Code versionados: os do Spec Kit e o `playwright-best-practices` (MIT, de `currents-dev`, instalado com `npx skills`; o lock guarda a origem e a versão). Atualize com `npx skills update -p` e revise o diff antes do commit. O `figma-screens-sync` é do próprio projeto (fora do lock): mantém o espelho do app no Figma (seção "Telas no Figma") |
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento. **Não é versionado** (está no `.gitignore`): existe só na máquina de quem desenvolve |
@@ -170,6 +171,7 @@ processo do app sozinhos; para `pnpm --filter @hunit/desktop dev`, rode antes
 | `pnpm --filter @hunit/server hunit:reservations-check --hotel <código> --from AAAA-MM-DD --to AAAA-MM-DD --save-dir test/fixtures/hunit/raw` | Verificação manual da leitura das reservas no Hunit **real** (mesmo modo de uso do `login-check`): lê a listagem de 1 hotel com os filtros fixos, confere que o Hunit os respeitou, abre algumas reservas e mostra número, situação e classificação (nunca o hóspede); `--parallel-hotel <código>` testa a leitura de dois hotéis ao mesmo tempo; guarda as respostas JSON na pasta ignorada pelo Git. `--help` mostra as opções |
 | `pnpm --filter @hunit/server hunit:login-check --wait-token <segundos> --save-dir test/fixtures/hunit/raw` | Como o `login-check`, mas espera esse tempo com a tela do token aberta antes de pedir o token: mede quanto tempo a tela aceita e captura a tela de token expirado |
 | `docker compose run --rm -v "C:\importacao:/import:ro" server node dist/cli.js legacy-import simulate --xlsx /import/planilha.xlsx --files /import/anexos` | Simula a importação do histórico do sistema anterior (specs/004) a partir da cópia .xlsx e da pasta de anexos, montadas só para leitura num container de uso único. Não grava reservas nem documentos e mostra o relatório (só contagens, linhas, chaves e motivos) com o id da simulação. Os outros subcomandos: `hotels` (lista; `--set <código> --hotel <código>`, `--set <código> --none`, `--accept-proposals`), `run --simulation <id> --xlsx … --files …` (importa) e `report --id <id> [--all]` (`--all` lista também cada "já importada", que normalmente vira só uma contagem). Fora do Docker: `pnpm --filter @hunit/server legacy-import <subcomando>`. Nunca acessa o Hunit. Passo a passo no `README.md` |
+| `docker compose exec server node dist/cli.js commercial-sheet setup` | Prepara a planilha do Comercial (abas "A cobrar" e "Concluídas", cabeçalhos, proteções e formatos); pode rodar de novo. `check` confere sem mudar nada. Exige `COMMERCIAL_SHEET_ID` e `COMMERCIAL_SHEET_KEY_FILE` e a chave em `deploy/secrets/`; nunca mostra o ID nem a chave. Fora do Docker: `pnpm --filter @hunit/server commercial-sheet <setup\|check>`. Passo a passo no `README.md` ("Planilha do Comercial") e em `specs/005-envio-comercial/contracts/cli.md` |
 | `pnpm --filter @hunit/server hunit:anonymize-fixtures` | Gera as fixtures reais anonimizadas (`test/fixtures/hunit/{html,json}/real/` e `real/manifest.json`) a partir de `test/fixtures/hunit/raw/` (depois do `pnpm build`). Não mostra valores; se sobrar algum dado original, não grava nada. Revise o resultado antes do commit |
 
 Regras ao mexer em dependências e no contrato:
@@ -185,15 +187,17 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/004-importacao-historico/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
+  `specs/005-envio-comercial/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
   A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua
-  na 1.3.0, a da 002 na 1.4.0 e a da 003 na 1.5.0, e não devem ser alteradas (specs/002, research
-  R-15; specs/003, research R-12; specs/004, research R-12).
+  na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0 e a da 004 na 1.6.0, e não devem ser alteradas
+  (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
+  research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
+  `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 - Mudou o `docker-compose.yml`? O teste `apps/server/test/unit/compose-config.test.ts` confere que
-  só o `proxy` publica porta para a rede, que a porta do `server` fica em `127.0.0.1` e que o
-  `backup` usa a mesma imagem do `db`. Variável nova vai também para o `.env.example`, com
+  só o `proxy` publica porta para a rede, que a porta do `server` fica em `127.0.0.1`, que o
+  `backup` usa a mesma imagem do `db` e que a pasta da chave da planilha é montada só para leitura. Variável nova vai também para o `.env.example`, com
   comentário.
 - Os scripts de `deploy/backup/` rodam em bash dentro do container `postgres:17`; mantenha os
   finais de linha LF (o `.gitattributes` já força) e nunca escreva a `BACKUP_PASSPHRASE` ou a senha
@@ -247,3 +251,24 @@ comprovantes importados têm o autor reservado `sistema-anterior` (revogado, sem
 O contrato passou para a 1.6.0 (só acréscimos: `Reservation.legacy`, o filtro `fromLegacy` e
 `fromLegacy` nos documentos e no histórico). O comando é administrativo, só no servidor
 (constitution 1.2.0, princípio III).
+
+Desde a feature 005 (`specs/005-envio-comercial/`), o Financeiro envia os pedidos de cobrança ao
+Comercial por uma planilha do Google, em vez de e-mail. O envio parte da seleção do app, pede o
+token do Hunit como as execuções (uma automação por conta do Hunit: execução e envio não rodam ao
+mesmo tempo na mesma conta) e verifica cada reserva no Hunit, só lendo, antes de escrevê-la na aba
+"A cobrar": a que não exige mais cobrança é retirada. A linha enviada conta como tratativa (situação
+"Tratativa enviada"). A planilha é uma projeção do banco: o servidor a reconcilia em rodadas
+(`src/commercial-sheet/sync.ts`), restaura células do sistema alteradas e nunca escreve o nome do
+hóspede. O Comercial preenche o retorno (código de autorização, hotel da cobrança, valor cobrado e
+responsável); o servidor o lê, a reserva fica "Validar comprovante" (`detailedSituation =
+return_pending`; `situation` continua `treatment_sent` para o app 1.6.0) e o Financeiro confirma
+(vale como comprovante e o valor do Comercial vira o valor cobrado, com a origem) ou recusa com o
+motivo. Vieram também "Verificar" em lote (`POST /treatment-reviews`), "selecionar todas do filtro"
+(`GET /reservations/selection`, até 2 000), a coluna "Valor cobrado" e "Copiar para e-mail" (tabela
+montada no processo principal do app com `@hunit/domain`, sem o hóspede). O contrato passou para a
+1.7.0 (só acréscimos: `/commercial-dispatches`, `/commercial-returns`, `/commercial-sheet`,
+`/treatment-reviews`, `/reservations/selection`, `/reservations/{h}/{n}/commercial`,
+`Reservation.commercial`, `detailedSituation`, `chargedAmountOrigin`), e a área "Comercial" entrou
+no app. Sem `COMMERCIAL_SHEET_ID` e `COMMERCIAL_SHEET_KEY_FILE`, o envio fica desligado e o resto
+funciona. O ID e a chave da planilha são segredos: entram no `SecretRegistry` e nunca aparecem em
+logs, respostas ou mensagens (teste `commercial-markers.test.ts`).

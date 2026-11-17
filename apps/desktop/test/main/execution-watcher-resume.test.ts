@@ -103,14 +103,14 @@ describe('ExecutionWatcher.resumeOwn (FR-019)', () => {
 
     await vi.waitFor(() => expect(streams.get(MINE)).toHaveLength(1));
     expect(streams.has(OTHER)).toBe(false);
-    expect(watcher.ownActive()).toEqual([MINE]);
+    expect(watcher.ownActive()).toEqual([{ kind: 'execution', id: MINE }]);
   });
 
   it('reabre o pedido de token de uma execução desta máquina com o prazo do servidor', async () => {
     await watcher.resumeOwn(ME);
 
     await vi.waitFor(() => expect(requests).toHaveLength(1));
-    expect(requests[0]).toMatchObject({ executionId: MINE, deadline });
+    expect(requests[0]).toMatchObject({ job: { kind: 'execution', id: MINE }, deadline });
     const remaining = Date.parse(deadline) - (Date.now() + (requests[0]?.clockOffsetMs ?? 0));
     expect(remaining).toBeGreaterThan(80_000);
     expect(remaining).toBeLessThanOrEqual(91_000);
@@ -132,6 +132,6 @@ describe('ExecutionWatcher.resumeOwn (FR-019)', () => {
     await watcher.resumeOwn(ME);
     await vi.waitFor(() => expect(requests).toHaveLength(1));
 
-    expect(requests.map((request) => request.executionId)).toEqual([MINE]);
+    expect(requests.map((request) => request.job.id)).toEqual([MINE]);
   });
 });
