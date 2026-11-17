@@ -161,6 +161,50 @@ export const legacyHotelDecisionEnum = pgEnum('legacy_hotel_decision', [
   'unmapped',
 ]);
 
+/**
+ * Desfecho de cada reserva num envio ao Comercial (specs/005, FR-005; data-model §1.2).
+ * `ignored` = não aceitou o envio na conferência feita ao criá-lo; nasce assim.
+ */
+export const dispatchItemOutcomeEnum = pgEnum('dispatch_item_outcome', [
+  'pending',
+  'sent',
+  'withdrawn',
+  'not_verified',
+  'ignored',
+]);
+
+/** Linha da reserva na planilha do Comercial (specs/005, FR-009). Repete `COMMERCIAL_LINE_STATES`. */
+export const commercialLineStateEnum = pgEnum('commercial_line_state', [
+  'open',
+  'concluded',
+  'cancelled',
+]);
+
+/** Retorno do Comercial (specs/005, data-model §1.5 e §4). */
+export const commercialReturnStateEnum = pgEnum('commercial_return_state', [
+  'awaiting_validation',
+  'confirmed',
+  'rejected',
+  'superseded',
+  'closed',
+]);
+
+/** Histórico do Comercial por reserva (specs/005, FR-020; data-model §1.6). */
+export const commercialEventTypeEnum = pgEnum('commercial_event_type', [
+  'dispatched',
+  'withdrawn',
+  'line_cancelled',
+  'line_restored',
+  'line_concluded',
+  'return_received',
+  'return_changed',
+  'return_ignored',
+  'return_confirmed',
+  'return_rejected',
+  'return_confirmation_undone',
+  'return_closed',
+]);
+
 export type ClientRole = (typeof clientRoleEnum.enumValues)[number];
 export type ExecutionStatus = (typeof executionStatusEnum.enumValues)[number];
 export type ExecutionEndReason = (typeof executionEndReasonEnum.enumValues)[number];
@@ -380,6 +424,11 @@ export const reservations = pgTable(
      * verificada pelo HUNIT Control (specs/004, research R-06).
      */
     lastExecutionId: uuid('last_execution_id').references(() => executions.id),
+    /**
+     * Último envio ao Comercial que verificou a reserva no Hunit (specs/005, research R-02).
+     * "Verificada pelo HUNIT Control" = `last_execution_id` ou `last_dispatch_id` preenchido.
+     */
+    lastDispatchId: uuid('last_dispatch_id').references((): AnyPgColumn => commercialDispatches.id),
     anonymizedAt: timestamptz('anonymized_at'),
   },
   (table) => [
@@ -426,9 +475,9 @@ export const evidence = pgTable(
   'evidence',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    executionId: uuid('execution_id')
-      .notNull()
-      .references(() => executions.id),
+    /** Execução dona da evidência; ou o envio ao Comercial (specs/005): exatamente um dos dois. */
+    executionId: uuid('execution_id').references(() => executions.id),
+    dispatchId: uuid('dispatch_id').references((): AnyPgColumn => commercialDispatches.id),
     hotelCode: text('hotel_code'),
     reservationNumber: text('reservation_number'),
     kind: evidenceKindEnum('kind').notNull(),
@@ -447,6 +496,7 @@ export const evidence = pgTable(
       'evidence_has_file_check',
       sql`num_nonnulls(${table.screenshotPath}, ${table.htmlPath}, ${table.responsePath}) >= 1`,
     ),
+    check('evidence_owner_check', sql`num_nonnulls(${table.executionId}, ${table.dispatchId}) = 1`),
     index('evidence_expires_at_idx').on(table.expiresAt),
   ],
 );
@@ -773,4 +823,280 @@ export const legacyReservations = pgTable(
     }),
     check('legacy_reservations_verification_count_check', sql`${table.verificationCount} >= 1`),
   ],
+);
+
+// ---------------------------------------------------------------------------
+// Envio dos pedidos de cobrança ao Comercial pela planilha (specs/005, data-model.md). Nenhuma
+// tabela guarda o nome do hóspede: ele continua só em `reservations` (FR-010).
+// ---------------------------------------------------------------------------
+
+/** Envio ao Comercial: um job com os estados de uma execução (FR-001 a FR-007; research R-01). */
+export const commercialDispatches = pgTable(
+  'commercial_dispatches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** HMAC do usuário do Hunit, como nas execuções (research R-11 da 001). */
+    accountKey: text('account_key').notNull(),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => apiClients.id),
+    /** Preenchido nas retomadas: o envio original (FR-007). */
+    parentDispatchId: uuid('parent_dispatch_id').references(
+      (): AnyPgColumn => commercialDispatches.id,
+    ),
+    status: executionStatusEnum('status').notNull().default('queued'),
+    endReason: executionEndReasonEnum('end_reason'),
+    twoFactorDeadline: timestamptz('two_factor_deadline'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    startedAt: timestamptz('started_at'),
+    finishedAt: timestamptz('finished_at'),
+    cancelledByClientId: uuid('cancelled_by_client_id').references(() => apiClients.id),
+  },
+  (table) => [
+    check(
+      'commercial_dispatches_end_reason_check',
+      sql`${table.status} not in ('failed', 'cancelled') or ${table.endReason} is not null`,
+    ),
+    // Uma automação por conta (constitution IV). Entre execuções e envios, quem garante é a trava
+    // da conta na criação (research R-01); este índice garante dentro dos envios.
+    uniqueIndex('commercial_dispatches_one_active_per_account')
+      .on(table.accountKey)
+      .where(sql`${table.status} in ('queued', 'running', 'awaiting_2fa')`),
+    uniqueIndex('commercial_dispatches_one_resume_per_parent').on(table.parentDispatchId),
+    index('commercial_dispatches_created_at_idx').on(table.createdAt, table.id),
+  ],
+);
+
+/**
+ * Cada reserva de um envio e o desfecho (data-model §1.2). Sem chave estrangeira para
+ * `reservations`: uma reserva pedida que não existe fica registrada como `ignored/not_found`.
+ */
+export const commercialDispatchItems = pgTable(
+  'commercial_dispatch_items',
+  {
+    dispatchId: uuid('dispatch_id')
+      .notNull()
+      .references(() => commercialDispatches.id),
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    /** Ordem de processamento (a da seleção), começando em 1. */
+    position: integer('position').notNull(),
+    outcome: dispatchItemOutcomeEnum('outcome').notNull().default('pending'),
+    classificationBefore: classificationEnum('classification_before'),
+    classificationAfter: classificationEnum('classification_after'),
+    /** Motivo de `withdrawn`, `not_verified` ou `ignored`; nunca com dado pessoal. */
+    reason: text('reason'),
+    processedAt: timestamptz('processed_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.dispatchId, table.hotelCode, table.reservationNumber] }),
+    check('commercial_dispatch_items_position_check', sql`${table.position} >= 1`),
+    check(
+      'commercial_dispatch_items_processed_check',
+      sql`(${table.outcome} = 'pending') = (${table.processedAt} is null)`,
+    ),
+    index('commercial_dispatch_items_reservation_idx').on(table.hotelCode, table.reservationNumber),
+  ],
+);
+
+/** Eventos de um envio, para o acompanhamento em tempo real (SSE), como `execution_events`. */
+export const commercialDispatchEvents = pgTable(
+  'commercial_dispatch_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    dispatchId: uuid('dispatch_id')
+      .notNull()
+      .references(() => commercialDispatches.id),
+    at: timestamptz('at').notNull().defaultNow(),
+    /** `status_changed`, `item_processed` ou `warning`. */
+    type: text('type').notNull(),
+    status: executionStatusEnum('status'),
+    hotelCode: text('hotel_code'),
+    reservationNumber: text('reservation_number'),
+    /** Nunca contém credenciais nem nome de hóspede. */
+    message: text('message').notNull(),
+  },
+  (table) => [index('commercial_dispatch_events_dispatch_id_idx').on(table.dispatchId, table.id)],
+);
+
+/** Retorno lido da planilha, já normalizado (research R-08). Só para detectar mudanças. */
+export interface StoredReturnValues {
+  authorizationCode: string;
+  chargeHotel: string;
+  chargedAmount: string;
+  chargedBy: string;
+}
+
+/**
+ * A linha de cada reserva enviada na planilha do Comercial: o estado desejado da projeção
+ * (FR-008 a FR-013; research R-06). `version > synced_version` = escrita pendente.
+ */
+export const commercialLines = pgTable(
+  'commercial_lines',
+  {
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    state: commercialLineStateEnum('state').notNull().default('open'),
+    firstSentAt: timestamptz('first_sent_at').notNull(),
+    lastSentAt: timestamptz('last_sent_at').notNull(),
+    lastDispatchId: uuid('last_dispatch_id')
+      .notNull()
+      .references(() => commercialDispatches.id),
+    lastSentByClientId: uuid('last_sent_by_client_id')
+      .notNull()
+      .references(() => apiClients.id),
+    /** Quando foi para "Concluídas" (`concluded` ou `cancelled`); limpo ao voltar para "A cobrar". */
+    concludedAt: timestamptz('concluded_at'),
+    cancelledAt: timestamptz('cancelled_at'),
+    cancelledByClientId: uuid('cancelled_by_client_id').references(() => apiClients.id),
+    /** Saiu da planilha (90 dias depois de concluída, ou anonimização; research R-15). */
+    removedFromSheetAt: timestamptz('removed_from_sheet_at'),
+    version: integer('version').notNull().default(1),
+    syncedVersion: integer('synced_version').notNull().default(0),
+    /** Última mudança que pede escrita na planilha. */
+    changedAt: timestamptz('changed_at').notNull(),
+    syncedAt: timestamptz('synced_at'),
+    /** Últimos valores lidos das colunas de retorno, normalizados (research R-08). */
+    lastReadReturn: jsonb('last_read_return').$type<StoredReturnValues>(),
+    /** Problema atual do retorno (incompleto, não entendido), sem dado do hóspede (FR-018). */
+    returnProblem: text('return_problem'),
+    returnProblemAt: timestamptz('return_problem_at'),
+    /** Último caso relatado na linha (restaurada, alterada) (FR-011). */
+    sheetIssue: text('sheet_issue'),
+    sheetIssueAt: timestamptz('sheet_issue_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.hotelCode, table.reservationNumber] }),
+    foreignKey({
+      name: 'commercial_lines_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    check(
+      'commercial_lines_cancelled_check',
+      sql`(${table.state} = 'cancelled') = (${table.cancelledAt} is not null)
+        and (${table.cancelledAt} is null) = (${table.cancelledByClientId} is null)`,
+    ),
+    check(
+      'commercial_lines_concluded_check',
+      sql`(${table.state} = 'open') = (${table.concludedAt} is null)`,
+    ),
+    check(
+      'commercial_lines_version_check',
+      sql`${table.version} >= 1 and ${table.syncedVersion} between 0 and ${table.version}`,
+    ),
+    // Linhas com escrita pendente (FR-013).
+    index('commercial_lines_pending_idx')
+      .on(table.changedAt)
+      .where(sql`${table.syncedVersion} < ${table.version}`),
+  ],
+);
+
+/** Retorno preenchido pelo Comercial na planilha (FR-014 a FR-019; data-model §1.5). */
+export const commercialReturns = pgTable(
+  'commercial_returns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    authorizationCode: text('authorization_code').notNull(),
+    /** "Hotel da cobrança": o estabelecimento da maquininha, texto livre (clarify 2026-11-17). */
+    chargeHotel: text('charge_hotel').notNull(),
+    chargedAmount: money('charged_amount').notNull(),
+    chargedBy: text('charged_by').notNull(),
+    readAt: timestamptz('read_at').notNull(),
+    state: commercialReturnStateEnum('state').notNull().default('awaiting_validation'),
+    decidedAt: timestamptz('decided_at'),
+    decidedByClientId: uuid('decided_by_client_id').references(() => apiClients.id),
+    /** Motivo da recusa (FR-017); apagado na anonimização da reserva (research R-15). */
+    rejectionReason: text('rejection_reason'),
+    /** Mesmo valor para as confirmações gravadas no mesmo pedido em lote (FR-016a). */
+    batchId: uuid('batch_id'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'commercial_returns_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    check(
+      'commercial_returns_texts_check',
+      sql`char_length(${table.authorizationCode}) between 1 and 100
+        and char_length(${table.chargeHotel}) between 1 and 100
+        and char_length(${table.chargedBy}) between 1 and 100`,
+    ),
+    check('commercial_returns_amount_check', sql`${table.chargedAmount} > 0`),
+    check(
+      'commercial_returns_rejection_reason_check',
+      sql`${table.rejectionReason} is null or char_length(${table.rejectionReason}) between 1 and 500`,
+    ),
+    // No máximo um retorno aguardando validação ou confirmado por reserva.
+    uniqueIndex('commercial_returns_one_current')
+      .on(table.hotelCode, table.reservationNumber)
+      .where(sql`${table.state} in ('awaiting_validation', 'confirmed')`),
+    index('commercial_returns_reservation_idx').on(table.hotelCode, table.reservationNumber),
+  ],
+);
+
+/**
+ * Histórico do Comercial (FR-020): só inclusão, como `treatment_events`. `client_id` nulo = o
+ * Comercial, pela planilha.
+ */
+export const commercialEvents = pgTable(
+  'commercial_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    type: commercialEventTypeEnum('type').notNull(),
+    dispatchId: uuid('dispatch_id').references(() => commercialDispatches.id),
+    returnId: uuid('return_id').references(() => commercialReturns.id),
+    clientId: uuid('client_id').references(() => apiClients.id),
+    /** Em `withdrawn`: a classificação lida. */
+    classification: classificationEnum('classification'),
+    /** Motivo da recusa ou do encerramento. */
+    reason: text('reason'),
+    batchId: uuid('batch_id'),
+    at: timestamptz('at').notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'commercial_events_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    index('commercial_events_reservation_idx').on(
+      table.hotelCode,
+      table.reservationNumber,
+      table.id,
+    ),
+  ],
+);
+
+/** Problema da última rodada sem reserva do sistema (linha órfã ou repetida, FR-011). */
+export interface SheetRoundProblem {
+  kind: 'orphan_line' | 'duplicate_line';
+  hotelCode: string | null;
+  reservationNumber: string | null;
+  message: string;
+  at: string;
+}
+
+/** Estado da integração com a planilha (FR-013): uma linha só (`id = 1`). */
+export const commercialSheetState = pgTable(
+  'commercial_sheet_state',
+  {
+    id: integer('id').primaryKey(),
+    lastRoundAt: timestamptz('last_round_at'),
+    lastRoundOkAt: timestamptz('last_round_ok_at'),
+    lastReadOkAt: timestamptz('last_read_ok_at'),
+    /** Código da última falha (research R-04); nunca a mensagem da biblioteca. */
+    lastErrorCode: text('last_error_code'),
+    lastErrorAt: timestamptz('last_error_at'),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    nextAttemptAt: timestamptz('next_attempt_at'),
+    /** Linhas órfãs e repetidas encontradas na última rodada. */
+    roundProblems: jsonb('round_problems').$type<SheetRoundProblem[]>().notNull().default([]),
+  },
+  (table) => [check('commercial_sheet_state_single_row_check', sql`${table.id} = 1`)],
 );

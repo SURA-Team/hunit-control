@@ -9,7 +9,9 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../../src/config.js';
 import { generateApiKey, hashApiKey } from '../../src/http/auth.js';
+import { MemorySheetGateway } from '../../src/commercial-sheet/memory-sheet-gateway.js';
 import { startServer, type RunningServer } from '../../src/main.js';
+import { getSheetState } from '../../src/persistence/commercial-repo.js';
 import { createClient } from '../../src/persistence/clients-repo.js';
 import { findExecution } from '../../src/persistence/executions-repo.js';
 import { evidence } from '../../src/persistence/schema.js';
@@ -40,6 +42,7 @@ function configFor(databaseUrl: string): AppConfig {
     },
     evidence: { dir: evidenceDir, retentionDays: 30 },
     reservationRetentionYears: 5,
+    commercialSheet: { access: null, doneRetentionDays: 90 },
   };
 }
 
@@ -135,5 +138,36 @@ describe('startServer (T035)', () => {
     const logs = logLines.join('');
     expect(logs).not.toContain('SENHA-DO-TESTE-MAIN');
     expect(logs).not.toContain('operador@hotel.test');
+  });
+});
+
+describe('planilha do Comercial (specs/005, T026)', () => {
+  it('sem configuração, a integração fica desligada e o servidor sobe normalmente', async () => {
+    expect(await (await fetch(`${server.url}/v1/health`)).json()).toEqual({ status: 'ok' });
+    expect(logLines.join('')).toContain('planilha do Comercial não configurada');
+  });
+
+  it('com a planilha, a sincronização começa ao subir e para no desligamento', async () => {
+    const sheet = new MemorySheetGateway();
+    const withSheet = await startServer({
+      config: configFor(database.url),
+      createGateway: hunit.createGateway,
+      commercialSheetGateway: sheet,
+      host: '127.0.0.1',
+      logDestination: { write: () => undefined },
+    });
+    try {
+      // A primeira rodada sai logo ao subir (leitura dos retornos, FR-014).
+      await vi.waitFor(
+        async () => expect((await getSheetState(database.db)).lastRoundOkAt).not.toBeNull(),
+        {
+          timeout: 5_000,
+          interval: 20,
+        },
+      );
+      expect(sheet.reads).toBeGreaterThan(0);
+    } finally {
+      await withSheet.close();
+    }
   });
 });

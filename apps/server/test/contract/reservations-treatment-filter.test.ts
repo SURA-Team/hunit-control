@@ -187,6 +187,8 @@ describe('perfil consulta (SC-006)', () => {
       'checkTreatmentDocuments',
       'clearManualChargedAmount',
       'confirmTreatmentReview',
+      // "Verificar" em lote (specs/005, FR-029).
+      'confirmTreatmentReviews',
       'registerTreatmentDocuments',
       'removeTreatmentDocument',
       'revertTreatmentDocument',

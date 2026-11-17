@@ -19,9 +19,15 @@ import {
 } from '@hunit/domain';
 import { and, desc, eq, isNull, max, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import {
+  loadCommercialSummaries,
+  refreshCommercialLine,
+  type CommercialSummaryRecord,
+} from './commercial-repo.js';
 import type { Database } from './db.js';
 import {
   apiClients,
+  commercialReturns,
   reservationManualAmounts,
   reservations,
   treatmentDocuments,
@@ -84,6 +90,8 @@ export interface TreatmentSummary {
   manualAmount: string | null;
   /** Última confirmação do alerta "Verificar" (FR-002a, research R-14). */
   lastReviewAt: Date | null;
+  /** Envio ao Comercial pela planilha (specs/005); `null` = nunca enviada pela planilha. */
+  commercial: CommercialSummaryRecord | null;
 }
 
 export const EMPTY_TREATMENT: TreatmentSummary = {
@@ -91,7 +99,32 @@ export const EMPTY_TREATMENT: TreatmentSummary = {
   proof: null,
   manualAmount: null,
   lastReviewAt: null,
+  commercial: null,
 };
+
+/**
+ * O que conta como tratativa e como comprovante (specs/005, research R-09; data-model §3.3): o
+ * documento da 003 **ou** o envio pela planilha (linha não cancelada); o documento **ou** o
+ * retorno do Comercial confirmado pelo Financeiro.
+ */
+export function treatmentFlags(summary: TreatmentSummary): {
+  hasCurrentRequest: boolean;
+  hasCurrentProof: boolean;
+  hasReturnAwaiting: boolean;
+  /** Valor do retorno confirmado, se houver. */
+  commercialAmount: string | null;
+} {
+  const commercial = summary.commercial;
+  const currentReturn = commercial?.currentReturn ?? null;
+  const confirmed = currentReturn?.state === 'confirmed';
+  return {
+    hasCurrentRequest:
+      summary.request !== null || (commercial !== null && commercial.lineState !== 'cancelled'),
+    hasCurrentProof: summary.proof !== null || confirmed,
+    hasReturnAwaiting: currentReturn?.state === 'awaiting_validation',
+    commercialAmount: confirmed ? currentReturn.chargedAmount : null,
+  };
+}
 
 export type OutcomeReason = 'not_found' | 'not_eligible' | 'same_file';
 
@@ -198,6 +231,13 @@ export async function loadTreatmentSummaries(
     .groupBy(treatmentEvents.hotelCode, treatmentEvents.reservationNumber);
   for (const review of reviews) summaryOf(review).lastReviewAt = review.at;
 
+  // Envio ao Comercial pela planilha (specs/005, research R-09).
+  const commercial = await loadCommercialSummaries(executor, keys);
+  for (const [mapKey, record] of commercial) {
+    const [hotelCode = '', reservationNumber = ''] = mapKey.split('\u0000');
+    summaryOf({ hotelCode, reservationNumber }).commercial = record;
+  }
+
   return summaries;
 }
 
@@ -253,6 +293,22 @@ async function findVigente(
       ),
     );
   return row ?? null;
+}
+
+/** A reserva tem um retorno do Comercial confirmado (vale como comprovante, specs/005)? */
+async function hasConfirmedReturn(tx: Transaction, key: ReservationKey): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: commercialReturns.id })
+    .from(commercialReturns)
+    .where(
+      and(
+        eq(commercialReturns.hotelCode, key.hotelCode),
+        eq(commercialReturns.reservationNumber, key.reservationNumber),
+        eq(commercialReturns.state, 'confirmed'),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
 }
 
 /** O documento deixa de ser o vigente. Um já purgado continua purgado. */
@@ -371,6 +427,8 @@ async function registerDocument(
     clientId: input.clientId,
     at: input.now,
   });
+  // Um comprovante leva a linha da planilha para "Concluídas" (specs/005, FR-009).
+  await refreshCommercialLine(tx, key, input.now);
 
   return {
     ...base,
@@ -483,6 +541,7 @@ export async function removeDocument(
       clientId: input.clientId,
       at: input.now,
     });
+    await refreshCommercialLine(tx, document, input.now);
     return { ok: true, key: document };
   });
 }
@@ -525,6 +584,7 @@ export async function revertDocument(
       clientId: input.clientId,
       at: input.now,
     });
+    await refreshCommercialLine(tx, document, input.now);
     return { ok: true, key: document };
   });
 }
@@ -539,7 +599,10 @@ export async function setManualAmount(
   const { key } = input;
   return db.transaction(async (tx): Promise<ManualAmountResult> => {
     if (!(await lockReservation(tx, key))) return 'not_found';
-    if (!(await findVigente(tx, key, 'proof'))) return 'proof_required';
+    // O retorno do Comercial confirmado também vale como comprovante (specs/005, FR-016).
+    if (!(await findVigente(tx, key, 'proof')) && !(await hasConfirmedReturn(tx, key))) {
+      return 'proof_required';
+    }
 
     await tx
       .insert(reservationManualAmounts)
@@ -607,10 +670,7 @@ export async function confirmReview(
     if (!reservation) return 'not_found';
 
     const summary = await loadTreatmentSummary(tx, key);
-    const status = treatmentStatus({
-      hasCurrentRequest: summary.request !== null,
-      hasCurrentProof: summary.proof !== null,
-    });
+    const status = treatmentStatus(treatmentFlags(summary));
     const pending = needsReview({
       classification: reservation.classification,
       status,
@@ -629,6 +689,127 @@ export async function confirmReview(
     }
     return 'ok';
   });
+}
+
+/** Desfecho de cada reserva na confirmação do "Verificar" em lote (specs/005, FR-029). */
+export interface ReviewBatchItem extends ReservationKey {
+  outcome: 'confirmed' | 'ignored' | 'failed';
+  reason: 'not_found' | 'no_review_alert' | null;
+  classification: Classification | null;
+  /** Erro inesperado que causou o `failed`, para o log; nunca vai para o cliente. */
+  error?: unknown;
+}
+
+/** Reservas por transação na confirmação em lote. */
+const REVIEW_BATCH_CHUNK = 200;
+
+type ReviewInput = {
+  keys: readonly ReservationKey[];
+  clientId: string;
+  batchId: string;
+  now: Date;
+};
+
+/**
+ * Confirma o alerta "Verificar" de várias reservas (specs/005, FR-029): a mesma regra da
+ * confirmação individual (FR-002a da 003) e o mesmo `batch_id`. Reserva sem o alerta fica de
+ * fora, com o motivo.
+ *
+ * Para caber no tempo de SC-014 (2 000 reservas em até 2 min), as reservas vão em blocos de 200
+ * por transação, travadas sempre na mesma ordem. Se um bloco falhar, ele é refeito uma reserva
+ * por transação: só a reserva com erro fica `failed`.
+ */
+export async function confirmReviewsBatch(
+  db: Database,
+  input: ReviewInput,
+): Promise<ReviewBatchItem[]> {
+  const results: ReviewBatchItem[] = [];
+  for (let start = 0; start < input.keys.length; start += REVIEW_BATCH_CHUNK) {
+    const chunk = input.keys.slice(start, start + REVIEW_BATCH_CHUNK);
+    try {
+      results.push(...(await db.transaction((tx) => confirmReviewChunk(tx, chunk, input))));
+    } catch {
+      for (const key of chunk) {
+        try {
+          results.push(...(await db.transaction((tx) => confirmReviewChunk(tx, [key], input))));
+        } catch (error) {
+          results.push({ ...key, outcome: 'failed', reason: null, classification: null, error });
+        }
+      }
+    }
+  }
+  return results;
+}
+
+async function confirmReviewChunk(
+  tx: Transaction,
+  keys: readonly ReservationKey[],
+  input: ReviewInput,
+): Promise<ReviewBatchItem[]> {
+  const found = await tx
+    .select({
+      hotelCode: reservations.hotelCode,
+      reservationNumber: reservations.reservationNumber,
+      classification: reservations.classification,
+      statusChangedAt: reservations.statusChangedAt,
+    })
+    .from(reservations)
+    .where(
+      sql`(${reservations.hotelCode}, ${reservations.reservationNumber}) in (${sql.join(
+        keys.map((key) => sql`(${key.hotelCode}, ${key.reservationNumber})`),
+        sql`, `,
+      )})`,
+    )
+    .orderBy(reservations.hotelCode, reservations.reservationNumber)
+    .for('update');
+  const byKey = new Map(found.map((row) => [reservationKeyOf(row), row]));
+  const summaries = await loadTreatmentSummaries(tx, keys);
+
+  const confirmed = new Set<string>();
+  const items = keys.map((key): ReviewBatchItem => {
+    const mapKey = reservationKeyOf(key);
+    const reservation = byKey.get(mapKey);
+    if (!reservation)
+      return { ...key, outcome: 'ignored', reason: 'not_found', classification: null };
+    const summary = summaries.get(mapKey) ?? EMPTY_TREATMENT;
+    const pending =
+      !confirmed.has(mapKey) &&
+      needsReview({
+        classification: reservation.classification,
+        status: treatmentStatus(treatmentFlags(summary)),
+        statusChangedAt: reservation.statusChangedAt,
+        lastReviewAt: summary.lastReviewAt,
+      });
+    if (!pending) {
+      return {
+        ...key,
+        outcome: 'ignored',
+        reason: 'no_review_alert',
+        classification: reservation.classification,
+      };
+    }
+    confirmed.add(mapKey);
+    return {
+      ...key,
+      outcome: 'confirmed',
+      reason: null,
+      classification: reservation.classification,
+    };
+  });
+
+  const events = items
+    .filter((item) => item.outcome === 'confirmed')
+    .map((item) => ({
+      hotelCode: item.hotelCode,
+      reservationNumber: item.reservationNumber,
+      type: 'review_confirmed' as const,
+      classification: item.classification,
+      batchId: input.batchId,
+      clientId: input.clientId,
+      at: input.now,
+    }));
+  if (events.length > 0) await tx.insert(treatmentEvents).values(events);
+  return items;
 }
 
 export interface TreatmentDetail {

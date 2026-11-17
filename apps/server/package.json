@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "hunit:login-check": "node dist/hunit-login-check.js",
     "hunit:reservations-check": "node dist/hunit-reservations-check.js",
-    "hunit:anonymize-fixtures": "node dist/hunit-anonymize-fixtures.js"
+    "hunit:anonymize-fixtures": "node dist/hunit-anonymize-fixtures.js",
+    "commercial-sheet": "node dist/cli.js commercial-sheet"
   },
   "dependencies": {
     "@hunit/contracts": "workspace:*",
@@ -22,6 +23,7 @@
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.8",
     "fastify-openapi-glue": "^4.12.0",
+    "google-auth-library": "^11.3.4",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "playwright": "1.65.0",

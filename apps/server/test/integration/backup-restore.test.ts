@@ -27,7 +27,17 @@ import {
 } from '../../src/persistence/schema.js';
 import { saveTreatmentFile } from '../../src/persistence/treatment-files-repo.js';
 import { registerDocuments, setManualAmount } from '../../src/persistence/treatments-repo.js';
+import { MemorySheetGateway } from '../../src/commercial-sheet/memory-sheet-gateway.js';
+import { CommercialSheetSync } from '../../src/commercial-sheet/sync.js';
+import {
+  insertCommercialReservation,
+  insertDispatch,
+  insertLine,
+  insertReturn,
+  seedTestHotels,
+} from '../helpers/commercial-fixtures.js';
 import { insertClient, insertExecution, insertReservation } from '../helpers/factories.js';
+import { captureLogs } from '../helpers/log-capture.js';
 
 const POSTGRES_IMAGE = 'postgres:17';
 const SCRIPTS_DIR = fileURLToPath(new URL('../../../../deploy/backup', import.meta.url));
@@ -44,6 +54,8 @@ const DOCUMENT = Buffer.concat([
 ]);
 const DOCUMENT_SHA256 = createHash('sha256').update(DOCUMENT).digest('hex');
 const BACKUP_NAME = /^hunit-\d{8}-\d{6}\.dump\.gpg$/;
+/** Reserva enviada ao Comercial, com retorno confirmado (specs/005, T059). */
+const COMMERCIAL_KEY = { hotelCode: 'hml_um', reservationNumber: '900001' };
 
 let container: StartedPostgreSqlContainer;
 let source: DatabaseConnection;
@@ -129,6 +141,19 @@ beforeAll(async () => {
     attachedByClientId: author,
     legacyImportId: legacyImport!.id,
   });
+
+  // Envio ao Comercial (specs/005, T059): uma reserva enviada com retorno confirmado, o envio e a
+  // linha já escrita na planilha (sem pendência).
+  await seedTestHotels(source.db);
+  await insertCommercialReservation(source.db, 1, { lastExecutionId: execution.id });
+  const dispatch = await insertDispatch(source.db, { clientId: client.id });
+  await insertLine(source.db, COMMERCIAL_KEY, {
+    state: 'concluded',
+    dispatchId: dispatch.id,
+    clientId: client.id,
+  });
+  await source.db.execute(sql`update commercial_lines set synced_version = version`);
+  await insertReturn(source.db, COMMERCIAL_KEY, { state: 'confirmed', chargedAmount: '1200.00' });
 }, 180_000);
 
 afterAll(async () => {
@@ -204,6 +229,10 @@ async function dumpOf(database: string) {
       `select reservation_number, original_classification, merged, applied_count ` +
       `from legacy_reservations; ` +
       `select kind, status, fingerprint from legacy_imports; ` +
+      // Envio ao Comercial (specs/005, T059).
+      `select status, account_key from commercial_dispatches order by id; ` +
+      `select reservation_number, state, version, synced_version from commercial_lines; ` +
+      `select reservation_number, state, charged_amount, authorization_code from commercial_returns; ` +
       `select reservation_number, legacy_import_id is not null from treatment_documents ` +
       `order by reservation_number"`,
   );
@@ -280,6 +309,9 @@ describe('backup.sh once (FR-030, SC-011)', () => {
     expect(original).toContain('L-9003|sem-execucao');
     expect(original).toContain('L-9003|not_virtual_card|f|2');
     expect(original).toContain('L-9003|t');
+    // O envio, a linha e o retorno confirmado do Comercial (specs/005, T059).
+    expect(original).toContain('900001|concluded');
+    expect(original).toContain('900001|confirmed|1200.00|AUT123');
     expect(await dumpOf('restaurado')).toBe(original);
   });
 
@@ -422,7 +454,20 @@ describe('restauração completa', () => {
       const result = await connection.db.execute<{ count: string }>(
         sql`select count(*)::text as count from reservations`,
       );
-      expect(result.rows[0]?.count).toBe('3'); // 2 do HUNIT Control + 1 importada (specs/004)
+      // 2 do HUNIT Control + 1 importada (specs/004) + 1 enviada ao Comercial (specs/005).
+      expect(result.rows[0]?.count).toBe('4');
+
+      // Planilha nova e vazia: a primeira rodada a reconstrói a partir do banco (research R-15).
+      const sheet = new MemorySheetGateway();
+      const sync = new CommercialSheetSync({
+        db: connection.db,
+        gateway: sheet,
+        logger: captureLogs().logger,
+        doneRetentionDays: 90,
+      });
+      expect((await sync.runRound()).ok).toBe(true);
+      expect(sheet.rows('done').map((row) => row[1])).toEqual([COMMERCIAL_KEY.reservationNumber]);
+      expect(sheet.rows('toCharge')).toEqual([]);
     } finally {
       await connection.close();
     }

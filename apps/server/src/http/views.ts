@@ -5,7 +5,8 @@
 import type { components } from '@hunit/contracts';
 import {
   acceptsTreatment,
-  effectiveChargedAmount,
+  chargedAmountWithOrigin,
+  detailedSituation,
   isRevertible,
   revertDeadline,
   needsReview,
@@ -13,6 +14,8 @@ import {
   treatmentStatus,
   type Classification,
 } from '@hunit/domain';
+import type { CommercialSummaryRecord } from '../persistence/commercial-repo.js';
+import { difference } from './commercial-views.js';
 import type { ExecutionEvent } from '../executions/events.js';
 import type { ExecutionTiming } from '../executions/timing.js';
 import type {
@@ -26,6 +29,7 @@ import type { ReservationRow } from '../persistence/reservations-repo.js';
 import type { ClassificationCounts } from '../persistence/schema.js';
 import {
   EMPTY_TREATMENT,
+  treatmentFlags,
   type ReservationOutcome,
   type TreatmentDocumentRecord,
   type TreatmentEventRecord,
@@ -210,12 +214,26 @@ export function toReservationTreatmentView(
   summary: TreatmentSummary,
   now: Date,
 ): ReservationTreatmentView {
-  const hasCurrentProof = summary.proof !== null;
-  const status = treatmentStatus({ hasCurrentRequest: summary.request !== null, hasCurrentProof });
+  // A tratativa inclui o envio pela planilha e o comprovante inclui o retorno confirmado
+  // (specs/005, research R-09).
+  const flags = treatmentFlags(summary);
+  const status = treatmentStatus(flags);
+  const charged = chargedAmountWithOrigin({
+    hunitAmount: reservation.chargedAmount,
+    manualAmount: summary.manualAmount,
+    commercialAmount: flags.commercialAmount,
+    hasCurrentProof: flags.hasCurrentProof,
+  });
   return {
     status,
     // Situação da reserva e alerta "Verificar" (FR-002, FR-002a, research R-14).
     situation: reservationSituation(reservation.classification, status),
+    // Com "Validar comprovante" (specs/005); `situation` continua sem esse valor (R-09).
+    detailedSituation: detailedSituation(
+      reservation.classification,
+      status,
+      flags.hasReturnAwaiting,
+    ),
     needsReview: needsReview({
       classification: reservation.classification,
       status,
@@ -225,12 +243,38 @@ export function toReservationTreatmentView(
     request: summary.request ? toTreatmentDocumentView(summary.request, now) : null,
     proof: summary.proof ? toTreatmentDocumentView(summary.proof, now) : null,
     manualChargedAmount: summary.manualAmount,
-    effectiveChargedAmount: effectiveChargedAmount(
-      reservation.chargedAmount,
-      summary.manualAmount,
-      hasCurrentProof,
-    ),
+    commercialChargedAmount: flags.commercialAmount,
+    effectiveChargedAmount: charged.amount,
+    chargedAmountOrigin: charged.origin,
     acceptsDocuments: acceptsTreatment(reservation.classification),
+  };
+}
+
+/** Resumo do envio ao Comercial de uma reserva (specs/005); `null` = nunca enviada pela planilha. */
+export function toCommercialSummaryView(
+  commercial: CommercialSummaryRecord | null,
+  totalAmount: string | null,
+): Schemas['CommercialSummary'] | null {
+  if (commercial === null) return null;
+  const current = commercial.currentReturn;
+  return {
+    lineState: commercial.lineState,
+    inSheet: commercial.inSheet,
+    lastSentAt: iso(commercial.lastSentAt),
+    lastDispatchId: commercial.lastDispatchId,
+    returnState: current?.state ?? null,
+    currentReturn: current && {
+      id: current.id,
+      state: current.state,
+      authorizationCode: current.authorizationCode,
+      chargeHotel: current.chargeHotel,
+      chargedAmount: current.chargedAmount,
+      chargedBy: current.chargedBy,
+      readAt: iso(current.readAt),
+      difference: difference(current.chargedAmount, totalAmount),
+    },
+    returnProblem: commercial.returnProblem,
+    syncPending: commercial.syncPending,
   };
 }
 
@@ -327,6 +371,8 @@ export function toReservationView(
       verificationCount: legacy.verificationCount,
       merged: legacy.merged,
     },
+    // Envio ao Comercial pela planilha (specs/005).
+    commercial: toCommercialSummaryView(treatment.commercial, row.totalAmount),
   };
 }
 

@@ -558,11 +558,15 @@ describe('GET /v1/reservations/{hotelCode}/{reservationNumber}/treatment', () =>
       treatment: {
         status: 'none',
         situation: 'invoiced',
+        // Acréscimos da 1.7.0 (specs/005).
+        detailedSituation: 'invoiced',
         needsReview: false,
         request: null,
         proof: null,
         manualChargedAmount: null,
+        commercialChargedAmount: null,
         effectiveChargedAmount: null,
+        chargedAmountOrigin: null,
         acceptsDocuments: false,
       },
       documents: [],

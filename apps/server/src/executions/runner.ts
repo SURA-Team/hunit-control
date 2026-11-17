@@ -1,11 +1,15 @@
 import type { Period } from '@hunit/domain';
 import type { EvidenceStore } from '../evidence/store.js';
+import { HunitError, ScreenNotRecognizedError } from '../hunit/errors.js';
 import {
-  HunitError,
-  ScreenNotRecognizedError,
-  TwoFactorTimeoutError,
-  type HunitErrorCode,
-} from '../hunit/errors.js';
+  authenticate,
+  END_REASON_BY_HUNIT_ERROR,
+  formatTime,
+  registerRunSecrets,
+  releaseAll,
+  TokenGate,
+  type RunSecrets,
+} from '../hunit-session/session.js';
 import type {
   CreateHunitGateway,
   HunitCredentials,
@@ -67,16 +71,6 @@ export interface ExecutionRunnerOptions {
   now?: () => Date;
 }
 
-/** Motivo de encerramento de cada falha da camada do Hunit (FR-003). */
-const END_REASON_BY_HUNIT_ERROR: Readonly<Record<HunitErrorCode, ExecutionEndReason>> = {
-  invalid_credentials: 'invalid_credentials',
-  invalid_token: 'invalid_token',
-  two_factor_timeout: 'two_factor_timeout',
-  hunit_unavailable: 'hunit_unavailable',
-  screen_not_recognized: 'hunit_screen_not_recognized',
-  session_expired: 'session_expired',
-};
-
 /** Mensagem ao operador quando a execução termina por um motivo que não veio do Hunit. */
 const END_REASON_MESSAGES: Readonly<Partial<Record<ExecutionEndReason, string>>> = {
   server_restarted: 'O servidor foi reiniciado; a execução foi interrompida.',
@@ -98,11 +92,6 @@ const CANCELLED_MESSAGE =
  */
 export type CancelOutcome = 'requested' | 'already_finished';
 
-interface TokenWaiter {
-  resolve(token: string): void;
-  reject(error: Error): void;
-}
-
 /** Uma execução em andamento neste processo. */
 interface ActiveRun {
   executionId: string;
@@ -115,8 +104,8 @@ interface ActiveRun {
   gateway: HunitGateway | null;
   /** Nome de cada hotel do catálogo lido nesta execução, para as mensagens ao operador. */
   hotelNames: Map<string, string>;
-  /** Preenchido enquanto a execução espera o token (estado `awaiting_2fa`). */
-  tokenWaiter: TokenWaiter | null;
+  /** Espera do token (estado `awaiting_2fa`), comum às automações (`hunit-session`). */
+  tokenGate: TokenGate;
   /** Preenchido quando alguém pede a parada; vira o motivo de encerramento. */
   stopReason: ExecutionEndReason | null;
   /** Cliente que pediu o cancelamento (auditoria, FR-007). */
@@ -130,23 +119,6 @@ interface ActiveRun {
   finishing: boolean;
   /** Termina quando a execução termina (nunca falha). */
   done: Promise<void>;
-}
-
-/** Funções que removem do `SecretRegistry` os segredos de uma execução. */
-interface RunSecrets {
-  /** Usuário: fica registrado até o fim da execução. */
-  releaseUsername: () => void;
-  /** Senha e token: removidos assim que o acesso é concluído. */
-  releaseAccess: Array<() => void>;
-}
-
-function releaseAll(secrets: RunSecrets): void {
-  for (const release of secrets.releaseAccess.splice(0)) release();
-  secrets.releaseUsername();
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
 
 /**
@@ -182,10 +154,7 @@ export class ExecutionRunner {
   async start(input: StartExecutionInput): Promise<ExecutionRow> {
     const { credentials } = input;
     // Registrados antes de qualquer gravação: uma falha já aqui não leva os valores ao log.
-    const secrets: RunSecrets = {
-      releaseUsername: this.options.secrets.register(credentials.username),
-      releaseAccess: [this.options.secrets.register(credentials.password)],
-    };
+    const secrets: RunSecrets = registerRunSecrets(this.options.secrets, credentials);
 
     const accountKey = accountKeyFor(credentials.username, this.options.accountKeySecret);
     let execution: ExecutionRow;
@@ -211,7 +180,7 @@ export class ExecutionRunner {
       logger: this.options.logger.child({ executionId: execution.id }),
       gateway: null,
       hotelNames: new Map(),
-      tokenWaiter: null,
+      tokenGate: new TokenGate(),
       stopReason: null,
       cancelledByClientId: null,
       forceCloseTimer: null,
@@ -271,14 +240,8 @@ export class ExecutionRunner {
    *   recebeu um token, o prazo terminou ou ela já foi encerrada).
    */
   submitToken(executionId: string, token: string): boolean {
-    const run = this.active.get(executionId);
-    const waiter = run?.tokenWaiter;
-    if (!run || !waiter) return false;
-
     // Só o primeiro token é aceito: um segundo envio simultâneo recebe `false`.
-    run.tokenWaiter = null;
-    waiter.resolve(token);
-    return true;
+    return this.active.get(executionId)?.tokenGate.submit(token) ?? false;
   }
 
   /** Indica se a execução está em andamento neste processo. */
@@ -312,8 +275,7 @@ export class ExecutionRunner {
       run.stopReason = reason;
       run.cancelledByClientId = clientId ?? null;
     }
-    run.tokenWaiter?.reject(new StopRequestedError());
-    run.tokenWaiter = null;
+    run.tokenGate.abort(new StopRequestedError());
   }
 
   private throwIfStopping(run: ActiveRun): void {
@@ -352,10 +314,6 @@ export class ExecutionRunner {
     credentials: HunitCredentials,
     secrets: RunSecrets,
   ): Promise<void> {
-    const releaseAccess = () => {
-      for (const release of secrets.releaseAccess.splice(0)) release();
-    };
-
     try {
       try {
         await this.options.events.publish({
@@ -368,17 +326,27 @@ export class ExecutionRunner {
         await this.changeStatus(run, { to: 'running' }, 'Acessando o Hunit.');
         const gateway = await this.openGateway(run);
 
-        const outcome = await gateway.login(credentials);
-        this.throwIfStopping(run);
-        if (outcome === 'two_factor_required') {
-          const token = await this.waitForToken(run);
-          secrets.releaseAccess.push(this.options.secrets.register(token));
-          await this.changeStatus(run, { to: 'running' }, 'Token recebido. Concluindo o acesso.');
-          await gateway.submitToken(token);
-        }
-        // Acesso concluído: senha e token não são mais necessários (FR-005).
-        releaseAccess();
-        this.throwIfStopping(run);
+        // Login e token (FR-002 a FR-005), na sessão comum às automações (`hunit-session`). Ao
+        // terminar, senha e token já não estão mais registrados.
+        await authenticate({
+          gateway,
+          credentials,
+          secrets: this.options.secrets,
+          runSecrets: secrets,
+          tokenGate: run.tokenGate,
+          timeoutMs: this.options.twoFactorTimeoutMs,
+          now: this.now,
+          throwIfStopping: () => this.throwIfStopping(run),
+          // O aviso sai assim que o Hunit pede o token (SC-005: em até 5 s).
+          announceAwaiting: (deadline) =>
+            this.changeStatus(
+              run,
+              { to: 'awaiting_2fa', twoFactorDeadline: deadline },
+              `O Hunit pediu o token de verificação. Envie o código do autenticador até ${formatTime(deadline)}.`,
+            ),
+          announceTokenReceived: () =>
+            this.changeStatus(run, { to: 'running' }, 'Token recebido. Concluindo o acesso.'),
+        });
 
         const catalog = await this.updateCatalog(run, gateway);
         const summary = await collectHotels({
@@ -440,36 +408,6 @@ export class ExecutionRunner {
     // A parada pode ter sido pedida enquanto o navegador abria.
     this.throwIfStopping(run);
     return gateway;
-  }
-
-  /** Entra em `awaiting_2fa`, avisa o operador e espera o token até o prazo (FR-004). */
-  private async waitForToken(run: ActiveRun): Promise<string> {
-    const timeoutMs = this.options.twoFactorTimeoutMs;
-    const deadline = new Date(this.now().getTime() + timeoutMs);
-
-    let timer: NodeJS.Timeout | undefined;
-    const token = new Promise<string>((resolve, reject) => {
-      run.tokenWaiter = { resolve, reject };
-      timer = setTimeout(() => {
-        run.tokenWaiter = null;
-        reject(new TwoFactorTimeoutError());
-      }, timeoutMs);
-    });
-    // Evita o aviso de "rejeição não tratada" se o prazo acabar antes de começarmos a esperar.
-    token.catch(() => undefined);
-
-    try {
-      // O aviso sai assim que o Hunit pede o token (SC-005: em até 5 s).
-      await this.changeStatus(
-        run,
-        { to: 'awaiting_2fa', twoFactorDeadline: deadline },
-        `O Hunit pediu o token de verificação. Envie o código do autenticador até ${formatTime(deadline)}.`,
-      );
-      return await token;
-    } finally {
-      clearTimeout(timer);
-      run.tokenWaiter = null;
-    }
   }
 
   /**

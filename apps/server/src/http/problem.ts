@@ -54,6 +54,36 @@ export const PROBLEMS: Readonly<Record<ProblemCode, ProblemDefinition>> = {
     status: 410,
     title: 'O arquivo foi apagado pelo prazo de retenção',
   },
+  // Envio ao Comercial (specs/005, contracts/api-changes.md).
+  account_busy: {
+    status: 409,
+    title: 'Já existe uma execução ou um envio ativo para esta conta do Hunit',
+  },
+  commercial_sheet_not_configured: {
+    status: 409,
+    title: 'A planilha do Comercial não está configurada no servidor',
+  },
+  commercial_sheet_unavailable: { status: 503, title: 'A planilha do Comercial está indisponível' },
+  no_eligible_reservations: {
+    status: 422,
+    title: 'Nenhuma das reservas aceita o envio ao Comercial',
+  },
+  dispatch_already_finished: { status: 409, title: 'O envio já foi encerrado' },
+  dispatch_already_resumed: { status: 409, title: 'O envio já foi retomado' },
+  return_awaiting_validation: {
+    status: 409,
+    title: 'Há um retorno do Comercial aguardando a validação do Financeiro',
+  },
+  return_not_awaiting_validation: {
+    status: 409,
+    title: 'O retorno não está aguardando validação',
+  },
+  return_not_confirmed: { status: 409, title: 'O retorno não está confirmado' },
+  not_in_commercial_sheet: {
+    status: 409,
+    title: 'A reserva não está nesta situação na planilha do Comercial',
+  },
+  restore_expired: { status: 409, title: 'O prazo de 30 dias para reverter terminou' },
   internal_error: { status: 500, title: 'Erro interno' },
 };
 

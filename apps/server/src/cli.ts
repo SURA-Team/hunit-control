@@ -14,6 +14,10 @@ import { generateApiKey, hashApiKey } from './http/auth.js';
 import { ClientNameTakenError, createClient, revokeClient } from './persistence/clients-repo.js';
 import { connectDatabase, runMigrations, type DatabaseConnection } from './persistence/db.js';
 import { findDatabaseError } from './persistence/errors.js';
+import {
+  commercialSheetCommand,
+  type CommercialSheetCommandOptions,
+} from './commercial-sheet/command.js';
 import { legacyImportCommand, type LegacyImportOptions } from './legacy-import/command.js';
 import { LEGACY_AUTHOR_NAME } from './persistence/legacy-import-repo.js';
 import { clientRoleEnum, type ClientRole } from './persistence/schema.js';
@@ -23,6 +27,7 @@ const USAGE = `Uso:
   revoke-client --name <nome>                             Revoga um cliente (a chave deixa de valer)
   legacy-import <subcomando>                              Importa o histórico do sistema anterior
                                                           (legacy-import --help mostra os subcomandos)
+  commercial-sheet <setup|check>                          Prepara ou confere a planilha do Comercial
 
 Níveis de acesso:
   operator   inicia, cancela e retoma execuções, envia o token e consulta resultados
@@ -124,10 +129,17 @@ const COMMANDS: Record<string, Command> = {
 export interface CliOptions {
   /** Relógio e parada da importação do histórico (specs/004). */
   legacyImport?: LegacyImportOptions;
+  /** Planilha falsa nos testes (specs/005). */
+  commercialSheet?: CommercialSheetCommandOptions;
 }
 
+/** Comando que não usa o banco: roda antes da conexão (specs/005, FR-008a). */
+const COMMERCIAL_SHEET_COMMAND = 'commercial-sheet';
+
 function isCommand(value: string | undefined): boolean {
-  return value !== undefined && Object.hasOwn(COMMANDS, value);
+  return (
+    value !== undefined && (Object.hasOwn(COMMANDS, value) || value === COMMERCIAL_SHEET_COMMAND)
+  );
 }
 
 /** Executa um comando e devolve o código de saída do processo (0 = sucesso). */
@@ -143,6 +155,10 @@ export async function runCli(
       commandName === undefined ? USAGE : `Comando desconhecido: ${commandName}\n\n${USAGE}`,
     );
     return 1;
+  }
+
+  if (commandName === COMMERCIAL_SHEET_COMMAND) {
+    return commercialSheetCommand(args, io, options.commercialSheet);
   }
 
   let connection: DatabaseConnection | undefined;

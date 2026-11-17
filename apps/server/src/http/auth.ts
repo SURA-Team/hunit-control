@@ -38,6 +38,21 @@ export const OPERATOR_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   'setManualChargedAmount',
   'clearManualChargedAmount',
   'confirmTreatmentReview',
+  // Envio ao Comercial (specs/005, FR-021): o perfil consulta vê envios, retornos e a planilha,
+  // mas não envia, não confirma, não recusa e não pede leitura.
+  'confirmTreatmentReviews',
+  'checkCommercialDispatch',
+  'createCommercialDispatch',
+  'sendCommercialDispatchTwoFactor',
+  'cancelCommercialDispatch',
+  'resumeCommercialDispatch',
+  'cancelCommercialLine',
+  'restoreCommercialLine',
+  'confirmCommercialReturn',
+  'rejectCommercialReturn',
+  'undoCommercialReturnConfirmation',
+  'confirmCommercialReturns',
+  'readCommercialSheet',
 ]);
 
 /** Gera uma chave de API nova, com 256 bits aleatórios. */
