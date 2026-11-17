@@ -146,14 +146,94 @@ export function isRevertible(
 }
 
 /**
- * Valor cobrado a exibir (FR-005): o do Hunit prevalece; o informado à mão só vale enquanto a
- * reserva tem comprovante atual.
+ * O Hunit informa um valor cobrado? Zero não conta: é o registro da validação do cartão
+ * ("Cartão validado (não cobrado)"), não uma cobrança (specs/005, FR-024).
+ */
+function hunitCharged(amount: Money | null): amount is Money {
+  return amount !== null && /[1-9]/.test(amount);
+}
+
+/**
+ * Valor cobrado a exibir (FR-005): o do Hunit prevalece (se for maior que zero); o informado à
+ * mão só vale enquanto a reserva tem comprovante atual.
  */
 export function effectiveChargedAmount(
   hunitAmount: Money | null,
   manualAmount: Money | null,
   hasCurrentProof: boolean,
 ): Money | null {
-  if (hunitAmount !== null) return hunitAmount;
+  if (hunitCharged(hunitAmount)) return hunitAmount;
   return hasCurrentProof ? manualAmount : null;
+}
+
+// ---------------------------------------------------------------------------
+// Feature 005 — envio ao Comercial pela planilha (research R-09, R-10; data-model §3.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Situação da reserva com o detalhe do Comercial (specs/005, research R-09): os valores de
+ * `ReservationSituation` mais `return_pending` — "Validar comprovante", o retorno do Comercial
+ * aguardando a validação do Financeiro. Fica num campo próprio da API para não acrescentar um
+ * valor que o app em uso não conhece.
+ */
+export type ReservationDetailedSituation = ReservationSituation | 'return_pending';
+
+/**
+ * Ordem da spec (premissas): comprovante → status do Hunit que não exige mais cobrança (com o
+ * alerta "Verificar") → "Validar comprovante" → "Tratativa enviada" → status do Hunit. Como
+ * `reservationSituation` já resolve as outras etapas, "Validar comprovante" só substitui
+ * "Tratativa enviada".
+ */
+export function detailedSituation(
+  classification: Classification,
+  status: TreatmentStatus,
+  hasReturnAwaiting: boolean,
+): ReservationDetailedSituation {
+  const situation = reservationSituation(classification, status);
+  return situation === 'treatment_sent' && hasReturnAwaiting ? 'return_pending' : situation;
+}
+
+/** De onde vem o valor cobrado exibido (specs/005, FR-024). */
+export const CHARGED_AMOUNT_ORIGINS = ['hunit', 'manual', 'commercial'] as const;
+export type ChargedAmountOrigin = (typeof CHARGED_AMOUNT_ORIGINS)[number];
+
+/**
+ * Valor cobrado a exibir e a origem dele (specs/005, FR-024, research R-10): o do Hunit
+ * prevalece, se for maior que zero; depois o informado à mão, que só vale com comprovante atual (specs/003, FR-005);
+ * depois o do Comercial, que só existe depois que o Financeiro confirma o retorno.
+ */
+export function chargedAmountWithOrigin(input: {
+  hunitAmount: Money | null;
+  manualAmount: Money | null;
+  commercialAmount: Money | null;
+  hasCurrentProof: boolean;
+}): { amount: Money | null; origin: ChargedAmountOrigin | null } {
+  if (hunitCharged(input.hunitAmount)) return { amount: input.hunitAmount, origin: 'hunit' };
+  if (input.hasCurrentProof && input.manualAmount !== null) {
+    return { amount: input.manualAmount, origin: 'manual' };
+  }
+  if (input.commercialAmount !== null) {
+    return { amount: input.commercialAmount, origin: 'commercial' };
+  }
+  return { amount: null, origin: null };
+}
+
+/** Estado da linha da reserva na planilha do Comercial (specs/005, FR-009). */
+export const COMMERCIAL_LINE_STATES = ['open', 'concluded', 'cancelled'] as const;
+export type CommercialLineState = (typeof COMMERCIAL_LINE_STATES)[number];
+
+/**
+ * Onde a linha deve estar (data-model §3.3): cancelada continua cancelada (envio desfeito pelo
+ * Financeiro); concluída com comprovante ou quando a classificação não aceita mais tratativa (o
+ * Hunit mostra cobrada, faturada, cancelada sem cobrança); aberta nos demais casos. Volta a
+ * aberta sozinha se a confirmação for desfeita ou o Hunit voltar a exigir cobrança.
+ */
+export function lineState(input: {
+  cancelled: boolean;
+  classification: Classification;
+  hasCurrentProof: boolean;
+}): CommercialLineState {
+  if (input.cancelled) return 'cancelled';
+  if (input.hasCurrentProof || !acceptsTreatment(input.classification)) return 'concluded';
+  return 'open';
 }
