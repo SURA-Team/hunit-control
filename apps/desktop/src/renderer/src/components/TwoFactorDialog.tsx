@@ -5,8 +5,10 @@
  * a aguardar o token (ou é encontrado assim ao abrir o app; specs/005, research R-14). A contagem regressiva usa o prazo do servidor corrigido pela
  * diferença de relógio. O diálogo fecha sozinho quando a execução sai da espera, com a mensagem do
  * desfecho; pedidos simultâneos (raros) entram em fila.
+ *
+ * Desde a 006 (T020; telas 2.4, 2.5, 2.9 e 7.3): diálogo escuro enquanto pede o token (contagem em
+ * lima, "Enviar token" em lima, sem fechar) e claro com o desfecho e "Fechar".
  */
-import { Alert, Button, Group, Modal, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useEffect, useState, type FormEvent } from 'react';
 import type {
   JobKind,
@@ -16,6 +18,7 @@ import type {
 } from '../../../shared/ipc-types';
 import { HunitError, unwrap, useHunit } from '../hunit';
 import { formatRemaining } from '../presentation/format';
+import { Action, AppDialog, Countdown, Field, Notice } from '../ui';
 
 const TOKEN_PATTERN = /^[0-9]{4,10}$/;
 
@@ -136,74 +139,62 @@ export function TwoFactorDialog() {
   const remaining = current ? Date.parse(current.deadline) - (now + current.clockOffsetMs) : 0;
 
   return (
-    <Modal
+    <AppDialog
       opened={current !== null}
       onClose={() => (closed ? next() : undefined)}
+      title="O Hunit pediu o token"
+      subtitle={current?.job.kind === 'dispatch' ? 'Envio ao Comercial' : undefined}
+      dark={closed === null}
       withCloseButton={closed !== null}
       closeOnClickOutside={false}
       closeOnEscape={closed !== null}
-      centered
-      size="md"
       // Acima de qualquer painel ou diálogo aberto: o pedido de token tem prazo curto.
       zIndex={1000}
-      title={
-        <Stack gap={0}>
-          <Title order={3}>O Hunit pediu o token</Title>
-          {current?.job.kind === 'dispatch' && (
-            <Text size="sm" c="dimmed">
-              Envio ao Comercial
-            </Text>
-          )}
-        </Stack>
+      instant
+      onSubmit={closed ? undefined : (event) => void submit(event)}
+      actions={
+        closed ? (
+          <Action variant="primary" size="sm" onClick={next}>
+            Fechar
+          </Action>
+        ) : phase.kind === 'waiting' ? undefined : (
+          <Action type="submit" variant="primary" size="sm" loading={phase.kind === 'sending'}>
+            Enviar token
+          </Action>
+        )
       }
-      transitionProps={{ duration: 0 }}
     >
       {closed ? (
-        <Stack>
-          <Alert color={closed.success ? 'green' : 'red'} role="status">
-            {closed.message}
-          </Alert>
-          <Group justify="flex-end">
-            <Button onClick={next}>Fechar</Button>
-          </Group>
-        </Stack>
+        <Notice tone={closed.success ? 'green' : 'red'} role="status">
+          {closed.message}
+        </Notice>
       ) : (
-        <form onSubmit={(event) => void submit(event)}>
-          <Stack>
-            <Group justify="space-between" align="baseline">
-              <Text>Tempo restante</Text>
-              <Text fz={36} fw={700} c={remaining < 30_000 ? 'red' : undefined} aria-live="polite">
-                {formatRemaining(remaining)}
-              </Text>
-            </Group>
-            {phase.kind === 'waiting' ? (
-              <Alert color="blue" role="status">
-                Token entregue, aguardando o Hunit…
-              </Alert>
-            ) : (
-              <>
-                <TextInput
-                  label="Token do autenticador"
-                  value={token}
-                  onChange={(event) => setToken(event.currentTarget.value)}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={10}
-                  data-autofocus
-                  error={phase.kind === 'open' ? phase.error : null}
-                  disabled={phase.kind === 'sending'}
-                  size="lg"
-                />
-                <Group justify="flex-end">
-                  <Button type="submit" loading={phase.kind === 'sending'} size="md">
-                    Enviar token
-                  </Button>
-                </Group>
-              </>
-            )}
-          </Stack>
-        </form>
+        <>
+          <Countdown
+            label="Tempo restante"
+            value={formatRemaining(remaining)}
+            urgent={remaining < 30_000}
+          />
+          {phase.kind === 'waiting' ? (
+            <Notice tone="lime" role="status">
+              Token entregue, aguardando o Hunit…
+            </Notice>
+          ) : (
+            <Field
+              size="lg"
+              label="Token do autenticador"
+              value={token}
+              onChange={(event) => setToken(event.currentTarget.value)}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={10}
+              data-autofocus
+              error={phase.kind === 'open' ? phase.error : null}
+              disabled={phase.kind === 'sending'}
+            />
+          )}
+        </>
       )}
-    </Modal>
+    </AppDialog>
   );
 }

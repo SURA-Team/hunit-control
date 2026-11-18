@@ -36,6 +36,12 @@ function request(executionId = ID_A, secondsLeft = 125, clockOffsetMs = 0) {
   );
 }
 
+/** "Fechar" do rodapé (no desfecho o diálogo também tem o X no topo, com o mesmo efeito; specs/006). */
+async function closeButton(): Promise<HTMLElement> {
+  const buttons = await screen.findAllByRole('button', { name: /^fechar$/i });
+  return buttons.at(-1) as HTMLElement;
+}
+
 describe('TwoFactorDialog', () => {
   it('a contagem é o prazo menos (agora + diferença de relógio)', async () => {
     renderWithApp(<TwoFactorDialog />, hunit);
@@ -122,7 +128,7 @@ describe('TwoFactorDialog', () => {
     act(() =>
       hunit.emit.twoFactorClosed({ job: { kind: 'execution', id: ID_A }, reason: 'accepted' }),
     );
-    await user.click(await screen.findByRole('button', { name: /fechar/i }));
+    await user.click(await closeButton());
 
     expect(await screen.findByText('1:30')).toBeInTheDocument();
   });
@@ -136,7 +142,7 @@ describe('TwoFactorDialog', () => {
     act(() =>
       hunit.emit.twoFactorClosed({ job: { kind: 'execution', id: ID_A }, reason: 'accepted' }),
     );
-    await user.click(await screen.findByRole('button', { name: /fechar/i }));
+    await user.click(await closeButton());
 
     await waitFor(() => expect(screen.queryByText(/token aceito/i)).not.toBeInTheDocument());
     expect(screen.queryByLabelText(/token do autenticador/i)).not.toBeInTheDocument();

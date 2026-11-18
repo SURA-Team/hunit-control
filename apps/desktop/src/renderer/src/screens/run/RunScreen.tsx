@@ -3,8 +3,10 @@
  * hotéis; inicia a execução e mostra o estado dela até o resultado. Guarda em memória o período e
  * os hotéis da última execução iniciada, para o "Iniciar de novo" (US1, cenário 5). Só o perfil
  * operador vê o formulário.
+ * Desde a 006 (T020; telas 2.1 a 2.3 e 2.8): cards de 980 px com os componentes de ui/;
+ * "Iniciar execução" é a principal do card "Consulta".
  */
-import { Alert, Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
+import { Group, Stack } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { StartExecutionInput } from '../../../../shared/ipc-types';
@@ -14,7 +16,7 @@ import { useExecution } from '../../state/executions';
 import { CredentialsForm } from './CredentialsForm';
 import { ExecutionResult } from './ExecutionResult';
 import { HotelSelect, type HotelMode } from './HotelSelect';
-import { PeriodPicker } from '../../ui/PeriodPicker';
+import { Action, Card, Notice, PageHeader, PeriodPicker, SectionTitle } from '../../ui';
 
 const IDLE_NOTICE =
   'Usuário e senha do Hunit foram apagados por inatividade. Informe-os de novo para executar.';
@@ -33,10 +35,10 @@ export function RunScreen({ onOpenExecution }: { onOpenExecution: (executionId: 
   if (!client) return null;
   if (!isOperator) {
     return (
-      <Alert color="gray" title="Executar">
+      <Notice tone="lime" title="Executar" role="status">
         Com o perfil consulta, o app não inicia execuções. Veja as execuções e as reservas nas
         outras áreas.
-      </Alert>
+      </Notice>
     );
   }
   return <RunForm onOpenExecution={onOpenExecution} />;
@@ -147,8 +149,8 @@ function RunForm({ onOpenExecution }: { onOpenExecution: (executionId: string) =
     start.error && errorCode(start.error) !== 'credentials_expired' ? messageOf(start.error) : null;
 
   return (
-    <Stack gap="md" maw={980}>
-      <Title order={2}>Executar</Title>
+    <Stack gap={16} maw={980}>
+      <PageHeader title="Executar" />
       <CredentialsForm
         status={credentials.data}
         username={username}
@@ -161,51 +163,57 @@ function RunForm({ onOpenExecution }: { onOpenExecution: (executionId: string) =
         notice={notice}
       />
 
-      <Paper withBorder p="md" radius="md">
-        <Stack gap="md">
-          <Title order={4}>Consulta</Title>
-          <PeriodPicker
-            value={period}
-            onChange={(next) => {
-              setPeriod(next);
-              setPeriodError(null);
-            }}
-            error={periodError}
-          />
-          <HotelSelect
-            hotels={hotels.data ?? []}
-            mode={hotelMode}
-            selected={selectedHotels}
-            onMode={setHotelMode}
-            onSelected={(codes) => {
-              setSelectedHotels(codes);
-              setHotelError(null);
-            }}
-            error={hotelError}
-          />
-          <Group>
-            <Button onClick={submit} loading={start.isPending} size="md" disabled={!isOnline}>
-              Iniciar execução
-            </Button>
-          </Group>
-          {errorMessage && (
-            <Alert color="red" role="alert">
-              <Group justify="space-between" wrap="nowrap">
-                <Text size="sm">{errorMessage}</Text>
-                {activeExecutionId && (
-                  <Button
-                    size="xs"
-                    variant="white"
-                    onClick={() => onOpenExecution(activeExecutionId)}
-                  >
-                    Ver a execução ativa
-                  </Button>
-                )}
-              </Group>
-            </Alert>
-          )}
-        </Stack>
-      </Paper>
+      <Card block="Consulta">
+        <SectionTitle>Consulta</SectionTitle>
+        <PeriodPicker
+          value={period}
+          onChange={(next) => {
+            setPeriod(next);
+            setPeriodError(null);
+          }}
+          error={periodError}
+        />
+        <HotelSelect
+          hotels={hotels.data ?? []}
+          mode={hotelMode}
+          selected={selectedHotels}
+          onMode={setHotelMode}
+          onSelected={(codes) => {
+            setSelectedHotels(codes);
+            setHotelError(null);
+          }}
+          error={hotelError}
+        />
+        <Group>
+          <Action
+            variant="primary"
+            size="lg"
+            onClick={submit}
+            loading={start.isPending}
+            disabled={!isOnline}
+          >
+            Iniciar execução
+          </Action>
+        </Group>
+        {errorMessage && (
+          <Notice
+            tone="red"
+            action={
+              activeExecutionId && (
+                <Action
+                  variant="secondary"
+                  size="xs"
+                  onClick={() => onOpenExecution(activeExecutionId)}
+                >
+                  Ver a execução ativa
+                </Action>
+              )
+            }
+          >
+            {errorMessage}
+          </Notice>
+        )}
+      </Card>
 
       {execution.data && (
         <ExecutionResult
@@ -215,9 +223,7 @@ function RunForm({ onOpenExecution }: { onOpenExecution: (executionId: string) =
         />
       )}
       {execution.error instanceof HunitError && execution.data === undefined && (
-        <Text size="sm" c="red">
-          {execution.error.message}
-        </Text>
+        <Notice tone="red">{execution.error.message}</Notice>
       )}
     </Stack>
   );

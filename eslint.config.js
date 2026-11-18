@@ -83,7 +83,6 @@ const NOT_YET_MIGRATED = [
   'components/LegacyBadge.tsx',
   'components/SituationBadge.tsx',
   'components/StatusBadge.tsx',
-  'components/TwoFactorDialog.tsx',
   'screens/commercial/CommercialScreen.tsx',
   'screens/commercial/DispatchesTab.tsx',
   'screens/commercial/ProblemsTab.tsx',
@@ -102,12 +101,7 @@ const NOT_YET_MIGRATED = [
   'screens/reservations/ReservationsScreen.tsx',
   'screens/reservations/SelectionDrawer.tsx',
   'screens/reservations/TreatmentSection.tsx',
-  'screens/run/CredentialsForm.tsx',
   'screens/run/ExecutionResult.tsx',
-  'screens/run/HotelSelect.tsx',
-  'screens/run/RunScreen.tsx',
-  'screens/setup/PreferencesForm.tsx',
-  'screens/setup/SetupScreen.tsx',
 ].map((file) => `apps/desktop/src/renderer/src/${file}`);
 
 export default defineConfig(

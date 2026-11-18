@@ -106,6 +106,17 @@
   color: var(--hc-texto-inverso);
 }
 
+.dialogSubtitle {
+  display: block;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+  letter-spacing: 0;
+}
+
+.dialogContent[data-dark] .dialogSubtitle {
+  color: var(--hc-texto-inverso-apagado);
+}
+
 .close {
   color: var(--hc-texto-icone);
 }
@@ -120,6 +131,12 @@
   gap: 16px;
   padding: 0 24px 24px;
   font: var(--hc-font-corpo);
+}
+
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .dialogFooter {

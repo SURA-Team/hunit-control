@@ -105,7 +105,7 @@ describe('envio ao Comercial (US1)', () => {
     await window.getByText('Token aceito pelo Hunit. O envio ao Comercial continua.').waitFor({
       timeout: 15_000,
     });
-    await tokenDialog.getByRole('button', { name: 'Fechar' }).click();
+    await tokenDialog.getByRole('button', { name: 'Fechar', exact: true }).click();
 
     const view = dialog.getByTestId('dispatch-view');
     await view.getByText('Concluído', { exact: true }).waitFor({ timeout: 20_000 });

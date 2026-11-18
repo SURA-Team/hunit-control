@@ -85,6 +85,9 @@ export const overlay = { opacity: 0.6, blur: 3 } as const;
 /** Fonte do design, embutida no app (research R-03), com as do sistema como reserva. */
 export const fontFamily = "'Manrope Variable', 'Segoe UI', system-ui, sans-serif";
 
+/** Fonte de códigos (impressão digital do certificado). O design usa Geist Mono, que não é embutida: as monoespaçadas do sistema. */
+export const monoFontFamily = "ui-monospace, 'Cascadia Mono', Consolas, monospace";
+
 export interface TextStyle {
   fontWeight: 500 | 600 | 700;
   /** Em px. */
@@ -181,6 +184,7 @@ export function cssVariables(): Record<`--hc-${string}`, string> {
   for (const [name, value] of Object.entries(radii))
     vars[cssVarName(name, 'radius-')] = `${value}px`;
   vars['--hc-font-family'] = fontFamily;
+  vars['--hc-font-mono'] = monoFontFamily;
   for (const [name, style] of Object.entries(textStyles) as [TextStyleToken, TextStyle][]) {
     const base = textStyleVarName(name);
     vars[base] = `${style.fontWeight} ${style.fontSize}px/${style.lineHeight} ${fontFamily}`;
@@ -264,6 +268,17 @@ export const TEXT_COLOR_PAIRS: readonly TextColorPair[] = [
   },
   { text: 'cinza/9', background: 'cinza/1', usage: 'selo cinza' },
   { text: 'vermelho/8', background: 'fundo/sutil', usage: 'rótulo do card de contagem vermelho' },
+  { text: 'amarelo/9', background: 'fundo/app', usage: '"dados de HH:MM — servidor indisponível"' },
+  {
+    text: 'verde/9',
+    background: 'fundo/padrão',
+    usage: 'confirmação curta ("Preferências salvas.")',
+  },
+  {
+    text: 'vermelho/6',
+    background: 'superfície/escura',
+    usage: 'contagem do token no fim, erro no diálogo do token',
+  },
   { text: 'texto/apagado', background: 'fundo/padrão', usage: 'texto secundário nos cards' },
   { text: 'texto/apagado', background: 'fundo/app', usage: 'subtítulo da página' },
   {

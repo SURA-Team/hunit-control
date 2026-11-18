@@ -10,5 +10,7 @@ body {
   background: var(--hc-fundo-app);
   color: var(--hc-texto-padrao);
   font-family: var(--hc-font-family);
+  /* "Corpo" do design é Medium (500). */
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
 }

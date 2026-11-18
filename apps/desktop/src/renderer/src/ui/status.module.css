@@ -88,13 +88,18 @@
   background: var(--hc-amarelo-1);
 }
 
+/*
+ * Compacto: só o texto, em negrito, na cor do título do tom (tela 5.1, "dados de HH:MM — …" na linha
+ * do título). O design usa amarelo/8, abaixo de 4,5:1 no fundo da página; o tom 9 é legível.
+ */
 .notice[data-compact] {
   display: inline-flex;
   gap: 8px;
-  padding: 6px 12px;
-  border-radius: var(--hc-radius-pill);
+  padding: 0;
+  border-radius: 0;
+  background: none;
   color: var(--notice-title);
-  font: var(--hc-font-rotulo);
+  font: var(--hc-font-corpo-forte);
   white-space: nowrap;
 }
 
@@ -219,4 +224,44 @@
   margin: 0;
   color: var(--hc-texto-apagado);
   font: var(--hc-font-corpo);
+}
+
+/* Contagem regressiva do token (tela 2.4). */
+.countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.countdownLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+
+.countdown[data-surface='dark'] .countdownLabel {
+  color: var(--hc-texto-inverso-apagado);
+}
+
+.countdownValue {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-cronometro);
+  letter-spacing: var(--hc-font-cronometro-tracking);
+  white-space: nowrap;
+}
+
+.countdown[data-surface='dark'] .countdownValue {
+  color: var(--hc-destaque-lima);
+}
+
+.countdownValue[data-urgent],
+.countdown[data-surface='dark'] .countdownValue[data-urgent] {
+  color: var(--hc-vermelho-6);
+}
+
+/* Código em fonte monoespaçada (impressão digital do certificado, tela 1.2). */
+.code {
+  color: var(--hc-texto-padrao);
+  font: 500 11px/1.4 var(--hc-font-mono);
+  overflow-wrap: anywhere;
 }

@@ -3,13 +3,13 @@
  * Rótulo, ajuda e erro ficam ligados ao campo (leitor de tela e `getByLabelText`).
  */
 import { TextInput, type TextInputProps } from '@mantine/core';
-import { inputClassNames } from './shared';
+import { inputClassNames, sizedClassNames, type FieldSize } from './shared';
 
 export type FieldProps = Omit<
   TextInputProps,
   'classNames' | 'styles' | 'className' | 'style' | 'variant' | 'size' | 'radius' | 'vars'
->;
+> & { size?: FieldSize };
 
-export function Field(props: FieldProps) {
-  return <TextInput classNames={inputClassNames} {...props} />;
+export function Field({ size = 'sm', ...props }: FieldProps) {
+  return <TextInput classNames={sizedClassNames(inputClassNames, size)} {...props} />;
 }

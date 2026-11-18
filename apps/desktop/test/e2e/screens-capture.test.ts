@@ -186,7 +186,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
     await dialog.getByRole('button', { name: 'Enviar token' }).click();
     await dialog.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
     if (capture) await shot('2.5', 'executar-token-aceito');
-    await dialog.getByRole('button', { name: 'Fechar' }).click();
+    await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
   }
 
   beforeAll(async () => {
@@ -543,7 +543,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await token.getByLabel('Token do autenticador').fill(TOKEN);
       await token.getByRole('button', { name: 'Enviar token' }).click();
       await token.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
-      await token.getByRole('button', { name: 'Fechar' }).click();
+      await token.getByRole('button', { name: 'Fechar', exact: true }).click();
       await Promise.race([reachedHotel, window.waitForTimeout(15_000)]);
       await window.waitForTimeout(1000);
       await shot('7.2', 'envio-em-andamento', true);
@@ -553,7 +553,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         timeout: 30_000,
       });
       await shot('7.4', 'envio-concluido', true);
-      await dialog.getByRole('button', { name: 'Fechar' }).last().click();
+      await dialog.getByRole('button', { name: 'Fechar', exact: true }).last().click();
     });
 
     await step('7.5 a 7.10 retornos e área Comercial', async () => {
@@ -684,7 +684,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await dialog.getByRole('button', { name: 'Enviar token' }).click();
       await dialog.getByText('O Hunit recusou o token.').waitFor({ timeout: 10_000 });
       await shot('2.9', 'executar-token-recusado-dialogo');
-      await dialog.getByRole('button', { name: 'Fechar' }).click();
+      await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
       await window.getByRole('button', { name: 'Iniciar de novo' }).waitFor();
       await shot('2.10', 'executar-falhou-com-iniciar-de-novo');
     });

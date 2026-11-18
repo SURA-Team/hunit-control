@@ -4,17 +4,17 @@
  */
 import { Select, type SelectProps } from '@mantine/core';
 import { SelectorIcon } from '../icons';
-import { comboboxClassNames } from './shared';
+import { comboboxClassNames, sizedClassNames, type FieldSize } from './shared';
 
 export type SelectFieldProps = Omit<
   SelectProps,
   'classNames' | 'styles' | 'className' | 'style' | 'variant' | 'size' | 'radius' | 'vars'
->;
+> & { size?: FieldSize };
 
-export function SelectField(props: SelectFieldProps) {
+export function SelectField({ size = 'sm', ...props }: SelectFieldProps) {
   return (
     <Select
-      classNames={comboboxClassNames}
+      classNames={sizedClassNames(comboboxClassNames, size)}
       rightSection={<SelectorIcon size={16} />}
       rightSectionPointerEvents="none"
       checkIconPosition="right"

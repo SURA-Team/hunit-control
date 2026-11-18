@@ -92,7 +92,7 @@ describe('AppDialog', () => {
 
     await user.click(cancel);
     expect(onCancel).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole('button', { name: 'Fechar' }));
+    await user.click(screen.getByRole('button', { name: 'Fechar o diálogo' }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expectOnePrimaryPerBlock();
   });
@@ -116,7 +116,7 @@ describe('AppDialog', () => {
       'data-surface',
       'dark',
     );
-    expect(screen.queryByRole('button', { name: 'Fechar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Fechar o diálogo' })).toBeNull();
   });
 });
 

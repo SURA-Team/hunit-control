@@ -113,7 +113,7 @@ async function answer(token: string, outcome: RegExp) {
   await dialog.getByLabel('Token do autenticador').fill(token);
   await dialog.getByRole('button', { name: 'Enviar token' }).click();
   await dialog.getByText(outcome).waitFor({ timeout: 15_000 });
-  await dialog.getByRole('button', { name: 'Fechar' }).click();
+  await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
 }
 
 async function filesUnder(dir: string): Promise<string[]> {

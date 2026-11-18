@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SetupScreen } from '../../src/renderer/src/screens/setup/SetupScreen';
 import type { PublicConfig } from '../../src/shared/ipc-types';
+import { expectOnePrimaryPerBlock } from './hierarchy';
 import { errorResult, fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
 
 const PEM = '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n';
@@ -193,5 +194,34 @@ describe('SetupScreen — preferências e aviso', () => {
     await userEvent.click(await screen.findByRole('button', { name: /testar aviso/i }));
 
     expect(hunit.api.attention.test).toHaveBeenCalled();
+  });
+});
+
+describe('SetupScreen — visual novo (specs/006, T019)', () => {
+  it('uma ação principal por card; "Remover" em vermelho suave e "Sim, remover" em vermelho (FR-007, FR-009)', async () => {
+    mocked(hunit.api.connection.getConfig).mockImplementation(() => okResult(CONFIG));
+    const user = userEvent.setup();
+    renderWithApp(<SetupScreen />, hunit);
+
+    const remove = await screen.findByRole('button', {
+      name: /remover a configuração desta máquina/i,
+    });
+    expect(remove).toHaveAttribute('data-variant', 'danger-light');
+    expect(screen.getByRole('button', { name: /^salvar conexão$/i })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(screen.getByRole('button', { name: /testar conexão/i })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+    expectOnePrimaryPerBlock();
+
+    await user.click(remove);
+    expect(await screen.findByRole('button', { name: /sim, remover/i })).toHaveAttribute(
+      'data-variant',
+      'danger',
+    );
+    expectOnePrimaryPerBlock();
   });
 });

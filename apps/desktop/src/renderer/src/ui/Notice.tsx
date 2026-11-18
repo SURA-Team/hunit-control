@@ -15,7 +15,7 @@ export interface NoticeProps {
   icon?: ReactNode;
   action?: ReactNode;
   role?: 'alert' | 'status' | 'none';
-  /** Pílula de uma linha, para avisos curtos ao lado do título da página ("dados de 14:05 — …"). */
+  /** Só o texto, em negrito no tom, para avisos curtos ao lado do título ("dados de 14:05 — …"). */
   compact?: boolean;
   'data-testid'?: string;
 }

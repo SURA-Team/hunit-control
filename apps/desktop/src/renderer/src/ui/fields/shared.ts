@@ -10,6 +10,21 @@ export const inputClassNames = {
   section: classes.section,
 };
 
+/** Altura do campo: `sm` 36 px (padrão das telas), `md` 40 px (barra de busca), `lg` 50 px (token). */
+export type FieldSize = 'sm' | 'md' | 'lg';
+
+const SIZE_CLASS: Record<FieldSize, string | undefined> = {
+  sm: undefined,
+  md: classes.inputMd,
+  lg: classes.inputLg,
+};
+
+/** As classes de um campo no tamanho pedido. */
+export function sizedClassNames<T extends { input?: string }>(base: T, size: FieldSize): T {
+  const extra = SIZE_CLASS[size];
+  return extra ? { ...base, input: `${base.input ?? ''} ${extra}` } : base;
+}
+
 export const comboboxClassNames = {
   ...inputClassNames,
   dropdown: classes.dropdown,

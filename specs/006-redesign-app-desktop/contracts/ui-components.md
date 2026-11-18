@@ -32,7 +32,7 @@ escritos nas telas.
 
 | Componente | Variantes e regras | Origem |
 |---|---|---|
-| `Field`, `SelectField`, `MultiSelectField`, `PasswordField` | 40 px de altura, fundo sutil, foco com contorno preto; rótulo acima | "Campo" `21:113` |
+| `Field`, `SelectField`, `MultiSelectField`, `PasswordField`, `NumberField` | Fundo sutil, foco com contorno preto; rótulo e ajuda acima. Altura `size`: `sm` 36 px (padrão: é a das telas do design), `md` 40 px (barra de busca, como a biblioteca) e `lg` 50 px (token) | "Campo" `21:113` |
 | `SelectionBox` | Caixa de seleção: desmarcada, marcada (preta com check lima) e parcial | "Caixa de seleção" `76:71` |
 | `CheckboxField`, `RadioField`, `SwitchField` | Com rótulo | "Checkbox" `21:195`, "Rádio" `21:145`, "Switch" `21:198` |
 | `PeriodPicker` | Calendário de período: hoje com contorno, escolhido em preto, intervalo em lima suave, hoje escolhido em círculo lima | "Calendário" `135:1405` |
@@ -47,7 +47,9 @@ escritos nas telas.
 | `ProgressBar` | Progresso da execução e do envio | "Progresso da execução" `26:1648` |
 | `CountCard` | Card de contagem (âmbar, vermelho, verde) | "Card de contagem" `21:153` |
 | `EmptyState` | Ícone, explicação e, com busca ou filtro em vigor, "Limpar busca e filtros" (FR-021) | Tela 4.3 |
-| `StaleDataNotice` | "dados de HH:MM — servidor indisponível" no novo cabeçalho da lista | Tela 5.1 |
+| `StaleDataNotice` | "dados de HH:MM — servidor indisponível" na linha do título (`Notice compact`: só o texto, em negrito; `amarelo/9` em vez do `amarelo/8` do design, que fica abaixo de 4,5:1) | Tela 5.1 |
+| `Countdown` | Contagem regressiva do token: rótulo à esquerda e o tempo no estilo "Cronômetro" (lima no escuro, vermelho no fim) | Tela 2.4 |
+| `CodeText` | Código em fonte monoespaçada (impressão digital do certificado) | Tela 1.2 |
 
 ## Navegação e estrutura
 
@@ -61,7 +63,7 @@ escritos nas telas.
 | `Card` | Branco, cantos de 20 px, sombra "card", sem borda; `padding` 0 (listas), 12 (barra de busca), 16 (formulários e gaveta) ou 24; `tone="subtle"` é a caixa cinza sem sombra ("Status do Hunit") | "Cards e relatórios" `135:1466` |
 | `RunningJobCard` | Card escuro do que está em andamento: a execução (data, período, cliente, "N de M hotéis concluídos", progresso, %, "Ver detalhes" em lima) e o envio ao Comercial na aba "Envios" ("N de M reservas verificadas", "Ver envio"; research R-13) | "Card — execução em andamento" `53:131`; envio: tela 7.7a (frame `211:9212`), aprovada pela UX em 2026-11-18 |
 | `IndicatorCard` | Número grande com rótulo (FR-004, US1-3) | "Card de indicador" `91:73` |
-| `AppDialog` | `size`: `sm` (520 px) · `lg` (780 px); 24 px de espaçamento; título no estilo do design; `dark` para o token; limitado à área visível, rola por dentro, fechar sempre alcançável (FR-042, FR-047) | Telas 2.4, 3.3, 4.6, 7.1, 7.6 |
+| `AppDialog` | `size`: `sm` (520 px) · `lg` (780 px); 24 px de espaçamento; título no estilo do design (e `subtitle`); `dark` para o token; limitado à área visível, rola por dentro, fechar sempre alcançável ("Fechar o diálogo", FR-042, FR-047); `onCancel`, `onSubmit` (formulário), `zIndex` e `instant` | Telas 2.4, 2.5, 2.9, 3.3, 4.6, 7.1, 7.6 |
 | `AppDrawer` | Gaveta à direita, `min(780px, 100vw − 96px)`, cards de 16 px | Telas 3.2, 4.2, 7.5 |
 
 ## Listas

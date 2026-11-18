@@ -18,6 +18,7 @@ import {
   renderWithApp,
   type FakeHunit,
 } from './render';
+import { expectOnePrimaryPerBlock } from './hierarchy';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const HOTELS: Hotel[] = [
@@ -295,4 +296,25 @@ describe('RunScreen — "Iniciar de novo" (US1, cenário 5)', () => {
       });
     },
   );
+});
+
+describe('RunScreen — visual novo (specs/006, T020)', () => {
+  it('"Iniciar execução" é a única principal; acesso guardado com "Limpar acesso" em vermelho suave', async () => {
+    renderWithApp(<RunScreen onOpenExecution={vi.fn()} />, hunit);
+    expect(await screen.findByRole('button', { name: /iniciar execução/i })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(screen.getByRole('button', { name: /guardar acesso/i })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+    expectOnePrimaryPerBlock();
+
+    await saveAccess();
+    expect(await screen.findByRole('button', { name: /limpar acesso/i })).toHaveAttribute(
+      'data-variant',
+      'danger-light',
+    );
+  });
 });

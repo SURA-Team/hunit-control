@@ -27,18 +27,31 @@ export function AppDrawer({
   'data-testid': testId,
 }: AppDrawerProps) {
   return (
-    <Drawer.Root opened={opened} onClose={onClose} position="right">
+    <Drawer.Root
+      opened={opened}
+      onClose={onClose}
+      position="right"
+      // Classes pelo Root: no Mantine 9, `className` no Drawer.Content também vai para o contêiner de
+      // tela cheia (`inner`).
+      classNames={{
+        content: classes.drawerContent,
+        header: classes.drawerHeader,
+        title: classes.dialogTitle,
+        close: classes.close,
+        body: classes.drawerBody,
+      }}
+    >
       <Drawer.Overlay
         color={colors['sobreposição']}
         backgroundOpacity={overlay.opacity}
         blur={overlay.blur}
       />
-      <Drawer.Content className={classes.drawerContent} data-testid={testId}>
-        <Drawer.Header className={classes.drawerHeader}>
-          <Drawer.Title className={classes.dialogTitle}>{title}</Drawer.Title>
-          <Drawer.CloseButton className={classes.close} icon={<CloseIcon />} aria-label="Fechar" />
+      <Drawer.Content data-testid={testId}>
+        <Drawer.Header>
+          <Drawer.Title>{title}</Drawer.Title>
+          <Drawer.CloseButton icon={<CloseIcon />} aria-label="Fechar" />
         </Drawer.Header>
-        <Drawer.Body className={classes.drawerBody}>
+        <Drawer.Body>
           <Surface>{children}</Surface>
         </Drawer.Body>
       </Drawer.Content>

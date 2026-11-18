@@ -12,7 +12,7 @@
 }
 
 .description {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   color: var(--hc-texto-apagado);
   font: var(--hc-font-descricao);
 }
@@ -23,15 +23,26 @@
   font: var(--hc-font-descricao);
 }
 
+/* 36 px: os campos das telas do design; 40 px (`md`) na barra de busca; 50 px (`lg`) no token. */
 .input {
-  height: 40px;
-  min-height: 40px;
+  height: 36px;
+  min-height: 36px;
   padding-inline: 14px 12px;
   border: 1px solid var(--hc-borda-padrao);
   border-radius: var(--hc-radius-field);
   background: var(--hc-fundo-sutil);
   color: var(--hc-texto-padrao);
   font: var(--hc-font-corpo);
+}
+
+.inputMd {
+  height: 40px;
+  min-height: 40px;
+}
+
+.inputLg {
+  height: 50px;
+  min-height: 50px;
 }
 
 .input::placeholder,
@@ -182,4 +193,15 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Dentro de um diálogo escuro (o token): rótulo claro e maior, erro no vermelho legível no escuro. */
+:global([data-dark]) .label {
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo-grande);
+  letter-spacing: var(--hc-font-rotulo-grande-tracking);
+}
+
+:global([data-dark]) .error {
+  color: var(--hc-vermelho-6);
 }

@@ -114,7 +114,7 @@ async function answerToken() {
   await dialog.getByLabel('Token do autenticador').fill(VALID_TOKEN);
   await dialog.getByRole('button', { name: 'Enviar token' }).click();
   await dialog.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
-  await dialog.getByRole('button', { name: 'Fechar' }).click();
+  await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
 }
 
 /** Inicia uma execução direto pela API, como outra máquina faria. */
