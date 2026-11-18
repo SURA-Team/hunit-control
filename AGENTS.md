@@ -35,7 +35,7 @@ funcionar porque o Hunit mudou a UI.
 | `deploy/homolog/` | Ambiente de homologação no PC do servidor, separado da produção (projeto `hunit-homolog`, dados fictícios): acréscimo ao Compose e modelo do `.env.homolog` (com a planilha de teste do Comercial). Passo a passo em `specs/003-tratativas-manuais/quickstart.md` §2.1 e, para a planilha, `specs/005-envio-comercial/quickstart.md` §3 |
 | `deploy/secrets/` | Chave da conta de serviço da planilha do Comercial, montada só para leitura no `server` (specs/005). **Ignorada pelo Git**, menos o `README.md` dela; nunca leia nem copie o que houver ali |
 | `README.md` | Visão geral, implantação no PC de produção, cópia de segurança e restauração |
-| `.claude/skills/`, `skills-lock.json` | Skills do Claude Code versionados: os do Spec Kit e o `playwright-best-practices` (MIT, de `currents-dev`, instalado com `npx skills`; o lock guarda a origem e a versão). Atualize com `npx skills update -p` e revise o diff antes do commit. O `figma-screens-sync` é do próprio projeto (fora do lock): mantém o espelho do app no Figma (seção "Telas no Figma") |
+| `.claude/skills/`, `skills-lock.json` | Skills do Claude Code versionados: os do Spec Kit e o `playwright-best-practices` (MIT, de `currents-dev`, instalado com `npx skills`; o lock guarda a origem e a versão). Atualize com `npx skills update -p` e revise o diff antes do commit. O `figma-screens-sync` é do próprio projeto (fora do lock): marca no Figma as telas em uso (✅) e as obsoletas (❌) (seção "Telas no Figma") |
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento. **Não é versionado** (está no `.gitignore`): existe só na máquina de quem desenvolve |
 
 O monorepo (pnpm + TypeScript) foi criado pela feature 001; a estrutura detalhada está em
@@ -59,22 +59,24 @@ Regras:
 
 ## Telas no Figma
 
-O arquivo [Hunit Control](https://www.figma.com/design/YCbxTAacFxbGuOF8uwoLtt/Hunit-Control) tem
-dois papéis, que não se misturam:
+O arquivo [Hunit Control](https://www.figma.com/design/YCbxTAacFxbGuOF8uwoLtt/Hunit-Control) tem uma
+página por feature, com o nome da branch (`002-app-desktop`, …, `006-redesign-app-desktop`, …), só
+com as telas que a feature criou ou mudou, e a biblioteca da UX (`Componentes — nova identidade`).
 
-- **Espelho do app, features 002 a 006**: uma página por feature, com o nome da branch
-  (`002-app-desktop`, `003-tratativas-manuais`, …), só com as telas que a feature criou ou mudou,
-  como ficaram no código. Uma tela substituída por uma feature seguinte fica com ❌ no nome e
-  oculta. As páginas `Identidade visual` e `Componentes` também são do espelho. Mantido pelo agente
-  com a skill `figma-screens-sync`, a partir de prints do app real com dados fictícios.
-- **Design oficial**: as páginas da UX. É a fonte da verdade de como o app **deve ser**. **A partir
-  da feature 007, a UX escreve as specs e desenha as telas antes do desenvolvimento**; não há
-  espelho para essas features. O agente só lê; levar o design para o código é trabalho da spec.
+- **Desde 18/11/2026, nenhuma spec começa sem passar pela PM**, e toda feature que muda telas chega
+  com elas desenhadas pela UX no Figma (da 006 em diante). O design é a fonte da verdade de como o
+  app **deve ser**; levá-lo para o código é trabalho da spec. O agente não desenha nem reconstrói
+  telas no Figma.
+- As páginas `002` a `005` (e `Identidade visual` e `Componentes`) são espelhos antigos, feitos pelo
+  agente a partir de prints do app; ficam congeladas.
+- **Marcação**: cada tela tem um número (`4.1`); a versão em uso fica com ✅ no nome, visível, e as
+  substituídas ficam com ❌, ocultas. Quem marca é a skill `figma-screens-sync`, que varre todas as
+  páginas de feature até a concluída.
 
-Regra: numa feature de 002 a 006, mudou algo visível no app desktop (`apps/desktop/src/renderer`,
-rótulos em `presentation/`, ícone ou tema)? Ao concluir a task ou a feature, antes do PR, rode a
-skill `figma-screens-sync` para atualizar a página da feature e registrar a mudança no histórico
-dela.
+Regra: ao concluir uma feature que mudou telas do app desktop (`apps/desktop/src/renderer`, rótulos
+em `presentation/`, ícone ou tema), depois de comparar o app com o design da feature (prints do
+roteiro de captura ao lado dos frames), rode a skill `figma-screens-sync` antes do PR final ou logo
+depois do merge.
 
 ## Usando o legado como referência
 
@@ -155,7 +157,7 @@ processo do app sozinhos; para `pnpm --filter @hunit/desktop dev`, rode antes
 | `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker — inclui o teste de segurança SC-004 e o de cópia e restauração, que roda os scripts de `deploy/backup/` num container `postgres:17`). Do app: `desktop` (processo principal, com servidor HTTPS local e certificados gerados no teste), `desktop-ui` (interface, jsdom) e `desktop-e2e` (o app compilado aberto pelo Playwright contra a API da 001 com o Hunit simulado; exige o Docker e abre janelas) |
 | `pnpm --filter @hunit/desktop dev` | Abre o app em desenvolvimento (electron-vite, recarga da tela na hora). Sem `ELECTRON_RUN_AS_NODE` no terminal |
 | `pnpm --filter @hunit/desktop build` | Compila o app para `apps/desktop/out/` (o `pnpm build` da raiz também compila) |
-| `$env:HUNIT_SCREENS_DIR = "<pasta>"; pnpm test --project desktop-e2e screens-capture` | Captura as telas do app para o espelho no Figma (PowerShell; ~3 min; exige o Docker): um PNG por tela, com o número da tela no Figma, e `falhas.txt`. Sem a variável, o roteiro fica desligado nas rodadas normais. Use uma pasta fora do repositório |
+| `$env:HUNIT_SCREENS_DIR = "<pasta>"; pnpm test --project desktop-e2e screens-capture` | Captura as telas do app para comparar com o design no Figma (PowerShell; ~3 min; exige o Docker): um PNG por tela, com o número da tela no Figma, e `falhas.txt`. Sem a variável, o roteiro fica desligado nas rodadas normais. Use uma pasta fora do repositório |
 | `pnpm --filter @hunit/desktop dist` | Gera o instalador NSIS em `apps/desktop/release/` (sem assinatura de código; research R-11 da 002). Rode antes o `pnpm build`: o app empacota o `dist` do `@hunit/domain` e do `@hunit/contracts` |
 | `pnpm build` | Compila os pacotes para `dist/`, na ordem das dependências. Use sempre este antes dos comandos `hunit:*`: `pnpm --filter @hunit/server build` compila só o servidor e usa o `dist` antigo do `@hunit/contracts` e do `@hunit/domain` (os testes leem o código-fonte e não acusam) |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |

@@ -1,5 +1,6 @@
 /**
- * Captura das telas do app para o espelho no Figma (skill `figma-screens-sync`).
+ * Captura das telas do app para comparar com o design no Figma (spec da feature; a skill
+ * `figma-screens-sync` só marca as telas em uso depois).
  *
  * Não é um teste: fica desligado nas rodadas normais e só roda com `HUNIT_SCREENS_DIR` definida
  * (pasta onde os prints são gravados). Abre o app compilado contra a API da 001 com o Hunit
@@ -7,7 +8,8 @@
  * tela no Figma (ex.: `2.4-executar-pedido-de-token.png`). Passos que falham não interrompem a
  * captura; ficam em `falhas.txt` na mesma pasta (o console do Vitest não mostra o `console.log`).
  *
- * Mudou a lista de telas? Atualize também `.claude/skills/figma-screens-sync/references/screens.md`.
+ * Mudou a lista de telas? Atualize também o catálogo em
+ * `.claude/skills/figma-screens-sync/references/screens.md`.
  */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
