@@ -2,8 +2,141 @@
  * Verificações de layout dos roteiros de larguras e de redimensionamento (specs/006, SC-007,
  * FR-043 a FR-045, research R-16).
  */
-import type { Page } from 'playwright';
+import type { Locator, Page } from 'playwright';
 import { expect } from 'vitest';
+
+/** Retângulo de um elemento e a área visível da página, em px de CSS (valem com qualquer zoom). */
+interface Placement {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
+async function placementOf(locator: Locator): Promise<Placement> {
+  return locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
+      viewportWidth: document.documentElement.clientWidth,
+      viewportHeight: document.documentElement.clientHeight,
+    };
+  });
+}
+
+/**
+ * A informação ou a ação existe e está ao alcance (SC-007, US9-1): visível depois de rolar até ela
+ * e inteira na largura da área visível (nada escondido à direita).
+ */
+export async function expectReachable(locator: Locator, where = ''): Promise<void> {
+  const label = `${locator.toString()} ${where}`.trim();
+  await locator.scrollIntoViewIfNeeded();
+  expect(await locator.isVisible(), `não visível: ${label}`).toBe(true);
+  const place = await placementOf(locator);
+  expect(place.left, `fora da área visível, à esquerda: ${label}`).toBeGreaterThanOrEqual(-0.5);
+  expect(place.right, `fora da área visível, à direita: ${label}`).toBeLessThanOrEqual(
+    place.viewportWidth + 0.5,
+  );
+}
+
+/**
+ * O diálogo cabe na área visível e fica centralizado nela (FR-047, US9-5; o conteúdo rola por
+ * dentro quando não cabe).
+ */
+export async function expectDialogFits(dialog: Locator, where = ''): Promise<void> {
+  // A entrada do diálogo desliza alguns px: mede depois das animações (as finitas) terminarem.
+  await dialog.evaluate((element) =>
+    Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished),
+    ),
+  );
+  const place = await placementOf(dialog);
+  const box = JSON.stringify(place);
+  expect(
+    place.left >= -0.5 && place.top >= -0.5,
+    `diálogo fora da área visível ${where}: ${box}`,
+  ).toBe(true);
+  expect(
+    place.right <= place.viewportWidth + 0.5 && place.bottom <= place.viewportHeight + 0.5,
+    `diálogo maior que a área visível ${where}: ${box}`,
+  ).toBe(true);
+  const sides = Math.abs(place.left - (place.viewportWidth - place.right));
+  const ends = Math.abs(place.top - (place.viewportHeight - place.bottom));
+  expect(sides <= 2 && ends <= 2, `diálogo fora do centro ${where}: ${box}`).toBe(true);
+}
+
+/**
+ * Os 24 px de espaçamento interno do diálogo, calculados pelo navegador (SC-009, FR-042, research
+ * R-14): cabeçalho em cima e dos lados, corpo dos lados e embaixo.
+ */
+export async function expectDialogSpacing(dialog: Locator, where = ''): Promise<void> {
+  const spacing = await dialog.evaluate((element) => {
+    const header = element.querySelector('.mantine-Modal-header');
+    const body = element.querySelector('.mantine-Modal-body');
+    if (!header || !body) return null;
+    const h = getComputedStyle(header);
+    const b = getComputedStyle(body);
+    return [
+      h.paddingTop,
+      h.paddingLeft,
+      h.paddingRight,
+      b.paddingLeft,
+      b.paddingRight,
+      b.paddingBottom,
+    ];
+  });
+  expect(spacing, `espaçamento do diálogo ${where}`.trim()).toEqual(Array(6).fill('24px'));
+}
+
+/**
+ * O menu lateral (FR-044, US9-4; research R-07): recolhido só com os ícones (o nome fica na dica)
+ * ou aberto com os nomes, e a área ativa identificável — em pílula, com o nome acessível, inteira
+ * na área visível.
+ */
+export async function expectSideMenu(
+  page: Page,
+  expected: { collapsed: boolean; active: string },
+  where = '',
+): Promise<void> {
+  const menu = await page.evaluate(() => {
+    const current = document.querySelector<HTMLElement>(
+      'nav[aria-label="Áreas do app"] [aria-current="page"]',
+    );
+    if (!current) return null;
+    const rect = current.getBoundingClientRect();
+    const name = current.lastElementChild?.getBoundingClientRect();
+    return {
+      active: current.getAttribute('aria-label'),
+      inside:
+        rect.width > 0 &&
+        rect.left >= 0 &&
+        rect.top >= 0 &&
+        rect.right <= document.documentElement.clientWidth &&
+        rect.bottom <= document.documentElement.clientHeight,
+      pill: getComputedStyle(current).backgroundColor !== 'rgba(0, 0, 0, 0)',
+      nameShown: (name?.width ?? 0) > 1,
+      tooltip: getComputedStyle(current, '::after').content,
+    };
+  });
+  expect(menu, `menu sem área ativa ${where}`.trim()).not.toBeNull();
+  expect(menu, `menu ${where}`.trim()).toMatchObject({
+    active: expected.active,
+    inside: true,
+    pill: true,
+    nameShown: !expected.collapsed,
+  });
+  if (expected.collapsed) {
+    expect(menu?.tooltip, `dica do menu recolhido ${where}`.trim()).toBe(`"${expected.active}"`);
+  }
+}
 
 /** A página não rola na horizontal: o documento cabe na largura da janela. */
 export async function expectNoHorizontalScroll(page: Page, where = ''): Promise<void> {

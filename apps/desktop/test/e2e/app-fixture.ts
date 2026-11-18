@@ -57,6 +57,10 @@ export interface LaunchOptions {
 /**
  * Muda o tamanho da janela do app e o zoom da página e espera a interface se acomodar (specs/006,
  * roteiros de larguras e de redimensionamento, research R-16).
+ *
+ * Numa tela menor que o pedido, o Windows limita a janela; aí o zoom diminui na mesma proporção,
+ * para a página ter a largura em px de CSS que teria com a janela inteira (as quebras do layout são
+ * medidas nela). Numa tela de 1 920 × 1 080 a 100 %, todos os tamanhos dos roteiros cabem.
  */
 export async function resizeWindow(
   app: ElectronApplication,
@@ -64,14 +68,23 @@ export async function resizeWindow(
   size: WindowSize,
   zoomFactor?: number,
 ): Promise<void> {
-  await app.evaluate(
+  const cssWidth = await app.evaluate(
     ({ BrowserWindow }, { size: target, zoom }) => {
       const main = BrowserWindow.getAllWindows()[0];
       if (!main) throw new Error('Janela do app não encontrada.');
       main.setSize(target.width, target.height);
-      if (zoom !== undefined) main.webContents.setZoomFactor(zoom);
+      const [width = target.width] = main.getSize();
+      const shrink = Math.min(1, width / target.width);
+      if (zoom !== undefined || shrink < 1) main.webContents.setZoomFactor((zoom ?? 1) * shrink);
+      const [contentWidth = width] = main.getContentSize();
+      return contentWidth / main.webContents.getZoomFactor();
     },
     { size, zoom: zoomFactor },
+  );
+  // O tamanho e o zoom chegam à página depois: espera a largura em px de CSS bater.
+  await window.waitForFunction(
+    (expected) => Math.abs(globalThis.innerWidth - expected) <= 1,
+    cssWidth,
   );
   // Dois quadros: o redimensionamento e o novo layout já desenhado.
   await window.evaluate(

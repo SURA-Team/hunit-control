@@ -8,6 +8,10 @@
  * tela no Figma (ex.: `2.4-executar-pedido-de-token.png`). Passos que falham não interrompem a
  * captura; ficam em `falhas.txt` na mesma pasta (o console do Vitest não mostra o `console.log`).
  *
+ * A janela é a do design, 1 440 × 900. Com `HUNIT_SCREENS_WIDTH` = `960` ou `1280`, as mesmas telas
+ * saem em 960 × 640 (a mínima do app) ou 1 280 × 820, para registrar como ficam nas larguras menores
+ * (specs/006, T024, research UX-5). Os nomes dos arquivos não mudam: use uma pasta por largura.
+ *
  * Mudou a lista de telas? Atualize também o catálogo em
  * `.claude/skills/figma-screens-sync/references/screens.md`.
  */
@@ -50,8 +54,22 @@ import {
 
 const OUT = process.env['HUNIT_SCREENS_DIR'];
 const TOKEN = '246810';
-/** Janela de referência das telas no Figma. */
-const WINDOW = { width: 1440, height: 900 };
+/** Área da janela em cada largura de captura; a de 1 440 é a referência das telas no Figma. */
+const WINDOWS: Record<string, { width: number; height: number }> = {
+  '960': { width: 960, height: 640 },
+  '1280': { width: 1280, height: 820 },
+  '1440': { width: 1440, height: 900 },
+};
+
+/** Área da janela pedida em `HUNIT_SCREENS_WIDTH` (padrão: 1 440 × 900). */
+function captureWindow(): { width: number; height: number } {
+  const width = process.env['HUNIT_SCREENS_WIDTH']?.trim() || '1440';
+  const size = WINDOWS[width];
+  if (!size) {
+    throw new Error(`HUNIT_SCREENS_WIDTH deve ser 960, 1280 ou 1440 (recebido: "${width}").`);
+  }
+  return size;
+}
 
 const GUESTS = [
   'Ana Ribeiro',
@@ -125,7 +143,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       const window = BrowserWindow.getAllWindows()[0];
       window?.setContentSize(size.width, size.height);
       window?.center();
-    }, WINDOW);
+    }, captureWindow());
   }
 
   /** Grava a tela `id` (número no Figma). `fullPage` para telas mais altas que a janela. */
@@ -190,6 +208,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
   }
 
   beforeAll(async () => {
+    captureWindow(); // Largura inválida para antes de subir o servidor.
     await mkdir(outDir, { recursive: true });
     certificates = await createTestCertificates();
     // Planilha do Comercial em memória (specs/005): telas do envio e da área Comercial.
