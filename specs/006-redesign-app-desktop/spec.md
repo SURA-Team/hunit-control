@@ -6,6 +6,8 @@
 
 **Status**: Draft
 
+**Updated**: 2026-11-18 (telas do sistema anterior — página 004 —, do envio ao Comercial — página 005 —, padronização final dos diálogos e telas responsivas)
+
 **Input**: User description: "Levar para o app desktop o design oficial da UX (arquivo Hunit Control no Figma): (1) nova identidade visual em todas as telas — fundo cinza claro, conteúdo em cards brancos de cantos bem arredondados e sombra suave, sem bordas; menu lateral flutuante com ícones, com o item ativo numa pílula preta com o ícone em lima; cabeçalho transparente com a marca nova (H lima no quadrado preto) e o cliente num selo branco; fonte Manrope, títulos maiores e números grandes nos indicadores; paleta monocromática com um único acento, o lima. (2) Hierarquia de botões e cores: preto é a ação principal (uma por bloco), lima é a principal só em fundo escuro, contorno é secundária, só texto é cancelar ou sair, âmbar é atenção e vermelho é destrutiva; ações destrutivas ('Limpar acesso', 'Desfazer', 'Remover valor' em vermelho suave; 'Sim, cancelar' em vermelho cheio) nunca parecem seguras; Baixar, Reverter e Desfazer com cores e ícones diferentes; 'Cancelar' só em texto nos diálogos; 'Substituir tratativa' e 'Substituir comprovante' com o mesmo peso; sai o botão 'Leve'. (3) Listas: reservas com 5 colunas (hóspede, hotel, período, valor, situação), duas linhas de texto em cada, coluna única 'Situação da reserva' com o selo 'Verificar' em âmbar cheio quando precisa; filtros viram uma busca, um botão 'Filtros' (painel) e filtros rápidos com contagem (Todas · Falta cobrar · A verificar · Com erro · Concluídas); linha inteira clicável com seta e a linha aberta ou marcada em lima suave; execuções com a que está em andamento num card escuro no topo, com progresso, e o resto no 'Histórico'; hotéis e documentos como linhas simples; estado vazio com ícone, explicação e 'Limpar busca e filtros'. (4) Seleção em lote: caixa de seleção preta com check em lima e cabeçalho com estado parcial; barra escura de seleção com o total e as ações, e 'Anexar comprovante' em lima; no diálogo de anexar, ícone verde para as reservas aceitas e âmbar para as ignoradas. (5) Detalhes da reserva: quadro 'Status do Hunit' com selo e 'Classificação anterior'; valor salvo (com Remover) separado do campo 'Corrigir o valor' com 'Informar valor' em preto; histórico com 5 itens e 'Mostrar mais'; card 'Verificações'; tela nova com o alerta 'Verificar', 'Confirmar' em preto e anexos desabilitados com a explicação do motivo. (6) Organização e consistência: o que se repete é componente único, para que uma mudança valha para todas as telas."
 
 ## Contexto
@@ -23,11 +25,29 @@ Onde o design pede algo que o app ainda não oferece (os filtros rápidos com co
 filtros, o histórico de execuções, a tela de alerta "Verificar"), a feature entrega o comportamento
 descrito aqui, sempre sobre dados que o servidor já informa.
 
+Desde a primeira versão desta spec, o design oficial recebeu três blocos de mudança, que esta feature
+também leva para o app: (a) as telas da **importação do histórico do sistema anterior** (página 004 do
+Figma: reservas com origem "Sistema anterior", filtro "Origem", selos e gaveta próprios); (b) as telas
+do **envio ao Comercial e da área Comercial** (página 005: envio, validação e recusa de retorno, abas
+da área, ações em lote, "Copiar para e-mail" e valor cobrado nas listas); e (c) uma **padronização
+final** dos diálogos e cards. Além disso, **todas as telas precisam ser responsivas**: a mesma
+informação e as mesmas ações devem funcionar em qualquer largura de janela suportada, e não só no
+tamanho em que o design foi desenhado. O comportamento de negócio da importação e do envio ao Comercial
+pertence às features 004 e 005; aqui entram a apresentação e a organização da informação dessas telas.
+
 O espelho do app no Figma (feature de manutenção das telas) passa a ser comparado com o design
 oficial: a feature termina quando os dois mostram as mesmas telas.
 
-Ficam **fora do escopo**: novas funções de negócio, mudança de permissões, tema escuro, versão para
-outros sistemas operacionais além do Windows, e qualquer mudança no servidor ou no contrato da API.
+Ficam **fora do escopo**: novas funções de negócio (as regras da importação do sistema anterior e do
+envio ao Comercial são das features 004 e 005), mudança de permissões, tema escuro, versão para outros
+sistemas operacionais além do Windows, versão para celular ou tablet, e qualquer mudança no servidor
+ou no contrato da API.
+
+## Clarifications
+
+### Session 2026-11-18
+
+- Q: As telas do sistema anterior (4.10 a 4.12) e do Comercial (seção 7) são implementadas na 006 ou junto das features 004 e 005? → A: A 006 entrega identidade, listas, componentes e responsividade; as telas 4.10 a 4.12 e a seção 7 são implementadas junto das features 004 e 005, já com o visual e a responsividade da 006.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -220,12 +240,138 @@ abrir as áreas de hotéis e de documentos e conferir com o design oficial.
 
 ---
 
+### User Story 7 - Reconhecer as reservas do sistema anterior nas listas e nos detalhes (Priority: P2)
+
+**Escopo nesta feature**: a 006 entrega os componentes e o visual que sustentam estas telas (selos,
+barra de lote agrupada, "Botão com menu", "Aba", ícone Comercial, linha de reserva com "Selo extra",
+diálogos padronizados); as telas em si e o comportamento são implementados junto da feature 004,
+que MUST seguir este design e a responsividade da história 9. Os cenários abaixo são o critério de
+aceite dessa implementação.
+
+A pessoa filtra por origem "Sistema anterior" na própria barra de busca, reconhece de relance as
+reservas importadas e abre uma delas numa gaveta que mostra o que foi importado e o que ainda não foi
+verificado.
+
+**Why this priority**: sem sinais visuais claros, o histórico importado se confunde com as reservas
+novas; depende das listas (história 2) e dos detalhes (história 5).
+
+**Independent Test**: com reservas importadas e novas gravadas, filtrar por "Sistema anterior", conferir
+a lista e abrir uma reserva "A revisar (sistema anterior)" comparando com as telas 4.10 a 4.12 do design.
+
+**Acceptance Scenarios**:
+
+1. **Given** a barra de busca de qualquer lista de reservas (e da lista usada nos relatórios), **When**
+   exibida, **Then** mostra o filtro "Origem" visível; ao escolher "Sistema anterior" a lista mostra só
+   as reservas importadas, e a linha "Filtros aplicados" e o painel de filtros avançados não repetem
+   esse filtro.
+2. **Given** uma reserva importada, **When** aparece numa lista, **Then** exibe o selo "Sistema
+   anterior" ao lado do nome do hóspede, e os selos de situação ficam um embaixo do outro, sem texto
+   cortado.
+3. **Given** a lista, **When** há reservas "A revisar (sistema anterior)", **Then** elas entram na
+   contagem e no filtro rápido "A verificar".
+4. **Given** uma reserva importada aberta na gaveta, **When** exibida, **Then** o topo mostra os selos
+   "Sistema anterior", "A revisar (sistema anterior)" e "Não identificada" (os que se aplicam), e a
+   gaveta traz o quadro "Status do Hunit", a tratativa importada (com Baixar e Desfazer), o card
+   Cobrança, o card Verificações (com o aviso "Ainda não verificada…") e o card "Sistema anterior".
+5. **Given** a opção de selo extra da linha de reserva, **When** usada, **Then** o rótulo é "Selo
+   extra" (antes "Verificar"), pois serve também para "Não identificada".
+6. **Given** o painel de filtros avançados, **When** aberto, **Then** mostra os mesmos filtros de antes,
+   sem o campo Origem, que passou para a barra de busca.
+
+---
+
+### User Story 8 - Enviar ao Comercial e trabalhar na área Comercial (Priority: P2)
+
+**Escopo nesta feature**: a 006 entrega os componentes e o visual que sustentam estas telas (selos,
+barra de lote agrupada, "Botão com menu", "Aba", ícone Comercial, linha de reserva com "Selo extra",
+diálogos padronizados); as telas em si e o comportamento são implementados junto da feature 005,
+que MUST seguir este design e a responsividade da história 9. Os cenários abaixo são o critério de
+aceite dessa implementação.
+
+A pessoa seleciona reservas e, na barra de seleção, envia ao Comercial: confere, acompanha o envio,
+responde ao pedido de token quando aparece e vê o resultado. Quando o Comercial devolve, valida o retorno
+na gaveta da reserva e acompanha tudo na área "Comercial".
+
+**Why this priority**: leva o fluxo da feature 005 para o app com a mesma identidade; depende da barra
+de lote (história 4) e da gaveta de detalhes (história 5).
+
+**Independent Test**: percorrer as telas 7.1 a 7.14 do design com dados de teste (conferência, envio em
+andamento, pedido de token, concluído, validação e recusa, as quatro abas, lote e e-mail) e comparar
+cada uma com o Figma.
+
+**Acceptance Scenarios**:
+
+1. **Given** o menu, **When** exibido em qualquer tela, **Then** tem o item "Comercial", com ícone, nos
+   dois perfis.
+2. **Given** reservas marcadas, **When** a barra de seleção aparece, **Then** agrupa as ações em "Ver
+   seleção", "Anexar ▾", "Confirmar ▾", "Enviar ao Comercial" (em lima) e "Desmarcar todas".
+3. **Given** "Enviar ao Comercial", **When** acionado, **Then** a pessoa passa pelas telas de
+   conferência, envio em andamento (progresso e lista de resultados), pedido de token (no mesmo diálogo
+   escuro do token das execuções) e concluído.
+4. **Given** uma reserva em "Validar comprovante", **When** a gaveta abre, **Then** o card "Comercial"
+   mostra o retorno (hotel diferente e diferença de valor em destaque) com "Confirmar" e "Recusar"; ao
+   recusar, o diálogo oferece motivos rápidos e um campo de texto.
+5. **Given** a área "Comercial", **When** aberta, **Then** tem as abas "Envios", "Retornos a validar",
+   "Retornos com problema" e "Planilha".
+6. **Given** uma lista de reservas, **When** exibida, **Then** tem o botão "Copiar para e-mail" ao lado
+   do título e "Selecionar todas do filtro" no fim da linha dos filtros rápidos, e permite confirmar
+   retornos e "Verificar" em lote.
+7. **Given** a coluna Valor da lista, **When** a reserva tem valor cobrado, **Then** uma segunda linha
+   embaixo do valor total mostra "cobrado R$ X · Hunit" ou "· manual"; nas gavetas, o campo "Valor
+   cobrado" aparece nos dados da reserva e, no card Cobrança, o rótulo é "Valor cobrado no Hunit".
+
+---
+
+### User Story 9 - Usar o app em janelas de tamanhos diferentes e com diálogos padronizados (Priority: P1)
+
+A pessoa usa o app em notebook, em monitor grande ou com a janela redimensionada, e todas as telas se
+reorganizam sozinhas: nada some, nada é cortado e as ações continuam ao alcance. Os diálogos têm a
+mesma aparência e o mesmo comportamento em todo o app.
+
+**Why this priority**: as listas de 5 colunas, a barra de lote e as abas só cumprem o redesenho se
+funcionarem fora do tamanho em que foram desenhadas; é requisito de todas as outras histórias.
+
+**Independent Test**: abrir cada tela, gaveta e diálogo na largura mínima suportada, numa intermediária e
+numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
+
+**Acceptance Scenarios**:
+
+1. **Given** qualquer tela, gaveta ou diálogo, **When** a janela tem qualquer largura entre a mínima
+   suportada e a de um monitor grande, **Then** não há rolagem horizontal da página e nenhuma informação
+   ou ação do design de referência deixa de existir.
+2. **Given** as listas, **When** a largura diminui, **Then** as colunas menos importantes se reduzem ou se
+   empilham, e valor total, valor cobrado e selos de situação nunca são cortados.
+3. **Given** a barra de busca, os filtros rápidos e a barra de seleção, **When** não cabem numa linha,
+   **Then** quebram em mais linhas sem se sobrepor, e as ações agrupadas em menus continuam acessíveis.
+4. **Given** as abas da área Comercial e o menu lateral, **When** a largura diminui, **Then** todas as
+   opções continuam alcançáveis, com a ativa visível (o menu pode se recolher só com ícones).
+5. **Given** gavetas e diálogos, **When** exibidos em qualquer largura, **Then** nunca ultrapassam a área
+   visível, rolam internamente, mantêm o botão de fechar alcançável e (os diálogos) ficam centralizados
+   na área visível.
+6. **Given** os diálogos do app (token, cancelar execução, recusar retorno, confirmações), **When**
+   exibidos, **Then** têm o mesmo espaçamento interno (24 px), só duas larguras (520 px e 780 px) e o
+   mesmo estilo de título; os diálogos do token e o de cancelar execução ficam um pouco mais largos que
+   antes.
+7. **Given** o card "Comercial" da gaveta, **When** exibido, **Then** tem o mesmo espaçamento interno
+   (16 px) dos demais cards.
+8. **Given** a janela redimensionada com a tela aberta, **When** a pessoa a redimensiona, **Then** a tela
+   se ajusta na hora, sem perder filtros, seleção, texto digitado, aba ativa nem gaveta aberta.
+
+---
+
 ### Edge Cases
 
 - Mais de uma execução em andamento ao mesmo tempo (contas diferentes): todas aparecem em destaque no
   topo, cada uma no seu card escuro, sem quebrar o layout.
-- Janela estreita: a lista de reservas e o menu continuam utilizáveis, sem rolagem horizontal da
-  página; o menu pode se recolher mostrando só os ícones.
+- Janela estreita: a lista de reservas, a barra de seleção, as abas e o menu continuam utilizáveis, sem
+  rolagem horizontal da página; o menu pode se recolher mostrando só os ícones (história 9).
+- Janela redimensionada com gaveta, diálogo ou seleção em andamento: tudo se ajusta sem fechar nem
+  perder o que a pessoa digitou ou escolheu.
+- Selos longos (por exemplo, "A revisar (sistema anterior)"): ficam empilhados e legíveis em qualquer
+  largura.
+- Reserva sem valor cobrado: a segunda linha da coluna Valor não aparece (nunca "R$ 0,00").
+- Perfil de consulta: vê as listas, abas e retornos, mas sem ações de registro, envio, confirmação,
+  recusa ou desfazer (regra da 003).
 - Reserva com valor ausente, período incompleto ou hotel sem nome legível: a célula mostra um
   marcador neutro, nunca fica em branco nem desalinha a linha.
 - Contagem dos filtros rápidos com muitas reservas: o número é mostrado de forma abreviada se não
@@ -280,12 +426,16 @@ abrir as áreas de hotéis e de documentos e conferir com o design oficial.
 
 - **FR-014**: A lista de reservas MUST ter cinco colunas — hóspede, hotel, período, valor e situação
   —, com até duas linhas de texto em cada; todo dado que saiu das colunas antigas MUST continuar
-  acessível nos detalhes da reserva.
+  acessível nos detalhes da reserva. Quando houver valor cobrado, a coluna Valor MUST mostrar, numa
+  segunda linha, "cobrado R$ X · Hunit" ou "· manual", e a coluna MUST ser dimensionada para que o texto
+  caiba (Hotel e Período um pouco mais estreitos).
 - **FR-015**: A coluna "Situação da reserva" MUST ser única e MUST mostrar, ao lado, o selo "Verificar"
   em âmbar cheio quando a reserva pede verificação.
-- **FR-016**: A área de reservas MUST oferecer uma busca, um botão "Filtros" que abre um painel com
-  todos os filtros detalhados que o app já oferece, e os filtros rápidos Todas, Falta cobrar, A
-  verificar, Com erro e Concluídas, cada um com a contagem de reservas.
+- **FR-016**: A área de reservas MUST oferecer uma busca, o filtro "Origem" visível na própria barra, um
+  botão "Filtros" que abre um painel com os demais filtros detalhados que o app já oferece, e os filtros
+  rápidos Todas, Falta cobrar, A verificar, Com erro e Concluídas, cada um com a contagem de reservas;
+  "Selecionar todas do filtro" MUST ficar no fim da linha dos filtros rápidos e "Copiar para e-mail" ao
+  lado do título.
 - **FR-017**: As contagens dos filtros rápidos MUST refletir a busca e os filtros em vigor e MUST ser
   atualizadas quando eles mudam ou quando os dados são recarregados.
 - **FR-018**: A linha inteira da reserva MUST abrir os detalhes ao ser clicada, MUST exibir uma seta no
@@ -302,8 +452,9 @@ abrir as áreas de hotéis e de documentos e conferir com o design oficial.
 
 - **FR-022**: A caixa de seleção MUST ser preta com o check em lima, e a do cabeçalho da lista MUST
   indicar estado parcial quando só parte das reservas está marcada.
-- **FR-023**: Com reservas marcadas, MUST aparecer uma barra escura com o total e as ações do lote, com
-  "Anexar comprovante" em lima; sem reservas marcadas, a barra MUST ficar oculta.
+- **FR-023**: Com reservas marcadas, MUST aparecer uma barra escura com o total e as ações do lote
+  agrupadas em "Ver seleção", "Anexar ▾", "Confirmar ▾", "Enviar ao Comercial" (em lima) e "Desmarcar
+  todas" (em vez de várias ações soltas); sem reservas marcadas, a barra MUST ficar oculta.
 - **FR-024**: O diálogo de anexar a várias reservas MUST resumir, antes da confirmação, as reservas
   aceitas (ícone verde) e as ignoradas (ícone âmbar), com a quantidade de cada grupo.
 
@@ -320,6 +471,55 @@ abrir as áreas de hotéis e de documentos e conferir com o design oficial.
 - **FR-029**: Para a reserva que pede verificação, os detalhes MUST mostrar o alerta "Verificar" com
   "Confirmar" como ação principal; enquanto não confirmada, os botões de anexar tratativa e comprovante
   MUST ficar desabilitados e MUST explicar o motivo ao lado.
+
+**Sistema anterior (página 004)**
+
+- **FR-033**: Reservas importadas MUST exibir o selo "Sistema anterior" ao lado do nome do hóspede nas
+  listas e nos detalhes; a opção de selo extra da linha MUST se chamar "Selo extra" (serve a "Verificar" e
+  a "Não identificada") e os selos de situação MUST ficar empilhados, nunca cortados.
+- **FR-034**: Nas listas filtradas por "Sistema anterior" e na gaveta de uma reserva importada, o filtro
+  "Origem" MUST mostrar "Sistema anterior"; a linha "Filtros aplicados" e o campo Origem do painel MUST NOT
+  repeti-lo. Reservas "A revisar (sistema anterior)" MUST contar em "A verificar".
+- **FR-035**: A gaveta de uma reserva importada MUST mostrar os selos aplicáveis ("Sistema anterior",
+  "A revisar (sistema anterior)", "Não identificada"), o quadro "Status do Hunit", a tratativa importada
+  com Baixar e Desfazer, os cards Cobrança e Verificações (com o aviso "Ainda não verificada…") e o card
+  "Sistema anterior".
+
+**Comercial (página 005)**
+
+- **FR-036**: O menu MUST ter o item "Comercial" em todas as telas, nos dois perfis.
+- **FR-037**: O envio ao Comercial MUST ter as telas de conferência, em andamento (progresso e lista de
+  resultados), pedido de token (no mesmo diálogo escuro do token das execuções) e concluído.
+- **FR-038**: A gaveta de uma reserva em "Validar comprovante" MUST mostrar o card "Comercial" com o
+  retorno (hotel diferente e diferença de valor em destaque), "Confirmar" e "Recusar"; o diálogo de
+  recusa MUST ter motivos rápidos e um campo de texto.
+- **FR-039**: A área "Comercial" MUST ter as abas "Envios", "Retornos a validar", "Retornos com problema"
+  e "Planilha".
+- **FR-040**: As gavetas MUST mostrar o campo "Valor cobrado" nos dados da reserva e, no card Cobrança, o
+  rótulo "Valor cobrado no Hunit"; os componentes "Botão com menu" e "Aba" e o ícone Comercial MUST ser
+  definições únicas (FR-030).
+- **FR-041**: A conferência de ações em lote ("Confirmar ▾", retornos e "Verificar") e a cópia para
+  e-mail MUST ter as telas descritas no design oficial (7.11 a 7.14).
+
+**Padronização e telas responsivas**
+
+- **FR-042**: Todos os diálogos do app MUST ter o mesmo espaçamento interno (24 px), só duas larguras
+  (520 px e 780 px), o mesmo estilo de título e ficar centralizados na área visível; o card "Comercial"
+  da gaveta MUST ter o mesmo espaçamento interno (16 px) dos demais cards.
+- **FR-043**: Todas as telas, gavetas e diálogos do app (inclusive os das features 004, 005 e 007)
+  MUST ser responsivos: funcionar em qualquer largura entre a mínima suportada pelo app (hoje 960 px,
+  da feature 002) e a de monitores grandes, sem rolagem horizontal da página e sem perder informação ou
+  ação em relação ao design de referência.
+- **FR-044**: Em larguras menores, os blocos MUST se reorganizar (colunas menos importantes reduzidas ou
+  empilhadas, barras de busca, de filtros rápidos e de seleção quebrando em mais linhas, abas e menu
+  alcançáveis), preservando a prioridade da informação.
+- **FR-045**: Valores em reais, selos de situação e rótulos de ação MUST nunca ser cortados em nenhuma
+  largura; só nomes longos (hóspede, hotel) podem ser cortados, com o texto inteiro nos detalhes.
+- **FR-046**: Em larguras grandes, o conteúdo MUST ter largura máxima de leitura.
+- **FR-047**: Gavetas e diálogos MUST respeitar a área visível, rolar internamente e manter o botão de
+  fechar alcançável.
+- **FR-048**: Redimensionar a janela MUST reorganizar a tela na hora, sem recarregar dados e sem perder
+  filtros, seleção, texto digitado, aba ativa nem gaveta aberta.
 
 **Consistência**
 
@@ -355,6 +555,14 @@ execuções, hotéis, documentos e o histórico de cada reserva).
   horizontal na janela padrão do app, e nenhum nome longo quebra o layout.
 - **SC-006**: O texto de todas as telas atende a contraste suficiente para leitura (relação mínima de
   4,5:1 no texto comum) e nenhuma informação depende só de cor.
+- **SC-008**: Em cada tela, gaveta e diálogo do app, verificados na largura mínima suportada, numa
+  intermediária e numa de monitor grande, 100% das informações e ações do design de referência estão
+  acessíveis, sem rolagem horizontal e sem valores, selos ou rótulos cortados.
+- **SC-009**: Redimensionar a janela nunca perde filtros, seleção, aba ativa, texto digitado nem gaveta
+  aberta, em 100% dos casos verificados.
+- **SC-010**: 100% dos diálogos do app usam o mesmo espaçamento e uma das duas larguras definidas.
+- **SC-011**: Uma pessoa distingue as reservas do sistema anterior das novas numa lista em até 5
+  segundos, e abre o envio ao Comercial a partir de uma seleção em no máximo 2 cliques.
 - **SC-007**: Nenhum pedido de ajuda registrado pelas usuárias, na semana seguinte à entrega, sobre
   "onde foi parar" uma informação que saiu das colunas da lista.
 
@@ -363,6 +571,15 @@ execuções, hotéis, documentos e o histórico de cada reserva).
 - **Fonte da verdade do visual**: o design oficial do arquivo "Hunit Control" do Figma; a numeração
   das telas (4.2, 4.4–4.7, 4.9, 4.10 etc.) refere-se a ele. Em caso de dúvida de detalhe, vale o
   Figma, e esta spec é atualizada se ele mudar.
+- **Dependências das features 004 e 005**: as telas do sistema anterior (4.10 a 4.12) e do Comercial (seção
+  7) dependem do comportamento das features 004 (importação do histórico) e 005 (envio ao Comercial,
+  "Validar comprovante", valor cobrado), que definem as regras; esta feature trata da apresentação. As
+  telas desses blocos (histórias 7 e 8, FR-033 a FR-041) são implementadas junto das features 004 e 005, e não por esta; a 006 entrega os componentes e o visual que elas usam. A numeração das
+  telas no Figma (4.x, 6.x, 7.x) refere-se ao design oficial.
+- **Responsividade**: o design oficial é desenhado numa largura de referência; o comportamento nas demais
+  larguras (quebras, empilhamento, largura máxima) é decidido na implementação conforme FR-043 a FR-048,
+  com revisão da UX. Não há versão para celular ou tablet. As demais features (004, 005 e 007) seguem
+  esta regra em suas telas.
 - **Dependência da 003**: vários elementos do design (tratativas, comprovantes, "Status do Hunit",
   "Verificações", "Verificar", valor manual, lote) existem a partir da feature 003. Esta feature parte
   do app com a 003 incorporada; a branch só começa a ser implementada depois que a 003 estiver na
