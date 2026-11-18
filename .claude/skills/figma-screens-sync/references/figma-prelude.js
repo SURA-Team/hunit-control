@@ -1,9 +1,14 @@
 // Prelúdio do espelho no Figma (skill figma-screens-sync).
-// Cole este arquivo no início do `code` de cada chamada `use_figma`, seguido do arquivo de telas
-// da área (references/screens/*.js) e, por último, da chamada `await rebuild([...])`.
+// Monte o `code` de cada chamada `use_figma` assim:
+//   const FEATURE_PAGE = '<nome da branch>';   // ex.: '003-tratativas-manuais'
+//   <este arquivo>
+//   <arquivo(s) de telas da área, references/screens/*.js>
+//   return { rebuilt: await rebuild([...]), created };
 // Tudo é resolvido pelo NOME (páginas, componentes, variáveis, estilos): não guarde IDs.
 
-const PAGES = { identity: 'Identidade visual', screens: 'Telas — app atual (espelho)', components: 'Componentes' };
+const PAGES = { identity: 'Identidade visual', components: 'Componentes' };
+/** Páginas do espelho: uma por feature, com o nome da branch, só de 002 a 006. A partir da 007 a UX desenha antes. */
+const MIRROR_PAGE = /^00[2-6]-[a-z0-9-]+$/;
 const SECTIONS = {
   1: '1. Configuração',
   2: '2. Executar',
@@ -11,6 +16,7 @@ const SECTIONS = {
   4: '4. Reservas',
   5: '5. Estados do sistema',
   6: '6. Perfil consulta (sem ações de operador)',
+  7: '7. Envio ao Comercial e área Comercial',
 };
 
 await Promise.all([['Noto Sans', 'Regular'], ['Noto Sans', 'Medium'], ['Noto Sans', 'SemiBold'], ['Noto Sans', 'Bold'], ['Roboto Mono', 'Regular']]
@@ -21,7 +27,17 @@ const pageByName = (name) => {
   if (!page) throw new Error(`Página "${name}" não encontrada`);
   return page;
 };
-const screensPage = pageByName(PAGES.screens);
+if (typeof FEATURE_PAGE !== 'string' || !MIRROR_PAGE.test(FEATURE_PAGE)) {
+  throw new Error(`FEATURE_PAGE "${typeof FEATURE_PAGE === 'string' ? FEATURE_PAGE : ''}" inválida: use o nome da branch de uma feature de 002 a 006 (a partir da 007 a UX desenha as telas antes).`);
+}
+/** Página da feature; criada na primeira vez, depois das páginas de features anteriores. */
+let screensPage = figma.root.children.find((p) => p.name === FEATURE_PAGE);
+const isNewFeaturePage = !screensPage;
+if (!screensPage) {
+  screensPage = figma.createPage(); screensPage.name = FEATURE_PAGE;
+  const before = figma.root.children.filter((p) => MIRROR_PAGE.test(p.name) && p.name < FEATURE_PAGE).at(-1);
+  figma.root.insertChild(before ? figma.root.children.indexOf(before) + 1 : 1, screensPage);
+}
 const componentsPage = pageByName(PAGES.components);
 await componentsPage.loadAsync();
 await figma.setCurrentPageAsync(screensPage); // a única troca de página da chamada
@@ -96,8 +112,9 @@ const STYLE = {
 // --- Construção
 const created = [];
 const SHADOW = [{ type: 'DROP_SHADOW', color: { r: 0, g: 0, b: 0, a: 0.12 }, offset: { x: 0, y: 6 }, radius: 24, spread: 0, visible: true, blendMode: 'NORMAL' }];
-const NAV_OP = ['Executar', 'Execuções', 'Reservas', 'Configuração'];
-const NAV_RD = ['Execuções', 'Reservas', 'Configuração'];
+// O item "Comercial" entrou com a 005 (App.tsx).
+const NAV_OP = ['Executar', 'Execuções', 'Reservas', 'Comercial', 'Configuração'];
+const NAV_RD = ['Execuções', 'Reservas', 'Comercial', 'Configuração'];
 const PERIOD = '13/11/2026 a 19/11/2026';
 
 async function I(component, props = {}) { const n = component.createInstance(); if (Object.keys(props).length) n.setProperties(props); return n; }
@@ -169,6 +186,8 @@ function modal(root, width, name) {
   m.fills = [paint('fundo/padrão')]; m.effects = SHADOW; root.appendChild(m); m.resize(width, m.height); m.counterAxisSizingMode = 'FIXED'; return m;
 }
 function center(root, m) { m.x = Math.round((root.width - m.width) / 2); m.y = Math.round((root.height - m.height) / 2); }
+/** Diálogo no alto da tela (a 45 px do topo), como os diálogos maiores do app. */
+function topOf(root, m) { m.x = Math.round((root.width - m.width) / 2); m.y = 45; }
 /** Gaveta de detalhe à direita (780 px), altura da tela. */
 function drawer(root, name) {
   const d = AL('VERTICAL', { name, itemSpacing: 16, paddingLeft: 16, paddingRight: 16, paddingTop: 16, paddingBottom: 16 });
@@ -198,6 +217,8 @@ async function table(parent, cols, rows) {
       if (typeof v === 'string') cell.appendChild(await T(v, header ? 'tabela' : 'corpo'));
       else if (v.badge) await badge(cell, v.badge, v.text);
       else if (v.rich) cell.appendChild(await rich(v.rich));
+      else if ('check' in v) cell.appendChild(tick(v.check));
+      else if (v.build) await v.build(cell);
     }
   };
   await mk(cols.map((c) => c[0]), true, false);
@@ -219,6 +240,15 @@ async function statGrid(parent, items, perRow = 5) {
     for (const s of tiles) { s.resize(s.width, max); s.layoutSizingHorizontal = 'FILL'; }
   }
   return g;
+}
+/** Caixa de seleção sem rótulo (tabelas): marcada = azul com o visto; 'some' = traço (parcial). */
+function tick(state) {
+  const f = figma.createFrame(); f.name = state ? 'Caixa marcada' : 'Caixa'; f.resize(18, 18); f.cornerRadius = 4;
+  if (!state) { f.fills = [paint('fundo/padrão')]; f.strokes = [paint('borda/campo')]; f.strokeWeight = 1; return f; }
+  f.fills = [paint('azul/6')];
+  const d = state === 'some' ? 'M4.5 9h9' : 'M4.5 9.5l3 3 6-6.5';
+  const icon = figma.createNodeFromSvg('<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="' + d + '" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  icon.name = 'visto'; f.appendChild(icon); icon.x = 0; icon.y = 0; return f;
 }
 const hotelCell = (name, code) => ({ rich: [[name], [` (${code})`, 'dimsm']] });
 
@@ -256,7 +286,64 @@ async function rebuild(ids) {
     const s = await screen(section, `${id} ${def.name}`, x, y, def.h, def.profile, def.nav, def.active);
     await def.build(s);
     fitSection(section);
-    done.push({ id, frameId: s.root.id });
+    done.push({ id, frameId: s.root.id, superseded: await supersedeOlder(id) });
   }
   return done;
+}
+/**
+ * A tela `id` desta feature substitui a de mesmo número nas páginas de features anteriores: a
+ * versão antiga fica marcada com ❌ no nome e oculta (não é apagada).
+ */
+async function supersedeOlder(id) {
+  const marked = [];
+  for (const page of figma.root.children.filter((p) => MIRROR_PAGE.test(p.name) && p.name < FEATURE_PAGE)) {
+    await page.loadAsync();
+    for (const f of page.findAll((n) => n.type === 'FRAME' && n.parent?.type === 'SECTION' && n.name.startsWith(id + ' '))) {
+      f.name = '❌ ' + f.name; f.visible = false; marked.push(`${page.name}: ${f.name}`);
+    }
+  }
+  return marked;
+}
+
+// --- Cabeçalho da página da feature (aviso + histórico)
+/**
+ * Cria (ou refaz) o aviso no topo da página da feature e garante a tabela de histórico.
+ * Chame na primeira vez que a feature tiver telas, e de novo se a versão do app mudar.
+ * Ex.: await featureHeader('tratativas manuais', '0.2.0');
+ */
+async function featureHeader(featureTitle, appVersion) {
+  const num = FEATURE_PAGE.slice(0, 3);
+  screensPage.children.find((n) => n.name === 'Aviso — página da feature')?.remove();
+  const notice = AL('VERTICAL', { name: 'Aviso — página da feature', itemSpacing: 12, paddingLeft: 32, paddingRight: 32, paddingTop: 28, paddingBottom: 28, cornerRadius: 12 });
+  notice.fills = [paint('amarelo/1')]; screensPage.appendChild(notice); notice.resize(1500, notice.height); notice.counterAxisSizingMode = 'FIXED'; notice.x = 0; notice.y = -760;
+  put(notice, await T(`${FEATURE_PAGE} — telas que a feature ${num} criou ou mudou`, 'título página', 'amarelo/9'), 'fill');
+  for (const p of [
+    `Espelho do app desktop ${appVersion}: as telas que a feature ${num} (${featureTitle}) acrescentou ou alterou, recriadas a partir de prints do app real com dados fictícios. As outras telas continuam como na página da feature anterior que as tem.`,
+    'Quem mantém esta página é o agente de código (skill “figma-screens-sync”), enquanto a feature está em desenvolvimento. Depois do merge, ela fica congelada.',
+    'O design oficial, que diz como o app deve ser, é o da UX (a partir da 007, a UX desenha as telas antes do desenvolvimento). Não altere esta página nem os componentes, as variáveis e os estilos que ela usa.',
+    'As telas são numeradas por área (1. Configuração … 7. Envio ao Comercial e área Comercial), com o mesmo número em todas as páginas. Para ver o app de hoje, use a versão mais recente de cada número.',
+  ]) put(notice, await T(p, 'corpo grande'), 'fill');
+  if (!screensPage.children.some((n) => n.name === 'Histórico de atualizações da página')) {
+    const hist = AL('VERTICAL', { name: 'Histórico de atualizações da página', itemSpacing: 12, paddingLeft: 32, paddingRight: 32, paddingTop: 28, paddingBottom: 28, cornerRadius: 12 });
+    hist.fills = [paint('fundo/padrão')]; hist.strokes = [paint('borda/padrão')]; screensPage.appendChild(hist); hist.resize(1500, hist.height); hist.counterAxisSizingMode = 'FIXED'; hist.x = 1620; hist.y = -760;
+    put(hist, await T('Histórico de atualizações', 'título seção'), 'fill');
+    const table = AL('VERTICAL', { name: 'Atualizações' }); put(hist, table, 'fill');
+    await historyLine(table, ['Data', 'Origem', 'Telas', 'O que mudou'], true);
+  }
+  return notice;
+}
+async function historyLine(table, cells, header = false) {
+  const COLS = [140, 260, 220, 'fill'];
+  const r = AL('HORIZONTAL', { name: header ? 'Cabeçalho' : 'Atualização', paddingTop: 8, paddingBottom: 8, itemSpacing: 16 }); put(table, r, 'fill');
+  r.strokes = [paint('borda/padrão')]; r.strokeTopWeight = 0; r.strokeLeftWeight = 0; r.strokeRightWeight = 0; r.strokeBottomWeight = 1;
+  for (let i = 0; i < COLS.length; i++) {
+    const t = await T(cells[i], header ? 'tabela' : 'corpo'); r.appendChild(t); t.textAutoResize = 'HEIGHT';
+    if (COLS[i] === 'fill') t.layoutSizingHorizontal = 'FILL'; else { t.resize(COLS[i], t.height); t.layoutSizingHorizontal = 'FIXED'; }
+  }
+}
+/** Acrescenta uma linha ao histórico da página. Ex.: await addHistory('16/11/2026', '4.1, 4.2', 'Coluna "Tratativa".'); */
+async function addHistory(date, screens, what) {
+  const table = screensPage.findOne((n) => n.name === 'Atualizações');
+  if (!table) throw new Error('A página ainda não tem histórico: chame featureHeader() antes.');
+  await historyLine(table, [date, FEATURE_PAGE, screens, what]);
 }

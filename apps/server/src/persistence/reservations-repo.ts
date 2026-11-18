@@ -1,12 +1,18 @@
 import {
+  CLASSIFICATIONS_ACCEPTING_TREATMENT,
+  CLASSIFICATIONS_REQUIRING_CHARGE,
   markNotFound,
   mergeVerification,
   selectNotFound,
   type Classification,
   type Period,
   type ReservationData,
+  type ReservationDetailedSituation,
   type ReservationRecord,
+  type ReservationSituation,
   type ReservationStatus,
+  type TreatmentDocumentKind,
+  type TreatmentStatus,
 } from '@hunit/domain';
 import {
   and,
@@ -17,6 +23,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  not,
   or,
   sql,
   type SQL,
@@ -24,7 +31,19 @@ import {
 import type { Database } from './db.js';
 import type { HotelProgress } from './execution-hotels-repo.js';
 import { InvalidCursorError } from './executions-repo.js';
-import { executionHotels, reservationObservations, reservations } from './schema.js';
+import { refreshCommercialLinesOf } from './commercial-repo.js';
+import {
+  commercialLines,
+  commercialReturns,
+  executionHotels,
+  hotels,
+  legacyReservations,
+  reservationManualAmounts,
+  reservationObservations,
+  reservations,
+  treatmentDocuments,
+  treatmentEvents,
+} from './schema.js';
 
 export type ReservationRow = typeof reservations.$inferSelect;
 type ReservationInsert = typeof reservations.$inferInsert;
@@ -58,12 +77,23 @@ function toInsert(record: ReservationRecord, executionId: string): ReservationIn
   };
 }
 
-/** Colunas atualizadas quando a reserva já existe: todas, menos a chave. */
-const UPSERT_SET = Object.fromEntries(
-  Object.entries(getTableColumns(reservations))
-    .filter(([key]) => key !== 'hotelCode' && key !== 'reservationNumber')
-    .map(([key, column]) => [key, sql.raw(`excluded.${column.name}`)]),
-) as Partial<Record<keyof ReservationInsert, SQL>>;
+/**
+ * Colunas atualizadas quando a reserva já existe: todas, menos a chave e a referência do outro
+ * verificador — uma execução não apaga o último envio que verificou a reserva, nem um envio apaga a
+ * última execução (specs/005, research R-02).
+ */
+function upsertSetWithout(
+  keep: keyof ReservationInsert,
+): Partial<Record<keyof ReservationInsert, SQL>> {
+  return Object.fromEntries(
+    Object.entries(getTableColumns(reservations))
+      .filter(([key]) => key !== 'hotelCode' && key !== 'reservationNumber' && key !== keep)
+      .map(([key, column]) => [key, sql.raw(`excluded.${column.name}`)]),
+  );
+}
+
+const UPSERT_SET = upsertSetWithout('lastDispatchId');
+const DISPATCH_UPSERT_SET = upsertSetWithout('lastExecutionId');
 
 export interface HotelResult {
   executionId: string;
@@ -149,6 +179,10 @@ export async function commitHotel(db: Database, result: HotelResult): Promise<Co
         );
     }
 
+    // Reserva enviada ao Comercial que a execução mostra cobrada (ou que volta a exigir cobrança)
+    // muda de aba na planilha (specs/005, FR-009).
+    await refreshCommercialLinesOf(tx, hotelCode, numbers, now);
+
     await tx
       .update(executionHotels)
       .set({
@@ -168,6 +202,54 @@ export async function commitHotel(db: Database, result: HotelResult): Promise<Co
       updated,
       markedNotFound: newlyMissing.length,
     };
+  });
+}
+
+/**
+ * Grava uma reserva verificada por um envio ao Comercial (specs/005, FR-004; research R-02): a
+ * mesma atualização de dados e de histórico de uma execução (FR-016 a FR-018b da 001), numa
+ * transação com a reserva travada. Diferenças: grava `last_dispatch_id` (e não mexe em
+ * `last_execution_id`), não cria `reservation_observations` e não marca "não encontrada".
+ *
+ * `within` roda na mesma transação, com a reserva já gravada: é onde o envio registra o desfecho
+ * da reserva, a linha da planilha e o histórico (FR-007: cada reserva por inteiro ou nada).
+ */
+export async function commitVerifiedReservation(
+  db: Database,
+  input: {
+    data: ReservationData;
+    dispatchId: string;
+    now: Date;
+    within?: (tx: Transaction, record: ReservationRecord) => Promise<void>;
+  },
+): Promise<ReservationRecord> {
+  const { data, dispatchId, now } = input;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.hotelCode, data.hotelCode),
+          eq(reservations.reservationNumber, data.reservationNumber),
+        ),
+      )
+      .for('update');
+    const merged = mergeVerification(row ? toReservationRecord(row) : null, data, now);
+    await tx
+      .insert(reservations)
+      .values({
+        ...merged,
+        chargedAt: merged.chargedAt ? new Date(merged.chargedAt) : null,
+        lastExecutionId: row?.lastExecutionId ?? null,
+        lastDispatchId: dispatchId,
+      })
+      .onConflictDoUpdate({
+        target: [reservations.hotelCode, reservations.reservationNumber],
+        set: DISPATCH_UPSERT_SET,
+      });
+    if (input.within) await input.within(tx, merged);
+    return merged;
   });
 }
 
@@ -216,8 +298,29 @@ export interface ReservationFilters {
   q?: string | undefined;
   /** Canal exatamente igual (specs/002, FR-020). */
   channel?: string | undefined;
-  /** Valor total ou valor cobrado iguais, no formato da API: "1234.56" (specs/002, FR-020b). */
+  /**
+   * Valor total, valor cobrado ou valor cobrado informado à mão (specs/003) iguais, no formato da
+   * API: "1234.56" (specs/002, FR-020b).
+   */
   amount?: string | undefined;
+  /** Situação da tratativa (specs/003, FR-015): qualquer uma das informadas. */
+  treatmentStatuses?: readonly TreatmentStatus[] | undefined;
+  /**
+   * "Falta cobrar" (specs/003, FR-002): `true` = classificação que exige cobrança e sem
+   * comprovante; `false` = o contrário.
+   */
+  pendingCharge?: boolean | undefined;
+  /** Situação da reserva (specs/003, FR-002, research R-14): qualquer uma das informadas. */
+  situations?: readonly ReservationSituation[] | undefined;
+  /** Alerta "Verificar" (specs/003, FR-002a): `true` = só com o alerta; `false` = o contrário. */
+  needsReview?: boolean | undefined;
+  /**
+   * Origem "Sistema anterior" (specs/004, FR-011): `true` = só as importadas, mesmo verificadas
+   * depois; `false` = só as que não vieram de lá.
+   */
+  fromLegacy?: boolean | undefined;
+  /** Situação detalhada, com "Validar comprovante" (specs/005, R-09): qualquer uma das informadas. */
+  detailedSituations?: readonly ReservationDetailedSituation[] | undefined;
 }
 
 export interface ListReservationsOptions extends ReservationFilters {
@@ -267,16 +370,115 @@ function freeTextCondition(text: string): SQL {
       and strpos(unaccent(lower(${reservations.guestName})), unaccent(lower(${text}))) > 0))`;
 }
 
+/** A reserva tem um documento vigente desse tipo? (specs/003: `ended_at` nulo = vigente.) */
+function hasVigenteDocument(kind: TreatmentDocumentKind): SQL {
+  return sql`exists (select 1 from ${treatmentDocuments} td where td.hotel_code = ${reservations.hotelCode} and td.reservation_number = ${reservations.reservationNumber} and td.kind = ${kind} and td.ended_at is null)`;
+}
+
+/**
+ * A reserva tem tratativa? Documento de tratativa vigente (specs/003) ou linha na planilha do
+ * Comercial que não foi cancelada (specs/005, research R-09; mesma regra de `treatmentFlags`).
+ */
+function hasRequestCondition(): SQL {
+  return sql`(${hasVigenteDocument('request')} or exists (select 1 from ${commercialLines} cl where cl.hotel_code = ${reservations.hotelCode} and cl.reservation_number = ${reservations.reservationNumber} and cl.state <> 'cancelled'))`;
+}
+
+/**
+ * A reserva tem comprovante? Documento de comprovante vigente (specs/003) ou retorno do Comercial
+ * confirmado pelo Financeiro (specs/005, FR-016).
+ */
+function hasProofCondition(): SQL {
+  return sql`(${hasVigenteDocument('proof')} or ${commercialReturnCondition('confirmed')})`;
+}
+
+function commercialReturnCondition(state: 'confirmed' | 'awaiting_validation'): SQL {
+  return sql`exists (select 1 from ${commercialReturns} cr where cr.hotel_code = ${reservations.hotelCode} and cr.reservation_number = ${reservations.reservationNumber} and cr.state = ${state})`;
+}
+
+/** Condição de cada situação da tratativa (specs/003, FR-002; mesma regra de `treatmentStatus`). */
+function treatmentStatusCondition(status: TreatmentStatus): SQL {
+  const hasProof = hasProofCondition();
+  const hasRequest = hasRequestCondition();
+  if (status === 'charged') return hasProof;
+  if (status === 'sent') return sql`(${hasRequest} and not ${hasProof})`;
+  return sql`(not ${hasRequest} and not ${hasProof})`;
+}
+
+/**
+ * "Falta cobrar" (specs/003, FR-002; mesma regra de `isPendingCharge`): a classificação exige
+ * cobrança — a lista vem do domínio, sem "A revisar (sistema anterior)" (specs/004, FR-007a) — e
+ * a reserva não tem comprovante. "Validar comprovante" continua aqui (specs/005, clarify Q1).
+ */
+function pendingChargeCondition(): SQL {
+  return sql`(${requiresChargeCondition()} and not ${hasProofCondition()})`;
+}
+
+/** A classificação da reserva aceita tratativa? (Lista do domínio, FR-003.) */
+function acceptsTreatmentCondition(): SQL {
+  return inArray(reservations.classification, [...CLASSIFICATIONS_ACCEPTING_TREATMENT]);
+}
+
+/** A classificação exige cobrança? (Mesma regra de `requiresCharge`, specs/004, R-04.) */
+function requiresChargeCondition(): SQL {
+  return inArray(reservations.classification, [...CLASSIFICATIONS_REQUIRING_CHARGE]);
+}
+
+/** A reserva veio do sistema anterior? (specs/004, FR-011.) */
+function fromLegacyCondition(): SQL {
+  return sql`exists (select 1 from ${legacyReservations} lr where lr.hotel_code = ${reservations.hotelCode} and lr.reservation_number = ${reservations.reservationNumber})`;
+}
+
+/**
+ * Condição de cada situação da reserva (specs/003, FR-002; mesma regra de
+ * `reservationSituation`): exatamente as reservas que a coluna mostra com essa situação.
+ */
+function situationCondition(situation: ReservationSituation): SQL {
+  const hasProof = hasProofCondition();
+  const hasRequest = hasRequestCondition();
+  if (situation === 'proof_sent') return hasProof;
+  if (situation === 'treatment_sent') {
+    return sql`(${hasRequest} and not ${hasProof} and ${requiresChargeCondition()})`;
+  }
+  // Uma classificação que exige cobrança só aparece sem tratativa; as outras, com ou sem.
+  const shown = CLASSIFICATIONS_REQUIRING_CHARGE.includes(situation)
+    ? sql`(not ${hasProof} and not ${hasRequest})`
+    : sql`(not ${hasProof})`;
+  return sql`(${eq(reservations.classification, situation)} and ${shown})`;
+}
+
+/**
+ * Alerta "Verificar" (specs/003, FR-002a; mesma regra de `needsReview`): só tratativa,
+ * classificação que não aceita tratativa (por isso "A revisar (sistema anterior)" fica de fora,
+ * specs/004) e nenhuma confirmação desde a última mudança de situação.
+ */
+function needsReviewCondition(): SQL {
+  return sql`(${hasRequestCondition()} and not ${hasProofCondition()} and not ${acceptsTreatmentCondition()} and not exists (select 1 from ${treatmentEvents} te where te.hotel_code = ${reservations.hotelCode} and te.reservation_number = ${reservations.reservationNumber} and te.type = 'review_confirmed' and te.at >= coalesce(${reservations.statusChangedAt}, '-infinity'::timestamptz)))`;
+}
+
+/**
+ * Condição de cada situação detalhada (specs/005, research R-09; mesma regra de
+ * `detailedSituation`): "Validar comprovante" é a parte de "Tratativa enviada" com retorno do
+ * Comercial aguardando validação.
+ */
+function detailedSituationCondition(situation: ReservationDetailedSituation): SQL {
+  const awaiting = commercialReturnCondition('awaiting_validation');
+  if (situation === 'return_pending') {
+    return sql`(${situationCondition('treatment_sent')} and ${awaiting})`;
+  }
+  if (situation === 'treatment_sent') {
+    return sql`(${situationCondition('treatment_sent')} and not ${awaiting})`;
+  }
+  return situationCondition(situation);
+}
+
 /**
  * Reservas com filtros combináveis (FR-020), em ordem de hotel e número, paginadas por cursor.
  * Os filtros de classificação e situação valem para o estado atual da reserva.
  *
  * @throws InvalidCursorError
  */
-export async function listReservations(
-  db: Database,
-  options: ListReservationsOptions,
-): Promise<ReservationPageResult> {
+/** As condições SQL dos filtros combináveis (FR-020), comuns à lista e à seleção do filtro. */
+function filterConditions(options: ReservationFilters): SQL[] {
   const conditions: SQL[] = [];
   const has = <T>(values: readonly T[] | undefined): values is readonly T[] =>
     values !== undefined && values.length > 0;
@@ -308,9 +510,38 @@ export async function listReservations(
     const amountCondition = or(
       eq(reservations.totalAmount, options.amount),
       eq(reservations.chargedAmount, options.amount),
+      sql`exists (select 1 from ${reservationManualAmounts} ma where ma.hotel_code = ${reservations.hotelCode} and ma.reservation_number = ${reservations.reservationNumber} and ma.amount = ${options.amount})`,
+      // Valor informado pelo Comercial e confirmado (specs/005, FR-024).
+      sql`exists (select 1 from ${commercialReturns} cr where cr.hotel_code = ${reservations.hotelCode} and cr.reservation_number = ${reservations.reservationNumber} and cr.state = 'confirmed' and cr.charged_amount = ${options.amount})`,
     );
     if (amountCondition) conditions.push(amountCondition);
   }
+  if (has(options.treatmentStatuses)) {
+    const anyStatus = or(...options.treatmentStatuses.map(treatmentStatusCondition));
+    if (anyStatus) conditions.push(anyStatus);
+  }
+  if (options.pendingCharge === true) conditions.push(pendingChargeCondition());
+  if (options.pendingCharge === false) conditions.push(not(pendingChargeCondition()));
+  if (has(options.situations)) {
+    const anySituation = or(...options.situations.map(situationCondition));
+    if (anySituation) conditions.push(anySituation);
+  }
+  if (options.needsReview === true) conditions.push(needsReviewCondition());
+  if (options.needsReview === false) conditions.push(not(needsReviewCondition()));
+  if (has(options.detailedSituations)) {
+    const anyDetailed = or(...options.detailedSituations.map(detailedSituationCondition));
+    if (anyDetailed) conditions.push(anyDetailed);
+  }
+  if (options.fromLegacy === true) conditions.push(fromLegacyCondition());
+  if (options.fromLegacy === false) conditions.push(not(fromLegacyCondition()));
+  return conditions;
+}
+
+export async function listReservations(
+  db: Database,
+  options: ListReservationsOptions,
+): Promise<ReservationPageResult> {
+  const conditions = filterConditions(options);
   if (options.cursor !== undefined) {
     const [hotelCode, reservationNumber] = decodeCursor(options.cursor);
     conditions.push(
@@ -331,6 +562,33 @@ export async function listReservations(
   return {
     items,
     nextCursor: rows.length > options.limit && last ? encodeCursor(last) : null,
+  };
+}
+
+/**
+ * Todas as reservas de um filtro, até `max`, na ordem da lista, e quantas o filtro encontrou
+ * (specs/005, FR-030 — "selecionar todas do filtro" e a cópia para e-mail, FR-027).
+ */
+export async function selectReservations(
+  db: Database,
+  filters: ReservationFilters,
+  max: number,
+): Promise<{ rows: Array<ReservationRow & { hotelName: string }>; total: number }> {
+  const where = and(...filterConditions(filters));
+  const [count] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(reservations)
+    .where(where);
+  const rows = await db
+    .select({ reservation: reservations, hotelName: hotels.name })
+    .from(reservations)
+    .innerJoin(hotels, eq(hotels.code, reservations.hotelCode))
+    .where(where)
+    .orderBy(asc(reservations.hotelCode), asc(reservations.reservationNumber))
+    .limit(max);
+  return {
+    rows: rows.map(({ reservation, hotelName }) => ({ ...reservation, hotelName })),
+    total: count?.total ?? 0,
   };
 }
 

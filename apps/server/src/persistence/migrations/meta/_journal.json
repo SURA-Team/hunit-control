@@ -50,6 +50,48 @@
       "when": 1794516304256,
       "tag": "0006_unaccent",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794607101569,
+      "tag": "0007_treatments",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794840596037,
+      "tag": "0008_treatment_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794853508004,
+      "tag": "0009_legacy_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794863986041,
+      "tag": "0010_reservation_total_optional",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794923579254,
+      "tag": "0011_commercial_dispatch",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794940422269,
+      "tag": "0012_commercial_lines_awaiting_return",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,58 @@ export const PROBLEMS: Readonly<Record<ProblemCode, ProblemDefinition>> = {
   nothing_to_resume: { status: 409, title: 'A execução não tem hotéis pendentes para retomar' },
   execution_already_resumed: { status: 409, title: 'A execução já foi retomada' },
   evidence_expired: { status: 410, title: 'Evidência expirada' },
+  // Tratativas manuais (specs/003, contracts/api-changes.md §1).
+  empty_file: { status: 400, title: 'O arquivo está vazio' },
+  file_too_large: { status: 413, title: 'O arquivo tem mais de 25 MB' },
+  unsupported_file_type: {
+    status: 415,
+    title: 'Tipo de arquivo não aceito ou conteúdo diferente da extensão',
+  },
+  file_not_found: { status: 422, title: 'O servidor não tem o arquivo informado' },
+  not_eligible_for_treatment: {
+    status: 409,
+    title: 'A situação da reserva não aceita tratativa nem comprovante',
+  },
+  document_not_current: { status: 409, title: 'O documento não é mais o atual' },
+  document_not_revertible: { status: 409, title: 'O documento não pode mais ser revertido' },
+  proof_required: {
+    status: 409,
+    title: 'O valor só pode ser informado numa reserva com comprovante',
+  },
+  document_purged: {
+    status: 410,
+    title: 'O arquivo foi apagado pelo prazo de retenção',
+  },
+  // Envio ao Comercial (specs/005, contracts/api-changes.md).
+  account_busy: {
+    status: 409,
+    title: 'Já existe uma execução ou um envio ativo para esta conta do Hunit',
+  },
+  commercial_sheet_not_configured: {
+    status: 409,
+    title: 'A planilha do Comercial não está configurada no servidor',
+  },
+  commercial_sheet_unavailable: { status: 503, title: 'A planilha do Comercial está indisponível' },
+  no_eligible_reservations: {
+    status: 422,
+    title: 'Nenhuma das reservas aceita o envio ao Comercial',
+  },
+  dispatch_already_finished: { status: 409, title: 'O envio já foi encerrado' },
+  dispatch_already_resumed: { status: 409, title: 'O envio já foi retomado' },
+  return_awaiting_validation: {
+    status: 409,
+    title: 'Há um retorno do Comercial aguardando a validação do Financeiro',
+  },
+  return_not_awaiting_validation: {
+    status: 409,
+    title: 'O retorno não está aguardando validação',
+  },
+  return_not_confirmed: { status: 409, title: 'O retorno não está confirmado' },
+  not_in_commercial_sheet: {
+    status: 409,
+    title: 'A reserva não está nesta situação na planilha do Comercial',
+  },
+  restore_expired: { status: 409, title: 'O prazo de 30 dias para reverter terminou' },
   internal_error: { status: 500, title: 'Erro interno' },
 };
 

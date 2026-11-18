@@ -43,6 +43,21 @@ const environmentSchema = z.object({
   EVIDENCE_DIR: z.string().default('/data/evidence'),
   EVIDENCE_RETENTION_DAYS: integer(1).default(30),
   RESERVATION_RETENTION_YEARS: integer(1).default(5),
+
+  // Planilha do Comercial (specs/005, research R-04). As duas ou nenhuma: sem elas, a integração
+  // fica desligada. O conteúdo da chave nunca vem por variável, só o caminho do arquivo.
+  COMMERCIAL_SHEET_ID: z
+    .string()
+    .regex(
+      /^[A-Za-z0-9_-]{20,100}$/,
+      'deve ser o identificador da planilha (letras, números, - e _)',
+    )
+    .optional(),
+  COMMERCIAL_SHEET_KEY_FILE: z
+    .string()
+    .regex(/^\/\S+$/, 'deve ser o caminho absoluto do arquivo da chave dentro do container')
+    .optional(),
+  COMMERCIAL_SHEET_DONE_RETENTION_DAYS: integer(1).default(90),
 });
 
 export interface AppConfig {
@@ -66,6 +81,20 @@ export interface AppConfig {
     retentionDays: number;
   };
   reservationRetentionYears: number;
+  /** Planilha do Comercial (specs/005, research R-04 e R-15). */
+  commercialSheet: {
+    /** `null` = integração desligada (nenhuma das duas variáveis definida). */
+    access: CommercialSheetAccess | null;
+    /** Dias que uma linha concluída fica na aba "Concluídas" (spec FR-026). */
+    doneRetentionDays: number;
+  };
+}
+
+/** Onde está a planilha e a chave da conta de serviço. Os valores nunca vão para log ou resposta. */
+export interface CommercialSheetAccess {
+  spreadsheetId: string;
+  /** Caminho do arquivo da chave dentro do container (pasta só de leitura, research R-04). */
+  keyFile: string;
 }
 
 /**
@@ -118,6 +147,11 @@ export function loadConfig(env: Environment = process.env): AppConfig {
   if (!result.success) throw new ConfigError(describeIssues(result.error));
 
   const values = result.data;
+  const sheetAccess = commercialSheetAccessOf(
+    values.COMMERCIAL_SHEET_ID,
+    values.COMMERCIAL_SHEET_KEY_FILE,
+  );
+
   return {
     port: values.PORT,
     logLevel: values.LOG_LEVEL,
@@ -135,5 +169,39 @@ export function loadConfig(env: Environment = process.env): AppConfig {
       retentionDays: values.EVIDENCE_RETENTION_DAYS,
     },
     reservationRetentionYears: values.RESERVATION_RETENTION_YEARS,
+    commercialSheet: {
+      access: sheetAccess,
+      doneRetentionDays: values.COMMERCIAL_SHEET_DONE_RETENTION_DAYS,
+    },
   };
+}
+
+/** As duas variáveis da planilha ou nenhuma (specs/005, research R-04). */
+function commercialSheetAccessOf(
+  spreadsheetId: string | undefined,
+  keyFile: string | undefined,
+): CommercialSheetAccess | null {
+  if ((spreadsheetId === undefined) !== (keyFile === undefined)) {
+    throw new ConfigError([
+      'COMMERCIAL_SHEET_ID e COMMERCIAL_SHEET_KEY_FILE: defina as duas variáveis da planilha do Comercial ou nenhuma',
+    ]);
+  }
+  return spreadsheetId !== undefined && keyFile !== undefined ? { spreadsheetId, keyFile } : null;
+}
+
+/**
+ * Lê só o acesso à planilha do Comercial. Usada pelo comando `commercial-sheet`, que não precisa
+ * das demais variáveis (nem do banco). `null` = integração desligada.
+ */
+export function loadCommercialSheetAccess(
+  env: Environment = process.env,
+): CommercialSheetAccess | null {
+  const result = environmentSchema
+    .pick({ COMMERCIAL_SHEET_ID: true, COMMERCIAL_SHEET_KEY_FILE: true })
+    .safeParse(withoutBlankValues(env));
+  if (!result.success) throw new ConfigError(describeIssues(result.error));
+  return commercialSheetAccessOf(
+    result.data.COMMERCIAL_SHEET_ID,
+    result.data.COMMERCIAL_SHEET_KEY_FILE,
+  );
 }

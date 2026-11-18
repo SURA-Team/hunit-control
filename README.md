@@ -16,6 +16,8 @@ servidor.
 - Validação ponta a ponta: [quickstart.md](specs/001-consulta-reservas-hunit/quickstart.md)
 - App desktop: [specs/002-app-desktop/spec.md](specs/002-app-desktop/spec.md),
   [plan.md](specs/002-app-desktop/plan.md) e [quickstart.md](specs/002-app-desktop/quickstart.md)
+- Envio ao Comercial pela planilha do Google: [specs/005-envio-comercial/spec.md](specs/005-envio-comercial/spec.md),
+  [plan.md](specs/005-envio-comercial/plan.md) e [quickstart.md](specs/005-envio-comercial/quickstart.md)
 - Guia para agentes de código, estrutura do repositório e todos os comandos: [AGENTS.md](AGENTS.md)
 
 ## Desenvolvimento
@@ -197,8 +199,13 @@ de outra máquina, cópia em atraso depois de o PC ficar desligado e uma restaur
 ## App desktop
 
 O app desktop (`apps/desktop`) é como o Financeiro e a Controladoria usam o sistema: executar a
-consulta e responder ao token, acompanhar, cancelar e retomar execuções e consultar reservas e
-evidências. Ele só fala com a API, por HTTPS, confirmando o servidor pelo certificado raiz.
+consulta e responder ao token, acompanhar, cancelar e retomar execuções, consultar reservas e
+evidências e registrar as tratativas. Ele só fala com a API, por HTTPS, confirmando o servidor pelo
+certificado raiz.
+
+Perfis: as máquinas do Financeiro usam chave de perfil **operador** (executam e registram
+tratativas); a Controladoria usa chave de perfil **consulta** (vê tudo e baixa os documentos, sem
+executar nem registrar).
 
 ### Gerar o instalador
 
@@ -206,11 +213,24 @@ Numa máquina de desenvolvimento:
 
 ```powershell
 pnpm install
+pnpm build                          # compila o @hunit/domain e o @hunit/contracts que o app empacota
 pnpm --filter @hunit/desktop dist
 ```
 
+Sem o `pnpm build`, o instalador usa o `dist` antigo dos pacotes e a compilação falha com
+`MISSING_EXPORT` quando o domínio ganhou funções novas (aconteceu na implantação da 005).
+
 O instalador fica em `apps/desktop/release/` (`HUNIT Control Setup <versão>.exe`). Ele instala só
 para o usuário do Windows, sem pedir administrador, e cria o atalho no Menu Iniciar.
+
+A versão é `major.minor.<commits>`. O major e o minor vêm do campo `version` de
+`apps/desktop/package.json` (ex.: `0.2.0`), e o último número é a quantidade de commits do Git, por
+exemplo `0.2.131`. Por isso, cada atualização puxada para a pasta de produção gera um instalador com
+número novo, e o mesmo código gera sempre o mesmo número. A versão aparece no rodapé da
+**Configuração** ("HUNIT Control — versão …") e no nome do instalador. Suba o minor à mão só numa
+feature nova com mudança no app (ex.: `0.2.0` → `0.3.0`). O último número do `package.json` fica
+sempre `0`. Gere o instalador a partir de um clone completo do repositório: com
+`git clone --depth`, a contagem fica errada.
 
 ### Instalar numa máquina
 
@@ -251,11 +271,133 @@ Fechar a janela encerra o app. Se houver uma execução desta máquina em andame
 ela continua no servidor, mas o pedido de token não chega com o app fechado. Ao abrir de novo, um
 pedido de token ainda no prazo reaparece.
 
+### Tratativas manuais
+
+Para as reservas que exigem cobrança (pendente de cobrança, erro na cobrança, cartão validado,
+erro de análise e cobrar na maquininha), o Financeiro registra, no detalhe da reserva:
+
+- a **tratativa** — o pedido de cobrança ao Comercial (por exemplo, o e-mail): a reserva fica
+  **Enviada** e continua pendente;
+- o **comprovante** — a prova de que o Comercial cobrou: a reserva fica **Cobrada**.
+
+Aceita e-mail (.eml ou .msg), PDF e imagem (.png, .jpg), de até 25 MB. Antes de confirmar, o app
+mostra o arquivo; o servidor confere o conteúdo contra a extensão. Um documento substituído ou
+desfeito fica guardado por **30 dias** e pode ser revertido nesse prazo. O valor cobrado pode ser
+informado à mão quando o Hunit não traz o valor.
+
+Para aplicar o mesmo documento a várias reservas, marque-as na lista (a seleção se mantém entre
+pesquisas, até 2 000 reservas) e use **Anexar tratativa** ou **Anexar comprovante** na barra da
+seleção. O atalho **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm
+comprovante. Nada disso acessa o Hunit.
+
+### Envio ao Comercial
+
+Com a planilha do Comercial configurada no servidor ("Planilha do Comercial", abaixo), o
+Financeiro envia os pedidos de cobrança direto para ela:
+
+- **Enviar ao Comercial**, na barra da seleção: o app mostra quais reservas aceitam o envio e o
+  total; pede o acesso ao Hunit (o mesmo das execuções) e o token. Antes de ir para a planilha, cada
+  reserva é verificada no Hunit (só leitura): a que não exige mais cobrança é retirada, e a que não
+  pode ser verificada não é enviada. A enviada fica como **Tratativa enviada**, como a tratativa por
+  e-mail.
+- O Comercial preenche, na aba "A cobrar", o código de autorização, o hotel da cobrança (o que
+  aparece na maquininha), o valor cobrado e o responsável. O servidor lê os retornos a cada
+  10 minutos (ou na hora, com **Ler retornos agora**, na área **Comercial**) e a reserva passa a
+  **Validar comprovante**.
+- O Financeiro confere o retorno no detalhe da reserva ou na aba **Retornos a validar** e
+  **confirma** (vale como comprovante, e o valor cobrado do Comercial passa a valer) ou **recusa**
+  com o motivo, que o Comercial vê na planilha. A confirmação pode ser em lote, com uma lista de
+  revisão antes; a recusa é sempre uma a uma.
+- A lista de reservas mostra o **valor cobrado** com a origem (Hunit, manual ou Comercial).
+- **Selecionar todas do filtro** marca até 2 000 reservas de todas as páginas; **Confirmar
+  "Verificar"** tira o alerta de várias de uma vez; **Copiar para e-mail** copia o resultado da
+  pesquisa (ou a seleção) numa tabela com as colunas da planilha, sem o nome do hóspede, para colar
+  no corpo do e-mail.
+
+## Planilha do Comercial
+
+Feita uma vez, no PC de produção, por quem administra a implantação (specs/005, FR-008a). A planilha
+é uma planilha do Google com duas abas ("A cobrar" e "Concluídas"); o servidor escreve nela com uma
+**conta de serviço** do Google, e a chave dessa conta fica só no servidor, numa pasta montada só para
+leitura. Sem as duas variáveis da planilha, o envio ao Comercial fica desligado e o resto funciona.
+
+1. No Google Cloud (console.cloud.google.com), num projeto da empresa: ative a **API do Google
+   Sheets**, crie uma **conta de serviço** (sem papéis no projeto) e, nela, uma **chave JSON**.
+2. Salve a chave como `deploy\secrets\commercial-sheet-key.json` na pasta de produção
+   (`C:\Dev\producao\hunit-control`). A pasta é ignorada pelo Git (menos o README dela). Nunca
+   envie a chave por e-mail ou chat nem a cole no `.env`.
+3. Crie a planilha vazia no Google Drive da empresa (ex.: "HUNIT Comercial") e compartilhe-a com o
+   e-mail da conta de serviço (`...@....iam.gserviceaccount.com`, no JSON) como **Editor**.
+4. No `.env`, preencha as duas juntas:
+   - `COMMERCIAL_SHEET_ID`: o ID da planilha (o trecho do endereço entre `/d/` e `/edit`);
+   - `COMMERCIAL_SHEET_KEY_FILE=/run/secrets/commercial-sheet/commercial-sheet-key.json`.
+5. Suba de novo e prepare a planilha (cria as abas, os cabeçalhos, a aparência e as proteções;
+   pode rodar de novo sem estragar nada) e confira:
+   ```powershell
+   docker compose up -d
+   docker compose exec server node dist/cli.js commercial-sheet setup
+   docker compose exec server node dist/cli.js commercial-sheet check
+   ```
+   O `check` deve dizer "acesso OK" e "OK" nas duas abas, com a quantidade de linhas: o "OK" já
+   quer dizer que o cabeçalho e as proteções estão certos. Ele não muda nada; se alguém alterar o
+   formato da planilha, ele aponta o que mudou (rode o `setup` de novo).
+   A aparência (cabeçalho preto e lima, listras, bordas tracejadas e a coluna "Validação do
+   Financeiro" em lima, laranja ou vermelho, conforme o status) não é conferida: se alguém mudá-la,
+   o `setup` a refaz. As regras de formatação condicional das duas abas são do sistema: o `setup`
+   apaga as que alguém tiver criado ali.
+6. Compartilhe a planilha com as contas do Comercial no Google, como **Editor**: as colunas do
+   sistema (A a J de "A cobrar") e a aba "Concluídas" ficam protegidas; o Comercial só preenche as
+   colunas de retorno (K a N).
+7. No app, a área **Comercial → Planilha** deve mostrar "Funcionando".
+
+Se a planilha ficar fora do ar, nada se perde: o servidor guarda as atualizações e as aplica quando
+ela volta (a área **Comercial → Planilha** mostra as pendências e desde quando). As linhas de
+"Concluídas" saem da planilha 90 dias depois (`COMMERCIAL_SHEET_DONE_RETENTION_DAYS`) e continuam
+no banco. Variáveis e opções: `.env.example`; comando: [contracts/cli.md](specs/005-envio-comercial/contracts/cli.md).
+
+## Importar o histórico do sistema anterior
+
+Feita uma vez, no PC de produção, por quem administra a implantação (specs/004). A importação nunca
+acessa o Hunit e não pede token. Os comandos rodam na pasta de produção, num container de uso único
+que lê a pasta da importação só para leitura.
+
+1. Confira que a cópia de segurança do dia foi feita (`docker compose logs backup`).
+2. Baixe a cópia **.xlsx** da planilha do sistema anterior (abas "Reservas" e "Tratativas") e copie
+   a pasta de anexos para `C:\importacao`, **fora de qualquer repositório**:
+   `C:\importacao\planilha.xlsx` e `C:\importacao\anexos\`.
+3. Simule. Nada é gravado; o relatório mostra o que seria criado, atualizado, ignorado ou recusado
+   e por quê, sem dados de hóspedes nem valores, e termina com o id da simulação:
+   ```powershell
+   docker compose run --rm -v "C:\importacao:/import:ro" server node dist/cli.js legacy-import simulate --xlsx /import/planilha.xlsx --files /import/anexos
+   ```
+4. Associe os hotéis do sistema anterior aos do catálogo. A simulação propõe pelo nome; confira e
+   confirme (ou troque, ou deixe sem associação):
+   ```powershell
+   docker compose run --rm server node dist/cli.js legacy-import hotels
+   docker compose run --rm server node dist/cli.js legacy-import hotels --accept-proposals
+   docker compose run --rm server node dist/cli.js legacy-import hotels --set <código antigo> --hotel <código do catálogo>
+   ```
+5. Simule de novo e revise as recusas com o Financeiro **antes** de importar.
+6. Importe a simulação conferida. Se a planilha, a pasta ou a associação mudaram depois dela, o
+   comando recusa e pede uma nova simulação:
+   ```powershell
+   docker compose run --rm -v "C:\importacao:/import:ro" server node dist/cli.js legacy-import run --simulation <id> --xlsx /import/planilha.xlsx --files /import/anexos
+   ```
+   Pode ser interrompida (Ctrl+C): o que entrou fica completo, e uma nova simulação e importação
+   completam o resto sem duplicar. `legacy-import report --id <id>` mostra o relatório de novo
+   (`--all` lista também cada linha já importada, que normalmente aparece só como contagem).
+7. No app, confira por amostragem (filtro **Origem → Sistema anterior**). Depois, rode uma execução
+   no Hunit cobrindo o período do sistema anterior: as reservas "A revisar (sistema anterior)"
+   recebem a classificação do Hunit e as pendências antigas são atualizadas.
+8. **Apague `C:\importacao`** e esvazie a lixeira. Os dados ficam só no banco e nas cópias de
+   segurança cifradas.
+
 ## Rotinas automáticas
 
 | Rotina | Quando | O que faz |
 |---|---|---|
-| Manutenção (no `server`) | Ao subir e a cada 24 h | Apaga evidências com mais de `EVIDENCE_RETENTION_DAYS` dias (padrão 30) e anonimiza o nome do hóspede das reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos (padrão 5) |
+| Manutenção (no `server`) | Ao subir e a cada 24 h | Apaga evidências com mais de `EVIDENCE_RETENTION_DAYS` dias (padrão 30), anonimiza o nome do hóspede das reservas com check-in há mais de `RESERVATION_RETENTION_YEARS` anos (padrão 5) e apaga os arquivos das tratativas vencidos: substituídos ou desfeitos há 30 dias, os de reservas anonimizadas e os enviados e nunca registrados (o registro e o histórico ficam) |
+| Planilha do Comercial (no `server`, quando configurada) | Segundos depois de cada mudança; confere pendências a cada 30 s e lê os retornos a cada 10 min | Escreve as linhas novas e as mudanças, move as concluídas para "Concluídas", lê os retornos do Comercial e tira da planilha as concluídas há mais de `COMMERCIAL_SHEET_DONE_RETENTION_DAYS` dias (padrão 90). Com a planilha fora do ar, tenta de novo sozinha |
 | Cópia de segurança (no `backup`) | Verifica a cada 15 min | Faz uma cópia quando a mais nova tem mais de `BACKUP_INTERVAL_HOURS` horas (padrão 24) e apaga as com mais de `BACKUP_RETENTION_DAYS` dias (padrão 30) |
 
 As duas olham o que está vencido, e não o horário: o que atrasou com o PC desligado é feito logo
@@ -263,8 +405,11 @@ que ele volta (FR-029).
 
 Para acompanhar: `docker compose logs backup` e `docker compose logs server`. As cópias ficam em
 `BACKUP_DIR` com o nome `hunit-AAAAMMDD-HHMMSS.dump.gpg` (horário UTC), cifradas com AES-256.
-Elas contêm reservas, histórico, execuções e clientes da API (só o hash das chaves); não contêm
-credenciais nem token do Hunit, nem as evidências.
+Elas contêm reservas, histórico, execuções, clientes da API (só o hash das chaves) e os documentos
+das tratativas, que ficam no próprio banco — por isso as cópias crescem com eles; não contêm
+credenciais nem token do Hunit, nem as evidências. Também têm os envios e os retornos do Comercial;
+depois de uma restauração, a primeira rodada reconstrói a planilha a partir do banco. A chave da
+planilha (`deploy/secrets`) não entra nas cópias: guarde-a fora do PC, como o `.env`.
 
 ## Restaurar uma cópia de segurança
 
@@ -305,5 +450,8 @@ seção 5 do quickstart.
   servidor grava (SC-004).
 - Nunca envie credenciais do Hunit por chat, e-mail ou arquivo; elas são digitadas só no app ou no
   terminal do operador.
+- A chave da conta de serviço da planilha do Comercial fica só em `deploy/secrets` do PC do
+  servidor; o ID da planilha e a chave nunca aparecem no app, na API, nos logs nem nas mensagens de
+  erro. A planilha nunca recebe o nome do hóspede.
 - Os dados de reservas são pessoais e financeiros: não copie o banco, as cópias decifradas, as
   evidências nem planilhas para fora dos locais previstos.

@@ -1,6 +1,7 @@
 /**
- * Estrutura da interface (specs/002, FR-004, FR-005, research R-09): quatro áreas fixas
- * (Executar, Execuções, Reservas, Configuração), navegação por estado, sem roteador. Sem conexão
+ * Estrutura da interface (specs/002, FR-004, FR-005, research R-09): áreas fixas (Executar,
+ * Execuções, Reservas, Comercial — specs/005, research R-14 — e Configuração), navegação por
+ * estado, sem roteador. Sem conexão
  * confirmada, só a Configuração fica disponível. As ações de operador somem para o perfil consulta.
  */
 import { AppShell, Badge, Group, NavLink, Stack, Text, Title } from '@mantine/core';
@@ -9,13 +10,14 @@ import alertSound from '../../../resources/sounds/token-alert.wav';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { TwoFactorDialog } from './components/TwoFactorDialog';
 import { useHunit } from './hunit';
+import { CommercialScreen } from './screens/commercial/CommercialScreen';
 import { ExecutionsScreen } from './screens/executions/ExecutionsScreen';
 import { ReservationsScreen } from './screens/reservations/ReservationsScreen';
 import { RunScreen } from './screens/run/RunScreen';
 import { SetupScreen } from './screens/setup/SetupScreen';
 import { useConnection } from './state/connection';
 
-export type Area = 'run' | 'executions' | 'reservations' | 'setup';
+export type Area = 'run' | 'executions' | 'reservations' | 'commercial' | 'setup';
 
 /** No máximo um aviso de atividade por minuto (research R-05). */
 const ACTIVITY_PING_MS = 60_000;
@@ -24,6 +26,7 @@ const AREA_TITLES: Record<Area, string> = {
   run: 'Executar',
   executions: 'Execuções',
   reservations: 'Reservas',
+  commercial: 'Comercial',
   setup: 'Configuração',
 };
 
@@ -45,8 +48,8 @@ export function App() {
   const available: Area[] = needsSetup
     ? ['setup']
     : isOperator
-      ? ['run', 'executions', 'reservations', 'setup']
-      : ['executions', 'reservations', 'setup'];
+      ? ['run', 'executions', 'reservations', 'commercial', 'setup']
+      : ['executions', 'reservations', 'commercial', 'setup'];
   const area: Area = available.includes(chosen) ? chosen : (available[0] ?? 'setup');
 
   // Ação do operador renova o prazo do cofre do acesso ao Hunit.
@@ -97,6 +100,7 @@ export function App() {
         initialExecutionId={reservationsExecutionId}
       />
     ),
+    commercial: <CommercialScreen />,
     setup: <SetupScreen />,
   };
 

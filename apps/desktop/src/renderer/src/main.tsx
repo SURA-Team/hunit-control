@@ -13,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { HunitContext, windowHunit } from './hunit';
 import { ConnectionProvider } from './state/connection';
+import { SelectionProvider } from './state/selection';
 
 const theme = createTheme({
   primaryColor: 'blue',
@@ -42,7 +43,10 @@ createRoot(root).render(
         <QueryClientProvider client={queryClient}>
           <HunitContext.Provider value={windowHunit()}>
             <ConnectionProvider>
-              <App />
+              {/* Acima das telas: a seleção do lote sobrevive às pesquisas e à troca de área. */}
+              <SelectionProvider>
+                <App />
+              </SelectionProvider>
             </ConnectionProvider>
           </HunitContext.Provider>
         </QueryClientProvider>

@@ -29,7 +29,7 @@ afterEach(() => {
 function request(executionId = ID_A, secondsLeft = 125, clockOffsetMs = 0) {
   act(() =>
     hunit.emit.twoFactorRequested({
-      executionId,
+      job: { kind: 'execution', id: executionId },
       deadline: new Date(NOW.getTime() + secondsLeft * 1000).toISOString(),
       clockOffsetMs,
     }),
@@ -92,7 +92,7 @@ describe('TwoFactorDialog', () => {
     request();
     await screen.findByLabelText(/token do autenticador/i);
 
-    act(() => hunit.emit.twoFactorClosed({ executionId: ID_A, reason }));
+    act(() => hunit.emit.twoFactorClosed({ job: { kind: 'execution', id: ID_A }, reason }));
 
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(screen.queryByLabelText(/token do autenticador/i)).not.toBeInTheDocument();
@@ -119,7 +119,9 @@ describe('TwoFactorDialog', () => {
     const user = userEvent.setup();
 
     expect(await screen.findByText('2:00')).toBeInTheDocument();
-    act(() => hunit.emit.twoFactorClosed({ executionId: ID_A, reason: 'accepted' }));
+    act(() =>
+      hunit.emit.twoFactorClosed({ job: { kind: 'execution', id: ID_A }, reason: 'accepted' }),
+    );
     await user.click(await screen.findByRole('button', { name: /fechar/i }));
 
     expect(await screen.findByText('1:30')).toBeInTheDocument();
@@ -131,7 +133,9 @@ describe('TwoFactorDialog', () => {
     request(ID_A, 120);
     const user = userEvent.setup();
 
-    act(() => hunit.emit.twoFactorClosed({ executionId: ID_A, reason: 'accepted' }));
+    act(() =>
+      hunit.emit.twoFactorClosed({ job: { kind: 'execution', id: ID_A }, reason: 'accepted' }),
+    );
     await user.click(await screen.findByRole('button', { name: /fechar/i }));
 
     await waitFor(() => expect(screen.queryByText(/token aceito/i)).not.toBeInTheDocument());

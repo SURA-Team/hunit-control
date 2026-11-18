@@ -8,12 +8,25 @@ import { parse } from 'yaml';
 import contractSource from '../../../../packages/contracts/openapi.yaml?raw';
 import {
   CLASSIFICATION_LABELS,
+  CLASSIFICATION_ORDER,
+  DOCUMENT_STATE_LABELS,
   END_REASON_MESSAGES,
   ERROR_MESSAGES,
   EXECUTION_STATUS_LABELS,
   HOTEL_STATUS_LABELS,
+  OUTCOME_NAMES,
+  OUTCOME_REASON_MESSAGES,
   RESERVATION_STATUS_LABELS,
+  REVIEW_LABEL,
+  DETAILED_SITUATION_LABELS,
+  LINE_STATE_LABELS,
+  RETURN_STATE_LABELS,
+  SITUATION_LABELS,
+  SITUATION_ORDER,
   TONES,
+  TREATMENT_EVENT_NAMES,
+  TREATMENT_KIND_NAMES,
+  TREATMENT_STATUS_LABELS,
 } from '../../src/renderer/src/presentation/labels.js';
 
 interface Schema {
@@ -35,6 +48,13 @@ describe('todo valor dos enums da API tem nome e tom', () => {
     ['ReservationStatus', RESERVATION_STATUS_LABELS],
     ['ExecutionStatus', EXECUTION_STATUS_LABELS],
     ['HotelRunStatus', HOTEL_STATUS_LABELS],
+    // Tratativas manuais (specs/003, data-model §7).
+    ['TreatmentStatus', TREATMENT_STATUS_LABELS],
+    ['TreatmentDocumentState', DOCUMENT_STATE_LABELS],
+    ['ReservationSituation', SITUATION_LABELS],
+    ['ReservationDetailedSituation', DETAILED_SITUATION_LABELS],
+    ['CommercialLineState', LINE_STATE_LABELS],
+    ['CommercialReturnState', RETURN_STATE_LABELS],
   ] as const)('%s', (name, labels) => {
     const table = labels as Record<string, { name: string; tone: string }>;
     for (const value of enumOf(name)) {
@@ -42,6 +62,42 @@ describe('todo valor dos enums da API tem nome e tom', () => {
       expect(TONES, value).toContain(table[value]?.tone);
     }
     expect(Object.keys(table).sort()).toEqual([...enumOf(name)].sort());
+  });
+
+  it('os enums das tratativas têm nome (specs/003, data-model §7)', () => {
+    const named = (table: Record<string, string>, values: Array<string | null>) => {
+      const expected = values.filter((value): value is string => value !== null);
+      for (const value of expected) expect(table[value], value).toBeTruthy();
+      expect(Object.keys(table).sort()).toEqual([...expected].sort());
+    };
+    const property = (schema: string, name: string) =>
+      (schemas[schema]?.properties?.[name]?.enum ?? []) as Array<string | null>;
+
+    named(TREATMENT_KIND_NAMES, enumOf('TreatmentDocumentKind'));
+    named(TREATMENT_EVENT_NAMES, property('TreatmentEvent', 'type'));
+    named(OUTCOME_NAMES, property('ReservationOutcome', 'outcome'));
+    named(OUTCOME_REASON_MESSAGES, property('ReservationOutcome', 'reason'));
+  });
+
+  it('as situações da tratativa têm os nomes da spec 003', () => {
+    expect(TREATMENT_STATUS_LABELS.none.name).toBe('Sem tratativa');
+    expect(TREATMENT_STATUS_LABELS.sent.name).toBe('Tratativa enviada');
+    expect(TREATMENT_STATUS_LABELS.charged.name).toBe('Comprovante enviado');
+    expect(TREATMENT_KIND_NAMES).toEqual({ request: 'Tratativa', proof: 'Comprovante' });
+  });
+
+  it('a situação da reserva tem os nomes da homologação (FR-002, FR-002a)', () => {
+    expect(SITUATION_LABELS.treatment_sent.name).toBe('Tratativa enviada');
+    expect(SITUATION_LABELS.proof_sent.name).toBe('Comprovante enviado');
+    expect(SITUATION_LABELS.virtual_card_already_charged.name).toBe('Já cobrada');
+    // Desde a 005, o filtro usa a situação detalhada: "Validar comprovante" depois de "Tratativa
+    // enviada" (specs/005, FR-023).
+    expect([...SITUATION_ORDER].sort()).toEqual([...enumOf('ReservationDetailedSituation')].sort());
+    expect(SITUATION_ORDER.indexOf('return_pending')).toBe(
+      SITUATION_ORDER.indexOf('treatment_sent') + 1,
+    );
+    expect(REVIEW_LABEL.name).toBe('Verificar');
+    expect(TREATMENT_EVENT_NAMES.review_confirmed).toBe('Confirmou a verificação');
   });
 
   it('ExecutionEndReason tem mensagem', () => {
@@ -89,8 +145,18 @@ describe('situações de cobrança (data-model §6.1)', () => {
       analysis_error: 'Erro de análise',
       cancelled_no_charge: 'Cancelada sem cobrança',
       ignored_hotelbeds_258: 'Ignorada (Hotelbeds 258)',
-      not_virtual_card: 'Não é cartão virtual (situação antiga)',
+      not_virtual_card: 'A revisar (sistema anterior)',
     });
+  });
+
+  it('"A revisar (sistema anterior)" pede atenção e vem logo depois das que pedem ação (specs/004)', () => {
+    expect(CLASSIFICATION_LABELS.not_virtual_card.tone).toBe('warning');
+    expect(CLASSIFICATION_ORDER.indexOf('not_virtual_card')).toBe(
+      CLASSIFICATION_ORDER.indexOf('analysis_error') + 1,
+    );
+    expect(SITUATION_ORDER.indexOf('not_virtual_card')).toBe(
+      SITUATION_ORDER.indexOf('analysis_error') + 1,
+    );
   });
 
   it('pendentes em atenção, cobradas em sucesso, erros em erro', () => {

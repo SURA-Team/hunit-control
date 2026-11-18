@@ -2,6 +2,13 @@
  * Filtros da consulta de reservas (specs/002, FR-020 a FR-020b): busca livre, valor no formato
  * brasileiro, hotel, período de check-in, situações, canal, "não encontrada" e execução. Os filtros
  * só valem ao clicar em "Buscar"; a busca é feita pelo servidor.
+ *
+ * Tratativas (specs/003, FR-002, FR-002a, FR-015): o filtro único "Situação da reserva" (os
+ * mesmos valores da coluna da lista) e os atalhos "Falta cobrar" e "A verificar" — estes valem na
+ * hora, e quem decide o que entra em cada um é o servidor.
+ *
+ * Envio ao Comercial (specs/005, FR-023): a situação inclui "Validar comprovante" (retorno do
+ * Comercial aguardando validação).
  */
 import {
   Badge,
@@ -18,9 +25,11 @@ import {
 } from '@mantine/core';
 import type { Hotel } from '../../../../shared/ipc-types';
 import {
-  CLASSIFICATION_LABELS,
-  CLASSIFICATION_ORDER,
+  ORIGIN_OPTIONS,
+  DETAILED_SITUATION_LABELS,
   RESERVATION_STATUS_LABELS,
+  SITUATION_ORDER,
+  type OriginFilter,
 } from '../../presentation/labels';
 import { PeriodPicker } from '../run/PeriodPicker';
 
@@ -28,9 +37,17 @@ export interface FilterDraft {
   q: string;
   amount: string;
   hotelCodes: string[];
-  classifications: string[];
+  /** Situação da reserva: a mesma da coluna da lista (FR-002, FR-015). */
+  situations: string[];
+  /** Ativa, cancelada ou não identificada no Hunit. */
   reservationStatuses: string[];
+  /** "Falta cobrar": exige cobrança e ainda não tem comprovante. */
+  pendingCharge: boolean;
+  /** "A verificar": o Hunit mudou a situação depois da tratativa (FR-002a). */
+  needsReview: boolean;
   channel: string | null;
+  /** Origem (specs/004, FR-011): todas, só do sistema anterior ou só do HUNIT Control. */
+  origin: OriginFilter;
   notFound: boolean;
   checkInFrom: string | null;
   checkInTo: string | null;
@@ -41,9 +58,12 @@ export const EMPTY_FILTERS: FilterDraft = {
   q: '',
   amount: '',
   hotelCodes: [],
-  classifications: [],
+  situations: [],
   reservationStatuses: [],
+  pendingCharge: false,
+  needsReview: false,
   channel: null,
+  origin: 'all',
   notFound: false,
   checkInFrom: null,
   checkInTo: null,
@@ -54,6 +74,8 @@ interface Props {
   draft: FilterDraft;
   onChange: (draft: FilterDraft) => void;
   onSearch: () => void;
+  /** Atalho que vale na hora, sem clicar em "Buscar". */
+  onQuickFilter: (draft: FilterDraft) => void;
   onClear: () => void;
   /** Servidor indisponível: a busca fica desabilitada (FR-005). */
   disabled: boolean;
@@ -66,6 +88,7 @@ export function ReservationFilters({
   draft,
   onChange,
   onSearch,
+  onQuickFilter,
   onClear,
   disabled,
   hotels,
@@ -124,21 +147,19 @@ export function ReservationFilters({
               error={errors.period}
             />
             <MultiSelect
-              label="Situação de cobrança"
-              placeholder={
-                draft.classifications.length === 0 ? 'Todas as situações de cobrança' : undefined
-              }
-              data={CLASSIFICATION_ORDER.map((value) => ({
+              label="Situação da reserva"
+              placeholder={draft.situations.length === 0 ? 'Todas as situações' : undefined}
+              data={SITUATION_ORDER.map((value) => ({
                 value,
-                label: CLASSIFICATION_LABELS[value].name,
+                label: DETAILED_SITUATION_LABELS[value].name,
               }))}
-              value={draft.classifications}
-              onChange={(value) => set('classifications', value)}
+              value={draft.situations}
+              onChange={(value) => set('situations', value)}
               clearable
               hidePickedOptions
             />
             <MultiSelect
-              label="Situação da reserva"
+              label="Ativa ou cancelada"
               placeholder={
                 draft.reservationStatuses.length === 0 ? 'Ativas e canceladas' : undefined
               }
@@ -160,9 +181,37 @@ export function ReservationFilters({
               clearable
               searchable
             />
+            <Select
+              label="Origem"
+              data={[...ORIGIN_OPTIONS]}
+              value={draft.origin}
+              onChange={(value) => set('origin', value ?? 'all')}
+              allowDeselect={false}
+            />
           </SimpleGrid>
           <Group justify="space-between">
             <Group gap="sm">
+              <Button
+                variant={draft.pendingCharge ? 'filled' : 'light'}
+                size="xs"
+                aria-pressed={draft.pendingCharge}
+                disabled={disabled}
+                title="Reservas que exigem cobrança e ainda não têm comprovante"
+                onClick={() => onQuickFilter({ ...draft, pendingCharge: !draft.pendingCharge })}
+              >
+                Falta cobrar
+              </Button>
+              <Button
+                variant={draft.needsReview ? 'filled' : 'light'}
+                color="yellow"
+                size="xs"
+                aria-pressed={draft.needsReview}
+                disabled={disabled}
+                title="Reservas com tratativa que o Hunit passou a mostrar numa situação que não exige cobrança"
+                onClick={() => onQuickFilter({ ...draft, needsReview: !draft.needsReview })}
+              >
+                A verificar
+              </Button>
               <Checkbox
                 label="Só as não encontradas na última verificação"
                 checked={draft.notFound}

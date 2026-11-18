@@ -26,7 +26,7 @@ async function tokenNoticeCard(main) {
   put(c, await T('Quando o Hunit pedir o token, o app mostra uma notificação do Windows, vem para a frente e toca um som. Teste para conferir se a notificação aparece nesta máquina.'), 'fill');
   divider(c); await btn(c, 'Testar aviso', 'Contorno');
 }
-const versionFooter = async (main) => put(main, await T('HUNIT Control — versão 0.1.0', 'corpo', 'texto/apagado'));
+const versionFooter = async (main) => put(main, await T('HUNIT Control — versão 0.2.0', 'corpo', 'texto/apagado'));
 
 SCREENS['1.1'] = {
   name: 'Configuração — primeiro uso', h: 900, profile: 'Sem conexão', nav: ['Configuração'], active: 'Configuração',

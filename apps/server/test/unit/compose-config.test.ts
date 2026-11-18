@@ -97,6 +97,47 @@ describe('proxy HTTPS (FR-032, R-20)', () => {
   });
 });
 
+describe('planilha do Comercial (specs/005, T002, research R-04)', () => {
+  const server = services['server'] as ComposeService & { environment?: Record<string, string> };
+
+  it('monta a pasta da chave só para leitura em /run/secrets/commercial-sheet', () => {
+    const volumes = (server.volumes ?? []).map(String);
+    expect(
+      volumes.some((volume) =>
+        /^\$\{COMMERCIAL_SHEET_SECRETS_DIR:-\.\/deploy\/secrets\}:\/run\/secrets\/commercial-sheet:ro$/.test(
+          volume,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('recebe só o identificador e o caminho da chave, nunca o conteúdo dela', () => {
+    const environment = server.environment ?? {};
+    expect(environment['COMMERCIAL_SHEET_ID']).toBe('${COMMERCIAL_SHEET_ID:-}');
+    expect(environment['COMMERCIAL_SHEET_KEY_FILE']).toBe('${COMMERCIAL_SHEET_KEY_FILE:-}');
+    for (const [name, value] of Object.entries(environment)) {
+      expect(name, 'a chave não pode vir por variável de ambiente').not.toMatch(
+        /PRIVATE_KEY|CREDENTIALS|SERVICE_ACCOUNT_JSON/i,
+      );
+      expect(String(value)).not.toMatch(/BEGIN PRIVATE KEY/);
+    }
+  });
+
+  it('a pasta dos segredos fica fora do Git, menos o README', () => {
+    const gitignore = readFromRepoRoot('.gitignore');
+    expect(gitignore).toMatch(/^deploy\/secrets\/\*$/m);
+    expect(gitignore).toMatch(/^!deploy\/secrets\/README\.md$/m);
+  });
+
+  it('o .env.example lista as variáveis novas, vazias', () => {
+    const example = readFromRepoRoot('.env.example');
+    for (const name of ['COMMERCIAL_SHEET_ID', 'COMMERCIAL_SHEET_KEY_FILE']) {
+      expect(example).toMatch(new RegExp(`^${name}=$`, 'm'));
+    }
+    expect(example).toMatch(/^COMMERCIAL_SHEET_DONE_RETENTION_DAYS=90$/m);
+  });
+});
+
 describe('cópia de segurança (FR-030, R-21)', () => {
   it('usa a mesma imagem do banco, para o pg_dump ter a versão do servidor', () => {
     expect(services['backup']?.image).toBeDefined();
