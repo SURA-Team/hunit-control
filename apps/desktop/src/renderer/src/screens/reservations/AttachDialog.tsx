@@ -6,8 +6,13 @@
  * O arquivo fica na memória do processo principal; a interface só tem a pré-visualização e um
  * id. Cancelar antes de confirmar descarta o arquivo e não envia nada. Quem decide o que cada
  * reserva aceita é o servidor — aqui só se mostra o que ele respondeu.
+ *
+ * Desde a 006 (T039, FR-011; telas 4.6 e 4.8): diálogo padrão largo, "Cancelar" só texto,
+ * "Escolher outro arquivo" e "Tentar de novo" em contorno e uma principal ("Confirmar"; no
+ * desfecho, "Tentar de novo" quando o envio foi interrompido, senão "Fechar"). O resumo com os
+ * ícones de aceitas e ignoradas vem com a T042.
  */
-import { Alert, Button, Group, List, Modal, Stack, Table, Text } from '@mantine/core';
+import { Alert, List, Stack, Table, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -28,6 +33,7 @@ import {
   OUTCOME_REASON_MESSAGES,
   TREATMENT_KIND_NAMES,
 } from '../../presentation/labels';
+import { Action, AppDialog } from '../../ui';
 
 type Phase = 'picking' | 'checking' | 'confirm' | 'applying' | 'result';
 
@@ -217,21 +223,56 @@ export function AttachDialog({
     (item) => item.outcome === 'ignored' || item.outcome === 'failed',
   );
 
+  const retrying = phase === 'result' && pending !== null && pending.length > 0;
+  const actions =
+    phase === 'confirm' ? (
+      <>
+        <Action variant="secondary" size="sm" onClick={() => void pickAnother()}>
+          Escolher outro arquivo
+        </Action>
+        {file && !check && (
+          <Action variant="secondary" size="sm" onClick={() => void runCheck()}>
+            Tentar de novo
+          </Action>
+        )}
+        <Action
+          variant="primary"
+          size="sm"
+          onClick={() => void apply(reservations)}
+          disabled={!file || accepted === 0}
+        >
+          Confirmar
+        </Action>
+      </>
+    ) : phase === 'result' ? (
+      <>
+        <Action
+          variant={retrying ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={() => void finish()}
+        >
+          Fechar
+        </Action>
+        {retrying && (
+          <Action variant="primary" size="sm" onClick={() => void apply(pending)}>
+            Tentar de novo
+          </Action>
+        )}
+      </>
+    ) : undefined;
+
   return (
-    <Modal
+    <AppDialog
       opened
+      size="lg"
       onClose={() => void (phase === 'result' ? finish() : cancel())}
-      title={
-        <Text fw={600}>
-          Anexar {kindName}
-          {!single && ` a ${reservations.length} reservas`}
-        </Text>
-      }
-      size="xl"
+      title={`Anexar ${kindName}${single ? '' : ` a ${reservations.length} reservas`}`}
       closeOnClickOutside={false}
       closeOnEscape={!busy}
       withCloseButton={!busy}
-      transitionProps={{ duration: 0 }}
+      instant
+      actions={actions}
+      {...(phase === 'confirm' && { onCancel: () => void cancel() })}
     >
       <Stack gap="md">
         {phase === 'picking' && <Text c="dimmed">Escolha o arquivo…</Text>}
@@ -327,38 +368,7 @@ export function AttachDialog({
             )}
           </Stack>
         )}
-
-        <Group justify="flex-end" gap="sm">
-          {phase === 'confirm' && (
-            <>
-              <Button variant="default" onClick={() => void cancel()}>
-                Cancelar
-              </Button>
-              <Button variant="default" onClick={() => void pickAnother()}>
-                Escolher outro arquivo
-              </Button>
-              {file && !check && (
-                <Button variant="default" onClick={() => void runCheck()}>
-                  Tentar de novo
-                </Button>
-              )}
-              <Button onClick={() => void apply(reservations)} disabled={!file || accepted === 0}>
-                Confirmar
-              </Button>
-            </>
-          )}
-          {phase === 'result' && (
-            <>
-              {pending !== null && pending.length > 0 && (
-                <Button onClick={() => void apply(pending)}>Tentar de novo</Button>
-              )}
-              <Button variant="default" onClick={() => void finish()}>
-                Fechar
-              </Button>
-            </>
-          )}
-        </Group>
       </Stack>
-    </Modal>
+    </AppDialog>
   );
 }

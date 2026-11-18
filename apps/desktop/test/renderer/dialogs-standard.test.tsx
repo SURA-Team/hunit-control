@@ -4,17 +4,30 @@
  * título no estilo "Título do diálogo". O tamanho na tela e o espaçamento calculado são conferidos no
  * roteiro de larguras (`test/e2e/responsive.test.ts`); aqui, que todos passam pelo mesmo componente.
  *
- * Cada história acrescenta em `DIALOGS` os diálogos que migrar (anexar, recusar retorno, confirmações
- * em lote, cópia para e-mail, envio, cancelar execução…). Hoje: o token e "Remover a configuração?".
+ * Cada história acrescenta em `DIALOGS` os diálogos que migrar (recusar retorno, confirmações em
+ * lote, cópia para e-mail, envio…). Hoje: o token, "Remover a configuração?" e, desde a US3, anexar
+ * (uma reserva e lote), "Desfazer o comprovante?" e "Cancelar a execução?".
  */
-import { act, screen } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TwoFactorDialog } from '../../src/renderer/src/components/TwoFactorDialog';
+import { ExecutionDetail } from '../../src/renderer/src/screens/executions/ExecutionDetail';
+import { AttachDialog } from '../../src/renderer/src/screens/reservations/AttachDialog';
+import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import { SetupScreen } from '../../src/renderer/src/screens/setup/SetupScreen';
 import classes from '../../src/renderer/src/ui/structure.module.css';
-import type { PublicConfig } from '../../src/shared/ipc-types';
+import type { Execution, PublicConfig } from '../../src/shared/ipc-types';
 import { fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
+import {
+  check,
+  detail,
+  document as treatmentDocument,
+  outcome,
+  pendingReservation,
+  pickedFile,
+  treatment,
+} from './treatment-fixtures';
 
 const NOW = new Date('2026-11-12T12:00:00.000Z');
 const EXECUTION_ID = '11111111-1111-4111-8111-111111111111';
@@ -109,6 +122,105 @@ const DIALOGS: Record<string, DialogCase> = {
       );
     },
   },
+  'anexar tratativa (tela 4.8)': {
+    title: 'Anexar tratativa',
+    size: 'lg',
+    open: async () => {
+      serveAttach();
+      renderWithApp(
+        <AttachDialog kind="request" reservations={[RESERVATION]} onClose={vi.fn()} />,
+        hunit,
+      );
+      await screen.findByTestId('attach-summary');
+    },
+  },
+  'anexar comprovante em lote (tela 4.6)': {
+    title: 'Anexar comprovante a 2 reservas',
+    size: 'lg',
+    open: async () => {
+      serveAttach();
+      renderWithApp(
+        <AttachDialog
+          kind="proof"
+          reservations={[RESERVATION, { ...RESERVATION, reservationNumber: '7002' }]}
+          onClose={vi.fn()}
+        />,
+        hunit,
+      );
+      await screen.findByTestId('attach-summary');
+    },
+  },
+  'desfazer o comprovante (tela 4.7)': {
+    title: 'Desfazer o comprovante?',
+    size: 'sm',
+    open: async () => {
+      const proof = treatmentDocument();
+      const current = treatment({ status: 'charged', proof });
+      mocked(hunit.api.treatments.get).mockImplementation(() =>
+        okResult(detail({ treatment: current, documents: [proof] })),
+      );
+      renderWithApp(
+        <ReservationDetail reservation={pendingReservation('7001', { treatment: current })} />,
+        hunit,
+      );
+      await waitFor(() => expect(hunit.api.connection.getState).toHaveBeenCalled());
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Desfazer' }));
+    },
+  },
+  'cancelar a execução (tela 3.3)': {
+    title: 'Cancelar a execução?',
+    size: 'sm',
+    open: async () => {
+      mocked(hunit.api.executions.get).mockImplementation(() => okResult(RUNNING_EXECUTION));
+      renderWithApp(
+        <ExecutionDetail
+          executionId={EXECUTION_ID}
+          onOpenExecution={vi.fn()}
+          onOpenReservations={vi.fn()}
+        />,
+        hunit,
+      );
+      const user = userEvent.setup();
+      const cancel = await screen.findByRole('button', { name: 'Cancelar execução' });
+      // Habilita quando o perfil da conexão chega.
+      await waitFor(() => expect(cancel).toBeEnabled());
+      await user.click(cancel);
+    },
+  },
+};
+
+const RESERVATION = { hotelCode: '31', reservationNumber: '7001' };
+
+/** Arquivo escolhido e conferência do servidor para o diálogo de anexar. */
+function serveAttach() {
+  URL.createObjectURL = vi.fn(() => 'blob:teste');
+  URL.revokeObjectURL = vi.fn();
+  mocked(hunit.api.treatments.pickFile).mockImplementation(() => okResult(pickedFile()));
+  mocked(hunit.api.treatments.check).mockImplementation((input) =>
+    okResult(
+      check(
+        input.reservations.map((reservation) => outcome(reservation.reservationNumber)),
+        '100.00',
+      ),
+    ),
+  );
+}
+
+const RUNNING_EXECUTION: Execution = {
+  id: EXECUTION_ID,
+  status: 'running',
+  period: { from: '2026-11-01', to: '2026-11-07' },
+  createdAt: '2026-11-12T11:00:00.000Z',
+  requestedClient: 'desktop-financeiro',
+  endReason: null,
+  finishedAt: null,
+  twoFactorDeadline: null,
+  current: null,
+  hotels: [],
+  counts: {},
+  recentEvents: [],
+  warnings: [],
 };
 
 /** O diálogo é um `AppDialog` com a largura `size`, os 24 px de espaçamento e o título padrão. */

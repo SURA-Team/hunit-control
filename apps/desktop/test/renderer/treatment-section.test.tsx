@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import type { ReservationTreatment, TreatmentDetail } from '../../src/shared/ipc-types';
+import { expectOnePrimaryPerBlock } from './hierarchy';
 import {
   errorResult,
   fakeHunit,
@@ -428,5 +429,82 @@ describe('perfil consulta (FR-014, FR-017)', () => {
     expect(section().queryByLabelText('Valor que foi cobrado (R$)')).not.toBeInTheDocument();
     // Também não aparece a explicação voltada ao operador.
     expect(section().queryByText(/não aceita novos documentos/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('hierarquia das ações (specs/006, T038; tela 4.7)', () => {
+  const button = (name: string) => section().getByRole('button', { name });
+
+  it('"Baixar", "Reverter", "Desfazer" e "Remover valor" são ações de documento distintas (FR-009, FR-010)', async () => {
+    await show(treatment({ status: 'charged', proof: PROOF, manualChargedAmount: '500.00' }), {
+      documents: [PROOF, OLD_PROOF],
+    });
+
+    const old = await section().findByRole('row', { name: /antigo\.pdf/ });
+    const current = section().getByRole('row', { name: /comprovante\.pdf/ });
+    expect(within(current).getByRole('button', { name: 'Baixar' })).toHaveAttribute(
+      'data-kind',
+      'download',
+    );
+    expect(within(current).getByRole('button', { name: 'Desfazer' })).toHaveAttribute(
+      'data-kind',
+      'undo',
+    );
+    expect(within(old).getByRole('button', { name: 'Reverter' })).toHaveAttribute(
+      'data-kind',
+      'revert',
+    );
+    expect(button('Remover valor')).toHaveAttribute('data-kind', 'remove');
+  });
+
+  it('"Anexar" e "Substituir" têm o mesmo peso para a tratativa e o comprovante (FR-012)', async () => {
+    await show(treatment({ status: 'charged', request: REQUEST, proof: PROOF }), {
+      documents: [PROOF, REQUEST],
+    });
+    expect(button('Substituir tratativa')).toHaveAttribute('data-variant', 'secondary');
+    expect(button('Substituir comprovante')).toHaveAttribute('data-variant', 'secondary');
+  });
+
+  it('sem tratativa, "Anexar tratativa" e "Anexar comprovante" também são iguais (FR-012)', async () => {
+    await show(treatment());
+    expect(button('Anexar tratativa')).toHaveAttribute('data-variant', 'secondary');
+    expect(button('Anexar comprovante')).toHaveAttribute('data-variant', 'secondary');
+  });
+
+  it('"Informar valor" é a principal do card; "Confirmar" é a do alerta "Verificar" (FR-007)', async () => {
+    const current = treatment({ ...REVIEW, status: 'charged', proof: PROOF });
+    await showReview(current);
+
+    expect(button('Informar valor')).toHaveAttribute('data-variant', 'primary');
+    expect(
+      within(section().getByTestId('review-alert')).getByRole('button', { name: 'Confirmar' }),
+    ).toHaveAttribute('data-variant', 'primary');
+    expectOnePrimaryPerBlock();
+  });
+
+  it('o desfazer confirmado é vermelho cheio e "Manter" é só texto (FR-009, FR-011)', async () => {
+    await show(treatment({ status: 'charged', proof: PROOF }), { documents: [PROOF] });
+    const user = userEvent.setup();
+
+    await user.click(await section().findByRole('button', { name: 'Desfazer' }));
+
+    const confirm = await screen.findByRole('dialog', { name: 'Desfazer o comprovante?' });
+    expect(within(confirm).getByRole('button', { name: 'Desfazer' })).toHaveAttribute(
+      'data-variant',
+      'danger',
+    );
+    expect(within(confirm).getByRole('button', { name: 'Manter' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    expectOnePrimaryPerBlock();
+  });
+
+  it('"Mostrar mais" é só texto', async () => {
+    await show(treatment({ status: 'charged', proof: PROOF }), { events: events(8) });
+    expect(await section().findByRole('button', { name: 'Mostrar mais' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
   });
 });

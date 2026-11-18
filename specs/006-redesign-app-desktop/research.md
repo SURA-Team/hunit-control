@@ -142,7 +142,10 @@ de documento tem tipos fechados (`download`, `revert`, `undo`, `remove`), cada u
 próprios (FR-010).
 
 Um teste de interface percorre os diálogos e blocos (`data-block`) e confere no máximo um botão
-`primary` por bloco (FR-007).
+`primary` por bloco (FR-007). Desde a T040, uma varredura do código das telas (analisador do
+TypeScript, `test/main/actions-audit.test.ts`) também exige que a variante de cada `Action` e o tipo
+de cada `DocumentAction` estejam escritos no código e dentro da lista, e barra o "Leve" em qualquer
+botão, inclusive nas telas ainda não migradas.
 
 **Justificativa**: variante fechada não deixa nascer um botão fora da regra; a superfície em contexto
 evita que cada tela decida a cor do principal no card escuro e no diálogo do token.

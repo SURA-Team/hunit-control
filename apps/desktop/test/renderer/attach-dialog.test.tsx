@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AttachDialog } from '../../src/renderer/src/screens/reservations/AttachDialog';
 import type { ReservationKey, TreatmentApplyResult } from '../../src/shared/ipc-types';
+import { expectOnePrimaryPerBlock } from './hierarchy';
 import { errorResult, fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
 import { check, document, outcome, pickedFile } from './treatment-fixtures';
 
@@ -203,6 +204,49 @@ describe('uma reserva', () => {
   });
 });
 
+describe('hierarquia das ações (specs/006, T039, FR-011; telas 4.6 e 4.8)', () => {
+  it('diálogo largo; "Cancelar" só texto, "Escolher outro arquivo" em contorno e uma principal', async () => {
+    renderWithApp(
+      <AttachDialog kind="request" reservations={[key('7001')]} onClose={onClose} />,
+      hunit,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Anexar tratativa' });
+    await screen.findByTestId('attach-summary');
+
+    expect(dialog).toHaveAttribute('data-size', 'lg');
+    const actions = within(dialog);
+    expect(actions.getByRole('button', { name: 'Cancelar' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    expect(actions.getByRole('button', { name: 'Escolher outro arquivo' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+    expect(actions.getByRole('button', { name: 'Confirmar' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expectOnePrimaryPerBlock();
+  });
+
+  it('no desfecho sem pendência, "Fechar" é a principal e não há "Cancelar"', async () => {
+    renderWithApp(
+      <AttachDialog kind="proof" reservations={[key('7001')]} onClose={onClose} />,
+      hunit,
+    );
+    await screen.findByTestId('attach-summary');
+    await click('Confirmar');
+    await screen.findByTestId('attach-result');
+
+    expect(screen.getByRole('button', { name: 'Fechar' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument();
+  });
+});
+
 describe('várias reservas (lote)', () => {
   const batch = [key('7001'), key('7002'), key('7003'), key('7004')];
 
@@ -331,6 +375,31 @@ describe('várias reservas (lote)', () => {
 
     expect(hunit.api.treatments.discardFile).toHaveBeenCalledWith(pickedFile().selectionId);
     expect(onClose.mock.calls[0]?.[0]?.failedKeys).toEqual([key('7002')]);
+  });
+
+  it('com o envio interrompido, "Tentar de novo" é a principal e "Fechar" fica em contorno', async () => {
+    mocked(hunit.api.treatments.apply).mockImplementation(() =>
+      okResult({
+        items: [outcome('7001')],
+        failedKeys: [key('7002')],
+        retryable: true,
+        error: { code: 'offline' as const },
+      }),
+    );
+    renderWithApp(<AttachDialog kind="proof" reservations={batch} onClose={onClose} />, hunit);
+    await screen.findByTestId('attach-summary');
+    await click('Confirmar');
+    await screen.findByTestId('attach-result');
+
+    expect(screen.getByRole('button', { name: 'Tentar de novo' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(screen.getByRole('button', { name: 'Fechar' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+    expectOnePrimaryPerBlock();
   });
 
   it('só a chave de cada reserva vai para a ponte', async () => {

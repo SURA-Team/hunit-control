@@ -34,6 +34,7 @@ import {
 } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
 import { useExecution } from '../../state/executions';
+import { Action, AppDialog } from '../../ui';
 
 const ACTIVE = new Set(['queued', 'running', 'awaiting_2fa']);
 const RESUMABLE = new Set(['failed', 'cancelled']);
@@ -361,25 +362,26 @@ function OperatorActions({
   return (
     <Stack gap="sm">
       <Group>
+        {/* Sem o "Leve" (FR-013, T038): cancelar é destrutiva; abrir a retomada, secundária. */}
         {ACTIVE.has(execution.status) && (
-          <Button
-            color="red"
-            variant="light"
-            onClick={() => setConfirmCancel(true)}
-            disabled={disabled}
-          >
+          <Action variant="danger-light" onClick={() => setConfirmCancel(true)} disabled={disabled}>
             Cancelar execução
-          </Button>
+          </Action>
         )}
         {RESUMABLE.has(execution.status) && (
-          <Button onClick={() => resume.mutate()} loading={resume.isPending} disabled={disabled}>
+          <Action
+            variant="primary"
+            onClick={() => resume.mutate()}
+            loading={resume.isPending}
+            disabled={disabled}
+          >
             Retomar
-          </Button>
+          </Action>
         )}
         {resumedId && (
-          <Button variant="light" onClick={() => onOpenExecution(resumedId)}>
+          <Action variant="secondary" onClick={() => onOpenExecution(resumedId)}>
             Abrir a retomada
-          </Button>
+          </Action>
         )}
       </Group>
       {resumeError && (
@@ -393,26 +395,31 @@ function OperatorActions({
         </Alert>
       )}
 
-      <Modal
+      {/* Tela 3.3: "Não" em contorno e "Sim, cancelar" em vermelho cheio (FR-009). */}
+      <AppDialog
         opened={confirmCancel}
         onClose={() => setConfirmCancel(false)}
         title="Cancelar a execução?"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            Os hotéis já concluídos ficam gravados; os que faltam podem ser retomados depois.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setConfirmCancel(false)}>
+        actions={
+          <>
+            <Action variant="secondary" size="sm" onClick={() => setConfirmCancel(false)}>
               Não
-            </Button>
-            <Button color="red" onClick={() => cancel.mutate()} loading={cancel.isPending}>
+            </Action>
+            <Action
+              variant="danger"
+              size="sm"
+              onClick={() => cancel.mutate()}
+              loading={cancel.isPending}
+            >
               Sim, cancelar
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+            </Action>
+          </>
+        }
+      >
+        <Text size="sm">
+          Os hotéis já concluídos ficam gravados; os que faltam podem ser retomados depois.
+        </Text>
+      </AppDialog>
 
       <Modal
         opened={askAccess !== null}

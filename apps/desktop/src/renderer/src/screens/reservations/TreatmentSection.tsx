@@ -7,19 +7,14 @@
  * perfil consulta só vê
  * e baixa (FR-014). O que cada reserva aceita, até quando um documento pode ser revertido e qual
  * valor vale vêm prontos do servidor.
+ *
+ * Ações (specs/006, T038, FR-009 a FR-012; tela 4.7): "Baixar", "Reverter", "Desfazer" e "Remover
+ * valor" são ações de documento, cada uma com cor e ícone próprios; "Anexar/Substituir tratativa" e
+ * "Anexar/Substituir comprovante" têm o mesmo peso (contorno); "Informar valor" é a principal do
+ * card, e "Confirmar" é a principal do alerta "Verificar", que é um bloco à parte. O resto do card
+ * (documentos em linhas, valor salvo separado do campo) vem com a T045.
  */
-import {
-  Alert,
-  Button,
-  Group,
-  Modal,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
+import { Alert, Group, Paper, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type {
@@ -52,6 +47,7 @@ import {
   TREATMENT_KIND_ORDER,
 } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
+import { Action, AppDialog, DocumentAction } from '../../ui';
 import { AttachDialog } from './AttachDialog';
 import { commercialKey } from './CommercialSection';
 
@@ -195,38 +191,25 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
   const documentActions = (document: TreatmentDocument) => (
     <Group gap={6} wrap="nowrap">
       {document.state !== 'purged' && (
-        <Button size="compact-xs" variant="default" onClick={() => void saveDocument(document)}>
-          Baixar
-        </Button>
+        <DocumentAction kind="download" onClick={() => void saveDocument(document)} />
       )}
       {canWrite && document.endedAt === null && (
-        <Button
-          size="compact-xs"
-          variant="default"
-          color="red"
-          disabled={busy}
-          onClick={() => setRemoving(document)}
-        >
-          Desfazer
-        </Button>
+        <DocumentAction kind="undo" disabled={busy} onClick={() => setRemoving(document)} />
       )}
       {canWrite && document.revertibleUntil && (
-        <Button
-          size="compact-xs"
-          variant="default"
+        <DocumentAction
+          kind="revert"
           disabled={busy || !treatment.acceptsDocuments}
           onClick={() =>
             void run(() => hunit.treatments.revert(document.id), 'Documento revertido.')
           }
-        >
-          Reverter
-        </Button>
+        />
       )}
     </Group>
   );
 
   return (
-    <Paper withBorder p="sm" radius="sm" data-testid="treatment-section">
+    <Paper withBorder p="sm" radius="sm" data-testid="treatment-section" data-block="Tratativa">
       <Group justify="space-between" mb="xs">
         <Group gap="xs">
           <Title order={5}>Tratativa</Title>
@@ -239,11 +222,12 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
         </Group>
         {isOperator && (
           <Group gap="xs">
+            {/* Mesmo peso para tratativa e comprovante (FR-012). */}
             {TREATMENT_KIND_ORDER.map((kind) => (
-              <Button
+              <Action
                 key={kind}
                 size="xs"
-                variant={kind === 'proof' ? 'filled' : 'default'}
+                variant="secondary"
                 disabled={!canWrite || !treatment.acceptsDocuments || busy}
                 onClick={() => {
                   setMessage(null);
@@ -252,7 +236,7 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
               >
                 {treatment[kind] ? 'Substituir' : 'Anexar'}{' '}
                 {TREATMENT_KIND_NAMES[kind].toLowerCase()}
-              </Button>
+              </Action>
             ))}
           </Group>
         )}
@@ -266,7 +250,9 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
           </Text>
         )}
         {treatment.needsReview && (
-          <Alert color="yellow" title="Verificar" data-testid="review-alert">
+          // Bloco à parte: "Confirmar" é a principal do alerta (tela 4.9), e "Informar valor", a do
+          // card (tela 4.7).
+          <Alert color="yellow" title="Verificar" data-testid="review-alert" data-block="Verificar">
             <Stack gap="xs">
               <Text size="sm">
                 Depois da tratativa, o Hunit passou a mostrar esta reserva como{' '}
@@ -275,16 +261,16 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
               </Text>
               {isOperator && (
                 <Group>
-                  <Button
+                  <Action
                     size="xs"
-                    color="yellow"
+                    variant="primary"
                     disabled={!canWrite || busy}
                     onClick={() =>
                       void run(() => hunit.treatments.confirmReview(key), 'Verificação confirmada.')
                     }
                   >
                     Confirmar
-                  </Button>
+                  </Action>
                 </Group>
               )}
             </Stack>
@@ -354,14 +340,11 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
             </Text>
           </div>
           {canWrite && treatment.manualChargedAmount && (
-            <Button
-              size="compact-xs"
-              variant="default"
+            <DocumentAction
+              kind="remove"
               disabled={busy}
               onClick={() => void run(() => hunit.treatments.clearManualAmount(key))}
-            >
-              Remover valor
-            </Button>
+            />
           )}
           {canWrite && treatment.proof && (
             <form
@@ -379,9 +362,9 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
                   value={amountDraft}
                   onChange={(event) => setAmountDraft(event.currentTarget.value)}
                 />
-                <Button size="xs" type="submit" variant="default" disabled={busy}>
+                <Action size="xs" type="submit" variant="primary" disabled={busy}>
                   Informar valor
-                </Button>
+                </Action>
               </Group>
             </form>
           )}
@@ -408,44 +391,36 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
               ))}
             </ul>
             {history.length > historyShown && (
-              <Button
-                size="compact-xs"
-                variant="subtle"
-                mt={4}
+              <Action
+                size="xs"
+                variant="text"
                 onClick={() => setHistoryShown((shown) => shown + HISTORY_STEP)}
               >
                 Mostrar mais
-              </Button>
+              </Action>
             )}
           </div>
         )}
       </Stack>
 
-      <Modal
+      {/* Destrutiva confirmada: "Desfazer" em vermelho cheio; "Manter" é o cancelar (FR-009). */}
+      <AppDialog
         opened={removing !== null}
         onClose={() => setRemoving(null)}
-        title={
-          <Text fw={600}>
-            Desfazer {removing?.kind === 'proof' ? 'o comprovante' : 'a tratativa'}?
-          </Text>
+        title={`Desfazer ${removing?.kind === 'proof' ? 'o comprovante' : 'a tratativa'}?`}
+        onCancel={() => setRemoving(null)}
+        cancelLabel="Manter"
+        actions={
+          <Action variant="danger" size="sm" onClick={() => removing && void remove(removing)}>
+            Desfazer
+          </Action>
         }
-        transitionProps={{ duration: 0 }}
       >
-        <Stack gap="md">
-          <Text size="sm">
-            {removing?.fileName ?? 'O documento'} deixa de valer para esta reserva. Ele fica
-            guardado por 30 dias e pode ser revertido nesse prazo.
-          </Text>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setRemoving(null)}>
-              Manter
-            </Button>
-            <Button color="red" onClick={() => removing && void remove(removing)}>
-              Desfazer
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        <Text size="sm">
+          {removing?.fileName ?? 'O documento'} deixa de valer para esta reserva. Ele fica guardado
+          por 30 dias e pode ser revertido nesse prazo.
+        </Text>
+      </AppDialog>
 
       {attaching && (
         <AttachDialog

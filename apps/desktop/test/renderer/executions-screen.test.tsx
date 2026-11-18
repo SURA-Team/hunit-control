@@ -217,9 +217,20 @@ describe('ações do operador (FR-017, FR-018)', () => {
     renderWithApp(<ExecutionsScreen />, hunit);
     const panel = within(await openDetail(/desktop-financeiro/));
 
-    await userEvent.click(await panel.findByRole('button', { name: /cancelar execução/i }));
+    const cancelButton = await panel.findByRole('button', { name: /cancelar execução/i });
+    // Sem o "Leve" (specs/006, FR-013): destrutiva em vermelho suave.
+    expect(cancelButton).toHaveAttribute('data-variant', 'danger-light');
+    await userEvent.click(cancelButton);
     expect(hunit.api.executions.cancel).not.toHaveBeenCalled();
-    await userEvent.click(await screen.findByRole('button', { name: /sim, cancelar/i }));
+    // Tela 3.3: "Não" em contorno e "Sim, cancelar" em vermelho cheio (FR-009).
+    const confirm = within(await screen.findByRole('dialog', { name: 'Cancelar a execução?' }));
+    expect(confirm.getByRole('button', { name: 'Não' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+    const yes = confirm.getByRole('button', { name: /sim, cancelar/i });
+    expect(yes).toHaveAttribute('data-variant', 'danger');
+    await userEvent.click(yes);
 
     await waitFor(() => expect(hunit.api.executions.cancel).toHaveBeenCalledWith(RUNNING));
   });
