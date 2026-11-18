@@ -148,7 +148,9 @@ describe('detalhe', () => {
     const section = screen.getByTestId('legacy-origin');
     expect(section).toHaveTextContent('Sem cartão virtual');
     expect(section).toHaveTextContent('Verificações no sistema anterior');
-    expect(screen.getAllByTestId('legacy-badge').length).toBeGreaterThan(0);
+    // Selo "Sistema anterior" no cabeçalho do detalhe (specs/006, T044).
+    const header = screen.getByRole('heading', { name: /Reserva 900001/ }).parentElement;
+    expect(header).toHaveTextContent('Sistema anterior');
     expect(screen.getByText(/Ainda não verificada pelo HUNIT Control/)).toBeInTheDocument();
   });
 

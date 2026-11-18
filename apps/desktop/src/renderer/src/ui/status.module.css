@@ -104,8 +104,15 @@
 }
 
 .noticeIcon {
-  display: flex;
-  color: var(--notice-title);
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--notice-title);
+  color: var(--hc-texto-inverso);
 }
 
 .noticeText {

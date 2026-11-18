@@ -95,8 +95,6 @@ const NOT_YET_MIGRATED = [
   'screens/reservations/CommercialSection.tsx',
   'screens/reservations/ConfirmBatchDialog.tsx',
   'screens/reservations/CopyDialog.tsx',
-  'screens/reservations/ReservationDetail.tsx',
-  'screens/reservations/TreatmentSection.tsx',
   'screens/run/ExecutionResult.tsx',
 ].map((file) => `apps/desktop/src/renderer/src/${file}`);
 

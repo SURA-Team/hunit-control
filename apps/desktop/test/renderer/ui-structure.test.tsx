@@ -10,6 +10,11 @@ import {
   AppDialog,
   AppDrawer,
   Card,
+  CardAside,
+  CardHeader,
+  DataField,
+  DataGrid,
+  DetailHeader,
   PageHeader,
   SectionTitle,
 } from '../../src/renderer/src/ui';
@@ -160,5 +165,55 @@ describe('uma ação principal por bloco (FR-007)', () => {
       </Card>,
     );
     expect(() => expectOnePrimaryPerBlock(container)).toThrow(/Tratativa/);
+  });
+});
+
+describe('DetailHeader, DataGrid, DataField e CardHeader (T044; tela 4.2)', () => {
+  it('o cabeçalho tem o título com o hotel e os selos lado a lado', () => {
+    renderUi(
+      <DetailHeader
+        title="Reserva 101-1002"
+        subtitle="hotel 101"
+        badges={[
+          { label: 'Erro na cobrança', tone: 'red' },
+          { label: 'Ativa', tone: 'gray' },
+        ]}
+      />,
+    );
+    const heading = screen.getByRole('heading', { name: 'Reserva 101-1002 hotel 101' });
+    expect(heading.parentElement).toHaveTextContent('Erro na cobrança');
+    expect(heading.parentElement).toHaveTextContent('Ativa');
+  });
+
+  it('cada dado tem o rótulo ligado ao valor; sem valor, "—"', () => {
+    renderUi(
+      <DataGrid label="Dados da reserva">
+        <DataField label="Canal">Decolar</DataField>
+        <DataField label="Forma de pagamento" />
+      </DataGrid>,
+    );
+    const grid = screen.getByLabelText('Dados da reserva');
+    const terms = [...grid.querySelectorAll('dt')].map((term) => [
+      term.textContent,
+      term.nextElementSibling?.textContent,
+    ]);
+    expect(terms).toEqual([
+      ['Canal', 'Decolar'],
+      ['Forma de pagamento', '—'],
+    ]);
+  });
+
+  it('o título do card tem o que vai ao lado e as ações', () => {
+    renderUi(
+      <CardHeader
+        title="Tratativa"
+        aside={<CardAside>Sem tratativa</CardAside>}
+        actions={<button type="button">Anexar tratativa</button>}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Tratativa' }).parentElement).toHaveTextContent(
+      'Sem tratativa',
+    );
+    expect(screen.getByRole('button', { name: 'Anexar tratativa' })).toBeInTheDocument();
   });
 });

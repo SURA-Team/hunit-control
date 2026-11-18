@@ -61,6 +61,18 @@ async function show(current: ReservationTreatment, more: Partial<TreatmentDetail
 
 const section = () => within(screen.getByTestId('treatment-section'));
 
+/** A linha do documento (tela 4.7) cujo texto contém `text` (nome do arquivo ou "arquivo apagado"). */
+async function documentRow(text: RegExp): Promise<HTMLElement> {
+  const list = await section().findByRole('list', { name: 'Documentos da tratativa' });
+  return waitFor(() => {
+    const row = within(list)
+      .getAllByRole('listitem')
+      .find((item) => text.test(item.textContent ?? ''));
+    if (!row) throw new Error(`documento ${String(text)} não encontrado`);
+    return row;
+  });
+}
+
 /** Reserva com tratativa que o Hunit passou a mostrar como "Já cobrada" (FR-002a). */
 const REVIEW = treatment({
   status: 'sent',
@@ -190,7 +202,7 @@ describe('situação e documentos', () => {
     expect(section().getByRole('button', { name: 'Anexar tratativa' })).toBeEnabled();
     expect(section().getByRole('button', { name: 'Anexar comprovante' })).toBeEnabled();
     await waitFor(() => expect(hunit.api.treatments.get).toHaveBeenCalledWith(KEY));
-    expect(section().getAllByText('Nenhum')).toHaveLength(2);
+    expect(section().getAllByText('Nenhum arquivo anexado')).toHaveLength(2);
   });
 
   it('só com tratativa mostra "Tratativa enviada"; com comprovante, "Comprovante enviado"', async () => {
@@ -204,12 +216,12 @@ describe('situação e documentos', () => {
     });
 
     expect(section().getByText('Comprovante enviado')).toBeInTheDocument();
-    const proofRow = section().getByRole('row', { name: /comprovante\.pdf/ });
+    const proofRow = await documentRow(/comprovante\.pdf/);
+    expect(proofRow).toHaveTextContent('Comprovante');
     expect(proofRow).toHaveTextContent('12,1 KB');
-    expect(proofRow).toHaveTextContent('13/11/2026 10:30');
-    expect(proofRow).toHaveTextContent('por desktop-financeiro');
+    expect(proofRow).toHaveTextContent('Anexado em 13/11/2026 10:30 por desktop-financeiro');
     expect(proofRow).toHaveTextContent('Atual');
-    expect(section().getByRole('row', { name: /pedido\.eml/ })).toBeInTheDocument();
+    expect(await documentRow(/pedido\.eml/)).toHaveTextContent('Tratativa');
     // Com documento atual, o botão passa a "Substituir".
     expect(section().getByRole('button', { name: 'Substituir comprovante' })).toBeInTheDocument();
     expect(section().getByRole('button', { name: 'Substituir tratativa' })).toBeInTheDocument();
@@ -220,13 +232,13 @@ describe('situação e documentos', () => {
       documents: [PROOF, OLD_PROOF, PURGED],
     });
 
-    const old = await section().findByRole('row', { name: /antigo\.pdf/ });
+    const old = await documentRow(/antigo\.pdf/);
     expect(old).toHaveTextContent('Comprovante anterior');
-    expect(old).toHaveTextContent('Substituído');
+    expect(old).toHaveTextContent('Substituído em 13/11/2026 11:00 por desktop-financeiro');
     expect(old).toHaveTextContent('pode ser revertido até 13/12/2026');
     expect(within(old).getByRole('button', { name: 'Reverter' })).toBeEnabled();
 
-    const purged = section().getByRole('row', { name: /arquivo apagado/ });
+    const purged = await documentRow(/arquivo apagado/);
     expect(purged).toHaveTextContent('Arquivo apagado pelo prazo de retenção');
     expect(within(purged).queryByRole('button', { name: 'Baixar' })).not.toBeInTheDocument();
     expect(within(purged).queryByRole('button', { name: 'Reverter' })).not.toBeInTheDocument();
@@ -301,7 +313,7 @@ describe('ações do operador', () => {
     );
     await show(treatment({ status: 'charged', proof: PROOF }), { documents: [PROOF] });
     const user = userEvent.setup();
-    const field = section().getByLabelText('Valor que foi cobrado (R$)');
+    const field = section().getByLabelText('Corrigir o valor cobrado (R$)');
 
     await user.type(field, 'doze');
     await user.click(section().getByRole('button', { name: 'Informar valor' }));
@@ -328,7 +340,11 @@ describe('ações do operador', () => {
       documents: [PROOF],
     });
 
-    expect(section().getByText(/R\$\s500,00 \(informado à mão\)/)).toBeInTheDocument();
+    // O valor salvo numa caixa à parte, com "Remover valor" (FR-026, tela 4.7).
+    const saved = section().getByTestId('manual-amount');
+    expect(saved).toHaveTextContent('Valor informado à mão');
+    expect(saved.textContent?.replace(/\s+/g, ' ')).toContain('R$ 500,00');
+    expect(within(saved).getByRole('button', { name: 'Remover valor' })).toBeInTheDocument();
 
     await userEvent.click(section().getByRole('button', { name: 'Remover valor' }));
 
@@ -338,7 +354,7 @@ describe('ações do operador', () => {
   it('sem comprovante, não oferece informar o valor (FR-005)', async () => {
     await show(treatment({ status: 'sent', request: REQUEST }));
 
-    expect(section().queryByLabelText('Valor que foi cobrado (R$)')).not.toBeInTheDocument();
+    expect(section().queryByLabelText('Corrigir o valor cobrado (R$)')).not.toBeInTheDocument();
   });
 
   it('baixar chama o processo principal, que abre "Salvar como"', async () => {
@@ -414,7 +430,7 @@ describe('perfil consulta (FR-014, FR-017)', () => {
       documents: [PROOF, OLD_PROOF],
     });
 
-    expect(await section().findByRole('row', { name: /antigo\.pdf/ })).toBeInTheDocument();
+    expect(await documentRow(/antigo\.pdf/)).toBeInTheDocument();
     expect(section().getAllByRole('button', { name: 'Baixar' })).toHaveLength(2);
     for (const name of [
       /anexar/i,
@@ -426,9 +442,97 @@ describe('perfil consulta (FR-014, FR-017)', () => {
     ]) {
       expect(section().queryByRole('button', { name })).not.toBeInTheDocument();
     }
-    expect(section().queryByLabelText('Valor que foi cobrado (R$)')).not.toBeInTheDocument();
+    expect(section().queryByLabelText('Corrigir o valor cobrado (R$)')).not.toBeInTheDocument();
     // Também não aparece a explicação voltada ao operador.
     expect(section().queryByText(/não aceita novos documentos/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('card "Tratativa" no visual novo (specs/006, T045; telas 4.7 e 4.9)', () => {
+  it('com "Verificar", anexar fica desabilitado com o motivo ao lado; confirmado, libera (FR-029)', async () => {
+    // A reserva ainda aceita documentos: o bloqueio é só do alerta (research R-12).
+    let current = treatment({
+      status: 'sent',
+      situation: 'virtual_card_charge_error',
+      needsReview: true,
+      request: REQUEST,
+    });
+    mocked(hunit.api.treatments.get).mockImplementation(() =>
+      okResult(detail({ treatment: current, documents: [REQUEST] })),
+    );
+    mocked(hunit.api.treatments.confirmReview).mockImplementation(() => {
+      current = { ...current, needsReview: false };
+      return okResult(current);
+    });
+    renderWithApp(
+      <ReservationDetail
+        reservation={pendingReservation('7001', {
+          classification: 'virtual_card_charge_error',
+          treatment: current,
+        })}
+      />,
+      hunit,
+    );
+    await waitFor(() => expect(hunit.api.connection.getState).toHaveBeenCalled());
+    const user = userEvent.setup();
+
+    const attachRequest = await section().findByRole('button', { name: 'Substituir tratativa' });
+    const attachProof = section().getByRole('button', { name: 'Anexar comprovante' });
+    await waitFor(() => expect(attachRequest).toBeDisabled());
+    expect(attachProof).toBeDisabled();
+    expect(section().getByTestId('attach-blocked')).toHaveTextContent(
+      'Confirme o alerta “Verificar” antes de anexar novos documentos.',
+    );
+    // Os documentos continuam com "Baixar".
+    expect(
+      within(await documentRow(/pedido\.eml/)).getByRole('button', { name: 'Baixar' }),
+    ).toBeEnabled();
+
+    await user.click(
+      within(section().getByTestId('review-alert')).getByRole('button', { name: 'Confirmar' }),
+    );
+
+    await waitFor(() => expect(attachRequest).toBeEnabled());
+    expect(attachProof).toBeEnabled();
+    expect(section().queryByTestId('attach-blocked')).not.toBeInTheDocument();
+    expect(section().queryByTestId('review-alert')).not.toBeInTheDocument();
+  });
+
+  it('o valor digitado não substitui o salvo antes de "Informar valor" (FR-026)', async () => {
+    await show(treatment({ status: 'charged', proof: PROOF, manualChargedAmount: '500.00' }), {
+      documents: [PROOF],
+    });
+    const user = userEvent.setup();
+
+    await user.type(section().getByLabelText('Corrigir o valor cobrado (R$)'), '700,00');
+
+    const saved = section().getByTestId('manual-amount');
+    expect(saved.textContent?.replace(/\s+/g, ' ')).toContain('R$ 500,00');
+    expect(saved.textContent?.replace(/\s+/g, ' ')).not.toContain('700');
+    expect(hunit.api.treatments.setManualAmount).not.toHaveBeenCalled();
+  });
+
+  it('sem valor salvo, "Valor informado à mão" mostra "—" e não oferece remover', async () => {
+    await show(treatment({ status: 'charged', proof: PROOF }), { documents: [PROOF] });
+    expect(section().queryByTestId('manual-amount')).not.toBeInTheDocument();
+    expect(section().getByText('Valor informado à mão').nextSibling).toHaveTextContent('—');
+    expect(section().queryByRole('button', { name: 'Remover valor' })).not.toBeInTheDocument();
+  });
+
+  it('cada documento numa linha com o ícone, o arquivo e a situação (FR-020)', async () => {
+    await show(treatment({ status: 'charged', request: REQUEST, proof: PROOF }), {
+      documents: [PROOF, REQUEST],
+    });
+    const rows = within(
+      await section().findByRole('list', { name: 'Documentos da tratativa' }),
+    ).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toMatch(/^Tratativapedido\.eml/);
+    expect(rows[1]?.textContent).toMatch(/^Comprovantecomprovante\.pdf/);
+    for (const row of rows) {
+      expect(row.querySelector('svg')).not.toBeNull();
+      expect(row).toHaveTextContent('Atual');
+    }
   });
 });
 
@@ -440,8 +544,8 @@ describe('hierarquia das ações (specs/006, T038; tela 4.7)', () => {
       documents: [PROOF, OLD_PROOF],
     });
 
-    const old = await section().findByRole('row', { name: /antigo\.pdf/ });
-    const current = section().getByRole('row', { name: /comprovante\.pdf/ });
+    const old = await documentRow(/antigo\.pdf/);
+    const current = await documentRow(/comprovante\.pdf/);
     expect(within(current).getByRole('button', { name: 'Baixar' })).toHaveAttribute(
       'data-kind',
       'download',

@@ -286,7 +286,7 @@ describe('US1 — comprovante', () => {
     await confirmAttach(window, 'Comprovante registrado.');
 
     await section(window).getByText('Comprovante enviado', { exact: true }).waitFor();
-    const row = section(window).getByRole('row').filter({ hasText: 'comprovante.pdf' });
+    const row = section(window).getByRole('listitem').filter({ hasText: 'comprovante.pdf' });
     await row.getByText('Atual', { exact: true }).waitFor();
     await row.getByText(`por ${server.operator.name}`).waitFor();
 
@@ -300,10 +300,12 @@ describe('US1 — comprovante', () => {
     const { window } = launched;
     await openDetail(window, 'R-PEND');
 
-    await section(window).getByLabel('Valor que foi cobrado (R$)').fill('1.234,56');
+    await section(window).getByLabel('Corrigir o valor cobrado (R$)').fill('1.234,56');
     await section(window).getByRole('button', { name: 'Informar valor' }).click();
+    // O valor salvo aparece na caixa à parte do campo (specs/006, FR-026).
     await section(window)
-      .getByText(/1\.234,56 \(informado à mão\)/)
+      .getByTestId('manual-amount')
+      .getByText(/1\.234,56/)
       .waitFor();
     expect((await treatmentOf('R-PEND')).treatment.manualChargedAmount).toBe('1234.56');
 
@@ -322,20 +324,20 @@ describe('US1 — comprovante', () => {
     await summary.getByText(/comprovante\.pdf, anexado por/).waitFor();
     await confirmAttach(window, 'Comprovante registrado.');
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante-2.pdf' })
       .getByText('Atual', { exact: true })
       .waitFor();
 
     const revertStarted = Date.now();
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'Comprovante anterior' })
       .getByRole('button', { name: 'Reverter' })
       .click();
     await section(window).getByText('Documento revertido.').waitFor();
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante.pdf' })
       .getByText('Atual', { exact: true })
       .waitFor();
@@ -352,7 +354,7 @@ describe('US1 — comprovante', () => {
     await stubSaveDialog(launched.app, target);
 
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante.pdf' })
       .getByRole('button', { name: 'Baixar' })
       .click();
@@ -460,7 +462,7 @@ describe('US2 — tratativa', () => {
     await section(window).getByText('Comprovante enviado', { exact: true }).waitFor();
 
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'tela.png' })
       .getByRole('button', { name: 'Desfazer' })
       .click();
@@ -757,9 +759,9 @@ describe('US4 — consulta com a chave de perfil consulta', () => {
     const treatment = section(window);
     await treatment.getByText('Comprovante enviado', { exact: true }).waitFor();
     await treatment
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante-2.pdf' })
-      .getByText('Substituído')
+      .getByText('Substituído', { exact: true })
       .waitFor();
     await treatment
       .getByRole('list', { name: 'Histórico da tratativa' })
@@ -772,7 +774,7 @@ describe('US4 — consulta com a chave de perfil consulta', () => {
     const target = path.join(inputDir, 'baixado-consulta.pdf');
     await stubSaveDialog(reader.app, target);
     await treatment
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante.pdf' })
       .getByRole('button', { name: 'Baixar' })
       .click();

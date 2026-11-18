@@ -8,11 +8,13 @@
  * Cada história do redesenho acrescenta aqui o estado dela (filtros, seleção, gaveta aberta, aba
  * ativa, texto de diálogo): um `it` que monta o estado, `keepsAcrossSizes` e a leitura do estado.
  * Hoje: Executar (US1), um diálogo aberto, Reservas (US2: busca, filtro do painel e filtro rápido)
- * e a seleção com a gaveta "Reservas selecionadas" aberta (US4).
+ * e a seleção com a gaveta "Reservas selecionadas" aberta (US4), a gaveta da reserva com um valor
+ * digitado em "Corrigir o valor" (US5).
  */
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestCertificates } from '../helpers/certificates.js';
+import { pdfFile } from '../helpers/synthetic-files.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
 import {
   configureApp,
@@ -216,6 +218,52 @@ describe('redimensionar sem perder nada (US9, SC-008)', () => {
     await keepsAcrossSizes(read);
 
     await window.getByRole('button', { name: 'Fechar seleção' }).click();
+    await drawer.waitFor({ state: 'hidden' });
+    await bar.getByRole('button', { name: 'Desmarcar todas' }).click();
+  });
+
+  it('Reservas: a gaveta aberta e o valor digitado em "Corrigir o valor" continuam (US5, T046)', async () => {
+    const { window } = launched;
+    // O campo só aparece com comprovante: registrado pela API, como o operador faria pelo app.
+    const upload = await server.test.app.inject({
+      method: 'POST',
+      url: `/v1/treatment-files?name=${encodeURIComponent('comprovante-r1.pdf')}`,
+      headers: { ...server.operator.headers, 'content-type': 'application/octet-stream' },
+      payload: pdfFile('Comprovante R-1'),
+    });
+    const { fileId } = upload.json<{ fileId: string }>();
+    await server.test.app.inject({
+      method: 'POST',
+      url: '/v1/treatment-documents',
+      headers: server.operator.headers,
+      payload: {
+        kind: 'proof',
+        fileId,
+        fileName: 'comprovante-r1.pdf',
+        reservations: [{ hotelCode: '201', reservationNumber: 'R-1' }],
+      },
+    });
+
+    await window.getByRole('button', { name: 'Abrir a reserva R-1' }).click();
+    const drawer = window.getByRole('dialog', { name: 'Detalhe da reserva' });
+    const field = drawer.getByLabel('Corrigir o valor cobrado (R$)');
+    await field.waitFor({ timeout: 15_000 });
+    await field.fill('1.234,56');
+
+    const read = async () => ({
+      drawerOpen: await drawer.isVisible(),
+      reservation: await drawer.getByRole('heading', { name: /Reserva R-1/ }).innerText(),
+      typed: await field.inputValue(),
+      proof: await drawer
+        .getByRole('list', { name: 'Documentos da tratativa' })
+        .getByText(/comprovante-r1\.pdf/)
+        .isVisible(),
+    });
+    expect(await read()).toMatchObject({ drawerOpen: true, typed: '1.234,56', proof: true });
+
+    await keepsAcrossSizes(read);
+
+    await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
     await drawer.waitFor({ state: 'hidden' });
   });
 });

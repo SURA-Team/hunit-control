@@ -17,6 +17,16 @@ export {
 } from './BatchSummary';
 export { Card, type CardProps } from './Card';
 export { CodeText } from './CodeText';
+export {
+  CardAside,
+  CardHeader,
+  DataField,
+  DataGrid,
+  DetailHeader,
+  type CardHeaderProps,
+  type DataFieldProps,
+  type DetailHeaderProps,
+} from './Detail';
 export { Countdown, type CountdownProps } from './Countdown';
 export {
   CountCard,

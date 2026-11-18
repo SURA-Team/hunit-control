@@ -45,7 +45,7 @@ escritos nas telas.
 |---|---|---|
 | `StatusBadge` | `tone`: `lime` (em andamento/destaque) · `amber` (atenção) · `green` (concluído) · `red` (erro) · `gray` (neutro/enviado) · `alert` (âmbar cheio, só para o que pede ação, como "Verificar"); sempre com texto (FR-006) | "Badge" `21:102` |
 | `SituationBadges` | Pilha de selos da reserva: situação, "Verificar", "Sistema anterior", "Não identificada" (o "Selo extra" do design); um embaixo do outro, nunca cortados | "Linha de reserva" `53:93` |
-| `Notice` | Alerta com tom `lime` · `green` · `red` · `amber`, ícone e ação opcional | "Alerta" `21:163` |
+| `Notice` | Alerta com tom `lime` · `green` · `red` · `amber`, ícone (num círculo cheio do tom, como o "!" do "Verificar") e ação opcionais; `block` faz dele um bloco à parte para a regra de uma principal por bloco | "Alerta" `21:163`; tela 4.9 |
 | `BatchSummary`, `SummaryLine`, `ReasonList` | Resumo de ação em lote: linhas com o ícone num círculo do tom (`green` ✓ para as aceitas; `amber` ! para as ignoradas e o que pede atenção; `red` ! para as que falharam) e o texto com o grupo e a quantidade (FR-006, FR-024); a caixa cinza com cada reserva que fica de fora e o motivo (T042) | "Resumo do lote" da tela 4.6 (`88:3565`) |
 | `ProgressBar` | Progresso da execução e do envio | "Progresso da execução" `26:1648` |
 | `CountCard` | Card de contagem (âmbar, vermelho, verde) | "Card de contagem" `21:153` |
@@ -67,6 +67,9 @@ escritos nas telas.
 | `RunningJobCard` | Card escuro do que está em andamento: a execução (data, período, cliente, "N de M hotéis concluídos", progresso, %, "Ver detalhes" em lima) e o envio ao Comercial na aba "Envios" ("N de M reservas verificadas", "Ver envio"; research R-13) | "Card — execução em andamento" `53:131`; envio: tela 7.7a (frame `211:9212`), aprovada pela UX em 2026-11-18 |
 | `IndicatorCard` | Número grande com rótulo (FR-004, US1-3) | "Card de indicador" `91:73` |
 | `AppDialog` | `size`: `sm` (520 px) · `lg` (780 px); 24 px de espaçamento; título no estilo do design (e `subtitle`); `dark` para o token; limitado à área visível, rola por dentro, fechar sempre alcançável ("Fechar o diálogo", FR-042, FR-047); `onCancel`, `onSubmit` (formulário), `zIndex` e `instant` | Telas 2.4, 2.5, 2.9, 3.3, 4.6, 7.1, 7.6 |
+| `DetailHeader` | Cabeçalho do detalhe numa gaveta: "Reserva N" (estilo "Título da seção"), a linha de apoio ("hotel 101") e os selos lado a lado à direita; quebra linha quando não cabe (T044) | Telas 4.2, 4.7, 4.9 |
+| `DataGrid`, `DataField` | Dados em três colunas (rótulo "Descrição" apagado em cima, valor "Corpo" embaixo; 16 px entre colunas, 12 px entre linhas), duas abaixo de 520 px; valores longos quebram linha. Sem valor, "—" (T044) | "Dados da reserva", "Dados da cobrança" (tela 4.2) |
+| `CardHeader`, `CardAside` | Título de card dentro da gaveta (estilo "Corpo forte": "Tratativa", "Cobrança", "Status do Hunit"), o que vai ao lado (selo ou texto apagado: "Sem tratativa") e as ações à direita (T044) | Tela 4.2 |
 | `AppDrawer` | Gaveta à direita, `min(780px, 100vw − 96px)`, cards de 16 px; `closeLabel` dá o nome do fechar ("Fechar detalhe" na gaveta da reserva, o que os roteiros procuram) | Telas 3.2, 4.2, 7.5 |
 
 ## Listas

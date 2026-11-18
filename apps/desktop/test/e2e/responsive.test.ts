@@ -9,7 +9,8 @@
  * Cada história do redesenho acrescenta aqui as telas dela (tarefas "registrar no roteiro de
  * larguras"): um `it` por estado, com `checkAllSizes`. Hoje: Configuração e Executar (US1) e
  * Reservas (US2: lista com a barra de seleção, painel "Filtros avançados" e nenhum resultado; US4: a
- * gaveta "Reservas selecionadas" e o diálogo de anexar em lote).
+ * gaveta "Reservas selecionadas" e o diálogo de anexar em lote; US5: a gaveta da reserva com
+ * comprovante e valor informado).
  */
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -171,6 +172,30 @@ async function checkAllSizes(state: ScreenState): Promise<void> {
 
 function button(name: string): Locator {
   return launched.window.getByRole('button', { name, exact: true });
+}
+
+/** Registra uma tratativa ou um comprovante pela API (como o operador faria pelo app). */
+async function registerDocument(
+  hotelCode: string,
+  reservationNumber: string,
+  kind: 'request' | 'proof',
+  name: string,
+  content: Buffer,
+): Promise<void> {
+  const upload = await server.test.app.inject({
+    method: 'POST',
+    url: `/v1/treatment-files?name=${encodeURIComponent(name)}`,
+    headers: { ...server.operator.headers, 'content-type': 'application/octet-stream' },
+    payload: content,
+  });
+  const { fileId } = upload.json<{ fileId: string }>();
+  const registered = await server.test.app.inject({
+    method: 'POST',
+    url: '/v1/treatment-documents',
+    headers: server.operator.headers,
+    payload: { kind, fileId, fileName: name, reservations: [{ hotelCode, reservationNumber }] },
+  });
+  expect(registered.statusCode, registered.body).toBeLessThan(300);
 }
 
 async function goTo(area: string): Promise<void> {
@@ -418,6 +443,45 @@ describe('larguras: Reservas (US2 e US4, SC-007)', () => {
     } finally {
       if (await drawer.isVisible()) await window.keyboard.press('Escape');
       await bar.getByRole('button', { name: 'Desmarcar todas' }).click();
+    }
+  });
+
+  it('gaveta da reserva com comprovante e valor informado (telas 4.2 e 4.7, US5)', async () => {
+    const { window } = launched;
+    // R-2 aceita documentos ("Cartão validado (não cobrado)"): comprovante e valor pela API.
+    await registerDocument('102', 'R-2', 'proof', 'comprovante-de-teste.pdf', pdfFile());
+    await server.test.app.inject({
+      method: 'PUT',
+      url: '/v1/reservations/102/R-2/manual-amount',
+      headers: server.operator.headers,
+      payload: { amount: '123456.78' },
+    });
+    await button('Abrir a reserva R-2').click();
+    const drawer = window.getByRole('dialog', { name: 'Detalhe da reserva' });
+    const treatment = drawer.getByTestId('treatment-section');
+    await treatment.getByRole('button', { name: 'Remover valor' }).waitFor({ timeout: 15_000 });
+    try {
+      await checkAllSizes({
+        name: 'gaveta da reserva',
+        area: 'Reservas',
+        reachable: () => [
+          drawer.getByRole('button', { name: 'Fechar detalhe' }),
+          drawer.getByRole('heading', { name: /Reserva R-2/ }),
+          drawer.getByTestId('hunit-status'),
+          treatment.getByRole('button', { name: 'Anexar tratativa' }),
+          treatment.getByRole('button', { name: 'Substituir comprovante' }),
+          treatment.getByRole('button', { name: 'Baixar' }),
+          treatment.getByRole('button', { name: 'Desfazer' }),
+          treatment.getByRole('button', { name: 'Remover valor' }),
+          treatment.getByLabel('Corrigir o valor cobrado (R$)'),
+          treatment.getByRole('button', { name: 'Informar valor' }),
+          drawer.getByText('Valor cobrado no Hunit'),
+          drawer.getByRole('heading', { name: 'Verificações' }),
+        ],
+      });
+    } finally {
+      await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
+      await drawer.waitFor({ state: 'hidden' });
     }
   });
 

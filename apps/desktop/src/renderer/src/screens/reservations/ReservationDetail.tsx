@@ -4,35 +4,35 @@
  * Tudo como o servidor informa; o app só formata. No topo, a situação da reserva (specs/003,
  * FR-002); a tratativa manual fica numa seção própria, e o envio ao Comercial em outra (specs/005,
  * FR-023), com o valor cobrado e a origem ao lado do valor total (FR-024).
+ *
+ * Desde a 006 (T044; tela 4.2, research R-12): o cabeçalho com "Reserva N", o hotel e os selos
+ * (situação, "Verificar", "Sistema anterior", ativa, cancelada ou não identificada); os dados da
+ * reserva em três colunas, com "Valor cobrado" (FR-040); a caixa cinza "Status do Hunit" com o selo,
+ * o motivo e a "Classificação anterior" quando mudou (FR-025); os cards "Tratativa", "Comercial",
+ * "Cobrança" ("Valor cobrado no Hunit") e "Verificações" (FR-028) e, para as importadas, "Sistema
+ * anterior". Cada card é um bloco: no máximo uma ação principal em cada (FR-007).
  */
-import { Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
-import type { ReactNode } from 'react';
+import { Group, Stack, Text } from '@mantine/core';
 import type { Reservation } from '../../../../shared/ipc-types';
-import { ChargedAmount } from '../../components/ChargedAmount';
-import { LegacyBadge } from '../../components/LegacyBadge';
-import { StatusBadge } from '../../components/StatusBadge';
-import { SituationBadge } from '../../components/SituationBadge';
 import { formatDate, formatDateTime, formatMoney } from '../../presentation/format';
 import {
+  CHARGED_AMOUNT_ORIGIN_NAMES,
   CLASSIFICATION_LABELS,
   RESERVATION_STATUS_LABELS,
   legacyClassificationName,
 } from '../../presentation/labels';
+import { badgeOf, LEGACY_BADGE, situationBadges } from '../../presentation/reservations';
+import {
+  Card,
+  CardHeader,
+  DataField,
+  DataGrid,
+  DetailHeader,
+  StatusBadge,
+  type SituationBadgeItem,
+} from '../../ui';
 import { CommercialSection } from './CommercialSection';
 import { TreatmentSection } from './TreatmentSection';
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed">
-        {label}
-      </Text>
-      <Text size="sm" component="div">
-        {children ?? '—'}
-      </Text>
-    </div>
-  );
-}
 
 const dash = (value: string | null | undefined) => (value ? value : '—');
 
@@ -47,6 +47,46 @@ export function GuestName({ reservation }: { reservation: Reservation }) {
   return <>{reservation.guestName}</>;
 }
 
+/** Selos do cabeçalho: os da lista e, depois, ativa ou cancelada ("Não identificada" já vem neles). */
+function headerBadges(reservation: Reservation): SituationBadgeItem[] {
+  return [
+    ...(reservation.legacy ? [LEGACY_BADGE] : []),
+    ...situationBadges(reservation),
+    ...(reservation.reservationStatus === 'unknown'
+      ? []
+      : [badgeOf(RESERVATION_STATUS_LABELS[reservation.reservationStatus])]),
+  ];
+}
+
+/** "R$ 380,00 (manual)": o valor que vale e a origem (specs/005, FR-024). */
+function ChargedAmount({ reservation }: { reservation: Reservation }) {
+  const { effectiveChargedAmount: amount, chargedAmountOrigin: origin } = reservation.treatment;
+  if (!amount) return <>—</>;
+  return (
+    <>
+      {formatMoney(amount)}
+      {origin && (
+        <Text span size="xs" c="dimmed">
+          {' '}
+          ({CHARGED_AMOUNT_ORIGIN_NAMES[origin]})
+        </Text>
+      )}
+    </>
+  );
+}
+
+/** "Classificação anterior: [selo]", na caixa "Status do Hunit" (tela 4.9). */
+function PreviousLine({ label, badge }: { label: string; badge: SituationBadgeItem }) {
+  return (
+    <Group gap={8}>
+      <Text size="xs" c="dimmed">
+        {label}
+      </Text>
+      <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+    </Group>
+  );
+}
+
 export function ReservationDetail({ reservation }: { reservation: Reservation }) {
   const { payment, tracking } = reservation;
   const installments =
@@ -57,127 +97,122 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
         : '—';
 
   return (
-    <Stack gap="md" data-testid="reservation-detail">
-      <Group justify="space-between">
-        <Title order={4}>
-          Reserva {reservation.reservationNumber}{' '}
-          <Text span c="dimmed" size="sm">
-            hotel {reservation.hotelCode}
-          </Text>
-        </Title>
-        <Group gap="xs">
-          {reservation.legacy && <LegacyBadge size="md" />}
-          <SituationBadge treatment={reservation.treatment} size="md" />
-          <StatusBadge label={RESERVATION_STATUS_LABELS[reservation.reservationStatus]} size="md" />
-        </Group>
-      </Group>
+    <Stack gap={16} data-testid="reservation-detail">
+      <DetailHeader
+        title={`Reserva ${reservation.reservationNumber}`}
+        subtitle={`hotel ${reservation.hotelCode}`}
+        badges={headerBadges(reservation)}
+      />
 
-      <SimpleGrid cols={3} spacing="sm">
-        <Field label="Hóspede">
+      <DataGrid label="Dados da reserva">
+        <DataField label="Hóspede">
           <GuestName reservation={reservation} />
-        </Field>
-        <Field label="Canal">{dash(reservation.channel)}</Field>
-        <Field label="Forma de pagamento">{dash(reservation.paymentForm)}</Field>
-        <Field label="Check-in">{formatDate(reservation.checkIn)}</Field>
-        <Field label="Check-out">{formatDate(reservation.checkOut)}</Field>
-        <Field label="Valor total">{formatMoney(reservation.totalAmount)}</Field>
-        <Field label="Valor cobrado">
-          <ChargedAmount treatment={reservation.treatment} />
-        </Field>
-      </SimpleGrid>
+        </DataField>
+        <DataField label="Canal">{dash(reservation.channel)}</DataField>
+        <DataField label="Forma de pagamento">{dash(reservation.paymentForm)}</DataField>
+        <DataField label="Check-in">{formatDate(reservation.checkIn)}</DataField>
+        <DataField label="Check-out">{formatDate(reservation.checkOut)}</DataField>
+        <DataField label="Valor total">{formatMoney(reservation.totalAmount)}</DataField>
+        <DataField label="Valor cobrado">
+          <ChargedAmount reservation={reservation} />
+        </DataField>
+      </DataGrid>
 
-      <Paper withBorder p="sm" radius="sm" data-testid="hunit-status">
-        <Group gap="xs" mb={6}>
-          <Title order={5}>Status do Hunit</Title>
-          <StatusBadge label={CLASSIFICATION_LABELS[reservation.classification]} />
-        </Group>
-        <Text size="xs" c="dimmed">
-          Motivo da classificação
-        </Text>
-        <Text size="sm">{reservation.reason}</Text>
+      <Card tone="subtle" padding={12} block="Status do Hunit" data-testid="hunit-status">
+        <CardHeader
+          title="Status do Hunit"
+          aside={
+            <StatusBadge tone={badgeOf(CLASSIFICATION_LABELS[reservation.classification]).tone}>
+              {CLASSIFICATION_LABELS[reservation.classification].name}
+            </StatusBadge>
+          }
+        />
+        <DataField label="Motivo da classificação">{reservation.reason}</DataField>
         {tracking?.previousClassification && (
-          <Group gap="xs" mt={6}>
-            <Text size="sm">Classificação anterior:</Text>
-            <StatusBadge label={CLASSIFICATION_LABELS[tracking.previousClassification]} />
-          </Group>
+          <PreviousLine
+            label="Classificação anterior:"
+            badge={badgeOf(CLASSIFICATION_LABELS[tracking.previousClassification])}
+          />
         )}
         {tracking?.previousReservationStatus && (
-          <Group gap="xs" mt={6}>
-            <Text size="sm">Situação anterior da reserva:</Text>
-            <StatusBadge label={RESERVATION_STATUS_LABELS[tracking.previousReservationStatus]} />
-          </Group>
+          <PreviousLine
+            label="Situação anterior da reserva:"
+            badge={badgeOf(RESERVATION_STATUS_LABELS[tracking.previousReservationStatus])}
+          />
         )}
         {tracking?.notFoundSince && (
-          <Text size="sm" c="orange.8" mt={6}>
-            Não encontrada na verificação de {formatDateTime(tracking.notFoundSince)}.
-          </Text>
+          <DataField label="Não encontrada na verificação de">
+            {formatDateTime(tracking.notFoundSince)}
+          </DataField>
         )}
-      </Paper>
+      </Card>
 
       <TreatmentSection reservation={reservation} />
 
       <CommercialSection reservation={reservation} />
 
-      <Paper withBorder p="sm" radius="sm">
-        <Title order={5} mb="xs">
-          Cobrança
-        </Title>
-        <SimpleGrid cols={3} spacing="sm">
-          <Field label="Data">{payment?.chargedAt ? formatDateTime(payment.chargedAt) : '—'}</Field>
-          <Field label="Responsável">{dash(payment?.chargedBy)}</Field>
-          <Field label="Valor cobrado no Hunit">{formatMoney(payment?.chargedAmount)}</Field>
-          <Field label="Transação">{dash(payment?.transactionId)}</Field>
-          <Field label="Autorização">{dash(payment?.authorizationCode)}</Field>
-          <Field label="Referência da operadora">{dash(payment?.processorReference)}</Field>
-          <Field label="Parcelamento">{installments}</Field>
-          <Field label="Estado do pré-pagamento">{dash(payment?.prePaymentState)}</Field>
-          <Field label="Mensagem do pré-pagamento">{dash(payment?.prePaymentMessage)}</Field>
-        </SimpleGrid>
-      </Paper>
+      <Card block="Cobrança">
+        <CardHeader title="Cobrança" />
+        <DataGrid>
+          <DataField label="Data">
+            {payment?.chargedAt ? formatDateTime(payment.chargedAt) : '—'}
+          </DataField>
+          <DataField label="Responsável">{dash(payment?.chargedBy)}</DataField>
+          <DataField label="Valor cobrado no Hunit">
+            {formatMoney(payment?.chargedAmount)}
+          </DataField>
+          <DataField label="Transação">{dash(payment?.transactionId)}</DataField>
+          <DataField label="Autorização">{dash(payment?.authorizationCode)}</DataField>
+          <DataField label="Referência da operadora">{dash(payment?.processorReference)}</DataField>
+          <DataField label="Parcelamento">{installments}</DataField>
+          <DataField label="Estado do pré-pagamento">{dash(payment?.prePaymentState)}</DataField>
+          <DataField label="Mensagem do pré-pagamento">
+            {dash(payment?.prePaymentMessage)}
+          </DataField>
+        </DataGrid>
+      </Card>
 
-      <Paper withBorder p="sm" radius="sm">
-        <Title order={5} mb="xs">
-          Verificações
-        </Title>
-        <SimpleGrid cols={3} spacing="sm">
-          <Field label="Primeira">{formatDateTime(reservation.firstVerifiedAt)}</Field>
-          <Field label="Última">{formatDateTime(reservation.lastVerifiedAt)}</Field>
-          <Field label="Quantidade">{reservation.verificationCount}</Field>
-        </SimpleGrid>
+      <Card block="Verificações">
+        <CardHeader title="Verificações" />
+        <DataGrid>
+          <DataField label="Primeira">{formatDateTime(reservation.firstVerifiedAt)}</DataField>
+          <DataField label="Última">{formatDateTime(reservation.lastVerifiedAt)}</DataField>
+          <DataField label="Quantidade">{reservation.verificationCount}</DataField>
+        </DataGrid>
         {reservation.lastExecutionId === undefined && (
-          <Text size="sm" c="dimmed" mt={6}>
+          <Text size="sm" c="dimmed">
             Ainda não verificada pelo HUNIT Control: os dados são os do sistema anterior.
           </Text>
         )}
-      </Paper>
+      </Card>
 
       {reservation.legacy && (
-        <Paper withBorder p="sm" radius="sm" data-testid="legacy-origin">
-          <Title order={5} mb="xs">
-            Sistema anterior
-          </Title>
-          <SimpleGrid cols={3} spacing="sm">
-            <Field label="Classificação original">
+        <Card block="Sistema anterior" data-testid="legacy-origin">
+          <CardHeader title="Sistema anterior" />
+          <DataGrid>
+            <DataField label="Classificação original">
               {legacyClassificationName(reservation.legacy.originalClassification)}
-            </Field>
-            <Field label="Importada em">{formatDateTime(reservation.legacy.importedAt)}</Field>
-            <Field label="Verificações no sistema anterior">
+            </DataField>
+            <DataField label="Importada em">
+              {formatDateTime(reservation.legacy.importedAt)}
+            </DataField>
+            <DataField label="Verificações no sistema anterior">
               {reservation.legacy.verificationCount}
-            </Field>
-            <Field label="Primeira verificação">
+            </DataField>
+            <DataField label="Primeira verificação">
               {formatDateTime(reservation.legacy.firstVerifiedAt)}
-            </Field>
-            <Field label="Última verificação">
+            </DataField>
+            <DataField label="Última verificação">
               {formatDateTime(reservation.legacy.lastVerifiedAt)}
-            </Field>
-          </SimpleGrid>
+            </DataField>
+          </DataGrid>
           {reservation.legacy.merged && (
-            <Text size="sm" c="dimmed" mt={6}>
+            <Text size="sm" c="dimmed">
               O HUNIT Control já conhecia esta reserva: valem os dados dele. A primeira verificação
               e a quantidade acima incluem as do sistema anterior.
             </Text>
           )}
-        </Paper>
+        </Card>
       )}
     </Stack>
   );

@@ -166,3 +166,87 @@
   gap: 16px;
   padding: 0 16px 16px;
 }
+
+/* Detalhe numa gaveta (telas 4.2, 4.7, 4.9, 4.11): cabeçalho, grade de dados e título de card. */
+.detailHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.detailTitle {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-da-secao);
+  letter-spacing: var(--hc-font-titulo-da-secao-tracking);
+}
+.detailSubtitle {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+  letter-spacing: 0;
+}
+.detailBadges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.dataGridFrame {
+  container-type: inline-size;
+}
+.dataGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+}
+@container (max-width: 519.98px) {
+  .dataGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.dataField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dataLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+.dataValue {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+  overflow-wrap: anywhere;
+}
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.cardTitleLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cardTitle {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+}
+.cardAside {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
