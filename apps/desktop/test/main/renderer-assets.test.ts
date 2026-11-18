@@ -68,6 +68,15 @@ describe('fonte embutida no build da interface (FR-004)', () => {
     }
   });
 
+  it('a página tem o ícone da marca, servido pelo próprio app (specs/006, R-04)', async () => {
+    const html = await readOut('index.html');
+    const href = /<link rel="icon"[^>]*href="([^"]+)"/.exec(html)?.[1] ?? '';
+    expect(href).not.toMatch(/^(https?:)?\/\//);
+    if (!href.startsWith('data:image/svg+xml')) {
+      expect(files).toContain(href.replace(/^\.\//, ''));
+    }
+  });
+
   it('a política de conteúdo do index.html continua a mesma', async () => {
     const html = await readOut('index.html');
     const csp = /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/.exec(html)?.[1];

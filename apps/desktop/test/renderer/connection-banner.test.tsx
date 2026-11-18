@@ -48,7 +48,35 @@ describe('ConnectionBanner', () => {
   });
 });
 
+describe('ConnectionBanner no visual novo (specs/006, T017)', () => {
+  it.each([
+    ['offline', 'amber', 'status'],
+    ['connecting', 'lime', 'status'],
+    ['not_configured', 'lime', 'status'],
+    ['untrusted_server', 'red', 'alert'],
+    ['unauthorized', 'red', 'alert'],
+  ] as const)('%s: alerta %s, anunciado como %s', (status, tone, role) => {
+    renderWithApp(<ConnectionBanner state={state(status)} onOpenSetup={vi.fn()} />);
+    expect(screen.getByRole(role)).toHaveAttribute('data-tone', tone);
+  });
+
+  it('"Abrir configuração" é uma ação secundária, não a principal', () => {
+    renderWithApp(<ConnectionBanner state={state('unauthorized')} onOpenSetup={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /abrir configuração/i })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+  });
+});
+
 describe('StaleDataNotice', () => {
+  it('é um aviso âmbar compacto, anunciado como status', () => {
+    renderWithApp(<StaleDataNotice updatedAt={new Date(2026, 10, 12, 9, 5).getTime()} offline />);
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveAttribute('data-tone', 'amber');
+    expect(notice).toHaveAttribute('data-compact');
+  });
+
   it('com o servidor indisponível, mostra o horário dos dados', () => {
     const updatedAt = new Date(2026, 10, 12, 9, 5).getTime();
     renderWithApp(<StaleDataNotice updatedAt={updatedAt} offline />);

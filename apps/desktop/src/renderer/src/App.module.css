@@ -1,0 +1,47 @@
+/*
+ * Estrutura do app (specs/006, FR-001, FR-002, FR-046, research R-07; telas 4.1 e 7.7a): o cabeçalho
+ * no topo, o menu lateral flutuante preso à esquerda (12 px das bordas, 4 px abaixo do cabeçalho) e o
+ * conteúdo, que rola com a página, com 16 px de margem e largura máxima de 1 600 px. O conteúdo é um
+ * contêiner (`@container`): as telas reagem ao espaço que sobra, com e sem o menu recolhido.
+ */
+.shell {
+  --shell-menu-space: calc(12px + var(--hc-menu-width) + 12px);
+  min-height: 100vh;
+}
+
+/* Janela abaixo de 1 180 px (tokens.breakpoints.collapsedMenu): menu só com os ícones. */
+@media (max-width: 1179.98px) {
+  .shell {
+    --shell-menu-space: calc(12px + var(--hc-menu-collapsed-width) + 12px);
+  }
+}
+
+/* O cabeçalho fica no topo ao rolar; o fundo é o da página, como o cabeçalho transparente do design. */
+.header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  background: var(--hc-fundo-app);
+}
+
+.menu {
+  position: fixed;
+  z-index: 10;
+  top: calc(var(--hc-header-height) + 4px);
+  bottom: 12px;
+  left: 12px;
+}
+
+.main {
+  margin-inline-start: var(--shell-menu-space);
+  padding: 16px;
+}
+
+.content {
+  container: content / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: var(--hc-content-max-width);
+  margin-inline: auto;
+}

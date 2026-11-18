@@ -15,6 +15,8 @@ export interface NoticeProps {
   icon?: ReactNode;
   action?: ReactNode;
   role?: 'alert' | 'status' | 'none';
+  /** Pílula de uma linha, para avisos curtos ao lado do título da página ("dados de 14:05 — …"). */
+  compact?: boolean;
   'data-testid'?: string;
 }
 
@@ -25,12 +27,14 @@ export function Notice({
   icon,
   action,
   role = 'alert',
+  compact = false,
   ...rest
 }: NoticeProps) {
   return (
     <div
       className={classes.notice}
       data-tone={tone}
+      data-compact={compact || undefined}
       role={role === 'none' ? undefined : role}
       {...rest}
     >

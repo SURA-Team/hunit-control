@@ -45,6 +45,7 @@
 
 .menu {
   width: var(--hc-menu-width);
+  height: 100%;
   padding: 10px;
   border-radius: var(--hc-radius-menu);
   background: var(--hc-fundo-padrao);

@@ -88,6 +88,16 @@
   background: var(--hc-amarelo-1);
 }
 
+.notice[data-compact] {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--hc-radius-pill);
+  color: var(--notice-title);
+  font: var(--hc-font-rotulo);
+  white-space: nowrap;
+}
+
 .noticeIcon {
   display: flex;
   color: var(--notice-title);

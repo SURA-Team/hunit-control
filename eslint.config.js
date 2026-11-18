@@ -77,9 +77,7 @@ const mantineOnlyInUi = [
  * migra um arquivo o tira daqui; a lista é esvaziada e removida na T059 (tasks.md da 006).
  */
 const NOT_YET_MIGRATED = [
-  'App.tsx',
   'components/ClassificationCountsGrid.tsx',
-  'components/ConnectionBanner.tsx',
   'components/DocumentPreview.tsx',
   'components/EvidenceList.tsx',
   'components/LegacyBadge.tsx',
