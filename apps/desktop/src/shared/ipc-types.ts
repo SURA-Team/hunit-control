@@ -50,6 +50,10 @@ export type CommercialSheetProblem = Schemas['CommercialSheetProblem'];
 export type CommercialSheetRead = Schemas['CommercialSheetRead'];
 export type ConfirmationBatchResult = Schemas['ConfirmationBatchResult'];
 export type ReservationSelection = Schemas['ReservationSelection'];
+/** Filtros rápidos e ordem da lista (specs/006, contrato 1.8.0). */
+export type ReservationQuickFilter = Schemas['ReservationQuickFilter'];
+export type ReservationOrder = Schemas['ReservationOrder'];
+export type ReservationQuickFilterCounts = Schemas['ReservationQuickFilterCounts'];
 export type SelectionItem = Schemas['SelectionItem'];
 export type ChargedAmountOrigin = NonNullable<ReservationTreatment['chargedAmountOrigin']>;
 
@@ -239,12 +243,22 @@ export interface ReservationListInput {
    * comprovante" (`return_pending`). A tela usa este no lugar de `situation`.
    */
   detailedSituation?: ReservationDetailedSituation[] | undefined;
+  /** Filtro rápido (specs/006, FR-016): só as reservas do grupo. */
+  quickFilter?: ReservationQuickFilter | undefined;
+  /** Ordem da lista (specs/006, R-18); a tela sempre manda `hotel_check_in`. */
+  order?: ReservationOrder | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
 }
 
 /** Os filtros da lista, sem paginação: "selecionar todas do filtro" e a cópia (specs/005). */
 export type ReservationFilters = Omit<ReservationListInput, 'cursor' | 'limit'>;
+
+/** Os filtros das contagens dos filtros rápidos: os da lista, sem paginação, filtro rápido e ordem. */
+export type ReservationCountFilters = Omit<
+  ReservationListInput,
+  'cursor' | 'limit' | 'quickFilter' | 'order'
+>;
 
 export interface ReservationKey {
   hotelCode: string;
@@ -491,6 +505,10 @@ export interface HunitApi {
     channels: () => Promise<Result<string[]>>;
     /** "Selecionar todas do filtro" (specs/005, FR-030): até 2 000, na ordem da lista. */
     selectAll: (filters: ReservationFilters) => Promise<Result<ReservationSelection>>;
+    /** Contagem de cada filtro rápido com os mesmos filtros da lista (specs/006, FR-017). */
+    quickFilterCounts: (
+      filters: ReservationCountFilters,
+    ) => Promise<Result<ReservationQuickFilterCounts>>;
   };
   treatments: {
     /** Abre "Abrir arquivo"; `null` = cancelado. O arquivo fica na memória do principal. */

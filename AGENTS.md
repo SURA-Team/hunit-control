@@ -189,9 +189,10 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/005-envio-comercial/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
+  `specs/006-redesign-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
   A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua
-  na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0 e a da 004 na 1.6.0, e não devem ser alteradas
+  na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0 e a da 005 na 1.7.0, e não
+  devem ser alteradas
   (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
   research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
   `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).

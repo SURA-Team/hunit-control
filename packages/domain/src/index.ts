@@ -174,6 +174,12 @@ export {
   type ParsedLegacyReservation,
   type ParsedLegacyTreatment,
 } from './legacy-import.js';
+export {
+  QUICK_FILTERS,
+  QUICK_FILTER_SITUATIONS,
+  quickFiltersOf,
+  type QuickFilter,
+} from './quick-filters.js';
 export { CLASSIFICATIONS, RESERVATION_STATUSES } from './types.js';
 export type {
   Classification,

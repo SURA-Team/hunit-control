@@ -1,11 +1,13 @@
 import {
   CLASSIFICATIONS_ACCEPTING_TREATMENT,
   CLASSIFICATIONS_REQUIRING_CHARGE,
+  QUICK_FILTER_SITUATIONS,
   markNotFound,
   mergeVerification,
   selectNotFound,
   type Classification,
   type Period,
+  type QuickFilter,
   type ReservationData,
   type ReservationDetailedSituation,
   type ReservationRecord,
@@ -321,12 +323,22 @@ export interface ReservationFilters {
   fromLegacy?: boolean | undefined;
   /** Situação detalhada, com "Validar comprovante" (specs/005, R-09): qualquer uma das informadas. */
   detailedSituations?: readonly ReservationDetailedSituation[] | undefined;
+  /** Filtro rápido (specs/006, FR-016, research R-09): só as reservas do grupo. */
+  quickFilter?: QuickFilter | undefined;
 }
+
+/**
+ * Ordem da lista (specs/006, research R-18): `hotel_number` = hotel e número (a da 1.7.0);
+ * `hotel_check_in` = hotel, check-in e número.
+ */
+export type ReservationOrder = 'hotel_number' | 'hotel_check_in';
 
 export interface ListReservationsOptions extends ReservationFilters {
   limit: number;
-  /** Valor de `nextCursor` de uma página anterior. */
+  /** Valor de `nextCursor` de uma página anterior, gerado com a mesma `order`. */
   cursor?: string | undefined;
+  /** Sem ela, `hotel_number`. */
+  order?: ReservationOrder | undefined;
 }
 
 export interface ReservationPageResult {
@@ -334,26 +346,62 @@ export interface ReservationPageResult {
   nextCursor: string | null;
 }
 
-function encodeCursor(row: ReservationRow): string {
-  return Buffer.from(JSON.stringify([row.hotelCode, row.reservationNumber]), 'utf8').toString(
-    'base64url',
-  );
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Posição de uma página na lista (specs/006, data-model §5): a ordem em que foi gerada e a chave da
+ * última reserva nessa ordem.
+ */
+type CursorPosition =
+  | { order: 'hotel_number'; hotelCode: string; reservationNumber: string }
+  | { order: 'hotel_check_in'; hotelCode: string; checkIn: string; reservationNumber: string };
+
+function encodeCursor(row: ReservationRow, order: ReservationOrder): string {
+  const value =
+    order === 'hotel_check_in'
+      ? [order, row.hotelCode, row.checkIn, row.reservationNumber]
+      : [order, row.hotelCode, row.reservationNumber];
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
 }
 
-function decodeCursor(cursor: string): [string, string] {
+/** Lê o cursor; o formato da 1.7.0 (`[hotel, número]`) vale como `hotel_number`. */
+function decodeCursor(cursor: string): CursorPosition {
   try {
     const value: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-    if (
-      Array.isArray(value) &&
-      value.length === 2 &&
-      value.every((part) => typeof part === 'string')
-    ) {
-      return value as [string, string];
+    if (Array.isArray(value) && value.every((part) => typeof part === 'string')) {
+      const parts = value;
+      if (parts.length === 2) {
+        const [hotelCode = '', reservationNumber = ''] = parts;
+        return { order: 'hotel_number', hotelCode, reservationNumber };
+      }
+      if (parts.length === 3 && parts[0] === 'hotel_number') {
+        const [, hotelCode = '', reservationNumber = ''] = parts;
+        return { order: 'hotel_number', hotelCode, reservationNumber };
+      }
+      if (parts.length === 4 && parts[0] === 'hotel_check_in' && ISO_DATE.test(parts[2] ?? '')) {
+        const [, hotelCode = '', checkIn = '', reservationNumber = ''] = parts;
+        return { order: 'hotel_check_in', hotelCode, checkIn, reservationNumber };
+      }
     }
   } catch {
     // Cai no erro abaixo.
   }
   throw new InvalidCursorError();
+}
+
+/** Reservas depois da posição do cursor, na ordem dele. */
+function afterCursor(position: CursorPosition): SQL {
+  if (position.order === 'hotel_check_in') {
+    return sql`(${reservations.hotelCode}, ${reservations.checkIn}, ${reservations.reservationNumber}) > (${position.hotelCode}, ${position.checkIn}::date, ${position.reservationNumber})`;
+  }
+  return sql`(${reservations.hotelCode}, ${reservations.reservationNumber}) > (${position.hotelCode}, ${position.reservationNumber})`;
+}
+
+/** Colunas do `order by` de cada ordem (a última coluna desempata: a chave é única). */
+function orderColumns(order: ReservationOrder): SQL[] {
+  return order === 'hotel_check_in'
+    ? [asc(reservations.hotelCode), asc(reservations.checkIn), asc(reservations.reservationNumber)]
+    : [asc(reservations.hotelCode), asc(reservations.reservationNumber)];
 }
 
 /**
@@ -452,7 +500,12 @@ function situationCondition(situation: ReservationSituation): SQL {
  * specs/004) e nenhuma confirmação desde a última mudança de situação.
  */
 function needsReviewCondition(): SQL {
-  return sql`(${hasRequestCondition()} and not ${hasProofCondition()} and not ${acceptsTreatmentCondition()} and not exists (select 1 from ${treatmentEvents} te where te.hotel_code = ${reservations.hotelCode} and te.reservation_number = ${reservations.reservationNumber} and te.type = 'review_confirmed' and te.at >= coalesce(${reservations.statusChangedAt}, '-infinity'::timestamptz)))`;
+  return sql`(${hasRequestCondition()} and not ${hasProofCondition()} and not ${acceptsTreatmentCondition()} and not ${reviewedSinceChangeCondition()})`;
+}
+
+/** Alguém confirmou o "Verificar" depois da última mudança de situação no Hunit? (specs/003.) */
+function reviewedSinceChangeCondition(): SQL {
+  return sql`exists (select 1 from ${treatmentEvents} te where te.hotel_code = ${reservations.hotelCode} and te.reservation_number = ${reservations.reservationNumber} and te.type = 'review_confirmed' and te.at >= coalesce(${reservations.statusChangedAt}, '-infinity'::timestamptz))`;
 }
 
 /**
@@ -469,6 +522,74 @@ function detailedSituationCondition(situation: ReservationDetailedSituation): SQ
     return sql`(${situationCondition('treatment_sent')} and not ${awaiting})`;
   }
   return situationCondition(situation);
+}
+
+/**
+ * Fatos da tratativa de que os filtros rápidos dependem (specs/006, research R-09). Na lista, são as
+ * subconsultas de cada reserva; nas contagens, colunas calculadas uma vez por reserva (cada grupo
+ * repetiria as mesmas subconsultas, e a contagem de 20 000 reservas passaria de 1 s).
+ */
+interface TreatmentFacts {
+  classification: SQL;
+  hasRequest: SQL;
+  hasProof: SQL;
+  awaitingReturn: SQL;
+  reviewedSinceChange: SQL;
+}
+
+function inlineFacts(): TreatmentFacts {
+  return {
+    classification: sql`${reservations.classification}`,
+    hasRequest: hasRequestCondition(),
+    hasProof: hasProofCondition(),
+    awaitingReturn: commercialReturnCondition('awaiting_validation'),
+    reviewedSinceChange: reviewedSinceChangeCondition(),
+  };
+}
+
+/** A classificação está na lista? */
+function classificationIn(facts: TreatmentFacts, list: readonly Classification[]): SQL {
+  return sql`${facts.classification} in (${sql.join(
+    list.map((value) => sql`${value}`),
+    sql`, `,
+  )})`;
+}
+
+/**
+ * Situação detalhada como expressão SQL (mesma regra de `detailedSituation` do domínio):
+ * comprovante → "Tratativa enviada" (ou "Validar comprovante", com retorno aguardando) enquanto a
+ * classificação exige cobrança → a própria classificação.
+ */
+function detailedSituationExpression(facts: TreatmentFacts): SQL {
+  return sql`(case
+    when ${facts.hasProof} then 'proof_sent'
+    when ${facts.hasRequest} and ${classificationIn(facts, CLASSIFICATIONS_REQUIRING_CHARGE)}
+      then (case when ${facts.awaitingReturn} then 'return_pending' else 'treatment_sent' end)
+    else ${facts.classification}::text
+  end)`;
+}
+
+/**
+ * Condição de cada filtro rápido sobre os fatos da tratativa (specs/006, research R-09; mesma regra
+ * de `quickFiltersOf`): as listas de situações vêm do domínio, e o teste de paridade confere
+ * contagens × lista × domínio.
+ */
+function quickFilterOver(filter: QuickFilter, facts: TreatmentFacts): SQL {
+  // "Falta cobrar": exige cobrança e sem comprovante (`isPendingCharge`).
+  if (filter === 'pending_charge') {
+    return sql`(${classificationIn(facts, CLASSIFICATIONS_REQUIRING_CHARGE)} and not ${facts.hasProof})`;
+  }
+  const situations = QUICK_FILTER_SITUATIONS[filter].map((value) => sql`${value}`);
+  const inGroup = sql`${detailedSituationExpression(facts)} in (${sql.join(situations, sql`, `)})`;
+  if (filter !== 'to_review') return inGroup;
+  // Alerta "Verificar" (`needsReview`): só tratativa, classificação que não aceita tratativa e
+  // nenhuma confirmação desde a última mudança de situação.
+  const needsReview = sql`(${facts.hasRequest} and not ${facts.hasProof} and not ${classificationIn(facts, CLASSIFICATIONS_ACCEPTING_TREATMENT)} and not ${facts.reviewedSinceChange})`;
+  return sql`(${needsReview} or ${inGroup})`;
+}
+
+function quickFilterCondition(filter: QuickFilter): SQL {
+  return quickFilterOver(filter, inlineFacts());
 }
 
 /**
@@ -534,6 +655,7 @@ function filterConditions(options: ReservationFilters): SQL[] {
   }
   if (options.fromLegacy === true) conditions.push(fromLegacyCondition());
   if (options.fromLegacy === false) conditions.push(not(fromLegacyCondition()));
+  if (options.quickFilter !== undefined) conditions.push(quickFilterCondition(options.quickFilter));
   return conditions;
 }
 
@@ -541,12 +663,13 @@ export async function listReservations(
   db: Database,
   options: ListReservationsOptions,
 ): Promise<ReservationPageResult> {
+  const order = options.order ?? 'hotel_number';
   const conditions = filterConditions(options);
   if (options.cursor !== undefined) {
-    const [hotelCode, reservationNumber] = decodeCursor(options.cursor);
-    conditions.push(
-      sql`(${reservations.hotelCode}, ${reservations.reservationNumber}) > (${hotelCode}, ${reservationNumber})`,
-    );
+    const position = decodeCursor(options.cursor);
+    // Cursor gerado com outra ordem: a posição não vale nesta (specs/006, R-18).
+    if (position.order !== order) throw new InvalidCursorError();
+    conditions.push(afterCursor(position));
   }
 
   // Lê um registro a mais para saber se existe uma próxima página.
@@ -554,25 +677,27 @@ export async function listReservations(
     .select()
     .from(reservations)
     .where(and(...conditions))
-    .orderBy(asc(reservations.hotelCode), asc(reservations.reservationNumber))
+    .orderBy(...orderColumns(order))
     .limit(options.limit + 1);
 
   const items = rows.slice(0, options.limit);
   const last = items.at(-1);
   return {
     items,
-    nextCursor: rows.length > options.limit && last ? encodeCursor(last) : null,
+    nextCursor: rows.length > options.limit && last ? encodeCursor(last, order) : null,
   };
 }
 
 /**
  * Todas as reservas de um filtro, até `max`, na ordem da lista, e quantas o filtro encontrou
- * (specs/005, FR-030 — "selecionar todas do filtro" e a cópia para e-mail, FR-027).
+ * (specs/005, FR-030 — "selecionar todas do filtro" e a cópia para e-mail, FR-027). Desde a 006,
+ * na ordem pedida (research R-18).
  */
 export async function selectReservations(
   db: Database,
   filters: ReservationFilters,
   max: number,
+  order: ReservationOrder = 'hotel_number',
 ): Promise<{ rows: Array<ReservationRow & { hotelName: string }>; total: number }> {
   const where = and(...filterConditions(filters));
   const [count] = await db
@@ -584,12 +709,97 @@ export async function selectReservations(
     .from(reservations)
     .innerJoin(hotels, eq(hotels.code, reservations.hotelCode))
     .where(where)
-    .orderBy(asc(reservations.hotelCode), asc(reservations.reservationNumber))
+    .orderBy(...orderColumns(order))
     .limit(max);
   return {
     rows: rows.map(({ reservation, hotelName }) => ({ ...reservation, hotelName })),
     total: count?.total ?? 0,
   };
+}
+
+/** Contagem de cada filtro rápido (specs/006, FR-017): `all` = "Todas". */
+export interface QuickFilterCounts {
+  all: number;
+  pendingCharge: number;
+  toReview: number;
+  withError: number;
+  done: number;
+}
+
+/**
+ * Reservas de cada filtro rápido com os mesmos filtros da lista, numa consulta só (specs/006,
+ * FR-017, research R-09). O `quickFilter` dos filtros, se vier, é ignorado: cada grupo é contado.
+ *
+ * Os fatos da tratativa saem de junções com os documentos, as linhas, os retornos e as revisões já
+ * agrupados por reserva, uma vez por reserva, numa CTE materializada (sem o `materialized`, o
+ * PostgreSQL repetiria as expressões em cada `filter`). As regras são as de `hasRequestCondition`,
+ * `hasProofCondition`, `commercialReturnCondition` e `reviewedSinceChangeCondition`, que a lista
+ * usa; o teste de paridade confere contagens × lista × domínio. Com subconsultas por reserva, a
+ * contagem de 20 000 reservas levava 0,6 s.
+ */
+export async function countQuickFilters(
+  db: Database,
+  filters: ReservationFilters,
+): Promise<QuickFilterCounts> {
+  const where = and(...filterConditions({ ...filters, quickFilter: undefined })) ?? sql`true`;
+  const columns: TreatmentFacts = {
+    classification: sql.raw('facts.classification'),
+    hasRequest: sql.raw('facts.has_request'),
+    hasProof: sql.raw('facts.has_proof'),
+    awaitingReturn: sql.raw('facts.awaiting_return'),
+    reviewedSinceChange: sql.raw('facts.reviewed_since_change'),
+  };
+  const sameReservation = (alias: string) =>
+    sql`${sql.raw(alias)}.hotel_code = ${reservations.hotelCode} and ${sql.raw(alias)}.reservation_number = ${reservations.reservationNumber}`;
+  const count = (filter: QuickFilter) =>
+    sql`(count(*) filter (where ${quickFilterOver(filter, columns)}))::int`;
+  const result = await db.execute<{ [K in keyof QuickFilterCounts]: number }>(sql`
+    with qf_documents as (
+      select hotel_code, reservation_number,
+        bool_or(kind = 'request') as has_request, bool_or(kind = 'proof') as has_proof
+      from ${treatmentDocuments}
+      where ended_at is null
+      group by hotel_code, reservation_number
+    ),
+    qf_lines as (
+      select distinct hotel_code, reservation_number
+      from ${commercialLines}
+      where state <> 'cancelled'
+    ),
+    qf_returns as (
+      select hotel_code, reservation_number,
+        bool_or(state = 'confirmed') as confirmed,
+        bool_or(state = 'awaiting_validation') as awaiting
+      from ${commercialReturns}
+      group by hotel_code, reservation_number
+    ),
+    qf_reviews as (
+      select hotel_code, reservation_number, max(at) as last_at
+      from ${treatmentEvents}
+      where type = 'review_confirmed'
+      group by hotel_code, reservation_number
+    ),
+    facts as materialized (
+      select ${reservations.classification} as classification,
+        (coalesce(qd.has_request, false) or ql.hotel_code is not null) as has_request,
+        (coalesce(qd.has_proof, false) or coalesce(qr.confirmed, false)) as has_proof,
+        coalesce(qr.awaiting, false) as awaiting_return,
+        coalesce(qv.last_at >= coalesce(${reservations.statusChangedAt}, '-infinity'::timestamptz), false)
+          as reviewed_since_change
+      from ${reservations}
+      left join qf_documents qd on ${sameReservation('qd')}
+      left join qf_lines ql on ${sameReservation('ql')}
+      left join qf_returns qr on ${sameReservation('qr')}
+      left join qf_reviews qv on ${sameReservation('qv')}
+      where ${where}
+    )
+    select count(*)::int as "all",
+      ${count('pending_charge')} as "pendingCharge",
+      ${count('to_review')} as "toReview",
+      ${count('with_error')} as "withError",
+      ${count('done')} as "done"
+    from facts`);
+  return result.rows[0] ?? { all: 0, pendingCharge: 0, toReview: 0, withError: 0, done: 0 };
 }
 
 /** Canais presentes nas reservas gravadas, em ordem alfabética (specs/002, filtro da FR-020). */

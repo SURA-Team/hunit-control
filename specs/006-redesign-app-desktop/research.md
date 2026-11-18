@@ -229,6 +229,16 @@ Um teste `server-db` confere a paridade: para um conjunto de reservas em todas a
 contagem de cada grupo é igual ao tamanho da lista com aquele `quickFilter` e igual ao que
 `quickFiltersOf` diz de cada reserva.
 
+_Na implementação (T026, T030)_: o domínio exporta também `QUICK_FILTER_SITUATIONS` (as situações
+detalhadas de "A verificar", "Com erro" e "Concluídas"), e o SQL de cada grupo é escrito sobre
+cinco fatos da reserva (classificação, tem tratativa, tem comprovante, retorno aguardando e
+"Verificar" confirmado depois da mudança), com a situação detalhada numa expressão `case` (a mesma
+regra de `detailedSituation`). Na lista, os fatos são as subconsultas de sempre; nas contagens, saem
+de junções com os documentos, as linhas, os retornos e as revisões já agrupados por reserva, numa
+CTE materializada. Com as subconsultas por reserva repetidas em cada grupo, a contagem de 20 000
+reservas levava 2,1 s; com os fatos calculados uma vez por reserva, 0,6 s; com as junções, cerca
+de 40 ms. O teste de paridade cobre as duas formas.
+
 No app, as contagens são uma consulta própria do TanStack Query, com os mesmos filtros da lista, e
 são invalidadas junto com a lista (mudança de filtro, volta do servidor, tratativa, envio,
 confirmação). Contagem grande aparece abreviada ("12,3 mil") com o número inteiro no `title`.
@@ -384,7 +394,7 @@ com o enum novo `ReservationOrder` = `hotel_number` (padrão, a ordem de hoje) e
 (hotel, data de check-in crescente, número da reserva para desempate). O app novo sempre pede
 `hotel_check_in`; o app 0.2 e o Sura, que não mandam o parâmetro, continuam com a ordem de hoje. O
 cursor passa a carregar a ordem e os campos dela (`[order, hotel, checkIn, número]`); um cursor de
-uma ordem usado com a outra responde 400 `invalid_cursor`, como um cursor inválido de hoje. A
+uma ordem usado com a outra responde 400 `validation_error`, como um cursor inválido de hoje. A
 seleção do filtro e a cópia para e-mail usam a mesma ordem da lista (a seleção corta nas 2 000
 primeiras "na ordem da lista", 005 FR-030).
 

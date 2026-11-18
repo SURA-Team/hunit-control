@@ -12,6 +12,7 @@ import {
   evidenceSaveInputSchema,
   executionIdSchema,
   executionListInputSchema,
+  reservationCountFiltersSchema,
   reservationKeySchema,
   reservationListInputSchema,
   sendTokenInputSchema,
@@ -117,6 +118,18 @@ export function createStoryHandlers(services: StoryServices): InvokeHandlers {
           reservationStatus: input.reservationStatus as never,
           situation: input.situation as never,
           detailedSituation: input.detailedSituation as never,
+        }),
+      ),
+    ),
+
+    [INVOKE.reservationsQuickFilterCounts]: handle(reservationCountFiltersSchema, (filters) =>
+      withApi((api) =>
+        api.countReservationQuickFilters({
+          ...filters,
+          classification: filters.classification as never,
+          reservationStatus: filters.reservationStatus as never,
+          situation: filters.situation as never,
+          detailedSituation: filters.detailedSituation as never,
         }),
       ),
     ),

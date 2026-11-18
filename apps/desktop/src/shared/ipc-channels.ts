@@ -45,6 +45,8 @@ export const INVOKE = {
   treatmentsSaveDocument: 'treatments:saveDocument',
   // Envio ao Comercial (specs/005, contracts/ipc.md).
   reservationsSelectAll: 'reservations:selectAll',
+  /** Contagens dos filtros rápidos (specs/006). */
+  reservationsQuickFilterCounts: 'reservations:quickFilterCounts',
   treatmentsConfirmReviews: 'treatments:confirmReviews',
   dispatchesCheck: 'dispatches:check',
   dispatchesStart: 'dispatches:start',

@@ -3,6 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import type { Database } from '../../persistence/db.js';
 import { InvalidCursorError } from '../../persistence/executions-repo.js';
 import {
+  countQuickFilters,
   findReservation,
   listChannels,
   listReservations,
@@ -24,6 +25,9 @@ import {
 
 type ListReservationsQuery = NonNullable<operations['listReservations']['parameters']['query']>;
 type SelectQuery = NonNullable<operations['selectReservations']['parameters']['query']>;
+type CountQuery = NonNullable<operations['countReservationQuickFilters']['parameters']['query']>;
+/** Filtros comuns às três rotas; `quickFilter` só na lista e na seleção (specs/006). */
+type FilterQuery = CountQuery & Pick<SelectQuery, 'quickFilter'>;
 
 /** Limite da seleção do filtro (specs/005, FR-030; o mesmo da seleção da 003, FR-006a). */
 export const MAX_SELECTION = 2000;
@@ -46,8 +50,8 @@ function freeText(q: string | undefined): string | undefined {
   return text;
 }
 
-/** Os filtros da consulta (FR-020), comuns à lista e à seleção do filtro. */
-function filtersOf(query: SelectQuery): ReservationFilters {
+/** Os filtros da consulta (FR-020), comuns à lista, à seleção do filtro e às contagens. */
+function filtersOf(query: FilterQuery): ReservationFilters {
   if (query.checkInFrom && query.checkInTo && query.checkInFrom > query.checkInTo) {
     throw new ProblemError(
       'validation_error',
@@ -71,6 +75,7 @@ function filtersOf(query: SelectQuery): ReservationFilters {
     needsReview: query.needsReview,
     fromLegacy: query.fromLegacy,
     detailedSituations: query.detailedSituation,
+    quickFilter: query.quickFilter,
   };
 }
 
@@ -88,6 +93,7 @@ export function createReservationHandlers(dependencies: { db: Database; now?: ()
           ...filters,
           limit: query.limit ?? DEFAULT_PAGE_SIZE,
           cursor: query.cursor,
+          order: query.order,
         });
         // Tratativas da página inteira de uma vez, sem consulta por reserva (specs/003).
         const treatments = await loadTreatmentSummaries(db, page.items);
@@ -117,8 +123,13 @@ export function createReservationHandlers(dependencies: { db: Database; now?: ()
      * seleção e a cópia para e-mail usam (specs/005, FR-027, FR-030).
      */
     async selectReservations(request: FastifyRequest) {
-      const filters = filtersOf(request.query as SelectQuery);
-      const { rows, total } = await selectReservations(db, filters, MAX_SELECTION);
+      const query = request.query as SelectQuery;
+      const { rows, total } = await selectReservations(
+        db,
+        filtersOf(query),
+        MAX_SELECTION,
+        query.order,
+      );
       const treatments = await loadTreatmentSummaries(db, rows);
       const at = now();
       return {
@@ -149,6 +160,14 @@ export function createReservationHandlers(dependencies: { db: Database; now?: ()
           };
         }),
       };
+    },
+
+    /**
+     * GET /v1/reservations/quick-filter-counts — reservas de cada filtro rápido com os mesmos
+     * filtros da lista (specs/006, FR-017).
+     */
+    async countReservationQuickFilters(request: FastifyRequest) {
+      return countQuickFilters(db, filtersOf(request.query as CountQuery));
     },
 
     /** GET /v1/channels — canais das reservas gravadas, para o filtro (specs/002, FR-020). */

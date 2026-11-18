@@ -139,6 +139,9 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       get: vi.fn(() => errorResult('not_found')),
       channels: vi.fn(() => okResult([])),
       selectAll: vi.fn(() => okResult({ total: 0, truncated: false, items: [] })),
+      quickFilterCounts: vi.fn(() =>
+        okResult({ all: 0, pendingCharge: 0, toReview: 0, withError: 0, done: 0 }),
+      ),
     },
     treatments: {
       pickFile: vi.fn(() => okResult(null)),

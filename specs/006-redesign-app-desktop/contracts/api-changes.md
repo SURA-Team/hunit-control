@@ -41,7 +41,7 @@ nenhuma delas.
 | `order` | `ReservationOrder` | Ordem da lista; sem o parâmetro, `hotel_number` |
 
 O `nextCursor` passa a carregar a ordem em que foi gerado. Um cursor usado com outra ordem (ou com
-`order` diferente do da primeira página) responde 400 `invalid_cursor`, como qualquer cursor
+`order` diferente do da primeira página) responde 400 `validation_error`, como qualquer cursor
 inválido. Cursores emitidos pela 1.7.0 continuam válidos para `hotel_number` durante a implantação
 (o servidor aceita o formato antigo `[hotel, número]` como `hotel_number`).
 
@@ -70,13 +70,13 @@ Contagem das reservas de cada filtro rápido, considerando a busca e os demais f
 Todos inteiros ≥ 0, obrigatórios. A soma dos grupos pode passar de `all`, porque uma reserva pode
 estar em mais de um grupo.
 
-**Erros**: 400 `invalid_parameters`; 401 sem chave.
+**Erros**: 400 `validation_error`, como na lista; 401 sem chave.
 
 ## Testes de contrato
 
 - `quickFilter` e `order` aceitos nas duas rotas e recusados com valor fora do enum (400).
 - `order=hotel_check_in` com cursor percorre todas as reservas uma vez, na ordem certa; cursor de uma
-  ordem usado com a outra dá 400 `invalid_cursor`; cursor no formato da 1.7.0 continua aceito.
+  ordem usado com a outra dá 400 `validation_error`; cursor no formato da 1.7.0 continua aceito.
 - `/reservations/quick-filter-counts` validado contra o esquema, com e sem filtros, para os dois
   perfis.
 - Paridade (`server-db`): para cada grupo, a contagem é igual ao número de reservas devolvidas pela
