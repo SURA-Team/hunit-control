@@ -74,7 +74,7 @@ usuárias
 
 | # | Princípio | Avaliação | Status |
 |---|---|---|---|
-| I | Spec-First | Spec 006 escrita, clarificada e revisada para o plano (2026-11-18). As decisões tomadas no plano que mudam o comportamento (ordem por hotel e check-in, ícone do app, exceções de contraste, card do envio em andamento, marcação no Figma) foram registradas antes na spec (clarificações "Session 2026-11-18 (plano)"); o único ponto aberto (UX-3) tem escolha provisória registrada | ✅ |
+| I | Spec-First | Spec 006 escrita, clarificada e revisada para o plano (2026-11-18). As decisões tomadas no plano que mudam o comportamento (ordem por hotel e check-in, ícone do app, exceções de contraste, card do envio em andamento, marcação no Figma) foram registradas antes na spec (clarificações "Session 2026-11-18 (plano)"); o ponto que ficou aberto (UX-3) foi decidido pelo usuário e registrado na spec | ✅ |
 | II | Isolamento do Hunit | A feature não toca a camada do Hunit nem o `read-only-guard`; a rota nova só lê o banco | ✅ |
 | III | API-First com Contrato | As contagens e o filtro rápido entram antes no `openapi.yaml` 1.8.0, só com acréscimos; nenhum enum existente ganha valores (teste da 005). O app só apresenta: a regra dos grupos fica no domínio e no servidor, não no renderer (R-09) | ✅ |
 | IV | Jobs Assíncronos com Intervenção Humana | Não muda execuções nem envios; só a apresentação do andamento e do token | ✅ |
@@ -204,7 +204,7 @@ Figma (node da tela, contracts/screens.md) ─► get_screenshot + get_design_co
 | Contagens lentas com muitas reservas | Filtros rápidos demoram | Uma consulta só com `count(*) filter`; teste de desempenho com 20 000 reservas (R-16) |
 | App novo contra servidor ainda na 1.7.0 | Contagens falham | Ordem de implantação: servidor antes do app (quickstart §5); falha das contagens não esconde a lista |
 | Quebras responsivas decididas sem desenho da UX | Retrabalho | Prints em 960 e 1 280 px para revisão da UX (UX-5) |
-| "Ativa ou cancelada" sem "Não identificada" no design | Filtro a menos ou tela diferente do Figma | Quarta opção provisória até a resposta (UX-3) |
+| "Ativa ou cancelada" sem "Não identificada" no design | Filtro a menos ou tela diferente do Figma | Quarta opção "Só não identificadas", decidida pelo usuário (UX-3); a diferença vai para a UX |
 | 004 e 005 deixaram telas com componentes Mantine direto | Visual misturado | Lint da R-05 falha em qualquer tela que ainda use componente visual do Mantine |
 
 ## Complexity Tracking

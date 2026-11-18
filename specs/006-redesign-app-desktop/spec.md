@@ -64,6 +64,7 @@ e para a ordem da lista por hotel e check-in (FR-014).
 - Q: As quebras para janelas menores não estão desenhadas. → A: A 006 implementa as telas responsivas como o plano define; ajustes finos ficam para uma feature seguinte.
 - Q: A marca nova vale também para o ícone do app? → A: Sim: o ícone do app no Windows (janela, barra de tarefas, atalho e instalador) e o da página do app passam a ser a marca nova.
 - Q: Como fica o Figma ao concluir a 006? → A: Nenhuma tela é redesenhada pelo agente: as telas em uso ficam marcadas com ✅ e as substituídas com ❌ e ocultas, em todas as páginas de feature (skill `figma-screens-sync`).
+- Q: O filtro "Ativa ou cancelada" do design tem três opções (Ativas e canceladas, Só ativas, Só canceladas) e não tem "Não identificada", que o filtro de hoje tem. Como fica? → A: Com uma quarta opção, "Só não identificadas", para nenhum filtro de hoje se perder (FR-016); a diferença em relação ao design vai para a UX.
 
 ## User Scenarios & Testing *(mandatory)*
 
