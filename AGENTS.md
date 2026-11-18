@@ -156,7 +156,7 @@ processo do app sozinhos; para `pnpm --filter @hunit/desktop dev`, rode antes
 | `pnpm --filter @hunit/desktop dev` | Abre o app em desenvolvimento (electron-vite, recarga da tela na hora). Sem `ELECTRON_RUN_AS_NODE` no terminal |
 | `pnpm --filter @hunit/desktop build` | Compila o app para `apps/desktop/out/` (o `pnpm build` da raiz também compila) |
 | `$env:HUNIT_SCREENS_DIR = "<pasta>"; pnpm test --project desktop-e2e screens-capture` | Captura as telas do app para o espelho no Figma (PowerShell; ~3 min; exige o Docker): um PNG por tela, com o número da tela no Figma, e `falhas.txt`. Sem a variável, o roteiro fica desligado nas rodadas normais. Use uma pasta fora do repositório |
-| `pnpm --filter @hunit/desktop dist` | Gera o instalador NSIS em `apps/desktop/release/` (sem assinatura de código; research R-11 da 002) |
+| `pnpm --filter @hunit/desktop dist` | Gera o instalador NSIS em `apps/desktop/release/` (sem assinatura de código; research R-11 da 002). Rode antes o `pnpm build`: o app empacota o `dist` do `@hunit/domain` e do `@hunit/contracts` |
 | `pnpm build` | Compila os pacotes para `dist/`, na ordem das dependências. Use sempre este antes dos comandos `hunit:*`: `pnpm --filter @hunit/server build` compila só o servidor e usa o `dist` antigo do `@hunit/contracts` e do `@hunit/domain` (os testes leem o código-fonte e não acusam) |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
 | `pnpm --filter @hunit/server db:generate --name=<descrição>` | Gera uma migration depois de mudar `apps/server/src/persistence/schema.ts` (não precisa de banco) |

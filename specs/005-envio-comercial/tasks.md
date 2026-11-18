@@ -258,7 +258,8 @@ colunas da planilha, total, filtros e momento dos dados; sem nome de hóspede; n
   _Resultado (2026-11-17):_ todos os testes do quickstart §3 aprovados, com o envio fictício do `homolog-commercial` (a homologação não acessa o Hunit); logs sem segredos. SC-002 fica para a produção. Ajustes pedidos na aparência da planilha: Phase 9 (research, "Homologação" e R-18).
 - [X] T065 Espelho no Figma (AGENTS.md, "Telas no Figma"): rodar a skill `figma-screens-sync` com as capturas de T062 para criar a página `005-envio-comercial` e registrar a mudança no histórico dela
   _Implementação:_ página `005-envio-comercial` com 4.1, 4.2, 4.4, 4.7, 4.9, 4.10, 4.11 e 6.2 (as versões da 003 e da 004 ficaram com ❌) e as telas novas 7.1 a 7.14, a partir das capturas do roteiro; construtores em `.claude/skills/figma-screens-sync/references/screens/7-envio.js` e `7-comercial.js`. Cores novas na coleção "Cores do app" e na "Identidade visual": `laranja/1`, `laranja/8` e `verde-azulado/6`.
-- [ ] T066 ⛔ PRODUÇÃO: quickstart §4 — planilha real do Comercial, chave em `deploy/secrets/` do clone de produção (`C:\Dev\producao\hunit-control`), `setup`, `check` e compartilhamento com o Comercial no Google; instalar a versão nova do app nas máquinas
+- [X] T066 ⛔ PRODUÇÃO: quickstart §4 — planilha real do Comercial, chave em `deploy/secrets/` do clone de produção (`C:\Dev\producao\hunit-control`), `setup`, `check` e compartilhamento com o Comercial no Google; instalar a versão nova do app nas máquinas
+  _Resultado (2026-11-17):_ implantado; app 0.2.163 nas máquinas do Financeiro e da Controladoria; SC-002 medido no primeiro envio real: 50 reservas em 45 s (research, "Produção").
 
 ---
 

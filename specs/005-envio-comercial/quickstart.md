@@ -64,7 +64,8 @@ No ambiente de homologação (`deploy/homolog/`, quickstart §2.1 da 003), separ
    `deploy/homolog/homolog.env.example`). Comandos com `docker compose --env-file .env.homolog …`, por
    exemplo `docker compose --env-file .env.homolog exec server node dist/cli.js commercial-sheet setup`.
 4. Rodar `commercial-sheet setup` e depois `commercial-sheet check` ([contracts/cli.md](./contracts/cli.md)):
-   esperado "acesso OK", as duas abas, os cabeçalhos e as proteções. Na planilha, a aparência de
+   esperado "acesso OK" e "OK" nas duas abas, com a quantidade de linhas (o "OK" já confere o
+   cabeçalho e as proteções; se algo estiver errado, o `check` diz o quê). Na planilha, a aparência de
    [sheet-layout.md](./contracts/sheet-layout.md) ("Aparência"): cabeçalho de A a J preto com letra
    lima e de K a N lima com letra preta, sem bordas; linhas de dados com listras e bordas
    tracejadas; coluna J em lima ("Aguardando retorno do Comercial"), laranja ("Aguardando validação
