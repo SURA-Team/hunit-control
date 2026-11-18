@@ -192,7 +192,8 @@ parcial do cabeçalho, a barra e o diálogo de anexar com aceitas e ignoradas.
    cabeçalho mostra o estado parcial.
 2. **Given** nenhuma reserva marcada, **When** a lista é exibida, **Then** a barra de seleção não
    aparece; **When** há reservas marcadas, **Then** aparece uma barra escura com o total marcado e as
-   ações do lote, com "Anexar comprovante" em lima.
+   ações do lote, com "Enviar ao Comercial" em lima e "Anexar comprovante" no menu "Anexar ▾"
+   (FR-023, tela 4.4; a descrição inicial punha "Anexar comprovante" em lima, antes do design).
 3. **Given** reservas marcadas, **When** a pessoa abre o diálogo de anexar, **Then** o resumo mostra
    um ícone verde para as reservas aceitas e um âmbar para as ignoradas, com a quantidade de cada
    grupo, antes da confirmação.

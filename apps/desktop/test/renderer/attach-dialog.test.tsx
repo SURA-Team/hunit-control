@@ -46,6 +46,13 @@ beforeEach(() => {
 
 const click = (name: string | RegExp) => userEvent.click(screen.getByRole('button', { name }));
 
+/** A reserva na caixa das que ficam de fora ("7003 (hotel 31)" e o motivo). */
+function leftOutItem(list: HTMLElement, number: string) {
+  return within(list)
+    .getAllByRole('listitem')
+    .find((item) => item.textContent?.startsWith(`${number} (hotel`));
+}
+
 describe('uma reserva', () => {
   it('abre a escolha do arquivo, mostra a pré-visualização e só registra depois de confirmar', async () => {
     renderWithApp(
@@ -278,11 +285,40 @@ describe('várias reservas (lote)', () => {
     expect(summary).toHaveTextContent('1 já tem um documento desse tipo, que será substituído');
     expect(summary).toHaveTextContent('2 serão ignoradas');
 
-    const leftOut = within(screen.getByRole('table', { name: 'Reservas que ficam de fora' }));
-    expect(leftOut.getByRole('row', { name: /7003/ })).toHaveTextContent(
-      'Esta reserva não exige cobrança.',
+    const leftOut = screen.getByRole('list', { name: 'Reservas que ficam de fora' });
+    expect(leftOutItem(leftOut, '7003')).toHaveTextContent('Esta reserva não exige cobrança.');
+    expect(leftOutItem(leftOut, '7004')).toHaveTextContent('Reserva não encontrada.');
+  });
+
+  it('o resumo marca as aceitas com o ícone verde e as ignoradas com o âmbar (FR-024, tela 4.6)', async () => {
+    renderWithApp(<AttachDialog kind="proof" reservations={batch} onClose={onClose} />, hunit);
+    const summary = await screen.findByTestId('attach-summary');
+
+    const tones = [...summary.querySelectorAll('[data-tone]')].map((line) => [
+      line.getAttribute('data-tone'),
+      line.textContent?.replace(/\s+/g, ' '),
+    ]);
+    expect(tones).toEqual([
+      ['green', '2 reservas aceitam o documento — total de R$ 1.234,50'],
+      ['amber', '1 já tem um documento desse tipo, que será substituído'],
+      ['amber', '2 serão ignoradas'],
+    ]);
+    // Cada linha tem o ícone (oculto do leitor de tela: o texto já diz o grupo, FR-006).
+    for (const line of summary.querySelectorAll('[data-tone]')) {
+      expect(line.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
+  });
+
+  it('sem ignoradas, não mostra a linha das ignoradas', async () => {
+    mocked(hunit.api.treatments.check).mockImplementation(() =>
+      okResult(check([outcome('7001'), outcome('7002')], '200.00')),
     );
-    expect(leftOut.getByRole('row', { name: /7004/ })).toHaveTextContent('Reserva não encontrada.');
+    renderWithApp(<AttachDialog kind="proof" reservations={batch} onClose={onClose} />, hunit);
+    const summary = await screen.findByTestId('attach-summary');
+
+    expect(summary).toHaveTextContent('2 reservas aceitam o documento — total de R$ 200,00');
+    expect(summary).not.toHaveTextContent('ignorada');
+    expect(screen.queryByRole('list', { name: 'Reservas que ficam de fora' })).toBeNull();
   });
 
   it('o resultado lista o que foi registrado e o que ficou de fora', async () => {
@@ -306,9 +342,15 @@ describe('várias reservas (lote)', () => {
     const result = await screen.findByTestId('attach-result');
     expect(result).toHaveTextContent('Documento registrado em 2 reservas.');
     expect(result).toHaveTextContent('2 reservas ficaram de fora');
-    expect(within(result).getByRole('row', { name: /7004/ })).toHaveTextContent(
-      'Erro ao registrar. A reserva ficou como estava.',
-    );
+    // Com erro de registro no grupo, a linha fica vermelha.
+    expect(
+      within(result)
+        .getByText(/ficaram de fora/)
+        .closest('[data-tone]'),
+    ).toHaveAttribute('data-tone', 'red');
+    expect(
+      leftOutItem(within(result).getByRole('list', { name: 'Reservas que ficam de fora' }), '7004'),
+    ).toHaveTextContent('Erro ao registrar. A reserva ficou como estava.');
 
     await click('Fechar');
     // Só a que falhou por erro volta para a seleção (FR-006a).

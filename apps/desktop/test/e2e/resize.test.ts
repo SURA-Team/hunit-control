@@ -7,7 +7,8 @@
  *
  * Cada história do redesenho acrescenta aqui o estado dela (filtros, seleção, gaveta aberta, aba
  * ativa, texto de diálogo): um `it` que monta o estado, `keepsAcrossSizes` e a leitura do estado.
- * Hoje: Executar (US1), um diálogo aberto e Reservas (US2: busca, filtro do painel e filtro rápido).
+ * Hoje: Executar (US1), um diálogo aberto, Reservas (US2: busca, filtro do painel e filtro rápido)
+ * e a seleção com a gaveta "Reservas selecionadas" aberta (US4).
  */
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -177,5 +178,44 @@ describe('redimensionar sem perder nada (US9, SC-008)', () => {
     });
 
     await keepsAcrossSizes(read);
+  });
+
+  it('Reservas: a seleção feita e a gaveta da seleção aberta continuam (US4, T043)', async () => {
+    const { window } = launched;
+    // Volta a lista ao início (o caso anterior deixou busca, painel e filtro rápido).
+    await window
+      .getByRole('group', { name: 'Filtros aplicados' })
+      .getByRole('button', { name: 'Limpar busca e filtros' })
+      .click();
+    await window.getByRole('button', { name: 'Fechar os filtros' }).click();
+    await waitForReservationRows(window, 3);
+    for (const number of ['R-1', 'R-3']) {
+      await window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).check();
+    }
+    const bar = window.getByTestId('selection-bar');
+    await bar.getByRole('button', { name: 'Ver seleção' }).click();
+    const drawer = window.getByRole('dialog', { name: 'Reservas selecionadas' });
+    const list = drawer.getByRole('list', { name: 'Reservas selecionadas' });
+    await list.waitFor();
+
+    const read = async () => ({
+      drawerOpen: await drawer.isVisible(),
+      selected: await list.getByRole('listitem').allInnerTexts(),
+      bar: await bar.innerText(),
+      checked: await Promise.all(
+        ['R-1', 'R-2', 'R-3'].map((number) =>
+          window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).isChecked(),
+        ),
+      ),
+    });
+    const before = await read();
+    expect(before).toMatchObject({ drawerOpen: true, checked: [true, false, true] });
+    expect(before.selected).toHaveLength(2);
+    expect(before.bar).toMatch(/2\s+reservas selecionadas/);
+
+    await keepsAcrossSizes(read);
+
+    await window.getByRole('button', { name: 'Fechar seleção' }).click();
+    await drawer.waitFor({ state: 'hidden' });
   });
 });

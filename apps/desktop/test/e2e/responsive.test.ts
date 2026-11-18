@@ -8,12 +8,17 @@
  *
  * Cada história do redesenho acrescenta aqui as telas dela (tarefas "registrar no roteiro de
  * larguras"): um `it` por estado, com `checkAllSizes`. Hoje: Configuração e Executar (US1) e
- * Reservas (US2: lista com a barra de seleção, painel "Filtros avançados" e nenhum resultado).
+ * Reservas (US2: lista com a barra de seleção, painel "Filtros avançados" e nenhum resultado; US4: a
+ * gaveta "Reservas selecionadas" e o diálogo de anexar em lote).
  */
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import type { FakeScenario } from '../../../server/test/helpers/fake-hunit-gateway.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
+import { pdfFile } from '../helpers/synthetic-files.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
 import {
   configureApp,
@@ -24,6 +29,7 @@ import {
   pickPeriod,
   resizeWindow,
   searchReservations,
+  stubOpenDialog,
   waitForReservationRows,
   type LaunchedApp,
   type WindowSize,
@@ -359,6 +365,58 @@ describe('larguras: Reservas (US2 e US4, SC-007)', () => {
         ],
       });
     } finally {
+      await bar.getByRole('button', { name: 'Desmarcar todas' }).click();
+    }
+  });
+
+  it('gaveta da seleção e anexar em lote (telas 4.5 e 4.6)', async () => {
+    const { app, window } = launched;
+    for (const number of ['R-1', 'R-2', 'R-3']) {
+      await window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).check();
+    }
+    const bar = window.getByTestId('selection-bar');
+    const drawer = window.getByRole('dialog', { name: 'Reservas selecionadas' });
+    const dialog = window.getByRole('dialog', { name: 'Anexar comprovante a 3 reservas' });
+    try {
+      await bar.getByRole('button', { name: 'Ver seleção' }).click();
+      await drawer.getByRole('list', { name: 'Reservas selecionadas' }).waitFor();
+      await checkAllSizes({
+        name: 'gaveta da seleção',
+        area: 'Reservas',
+        reachable: () => [
+          drawer.getByRole('button', { name: 'Fechar seleção' }),
+          drawer.getByText(/^3 reservas — total de/),
+          drawer.getByRole('button', { name: 'Limpar seleção' }),
+          drawer.getByRole('button', { name: 'Desmarcar a reserva R-1' }),
+          drawer.getByRole('button', { name: 'Desmarcar a reserva R-3' }),
+        ],
+      });
+      await drawer.getByRole('button', { name: 'Fechar seleção' }).click();
+      await drawer.waitFor({ state: 'hidden' });
+
+      const files = await mkdtemp(path.join(tmpdir(), 'hunit-larguras-'));
+      const file = path.join(files, 'comprovante-de-teste.pdf');
+      await writeFile(file, pdfFile());
+      await stubOpenDialog(app, file);
+      await bar.getByRole('button', { name: 'Anexar' }).click();
+      await window.getByRole('menuitem', { name: 'Anexar comprovante' }).click();
+      await dialog.getByTestId('attach-summary').waitFor({ timeout: 15_000 });
+      await checkAllSizes({
+        name: 'anexar em lote',
+        area: 'Reservas',
+        dialog: () => dialog,
+        reachable: () => [
+          dialog.getByRole('button', { name: 'Fechar o diálogo' }),
+          dialog.getByTestId('attach-summary'),
+          dialog.getByRole('button', { name: 'Cancelar' }),
+          dialog.getByRole('button', { name: 'Escolher outro arquivo' }),
+          dialog.getByRole('button', { name: 'Confirmar' }),
+        ],
+      });
+      await dialog.getByRole('button', { name: 'Cancelar' }).click();
+      await dialog.waitFor({ state: 'detached' });
+    } finally {
+      if (await drawer.isVisible()) await window.keyboard.press('Escape');
       await bar.getByRole('button', { name: 'Desmarcar todas' }).click();
     }
   });

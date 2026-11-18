@@ -92,12 +92,10 @@ const NOT_YET_MIGRATED = [
   'screens/dispatch/DispatchView.tsx',
   'screens/executions/ExecutionDetail.tsx',
   'screens/executions/ExecutionsScreen.tsx',
-  'screens/reservations/AttachDialog.tsx',
   'screens/reservations/CommercialSection.tsx',
   'screens/reservations/ConfirmBatchDialog.tsx',
   'screens/reservations/CopyDialog.tsx',
   'screens/reservations/ReservationDetail.tsx',
-  'screens/reservations/SelectionDrawer.tsx',
   'screens/reservations/TreatmentSection.tsx',
   'screens/run/ExecutionResult.tsx',
 ].map((file) => `apps/desktop/src/renderer/src/${file}`);

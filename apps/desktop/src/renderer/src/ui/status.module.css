@@ -265,3 +265,64 @@
   font: 500 11px/1.4 var(--hc-font-mono);
   overflow-wrap: anywhere;
 }
+
+/* Resumo do lote (tela 4.6, "Resumo do lote"): linhas com o ícone num círculo do tom e a caixa cinza
+   das reservas que ficam de fora. */
+.batchSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.summaryLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+.summaryLine[data-tone='green'] {
+  --summary-bg: var(--hc-verde-1);
+  --summary-fg: var(--hc-verde-9);
+}
+.summaryLine[data-tone='amber'] {
+  --summary-bg: var(--hc-amarelo-1);
+  --summary-fg: var(--hc-amarelo-9);
+}
+.summaryLine[data-tone='red'] {
+  --summary-bg: var(--hc-vermelho-1);
+  --summary-fg: var(--hc-vermelho-9);
+}
+.summaryIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--summary-bg);
+  color: var(--summary-fg);
+}
+.reasonList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-sutil);
+  list-style: none;
+}
+.reasonItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+  overflow-wrap: anywhere;
+}
+.reasonTitle {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+}

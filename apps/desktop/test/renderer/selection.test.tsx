@@ -131,12 +131,20 @@ describe('seleção que não se perde (US3 cenários 4 e 5)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Ver seleção' }));
 
-    const list = within(await screen.findByRole('table', { name: 'Reservas selecionadas' }));
-    expect(list.getByRole('row', { name: /7001/ })).toHaveTextContent('Hotel Praia');
-    expect(list.getByRole('row', { name: /8001/ })).toHaveTextContent('Pendente de cobrança');
+    // Tela 4.5: linhas compactas com hóspede, "número · hotel", valor, situação e o X.
+    const list = await screen.findByRole('list', { name: 'Reservas selecionadas' });
+    const item = (number: string) =>
+      within(list)
+        .queryAllByRole('listitem')
+        .find((row) => row.textContent?.includes(`${number} · `));
+    expect(item('7001')).toHaveTextContent('7001 · Hotel Praia');
+    expect(item('8001')).toHaveTextContent('Pendente de cobrança');
+    expect(screen.getByRole('dialog', { name: 'Reservas selecionadas' })).toHaveTextContent(
+      '2 reservas — total de',
+    );
 
     await user.click(screen.getByRole('button', { name: 'Desmarcar a reserva 7001' }));
-    expect(list.queryByRole('row', { name: /7001/ })).not.toBeInTheDocument();
+    expect(item('7001')).toBeUndefined();
     expect(screen.getByTestId('selection-bar')).toHaveTextContent('1 reserva selecionada');
 
     await user.click(screen.getByRole('button', { name: 'Limpar seleção' }));

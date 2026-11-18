@@ -46,6 +46,7 @@ escritos nas telas.
 | `StatusBadge` | `tone`: `lime` (em andamento/destaque) · `amber` (atenção) · `green` (concluído) · `red` (erro) · `gray` (neutro/enviado) · `alert` (âmbar cheio, só para o que pede ação, como "Verificar"); sempre com texto (FR-006) | "Badge" `21:102` |
 | `SituationBadges` | Pilha de selos da reserva: situação, "Verificar", "Sistema anterior", "Não identificada" (o "Selo extra" do design); um embaixo do outro, nunca cortados | "Linha de reserva" `53:93` |
 | `Notice` | Alerta com tom `lime` · `green` · `red` · `amber`, ícone e ação opcional | "Alerta" `21:163` |
+| `BatchSummary`, `SummaryLine`, `ReasonList` | Resumo de ação em lote: linhas com o ícone num círculo do tom (`green` ✓ para as aceitas; `amber` ! para as ignoradas e o que pede atenção; `red` ! para as que falharam) e o texto com o grupo e a quantidade (FR-006, FR-024); a caixa cinza com cada reserva que fica de fora e o motivo (T042) | "Resumo do lote" da tela 4.6 (`88:3565`) |
 | `ProgressBar` | Progresso da execução e do envio | "Progresso da execução" `26:1648` |
 | `CountCard` | Card de contagem (âmbar, vermelho, verde) | "Card de contagem" `21:153` |
 | `EmptyState` | Ícone, explicação e, com busca ou filtro em vigor, "Limpar busca e filtros" (FR-021) | Tela 4.3 |

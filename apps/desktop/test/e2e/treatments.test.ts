@@ -516,9 +516,10 @@ describe('US3 — lote com seleção entre pesquisas', () => {
     expect(await window.locator('tbody tr').count()).toBe(1);
 
     await bar.getByRole('button', { name: 'Ver seleção' }).click();
-    const list = window.getByRole('table', { name: 'Reservas selecionadas' });
+    // Tela 4.5 (specs/006): linhas compactas com "número · hotel".
+    const list = window.getByRole('list', { name: 'Reservas selecionadas' });
     for (const number of BATCH) {
-      await list.getByRole('cell', { name: number, exact: true }).waitFor();
+      await list.getByText(new RegExp(`^${escapeRegExp(number)} · `)).waitFor();
     }
     await window.getByRole('button', { name: 'Fechar seleção' }).click();
     await list.waitFor({ state: 'detached' });
@@ -540,15 +541,20 @@ describe('US3 — lote com seleção entre pesquisas', () => {
       /8\s+reservas aceitam o documento — total de\s+R\$\s800,00/,
     );
     expect(await summary.innerText()).toMatch(/2\s+serão ignoradas/);
+    // A caixa das que ficam de fora (tela 4.6): a reserva e o motivo.
     await summary
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'B09' })
       .getByText('Esta reserva não exige cobrança.')
       .waitFor();
 
     await dialog.getByRole('button', { name: 'Confirmar' }).click();
     await dialog.getByText('Documento registrado em 8 reservas.').waitFor({ timeout: 20_000 });
-    await dialog.getByTestId('attach-result').getByRole('row').filter({ hasText: 'B10' }).waitFor();
+    await dialog
+      .getByTestId('attach-result')
+      .getByRole('listitem')
+      .filter({ hasText: 'B10' })
+      .waitFor();
     await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
     await dialog.waitFor({ state: 'detached' });
 

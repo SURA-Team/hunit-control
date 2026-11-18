@@ -469,7 +469,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('4.4', 'reservas-selecao-do-lote');
 
       await window.getByRole('button', { name: 'Ver seleção' }).click();
-      await window.getByRole('table', { name: 'Reservas selecionadas' }).waitFor();
+      await window.getByRole('list', { name: 'Reservas selecionadas' }).waitFor();
       await shot('4.5', 'reservas-reservas-selecionadas');
       await window.getByRole('button', { name: 'Fechar seleção' }).click();
 
