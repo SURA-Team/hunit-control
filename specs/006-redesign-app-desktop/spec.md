@@ -592,7 +592,8 @@ execuções, hotéis, documentos e o histórico de cada reserva).
   horizontal na janela padrão do app, e nenhum nome longo quebra o layout.
 - **SC-005**: O texto de todas as telas atende a contraste suficiente para leitura (relação mínima de
   4,5:1 no texto comum), exceto os pares de cor do design já conhecidos — texto secundário
-  ("texto/apagado"), placeholder dos campos e selo "Verificar" —, que ficam para uma próxima spec; e
+  ("texto/apagado"), placeholder dos campos e dias de fora do mês no calendário, selo "Verificar",
+  botão "Perigo" e rótulos âmbar e verde do card de contagem (research UX-1 e UX-1a) —, que ficam para uma próxima spec; e
   nenhuma informação depende só de cor.
 - **SC-006**: Nenhum pedido de ajuda registrado pelas usuárias, na semana seguinte à entrega, sobre
   "onde foi parar" uma informação que saiu das colunas da lista.

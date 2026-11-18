@@ -1,0 +1,47 @@
+/**
+ * Gaveta de detalhes à direita (specs/006, FR-042, FR-047; telas 3.2, 4.2 e 7.5): até 780 px, sempre
+ * com 96 px livres à esquerda, a altura toda da janela, cantos arredondados só à esquerda. Rola por
+ * dentro com o título e o fechar fixos no topo. Os cards dentro dela usam `<Card padding={16}>`.
+ * Abre por cima do conteúdo, sem mudar a largura da lista (research R-07).
+ */
+import { Drawer } from '@mantine/core';
+import type { ReactNode } from 'react';
+import { CloseIcon } from './icons';
+import classes from './structure.module.css';
+import { Surface } from './Surface';
+import { colors, overlay } from './tokens';
+
+export interface AppDrawerProps {
+  opened: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  children: ReactNode;
+  'data-testid'?: string;
+}
+
+export function AppDrawer({
+  opened,
+  onClose,
+  title,
+  children,
+  'data-testid': testId,
+}: AppDrawerProps) {
+  return (
+    <Drawer.Root opened={opened} onClose={onClose} position="right">
+      <Drawer.Overlay
+        color={colors['sobreposição']}
+        backgroundOpacity={overlay.opacity}
+        blur={overlay.blur}
+      />
+      <Drawer.Content className={classes.drawerContent} data-testid={testId}>
+        <Drawer.Header className={classes.drawerHeader}>
+          <Drawer.Title className={classes.dialogTitle}>{title}</Drawer.Title>
+          <Drawer.CloseButton className={classes.close} icon={<CloseIcon />} aria-label="Fechar" />
+        </Drawer.Header>
+        <Drawer.Body className={classes.drawerBody}>
+          <Surface>{children}</Surface>
+        </Drawer.Body>
+      </Drawer.Content>
+    </Drawer.Root>
+  );
+}

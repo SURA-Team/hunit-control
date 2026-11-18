@@ -1,0 +1,185 @@
+/*
+ * Campos do design ("Campo", node 21:113; rótulo e ajuda como na tela 1.1, node 24:766): 40 px, fundo
+ * sutil, borda padrão, cantos de 12 px; no foco, fundo branco e contorno preto de 1,5 px. O design não
+ * desenha erro nem desabilitado: o erro usa o vermelho dos selos e o desabilitado o fundo do botão
+ * "Desabilitado".
+ */
+.label {
+  margin-bottom: 4px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+  letter-spacing: var(--hc-font-rotulo-tracking);
+}
+
+.description {
+  margin-bottom: 6px;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.error {
+  margin-top: 4px;
+  color: var(--hc-vermelho-9);
+  font: var(--hc-font-descricao);
+}
+
+.input {
+  height: 40px;
+  min-height: 40px;
+  padding-inline: 14px 12px;
+  border: 1px solid var(--hc-borda-padrao);
+  border-radius: var(--hc-radius-field);
+  background: var(--hc-fundo-sutil);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.input::placeholder,
+.input [data-placeholder] {
+  color: var(--hc-texto-placeholder);
+  opacity: 1;
+}
+
+.input:focus,
+.input:focus-within {
+  border-color: var(--hc-texto-padrao);
+  background: var(--hc-fundo-padrao);
+  box-shadow: 0 0 0 0.5px var(--hc-texto-padrao);
+}
+
+.input[data-error] {
+  border-color: var(--hc-vermelho-9);
+  color: var(--hc-texto-padrao);
+}
+
+.input:disabled,
+.input[data-disabled] {
+  border-color: var(--hc-borda-padrao);
+  background: var(--hc-fundo-desabilitado);
+  color: var(--hc-texto-placeholder);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.wrapper[data-with-left-section] .input {
+  padding-inline-start: 40px;
+}
+
+.wrapper[data-with-right-section] .input {
+  padding-inline-end: 40px;
+}
+
+.section {
+  width: 40px;
+  color: var(--hc-texto-icone);
+}
+
+/* Senha: a caixa visível é o .input; o campo de verdade fica dentro dela. */
+.innerInput {
+  padding-inline: 14px 40px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.visibilityToggle {
+  color: var(--hc-texto-padrao);
+}
+
+/* Lista suspensa do seletor (como "Opções — Ativa ou cancelada", node 125:3775). */
+.dropdown {
+  padding: 6px;
+  border: none;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-dialogo);
+}
+
+.option {
+  padding: 8px 10px;
+  border-radius: var(--hc-radius-option);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.option:where([data-combobox-selected]) {
+  background: var(--hc-fundo-sutil);
+}
+
+.option:where([data-checked]) {
+  background: var(--hc-destaque-lima-suave);
+}
+
+.pill {
+  background: var(--hc-cinza-1);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+}
+
+/* Caixa de seleção ("Caixa de seleção", node 76:71), Checkbox, Rádio e Switch. */
+.choiceLabel {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.choiceDescription {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.checkboxInput {
+  border: 1.5px solid var(--hc-borda-campo);
+  background: var(--hc-fundo-padrao);
+  cursor: pointer;
+}
+
+.checkboxInput:checked,
+.checkboxInput[data-indeterminate] {
+  border-color: transparent;
+  background: var(--hc-superficie-escura);
+}
+
+.checkboxIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--hc-destaque-lima);
+}
+
+.radio {
+  border: 1.5px solid var(--hc-borda-campo);
+  background: var(--hc-fundo-padrao);
+  cursor: pointer;
+}
+
+.radio:checked {
+  border-color: transparent;
+  background: var(--hc-superficie-escura);
+}
+
+.radioIcon {
+  color: var(--hc-destaque-lima);
+}
+
+.track {
+  border: none;
+  background: var(--hc-borda-campo);
+  cursor: pointer;
+}
+
+.switchInput:checked + .track {
+  background: var(--hc-superficie-escura);
+}
+
+.thumb {
+  border: none;
+  background: var(--hc-fundo-padrao);
+}
+
+.switchInput:checked + .track .thumb {
+  background: var(--hc-destaque-lima);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

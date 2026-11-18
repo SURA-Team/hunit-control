@@ -1,0 +1,115 @@
+/*
+ * Botão do design ("Botão", node 21:75; specs/006, FR-007 a FR-013, research R-06). Pílula com as
+ * variantes da hierarquia. As cores vão nas variáveis do Botão do Mantine (--button-*), que já tratam
+ * passar o mouse, carregando e desabilitado; desabilitado usa fundo/desabilitado e texto/placeholder
+ * (tema, ui/theme.ts). O design não desenha passar o mouse nem foco: os tons vêm dos tokens.
+ */
+.root {
+  --button-radius: var(--hc-radius-pill);
+  --action-border: transparent;
+  flex-shrink: 0;
+  height: 40px;
+  padding-inline: 20px;
+  border: 1px solid var(--action-border);
+  border-radius: var(--hc-radius-pill);
+  font: var(--hc-font-botao);
+  letter-spacing: var(--hc-font-botao-tracking);
+  white-space: nowrap;
+}
+
+.root[data-size='xs'] {
+  height: 30px;
+  padding-inline: 14px;
+  font: var(--hc-font-botao-pequeno);
+  letter-spacing: var(--hc-font-botao-pequeno-tracking);
+}
+
+/* 36 px: os botões dos diálogos e da gaveta nas telas do design (não há no conjunto "Botão"). */
+.root[data-size='sm'] {
+  height: 36px;
+}
+
+.root[data-size='lg'] {
+  height: 48px;
+  padding-inline: 26px;
+  font: var(--hc-font-botao-grande);
+  letter-spacing: var(--hc-font-botao-grande-tracking);
+}
+
+.root[data-variant='primary'] {
+  --button-bg: var(--hc-superficie-escura);
+  --button-hover: var(--hc-superficie-escura-2);
+  --button-color: var(--hc-fundo-padrao);
+}
+
+/* "Destaque": a principal em superfície escura é lima (FR-007). */
+.root[data-variant='primary'][data-surface='dark'] {
+  --button-bg: var(--hc-destaque-lima);
+  --button-hover: color-mix(in srgb, var(--hc-destaque-lima), var(--hc-superficie-escura) 10%);
+  --button-color: var(--hc-texto-padrao);
+}
+
+/* "Contorno": continua branco também em superfície escura (barra de lote). */
+.root[data-variant='secondary'] {
+  --action-border: var(--hc-borda-campo);
+  --button-bg: var(--hc-fundo-padrao);
+  --button-hover: var(--hc-fundo-sutil);
+  --button-color: var(--hc-texto-padrao);
+}
+
+.root[data-variant='text'] {
+  --button-bg: transparent;
+  --button-hover: var(--hc-fundo-sutil);
+  --button-color: var(--hc-texto-padrao);
+}
+
+/* "Desmarcar todas" na barra de lote. */
+.root[data-variant='text'][data-surface='dark'] {
+  --button-hover: var(--hc-superficie-escura-2);
+  --button-color: var(--hc-texto-inverso-apagado);
+  --button-hover-color: var(--hc-texto-inverso);
+  padding-inline: 12px;
+}
+
+.root[data-variant='text']:disabled,
+.root[data-variant='text'][data-disabled] {
+  background: transparent;
+}
+
+/* Atenção: o design não tem botão âmbar; os tons são os do selo e da ação "Reverter". */
+.root[data-variant='warning'] {
+  --button-bg: var(--hc-amarelo-1);
+  --button-hover: color-mix(in srgb, var(--hc-amarelo-1), var(--hc-amarelo-9) 10%);
+  --button-color: var(--hc-amarelo-9);
+}
+
+/* "Perigo leve": Limpar acesso, Desfazer, Remover valor (FR-009). */
+.root[data-variant='danger-light'] {
+  --button-bg: var(--hc-vermelho-1);
+  --button-hover: color-mix(in srgb, var(--hc-vermelho-1), var(--hc-vermelho-9) 10%);
+  --button-color: var(--hc-vermelho-9);
+}
+
+/* "Perigo": só na confirmação ("Sim, cancelar"). */
+.root[data-variant='danger'] {
+  --button-bg: var(--hc-vermelho-6);
+  --button-hover: var(--hc-vermelho-8);
+  --button-color: var(--hc-fundo-padrao);
+}
+
+/* "Botão com menu" (MenuButton): 14 px depois da seta. */
+.root[data-menu] {
+  padding-inline-end: 14px;
+}
+
+.root[data-surface='dark']:focus-visible {
+  outline-color: var(--hc-destaque-lima);
+}
+
+.section[data-position='left'] {
+  margin-inline-end: 8px;
+}
+
+.section[data-position='right'] {
+  margin-inline-start: 6px;
+}

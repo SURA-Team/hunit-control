@@ -40,7 +40,49 @@ export async function newUserDataDir(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), 'hunit-desktop-e2e-'));
 }
 
-export async function launchApp(options: { userDataDir?: string } = {}): Promise<LaunchedApp> {
+/** Tamanho da janela, em px, como a usuária vê (com a moldura do Windows). */
+export interface WindowSize {
+  width: number;
+  height: number;
+}
+
+export interface LaunchOptions {
+  userDataDir?: string;
+  /** Tamanho da janela; sem ele, o padrão do app (1 280 × 820). */
+  window?: WindowSize;
+  /** Zoom da página (1.25 = 125 %), como a escala de tela do Windows (specs/006, SC-007). */
+  zoomFactor?: number;
+}
+
+/**
+ * Muda o tamanho da janela do app e o zoom da página e espera a interface se acomodar (specs/006,
+ * roteiros de larguras e de redimensionamento, research R-16).
+ */
+export async function resizeWindow(
+  app: ElectronApplication,
+  window: Page,
+  size: WindowSize,
+  zoomFactor?: number,
+): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, { size: target, zoom }) => {
+      const main = BrowserWindow.getAllWindows()[0];
+      if (!main) throw new Error('Janela do app não encontrada.');
+      main.setSize(target.width, target.height);
+      if (zoom !== undefined) main.webContents.setZoomFactor(zoom);
+    },
+    { size, zoom: zoomFactor },
+  );
+  // Dois quadros: o redimensionamento e o novo layout já desenhado.
+  await window.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+}
+
+export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedApp> {
   const userDataDir = options.userDataDir ?? (await newUserDataDir());
   const app = await electron.launch({
     args: [MAIN_ENTRY],
@@ -49,6 +91,10 @@ export async function launchApp(options: { userDataDir?: string } = {}): Promise
   });
   const window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
+  if (options.window || options.zoomFactor !== undefined) {
+    const size = options.window ?? { width: 1280, height: 820 };
+    await resizeWindow(app, window, size, options.zoomFactor);
+  }
   return {
     app,
     window,

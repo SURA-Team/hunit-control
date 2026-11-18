@@ -1,0 +1,49 @@
+/* "Chip de filtro" (node 53:58; specs/006, FR-015, research R-09). */
+.root {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding-inline: 16px;
+  border: 1px solid var(--hc-borda-padrao);
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-fundo-padrao);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+  letter-spacing: var(--hc-font-rotulo-tracking);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.root:hover {
+  background: var(--hc-fundo-sutil);
+}
+
+.root:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+.root[data-with-count] {
+  padding-inline-end: 6px;
+}
+
+/* A borda fica transparente no ativo: o chip não muda de largura. */
+.root[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--hc-superficie-escura);
+  color: var(--hc-texto-inverso);
+}
+
+.count {
+  padding: 3px 8px;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-fundo-sutil);
+  color: var(--hc-texto-apagado);
+}
+
+.root[aria-pressed='true'] .count {
+  background: var(--hc-destaque-lima);
+  color: var(--hc-texto-padrao);
+}

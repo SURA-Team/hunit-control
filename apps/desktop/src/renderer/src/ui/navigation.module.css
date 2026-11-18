@@ -1,0 +1,207 @@
+/*
+ * Navegação (specs/006, FR-002, FR-044, research R-07): "Cabeçalho do app" (21:202), "Menu/Item"
+ * (21:140) com o menu lateral da tela 7.7a e "Aba" (182:1232) no trilho cinza.
+ */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: var(--hc-header-height);
+  padding-inline: 20px 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appName {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-do-app);
+  letter-spacing: var(--hc-font-titulo-do-app-tracking);
+  white-space: nowrap;
+}
+
+.client {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+.clientName {
+  overflow: hidden;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu {
+  width: var(--hc-menu-width);
+  padding: 10px;
+  border-radius: var(--hc-radius-menu);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--hc-radius-pill);
+  background: transparent;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+  text-align: start;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--hc-fundo-sutil);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+.itemIcon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--hc-texto-icone);
+}
+
+.itemLabel {
+  white-space: nowrap;
+}
+
+/* Ativo: pílula preta com o ícone lima. */
+.item[aria-current='page'] {
+  background: var(--hc-superficie-escura);
+  color: var(--hc-texto-inverso);
+}
+
+.item[aria-current='page'] .itemIcon {
+  color: var(--hc-destaque-lima);
+}
+
+/* Janela abaixo de 1 180 px (tokens.breakpoints.collapsedMenu): só os ícones, com a dica do nome. */
+@media (max-width: 1179.98px) {
+  .menu {
+    width: var(--hc-menu-collapsed-width);
+  }
+
+  .item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .itemLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .item::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    z-index: 10;
+    top: 50%;
+    left: calc(100% + 12px);
+    padding: 6px 10px;
+    border-radius: var(--hc-radius-option);
+    background: var(--hc-superficie-escura);
+    color: var(--hc-texto-inverso);
+    font: var(--hc-font-descricao);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: opacity 120ms ease;
+  }
+
+  .item:hover::after,
+  .item:focus-visible::after {
+    opacity: 1;
+  }
+}
+
+/* Abas: trilho cinza com a aba ativa em branco; quebram linha quando não cabem. */
+.tabList {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 22px;
+  background: var(--hc-cinza-1);
+}
+
+.tabList::before {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--hc-radius-pill);
+  background: transparent;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-rotulo);
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: transparent;
+  color: var(--hc-texto-padrao);
+}
+
+.tab[data-active] {
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+  color: var(--hc-texto-padrao);
+}
+
+.tabSection {
+  margin: 0;
+}
+
+.tabCount {
+  padding: 2px 7px;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-cinza-1);
+  color: var(--hc-texto-padrao);
+}
+
+.tab[data-active] .tabCount {
+  background: var(--hc-destaque-lima);
+}
+
+.panel {
+  padding-top: 16px;
+}

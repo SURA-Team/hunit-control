@@ -154,7 +154,8 @@ parecidos com significados diferentes.
 
 **Decisão**:
 
-- **Estrutura**: cabeçalho transparente de 72 px (marca à esquerda; cliente e perfil num selo
+- **Estrutura**: cabeçalho transparente de 56 px, como no design (o conteúdo começa a 72 px do topo: 56 + 16 de
+  espaçamento) (marca à esquerda; cliente e perfil num selo
   branco à direita), menu lateral flutuante de 196 px (card branco com o item ativo em pílula
   preta e ícone lima) e a área de conteúdo com largura máxima de 1 600 px, centralizada (FR-046).
 - **Medida pelo espaço do conteúdo, não da janela**: a área de conteúdo é um *container*
@@ -404,6 +405,7 @@ Achados do levantamento que divergiam da spec ou entre si, com a decisão de 202
 | # | Ponto | Decisão |
 |---|---|---|
 | UX-1 | **Contraste (SC-005, 4,5:1)**: "texto/apagado" `#787b83` dá 4,23:1 no branco e 3,62:1 no fundo do app; o placeholder `#a6a9b0` dá 2,16:1 no fundo do campo; o selo "Verificar" (texto branco em `#d97a00`) dá 3,12:1. Valores que passariam: `#686b71` (texto apagado, 4,56:1), `#6d6f74` (placeholder, 4,61:1), texto `#0e0e10` no selo (6,18:1) | A 006 usa as cores do design; os três pares viram exceção do SC-005 e vão para a UX numa próxima spec |
+| UX-1a | **Contraste — pares achados na Fundação** (T004, 2026-11-18): botão "Perigo" (texto branco em `vermelho/6`, 3,91:1); rótulos âmbar e verde do card de contagem (`amarelo/8` e `verde/8` em `fundo/sutil`, 2,86:1 e 3,20:1); dias de fora do mês no calendário (`texto/placeholder` em branco, 2,35:1); "texto/apagado" sobre `cinza/1` (abas, 3,68:1) e sobre lima suave (linha marcada, 3,89:1) | Como na UX-1: a 006 usa as cores do design; os pares ficam na lista de exceções do teste de contraste (`CONTRAST_EXCEPTIONS`) e no SC-005, para a mesma próxima spec |
 | UX-2 | Rodapé "ordenadas por hotel e check-in" × API ordenada por hotel e número | Hotel e check-in (R-18) |
 | UX-3 | "Ativa ou cancelada" no painel tem 3 opções (Ativas e canceladas, Só ativas, Só canceladas); o filtro de hoje também tem "Não identificada" | **Pendente** de resposta do usuário. Enquanto isso, quarta opção "Só não identificadas" |
 | UX-4 | Não há desenho do envio em andamento na aba "Envios" | Card escuro com lima e progresso; tela de exemplo 7.7a aprovada pela UX em 2026-11-18, sem ajustes (R-13) |

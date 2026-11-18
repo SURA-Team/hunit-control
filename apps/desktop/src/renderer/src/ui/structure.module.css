@@ -1,0 +1,151 @@
+/*
+ * Estrutura das telas (specs/006, FR-042, FR-046, FR-047, research R-07 e R-14): cards ("Cards e
+ * relatórios", 135:1466), cabeçalho da página (telas 4.1 e 7.7a), diálogos (telas 3.3, 4.6 e 2.4) e
+ * a gaveta (tela 4.2).
+ */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+/* Caixa cinza dentro de cards e da gaveta ("Status do Hunit", pré-visualização). */
+.card[data-tone='subtle'] {
+  gap: 4px;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-sutil);
+  box-shadow: none;
+}
+
+.card[data-padding='0'] {
+  padding: 0;
+}
+
+.card[data-padding='12'] {
+  padding: 12px;
+}
+
+.card[data-padding='16'] {
+  padding: 16px;
+}
+
+.card[data-padding='24'] {
+  padding: 24px;
+}
+
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.pageTitles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-da-pagina);
+  letter-spacing: var(--hc-font-titulo-da-pagina-tracking);
+}
+
+.pageSubtitle {
+  margin: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+
+.pageActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-da-secao);
+  letter-spacing: var(--hc-font-titulo-da-secao-tracking);
+}
+
+/* Diálogos: 520 ou 780 px, limitados à janela (24 px de margem), 24 px por dentro. */
+.dialogContent {
+  border-radius: var(--hc-radius-dialog);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-dialogo);
+}
+
+.dialogContent[data-dark] {
+  background: var(--hc-superficie-escura);
+  color: var(--hc-texto-inverso);
+}
+
+.dialogHeader {
+  padding: 24px 24px 16px;
+  background: inherit;
+}
+
+.dialogTitle {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-do-dialogo);
+  letter-spacing: var(--hc-font-titulo-do-dialogo-tracking);
+}
+
+.dialogContent[data-dark] .dialogTitle {
+  color: var(--hc-texto-inverso);
+}
+
+.close {
+  color: var(--hc-texto-icone);
+}
+
+.dialogContent[data-dark] .close {
+  color: var(--hc-texto-inverso-apagado);
+}
+
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 24px 24px;
+  font: var(--hc-font-corpo);
+}
+
+.dialogFooter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Gaveta: à direita, até 780 px e sempre 96 px livres à esquerda; cantos arredondados só à esquerda. */
+.drawerContent {
+  --drawer-flex: 0 0 min(var(--hc-drawer-width), calc(100vw - 96px));
+  border-start-start-radius: var(--hc-radius-dialog);
+  border-end-start-radius: var(--hc-radius-dialog);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-dialogo);
+}
+
+.drawerHeader {
+  padding: 16px;
+  background: var(--hc-fundo-padrao);
+}
+
+.drawerBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 16px 16px;
+}

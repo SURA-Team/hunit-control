@@ -7,11 +7,12 @@ import { MantineProvider } from '@mantine/core';
 import { DatesProvider } from '@mantine/dates';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { vi, type Mock } from 'vitest';
 import { HunitContext } from '../../src/renderer/src/hunit';
 import { ConnectionProvider } from '../../src/renderer/src/state/connection';
 import { SelectionProvider } from '../../src/renderer/src/state/selection';
+import { cssVariablesResolver, theme } from '../../src/renderer/src/ui/theme';
 import type {
   ConnectionState,
   CredentialsClearReason,
@@ -222,6 +223,19 @@ export function mocked<T extends (...args: never[]) => unknown>(fn: T): Mock<T> 
   return fn as unknown as Mock<T>;
 }
 
+function UiProviders({ children }: { children: ReactNode }) {
+  return (
+    <MantineProvider env="test" theme={theme} cssVariablesResolver={cssVariablesResolver}>
+      <DatesProvider settings={{ locale: 'pt-br' }}>{children}</DatesProvider>
+    </MantineProvider>
+  );
+}
+
+/** Renderiza um componente de ui/ só com o Mantine e o tema do app (specs/006). */
+export function renderUi(ui: ReactElement): RenderResult {
+  return render(ui, { wrapper: UiProviders });
+}
+
 export function renderWithApp(
   ui: ReactElement,
   hunit: FakeHunit = fakeHunit(),
@@ -230,7 +244,7 @@ export function renderWithApp(
     defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } },
   });
   const result = render(
-    <MantineProvider env="test">
+    <MantineProvider env="test" theme={theme} cssVariablesResolver={cssVariablesResolver}>
       <DatesProvider settings={{ locale: 'pt-br' }}>
         <QueryClientProvider client={queryClient}>
           <HunitContext.Provider value={hunit.api}>

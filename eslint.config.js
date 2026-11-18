@@ -107,7 +107,6 @@ const NOT_YET_MIGRATED = [
   'screens/run/CredentialsForm.tsx',
   'screens/run/ExecutionResult.tsx',
   'screens/run/HotelSelect.tsx',
-  'screens/run/PeriodPicker.tsx',
   'screens/run/RunScreen.tsx',
   'screens/setup/PreferencesForm.tsx',
   'screens/setup/SetupScreen.tsx',

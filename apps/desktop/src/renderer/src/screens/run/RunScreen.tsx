@@ -14,7 +14,7 @@ import { useExecution } from '../../state/executions';
 import { CredentialsForm } from './CredentialsForm';
 import { ExecutionResult } from './ExecutionResult';
 import { HotelSelect, type HotelMode } from './HotelSelect';
-import { PeriodPicker } from './PeriodPicker';
+import { PeriodPicker } from '../../ui/PeriodPicker';
 
 const IDLE_NOTICE =
   'Usuário e senha do Hunit foram apagados por inatividade. Informe-os de novo para executar.';

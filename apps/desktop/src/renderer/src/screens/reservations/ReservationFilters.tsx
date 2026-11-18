@@ -31,7 +31,7 @@ import {
   SITUATION_ORDER,
   type OriginFilter,
 } from '../../presentation/labels';
-import { PeriodPicker } from '../run/PeriodPicker';
+import { PeriodPicker } from '../../ui/PeriodPicker';
 
 export interface FilterDraft {
   q: string;

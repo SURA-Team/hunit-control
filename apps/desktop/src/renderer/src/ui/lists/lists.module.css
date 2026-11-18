@@ -1,0 +1,354 @@
+/*
+ * Listas do design (specs/006, FR-014, FR-018 a FR-020, research R-07 e R-08): cabeçalhos (53:94,
+ * 53:126), "Linha de reserva" (53:93), "Linha de reserva compacta" (76:223), "Linha de execução"
+ * (53:125), "Linha de hotel" (55:2262), "Barra de seleção em lote" (76:117) e "Card — execução em
+ * andamento" (53:131). As larguras das colunas são as do design; o espaço entre colunas (20 px) vai
+ * no início de cada célula.
+ */
+.card {
+  container-type: inline-size;
+  padding: 4px 0;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  box-sizing: content-box;
+  padding: 0 0 0 20px;
+  text-align: start;
+  vertical-align: middle;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-inline-end: 16px;
+}
+
+.table th {
+  height: 40px;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-tabela-cabecalho);
+  letter-spacing: var(--hc-font-tabela-cabecalho-tracking);
+  white-space: nowrap;
+}
+
+/* Larguras das colunas (conteúdo; o espaço entre colunas vem do padding). */
+.table [data-col='select'],
+.table [data-col='arrow'] {
+  width: 20px;
+}
+
+.table [data-col='hotel'] {
+  width: 180px;
+}
+
+.table [data-col='period'] {
+  width: 150px;
+}
+
+.table [data-col='amount'] {
+  width: 160px;
+  text-align: end;
+}
+
+.table [data-col='situation'] {
+  width: 260px;
+}
+
+.table [data-col='result'] {
+  width: 360px;
+}
+
+.table [data-col='status'] {
+  width: 150px;
+}
+
+.row td {
+  height: 64px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+}
+
+.row[data-kind='execution'] td {
+  height: 68px;
+}
+
+.row:last-child td {
+  border-bottom: none;
+}
+
+.row {
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--hc-fundo-sutil);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: -2px;
+}
+
+/* Linha aberta na gaveta ou marcada para o lote. */
+.row[data-selected] {
+  background: var(--hc-destaque-lima-suave);
+}
+
+.primary {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.strong {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+}
+
+.secondary {
+  margin-top: 2px;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+/* Nomes de hóspede e de hotel: até duas linhas, com o texto inteiro na dica (FR-045). */
+.clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.value {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.hotelInline {
+  display: none;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-start: -4px;
+  padding: 0;
+  border: none;
+  border-radius: var(--hc-radius-pill);
+  background: transparent;
+  color: var(--hc-texto-icone);
+  cursor: pointer;
+}
+
+.arrow:hover {
+  background: var(--hc-cinza-1);
+}
+
+.arrow:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+}
+
+/* Conteúdo abaixo de 1 000 px (tokens.breakpoints.narrowList): o hotel vai para a linha do hóspede. */
+@container (max-width: 999.98px) {
+  .table [data-col='hotel'] {
+    display: none;
+  }
+
+  .hotelInline {
+    display: inline;
+  }
+
+  .table [data-col='amount'] {
+    width: 130px;
+  }
+
+  .table [data-col='situation'] {
+    width: 230px;
+  }
+
+  .table [data-col='result'] {
+    width: 240px;
+  }
+}
+
+/* Linhas simples (hotéis da execução, documentos da reserva, reservas da seleção). */
+.rowList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simpleRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+}
+
+.simpleRow:last-child {
+  border-bottom: none;
+}
+
+.simpleRow[data-with-icon] {
+  padding-block: 14px;
+}
+
+.simpleMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.iconTile {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--hc-radius-field);
+  background: var(--hc-fundo-sutil);
+  color: var(--hc-texto-icone);
+}
+
+.simpleActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.compactAmount {
+  flex-shrink: 0;
+  width: 110px;
+  text-align: end;
+}
+
+.compactSituation {
+  flex-shrink: 0;
+  width: 210px;
+}
+
+/* Barra de lote: escura, com a principal em lima; quebra linha quando não cabe. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 12px 12px 12px 20px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-superficie-escura);
+  box-shadow: var(--hc-shadow-flutuante);
+}
+
+.partialBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--hc-radius-checkbox);
+  color: var(--hc-destaque-lima);
+}
+
+.barSummary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 200px;
+  margin: 0 0 0 8px;
+}
+
+.barCount {
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo-grande);
+  letter-spacing: var(--hc-font-rotulo-grande-tracking);
+  white-space: nowrap;
+}
+
+.barTotal {
+  color: var(--hc-texto-inverso-apagado);
+  font: var(--hc-font-corpo);
+  white-space: nowrap;
+}
+
+/* Card escuro do que está em andamento (execução ou envio ao Comercial). */
+.job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 32px;
+  padding: 20px 20px 20px 24px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-superficie-escura);
+  box-shadow: var(--hc-shadow-flutuante);
+}
+
+.jobMain {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.jobTitle {
+  margin: 0;
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo-grande);
+  letter-spacing: var(--hc-font-rotulo-grande-tracking);
+}
+
+.jobDetail {
+  margin: 0;
+  color: var(--hc-texto-inverso-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.jobProgress {
+  display: flex;
+  flex: 0 1 340px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.jobLegend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo);
+}
+
+.jobPercent {
+  color: var(--hc-destaque-lima);
+  font: var(--hc-font-corpo-forte);
+}

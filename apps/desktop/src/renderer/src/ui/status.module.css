@@ -1,0 +1,212 @@
+/*
+ * Status e avisos do design (specs/006, FR-006, FR-021): "Badge" (21:102), "Alerta" (21:163),
+ * "Progresso da execução" (26:1648), "Card de contagem" (21:153), "Card de indicador" (91:73) e o
+ * estado vazio da tela 4.3.
+ */
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 18px;
+  padding-inline: 10px;
+  border-radius: var(--hc-radius-pill);
+  font: var(--hc-font-badge);
+  letter-spacing: var(--hc-font-badge-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge[data-size='md'] {
+  height: 20px;
+}
+
+.badge[data-tone='lime'] {
+  background: var(--hc-azul-1);
+  color: var(--hc-azul-9);
+}
+
+.badge[data-tone='amber'] {
+  background: var(--hc-amarelo-1);
+  color: var(--hc-amarelo-9);
+}
+
+.badge[data-tone='green'] {
+  background: var(--hc-verde-1);
+  color: var(--hc-verde-9);
+}
+
+.badge[data-tone='red'] {
+  background: var(--hc-vermelho-1);
+  color: var(--hc-vermelho-9);
+}
+
+.badge[data-tone='gray'] {
+  background: var(--hc-cinza-1);
+  color: var(--hc-cinza-9);
+}
+
+/* Âmbar cheio: só para o que pede ação ("Verificar"). */
+.badge[data-tone='alert'] {
+  background: var(--hc-amarelo-8);
+  color: var(--hc-texto-inverso);
+}
+
+.stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: var(--hc-radius-notice);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.notice[data-tone='lime'] {
+  --notice-title: var(--hc-azul-9);
+  background: var(--hc-azul-1);
+}
+
+.notice[data-tone='green'] {
+  --notice-title: var(--hc-verde-9);
+  background: var(--hc-verde-1);
+}
+
+.notice[data-tone='red'] {
+  --notice-title: var(--hc-vermelho-9);
+  background: var(--hc-vermelho-1);
+}
+
+.notice[data-tone='amber'] {
+  --notice-title: var(--hc-amarelo-9);
+  background: var(--hc-amarelo-1);
+}
+
+.noticeIcon {
+  display: flex;
+  color: var(--notice-title);
+}
+
+.noticeText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.noticeTitle {
+  color: var(--notice-title);
+  font: var(--hc-font-corpo-forte);
+}
+
+.track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-cinza-1);
+}
+
+.track[data-surface='dark'] {
+  background: var(--hc-superficie-escura-2);
+}
+
+.fill {
+  height: 100%;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-superficie-escura);
+}
+
+.track[data-surface='dark'] .fill {
+  background: var(--hc-destaque-lima);
+}
+
+.countCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--hc-radius-notice);
+  background: var(--hc-fundo-sutil);
+}
+
+.countLabel {
+  font: var(--hc-font-contagem-rotulo);
+}
+
+.countCard[data-tone='amber'] .countLabel {
+  color: var(--hc-amarelo-8);
+}
+
+.countCard[data-tone='red'] .countLabel {
+  color: var(--hc-vermelho-8);
+}
+
+.countCard[data-tone='green'] .countLabel {
+  color: var(--hc-verde-8);
+}
+
+.countNumber {
+  display: block;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-contagem-numero);
+  letter-spacing: var(--hc-font-contagem-numero-tracking);
+  white-space: nowrap;
+}
+
+.indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 20px 22px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+.indicatorLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-rotulo);
+}
+
+.indicatorHelp {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 56px 24px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--hc-texto-placeholder);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-da-secao);
+  letter-spacing: var(--hc-font-titulo-da-secao-tracking);
+}
+
+.emptyText {
+  margin: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
