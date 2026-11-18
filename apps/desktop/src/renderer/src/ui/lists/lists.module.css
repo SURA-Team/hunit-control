@@ -32,6 +32,11 @@
   padding-inline-end: 16px;
 }
 
+/* A célula vazia da seta, no cabeçalho, também leva a borda até o fim da linha. */
+.table thead td {
+  border-bottom: 1px solid var(--hc-borda-padrao);
+}
+
 .table th {
   height: 40px;
   border-bottom: 1px solid var(--hc-borda-padrao);
@@ -72,14 +77,18 @@
   width: 150px;
 }
 
+/*
+ * As células são `content-box` (as larguras acima não contam o espaçamento): a altura é a do
+ * conteúdo, e a linha fica com a do design somando os 10 px de cima e de baixo (64 e 68 px).
+ */
 .row td {
-  height: 64px;
+  height: 44px;
   padding-block: 10px;
   border-bottom: 1px solid var(--hc-borda-padrao);
 }
 
 .row[data-kind='execution'] td {
-  height: 68px;
+  height: 48px;
 }
 
 .row:last-child td {
@@ -145,6 +154,10 @@
   display: none;
 }
 
+.periodInline {
+  display: none;
+}
+
 .arrow {
   display: flex;
   align-items: center;
@@ -188,6 +201,20 @@
 
   .table [data-col='result'] {
     width: 240px;
+  }
+}
+
+/*
+ * Conteúdo abaixo de 720 px (tokens.breakpoints.compactList; a janela mínima com zoom de 125 %): o
+ * período também vai para a segunda linha do hóspede, para Valor e Situação caberem sem cortar.
+ */
+@container (max-width: 719.98px) {
+  .table [data-col='period'] {
+    display: none;
+  }
+
+  .periodInline {
+    display: inline;
   }
 }
 

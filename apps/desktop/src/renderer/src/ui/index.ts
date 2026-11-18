@@ -23,6 +23,18 @@ export {
 } from './DocumentAction';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export * from './fields';
+export {
+  AppliedFilters,
+  FilterBar,
+  FilterBarSearch,
+  FilterPanel,
+  FilterPanelWide,
+  RemovableChip,
+  type AppliedFiltersProps,
+  type FilterBarProps,
+  type FilterPanelProps,
+  type RemovableChipProps,
+} from './FilterBar';
 export { FilterChip, type FilterChipProps } from './FilterChip';
 export * from './icons';
 export * from './lists';

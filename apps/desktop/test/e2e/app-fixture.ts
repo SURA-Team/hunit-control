@@ -190,6 +190,35 @@ export async function configureApp(
 
 export type { ElectronApplication, Page };
 
+/**
+ * Busca única da lista de reservas (specs/006, research R-10): não há "Buscar"; a tela aplica 400 ms
+ * depois da última tecla. Texto vazio tira a busca.
+ */
+export async function searchReservations(window: Page, text: string): Promise<void> {
+  await window.getByRole('textbox', { name: 'Buscar reservas' }).fill(text);
+}
+
+/**
+ * Espera a lista de reservas ficar com `count` linhas. Sem o "Buscar", a lista anterior continua na
+ * tela até a resposta chegar: contar logo depois de digitar ou de escolher um filtro seria instável.
+ */
+export async function waitForReservationRows(window: Page, count: number): Promise<void> {
+  await window.waitForFunction(
+    (expected) =>
+      document.querySelectorAll('table[aria-label="Reservas"] tbody tr').length === expected,
+    count,
+    { timeout: 10_000 },
+  );
+}
+
+/** Abre o painel "Filtros avançados" da lista de reservas (specs/006, tela 4.12). */
+export async function openReservationFilters(window: Page) {
+  await window.getByRole('button', { name: 'Filtros', exact: true }).click();
+  const panel = window.getByRole('region', { name: 'Filtros avançados' });
+  await panel.waitFor();
+  return panel;
+}
+
 const MONTHS = [
   'janeiro',
   'fevereiro',

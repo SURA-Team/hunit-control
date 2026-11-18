@@ -97,8 +97,6 @@ const NOT_YET_MIGRATED = [
   'screens/reservations/ConfirmBatchDialog.tsx',
   'screens/reservations/CopyDialog.tsx',
   'screens/reservations/ReservationDetail.tsx',
-  'screens/reservations/ReservationFilters.tsx',
-  'screens/reservations/ReservationsScreen.tsx',
   'screens/reservations/SelectionDrawer.tsx',
   'screens/reservations/TreatmentSection.tsx',
   'screens/run/ExecutionResult.tsx',

@@ -184,8 +184,8 @@ describe('nada sensível no disco (SC-004)', () => {
       server.setScenario(SCENARIO);
 
       // Consulta de reservas com os nomes dos hóspedes na tela.
+      // A lista carrega ao abrir a área (desde a 006 não há "Buscar").
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Buscar' }).click();
       for (const guest of GUESTS)
         await window.getByText(guest).first().waitFor({ timeout: 10_000 });
 

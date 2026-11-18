@@ -1,86 +1,84 @@
 /**
- * Tela Reservas (specs/002, US3, FR-020 a FR-023, FR-005; specs/003, US3 e US4): consulta das
- * reservas gravadas com filtros combinados, busca livre e busca por valor, feitas pelo servidor;
- * "carregar mais" mantém os filtros; o detalhe abre num painel lateral. Nada é gravado: o que
- * está na tela fica só em memória (FR-008a).
+ * Tela Reservas (specs/002, US3; specs/003, US3 e US4; specs/005; desde a 006 no visual novo, telas
+ * 4.1, 4.3, 4.4, 4.12 e 6.2):
+ * - busca única, "Origem" e o painel "Filtros avançados" (`ReservationFilters`), valendo na hora; a
+ *   busca, 400 ms depois da última tecla (research R-10, R-11);
+ * - filtros rápidos Todas · Falta cobrar · A verificar · Com erro · Concluídas, com as contagens do
+ *   servidor para a busca e os filtros em vigor (FR-016, FR-017, research R-09); o escolhido vale
+ *   também para "Selecionar todas do filtro" e para a cópia para e-mail;
+ * - a lista de cinco colunas, ordenada por hotel e check-in, com "Carregar mais" e o rodapé "Mostrando
+ *   X de Y" (FR-014, research R-08, R-18), e o estado vazio (FR-021);
+ * - a barra da seleção do lote (tela 4.4): "Ver seleção", "Anexar ▾", "Confirmar ▾", "Enviar ao
+ *   Comercial" e "Desmarcar todas". A seleção fica fora desta tela (`state/selection`): pesquisar de
+ *   novo, trocar filtros ou carregar mais não desmarca nada (specs/003).
  *
- * Tratativas (specs/003): cada linha mostra a situação da reserva numa coluna só — "Tratativa
- * enviada", "Comprovante enviado" ou o status do Hunit, com o alerta "Verificar" quando houver
- * (FR-002, FR-002a, FR-017); o perfil operador marca
- * reservas para aplicar o mesmo documento a várias. A seleção fica fora desta tela
- * (`state/selection`): pesquisar de novo, trocar filtros ou carregar mais não desmarca nada.
- *
- * Envio ao Comercial (specs/005): "Enviar ao Comercial", "Confirmar retornos" e "Confirmar
- * 'Verificar'" na barra da seleção; "Selecionar todas do filtro" (até 2 000, FR-030); a coluna
- * "Valor cobrado" com a origem (FR-024); e "Copiar para e-mail" (FR-027), também para o perfil
- * consulta.
+ * O detalhe abre numa gaveta. Nada é gravado: o que está na tela fica só em memória (FR-008a da 002).
+ * O perfil consulta vê a lista sem as caixas de seleção (tela 6.2).
  */
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Drawer,
-  Group,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  Title,
-} from '@mantine/core';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { Group, Stack, Text } from '@mantine/core';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   Reservation,
+  ReservationFilters,
   ReservationKey,
   ReservationListInput,
+  ReservationQuickFilter,
   TreatmentDocumentKind,
 } from '../../../../shared/ipc-types';
-import { ChargedAmount } from '../../components/ChargedAmount';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
-import { LegacyBadge } from '../../components/LegacyBadge';
-import { StatusBadge } from '../../components/StatusBadge';
-import { SituationBadge } from '../../components/SituationBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
-import { formatDate, formatMoney, parseAmountInput, sumMoney } from '../../presentation/format';
-import { RESERVATION_STATUS_LABELS } from '../../presentation/labels';
+import { formatMoney, sumMoney } from '../../presentation/format';
+import type { OriginFilter } from '../../presentation/labels';
+import {
+  LEGACY_BADGE,
+  QUICK_FILTER_COUNT_FIELD,
+  QUICK_FILTER_LABELS,
+  QUICK_FILTER_ORDER,
+  parseSearch,
+  reservationRowText,
+  situationBadges,
+} from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
 import { SELECTION_LIMIT, useSelection } from '../../state/selection';
+import {
+  Action,
+  AppDrawer,
+  EmptyState,
+  FilterChip,
+  ListCard,
+  ListHeader,
+  MenuButton,
+  Notice,
+  PageHeader,
+  RESERVATION_COLUMNS,
+  ReservationRow,
+  SelectionBar,
+  SelectionBox,
+  SituationBadges,
+  StatusBadge,
+  type NoticeTone,
+} from '../../ui';
 import { DispatchDialog } from '../dispatch/DispatchDialog';
 import { AttachDialog } from './AttachDialog';
 import { ConfirmBatchDialog, type BatchKind } from './ConfirmBatchDialog';
 import { CopyDialog } from './CopyDialog';
-import { GuestName, ReservationDetail } from './ReservationDetail';
-import { EMPTY_FILTERS, ReservationFilters, type FilterDraft } from './ReservationFilters';
+import { ReservationDetail } from './ReservationDetail';
+import {
+  AppliedFilterChips,
+  EMPTY_PANEL,
+  ReservationFilterBar,
+  appliedChips,
+  filtersOf,
+  type PanelFilters,
+} from './ReservationFilters';
 import { SelectionDrawer } from './SelectionDrawer';
 
 const PAGE_SIZE = 50;
+/** A busca vale 400 ms depois da última tecla (research R-10). */
+export const SEARCH_DELAY_MS = 400;
 
-type Applied = Omit<ReservationListInput, 'cursor' | 'limit'>;
-
-/** Filtros da tela no formato da API; campos vazios ficam de fora. */
-function toQuery(draft: FilterDraft, q: string | undefined, amount: string | undefined): Applied {
-  return {
-    ...(q !== undefined && { q }),
-    ...(amount !== undefined && { amount }),
-    ...(draft.hotelCodes.length > 0 && { hotelCode: draft.hotelCodes }),
-    // A situação com o detalhe do Comercial ("Validar comprovante", specs/005, FR-023).
-    ...(draft.situations.length > 0 && {
-      detailedSituation: draft.situations as Applied['detailedSituation'],
-    }),
-    ...(draft.reservationStatuses.length > 0 && {
-      reservationStatus: draft.reservationStatuses as Applied['reservationStatus'],
-    }),
-    // "Falta cobrar" e "A verificar": a regra é do servidor; a tela só pede (specs/003).
-    ...(draft.pendingCharge && { pendingCharge: true }),
-    ...(draft.needsReview && { needsReview: true }),
-    ...(draft.channel && { channel: draft.channel }),
-    ...(draft.origin !== 'all' && { fromLegacy: draft.origin === 'legacy' }),
-    ...(draft.notFound && { notFound: true }),
-    ...(draft.checkInFrom && { checkInFrom: draft.checkInFrom }),
-    ...(draft.checkInTo && { checkInTo: draft.checkInTo }),
-    ...(draft.executionId && { executionId: draft.executionId }),
-  };
-}
+type SearchQuery = Pick<ReservationListInput, 'q' | 'amount'>;
 
 export function ReservationsScreen({
   initialExecutionId = null,
@@ -90,11 +88,21 @@ export function ReservationsScreen({
   const hunit = useHunit();
   const { state, isOperator } = useConnection();
   const selection = useSelection();
-  const initial: FilterDraft = { ...EMPTY_FILTERS, executionId: initialExecutionId };
-  const [draft, setDraft] = useState<FilterDraft>(initial);
-  const [applied, setApplied] = useState<Applied>(() => toQuery(initial, undefined, undefined));
-  const [errors, setErrors] = useState<{ q?: string; amount?: string; period?: string }>({});
-  const [selected, setSelected] = useState<Reservation | null>(null);
+  const offline = state?.status === 'offline';
+
+  // Busca: o texto digitado, a busca em vigor (a última válida) e o erro, se houver.
+  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState<SearchQuery>({});
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [origin, setOrigin] = useState<OriginFilter>('all');
+  const [panel, setPanel] = useState<PanelFilters>({
+    ...EMPTY_PANEL,
+    executionId: initialExecutionId,
+  });
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [quickFilter, setQuickFilter] = useState<ReservationQuickFilter | null>(null);
+
+  const [opened, setOpened] = useState<Reservation | null>(null);
   const [selectionOpen, setSelectionOpen] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   /** Lote em andamento: o tipo do documento e as reservas marcadas quando o diálogo abriu. */
@@ -108,9 +116,24 @@ export function ReservationsScreen({
   const [copying, setCopying] = useState(false);
   const [selectingAll, setSelectingAll] = useState(false);
   const [selectAllNotice, setSelectAllNotice] = useState<{
-    tone: 'blue' | 'yellow' | 'red';
+    tone: NoticeTone;
     text: string;
   } | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const parsed = parseSearch(search);
+      setSearchError(parsed.error ?? null);
+      // Busca inválida: a lista continua com a última busca válida.
+      if (!parsed.error) {
+        setSearchQuery({
+          ...(parsed.q !== undefined && { q: parsed.q }),
+          ...(parsed.amount !== undefined && { amount: parsed.amount }),
+        });
+      }
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const hotels = useQuery({ queryKey: ['hotels'], queryFn: () => unwrap(hunit.hotels.list()) });
   const channels = useQuery({
@@ -122,12 +145,23 @@ export function ReservationsScreen({
     [hotels.data],
   );
 
+  /** A busca e os filtros, sem o filtro rápido: a base das contagens. */
+  const filters = useMemo<ReservationFilters>(
+    () => ({ ...filtersOf(panel, origin), ...searchQuery }),
+    [panel, origin, searchQuery],
+  );
+  /** O que a lista, "Selecionar todas do filtro" e a cópia usam (FR-014: a mesma ordem). */
+  const listFilters = useMemo<ReservationFilters>(
+    () => ({ ...filters, ...(quickFilter && { quickFilter }), order: 'hotel_check_in' }),
+    [filters, quickFilter],
+  );
+
   const list = useInfiniteQuery({
-    queryKey: ['reservations', applied],
+    queryKey: ['reservations', listFilters],
     queryFn: ({ pageParam }) =>
       unwrap(
         hunit.reservations.list({
-          ...applied,
+          ...listFilters,
           limit: PAGE_SIZE,
           ...(pageParam !== null && { cursor: pageParam }),
         }),
@@ -135,25 +169,28 @@ export function ReservationsScreen({
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
   });
+  // A chave começa com "reservations": quem invalida a lista invalida as contagens (research R-09).
+  const counts = useQuery({
+    queryKey: ['reservations', 'quick-filter-counts', filters],
+    queryFn: () => unwrap(hunit.reservations.quickFilterCounts(filters)),
+    placeholderData: keepPreviousData,
+  });
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const offline = state?.status === 'offline';
 
-  function applyDraft(next: FilterDraft) {
-    const found: typeof errors = {};
-    const text = next.q.trim();
-    if (text.length === 1) found.q = 'Digite ao menos 2 caracteres na busca.';
-    let amount: string | undefined;
-    if (next.amount.trim() !== '') {
-      amount = parseAmountInput(next.amount) ?? undefined;
-      if (amount === undefined) found.amount = 'Valor inválido. Use, por exemplo, 1.234,56.';
-    }
-    // O seletor de intervalo já ordena as datas; falta só o caso de escolher apenas o início.
-    if (Boolean(next.checkInFrom) !== Boolean(next.checkInTo)) {
-      found.period = 'Escolha também o fim do período (ou limpe o período).';
-    }
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
-    setApplied(toQuery(next, text.length >= 2 ? text : undefined, amount));
+  const searching = Object.keys(searchQuery).length > 0;
+  const filtering =
+    searching ||
+    origin !== 'all' ||
+    quickFilter !== null ||
+    appliedChips(panel, hotels.data ?? []).length > 0;
+
+  function clearAll() {
+    setSearch('');
+    setSearchQuery({});
+    setSearchError(null);
+    setOrigin('all');
+    setPanel(EMPTY_PANEL);
+    setQuickFilter(null);
   }
 
   function addToSelection(reservations: Reservation[]) {
@@ -161,12 +198,12 @@ export function ReservationsScreen({
     setLimitReached(skipped > 0);
   }
 
-  /** "Selecionar todas do filtro" (FR-030): soma à seleção as 2 000 primeiras, na ordem da lista. */
+  /** "Selecionar todas do filtro" (FR-030 da 005): soma à seleção as 2 000 primeiras da lista. */
   async function selectAllFromFilter() {
     setSelectingAll(true);
     setSelectAllNotice(null);
     try {
-      const found = await unwrap(hunit.reservations.selectAll(applied));
+      const found = await unwrap(hunit.reservations.selectAll(listFilters));
       const { added, skipped } = selection.add(found.items);
       const parts = [
         `${added.toLocaleString('pt-BR')} ${added === 1 ? 'reserva selecionada' : 'reservas selecionadas'} do filtro`,
@@ -182,7 +219,7 @@ export function ReservationsScreen({
         );
       }
       setSelectAllNotice({
-        tone: found.truncated || skipped > 0 ? 'yellow' : 'blue',
+        tone: found.truncated || skipped > 0 ? 'amber' : 'lime',
         text: `${parts.join('; ')}.`,
       });
     } catch (caught) {
@@ -203,165 +240,187 @@ export function ReservationsScreen({
   const selectedOnPage = items.filter((reservation) => selection.has(reservation));
   const allOnPageSelected = items.length > 0 && selectedOnPage.length === items.length;
   const selectedCount = selection.items.length;
+  const selectedKeys = selection.items.map(({ hotelCode, reservationNumber }) => ({
+    hotelCode,
+    reservationNumber,
+  }));
+
+  // Sem nenhuma reserva para a busca e os filtros, só "Todas" (tela 4.3) e o filtro em vigor.
+  const nothingAtAll = counts.data?.all === 0 && list.isSuccess && items.length === 0;
+  const chips = QUICK_FILTER_ORDER.filter((filter) => !nothingAtAll || filter === quickFilter);
+  const total =
+    counts.data === undefined
+      ? null
+      : quickFilter
+        ? counts.data[QUICK_FILTER_COUNT_FIELD[quickFilter]]
+        : counts.data.all;
 
   return (
-    <Stack gap="md">
-      <Group justify="space-between">
-        <Title order={2}>Reservas</Title>
-        <Group gap="sm">
-          <StaleDataNotice updatedAt={list.dataUpdatedAt} offline={offline} />
-          <Button
-            variant="default"
-            size="xs"
-            disabled={items.length === 0 || offline}
-            onClick={() => setCopying(true)}
-          >
-            Copiar para e-mail
-          </Button>
-        </Group>
-      </Group>
-      <ReservationFilters
-        disabled={offline}
-        draft={draft}
-        onChange={setDraft}
-        onSearch={() => applyDraft(draft)}
-        onQuickFilter={(next) => {
-          setDraft(next);
-          applyDraft(next);
-        }}
-        onClear={() => {
-          setDraft(EMPTY_FILTERS);
-          setErrors({});
-          setApplied({});
-        }}
-        hotels={hotels.data ?? []}
-        channels={channels.data ?? []}
-        errors={errors}
+    <Stack gap={16}>
+      <PageHeader
+        title="Reservas"
+        action={
+          <>
+            <StaleDataNotice updatedAt={list.dataUpdatedAt} offline={offline} />
+            <Action
+              variant="secondary"
+              disabled={items.length === 0 || offline}
+              onClick={() => setCopying(true)}
+            >
+              Copiar para e-mail
+            </Action>
+          </>
+        }
       />
 
-      {isOperator && selectedCount > 0 && (
-        <Paper withBorder p="sm" radius="md" data-testid="selection-bar">
-          <Group justify="space-between">
-            <Text size="sm">
-              <b>{selectedCount}</b>{' '}
-              {selectedCount === 1 ? 'reserva selecionada' : 'reservas selecionadas'} — total de{' '}
-              <b>{formatMoney(sumMoney(selection.items.map((item) => item.totalAmount)))}</b>
-            </Text>
-            <Group gap="xs">
-              <Button variant="default" size="xs" onClick={() => setSelectionOpen(true)}>
-                Ver seleção
-              </Button>
-              <Button
-                variant="default"
-                size="xs"
-                disabled={offline}
-                onClick={() => setBatch({ kind: 'request', reservations: selection.items })}
-              >
-                Anexar tratativa
-              </Button>
-              <Button
-                size="xs"
-                disabled={offline}
-                onClick={() => setBatch({ kind: 'proof', reservations: selection.items })}
-              >
-                Anexar comprovante
-              </Button>
-              <Button
-                size="xs"
-                color="teal"
-                disabled={offline}
-                onClick={() =>
-                  setDispatching(
-                    selection.items.map(({ hotelCode, reservationNumber }) => ({
-                      hotelCode,
-                      reservationNumber,
-                    })),
-                  )
-                }
-              >
-                Enviar ao Comercial
-              </Button>
-              <Button
-                variant="default"
-                size="xs"
-                disabled={offline}
-                onClick={() => setConfirming('returns')}
-              >
-                Confirmar retornos
-              </Button>
-              <Button
-                variant="default"
-                size="xs"
-                color="yellow"
-                disabled={offline}
-                onClick={() => setConfirming('reviews')}
-              >
-                Confirmar &quot;Verificar&quot;
-              </Button>
-              <Button
-                variant="subtle"
-                size="xs"
-                onClick={() => {
-                  selection.clear();
-                  setLimitReached(false);
-                }}
-              >
-                Desmarcar todas
-              </Button>
-            </Group>
-          </Group>
-        </Paper>
-      )}
-      {limitReached && (
-        <Alert color="yellow" role="alert" withCloseButton onClose={() => setLimitReached(false)}>
-          Selecione no máximo {SELECTION_LIMIT.toLocaleString('pt-BR')} reservas. As que passaram do
-          limite não foram marcadas.
-        </Alert>
-      )}
+      <ReservationFilterBar
+        search={search}
+        onSearch={setSearch}
+        searchError={searchError}
+        origin={origin}
+        onOrigin={setOrigin}
+        panel={panel}
+        onPanel={setPanel}
+        panelOpen={panelOpen}
+        onPanelOpen={setPanelOpen}
+        hotels={hotels.data ?? []}
+        channels={channels.data ?? []}
+      />
+      <AppliedFilterChips
+        panel={panel}
+        hotels={hotels.data ?? []}
+        onPanel={setPanel}
+        onClearAll={clearAll}
+      />
 
-      {selectAllNotice && (
-        <Alert
-          color={selectAllNotice.tone}
-          role={selectAllNotice.tone === 'red' ? 'alert' : 'status'}
-          withCloseButton
-          onClose={() => setSelectAllNotice(null)}
-        >
-          {selectAllNotice.text}
-        </Alert>
-      )}
-      {isOperator && items.length > 0 && (
-        <Group gap="sm">
-          <Button
-            variant="light"
-            size="xs"
+      <Group justify="space-between" gap={8} role="group" aria-label="Filtros rápidos">
+        <Group gap={8}>
+          <FilterChip
+            label="Todas"
+            count={counts.data?.all ?? null}
+            active={quickFilter === null}
+            onClick={() => setQuickFilter(null)}
+          />
+          {chips.map((filter) => (
+            <FilterChip
+              key={filter}
+              label={QUICK_FILTER_LABELS[filter]}
+              count={counts.data ? counts.data[QUICK_FILTER_COUNT_FIELD[filter]] : null}
+              active={quickFilter === filter}
+              onClick={() => setQuickFilter(quickFilter === filter ? null : filter)}
+            />
+          ))}
+        </Group>
+        {isOperator && items.length > 0 && (
+          <Action
+            variant="text"
             loading={selectingAll}
             disabled={offline}
+            title={`Todas as páginas, até ${SELECTION_LIMIT.toLocaleString('pt-BR')} reservas, na ordem da lista.`}
             onClick={() => void selectAllFromFilter()}
           >
             Selecionar todas do filtro
-          </Button>
-          <Text size="xs" c="dimmed">
-            Todas as páginas, até {SELECTION_LIMIT.toLocaleString('pt-BR')} reservas, na ordem da
-            lista.
-          </Text>
-        </Group>
+          </Action>
+        )}
+      </Group>
+
+      {limitReached && (
+        <Notice
+          tone="amber"
+          action={
+            <Action variant="text" size="xs" onClick={() => setLimitReached(false)}>
+              Fechar
+            </Action>
+          }
+        >
+          Selecione no máximo {SELECTION_LIMIT.toLocaleString('pt-BR')} reservas. As que passaram do
+          limite não foram marcadas.
+        </Notice>
+      )}
+      {selectAllNotice && (
+        <Notice
+          tone={selectAllNotice.tone}
+          role={selectAllNotice.tone === 'red' ? 'alert' : 'status'}
+          action={
+            <Action variant="text" size="xs" onClick={() => setSelectAllNotice(null)}>
+              Fechar
+            </Action>
+          }
+        >
+          {selectAllNotice.text}
+        </Notice>
       )}
 
-      {list.isError && items.length === 0 && (
-        <Alert color="red" role="alert">
-          {messageOf(list.error)}
-        </Alert>
+      {isOperator && selectedCount > 0 && (
+        <SelectionBar
+          count={selectedCount}
+          total={formatMoney(sumMoney(selection.items.map((item) => item.totalAmount)))}
+          onClearAll={() => {
+            selection.clear();
+            setLimitReached(false);
+          }}
+          actions={
+            <>
+              <Action variant="secondary" onClick={() => setSelectionOpen(true)}>
+                Ver seleção
+              </Action>
+              <MenuButton
+                label="Anexar"
+                disabled={offline}
+                items={[
+                  {
+                    label: 'Anexar tratativa',
+                    onClick: () => setBatch({ kind: 'request', reservations: selection.items }),
+                  },
+                  {
+                    label: 'Anexar comprovante',
+                    onClick: () => setBatch({ kind: 'proof', reservations: selection.items }),
+                  },
+                ]}
+              />
+              <MenuButton
+                label="Confirmar"
+                disabled={offline}
+                items={[
+                  { label: 'Confirmar retornos', onClick: () => setConfirming('returns') },
+                  { label: 'Confirmar "Verificar"', onClick: () => setConfirming('reviews') },
+                ]}
+              />
+              <Action
+                variant="primary"
+                disabled={offline}
+                onClick={() => setDispatching(selectedKeys)}
+              >
+                Enviar ao Comercial
+              </Action>
+            </>
+          }
+        />
       )}
+
+      {list.isError && items.length === 0 && <Notice tone="red">{messageOf(list.error)}</Notice>}
       {list.isSuccess && items.length === 0 && (
-        <Text c="dimmed">Nenhuma reserva encontrada com estes filtros.</Text>
+        <EmptyState
+          title="Nenhuma reserva encontrada"
+          description={
+            searchQuery.q
+              ? `Não há reservas para “${searchQuery.q}” com os filtros atuais. Confira o nome ou limpe os filtros.`
+              : filtering
+                ? 'Não há reservas com a busca e os filtros atuais.'
+                : 'Ainda não há reservas gravadas. Elas aparecem depois de uma execução.'
+          }
+          {...(filtering && { onClear: clearAll })}
+        />
       )}
       {items.length > 0 && (
-        <Table highlightOnHover striped verticalSpacing={6}>
-          <Table.Thead>
-            <Table.Tr>
-              {isOperator && (
-                <Table.Th w={36}>
-                  <Checkbox
+        <ListCard
+          label="Reservas"
+          header={
+            <ListHeader
+              columns={RESERVATION_COLUMNS}
+              {...(isOperator && {
+                select: (
+                  <SelectionBox
                     aria-label="Selecionar todas as reservas listadas"
                     checked={allOnPageSelected}
                     indeterminate={selectedOnPage.length > 0 && !allOnPageSelected}
@@ -373,90 +432,74 @@ export function ReservationsScreen({
                       }
                     }}
                   />
-                </Table.Th>
-              )}
-              <Table.Th>Hotel</Table.Th>
-              <Table.Th>Número</Table.Th>
-              <Table.Th>Hóspede</Table.Th>
-              <Table.Th>Canal</Table.Th>
-              <Table.Th>Check-in</Table.Th>
-              <Table.Th>Check-out</Table.Th>
-              <Table.Th>Valor total</Table.Th>
-              <Table.Th>Valor cobrado</Table.Th>
-              <Table.Th>Situação da reserva</Table.Th>
-              <Table.Th>Reserva</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {items.map((reservation) => (
-              <Table.Tr
+                ),
+              })}
+            />
+          }
+        >
+          {items.map((reservation) => {
+            const text = reservationRowText(
+              reservation,
+              hotelNames.get(reservation.hotelCode) ?? reservation.hotelCode,
+            );
+            return (
+              <ReservationRow
                 key={`${reservation.hotelCode}/${reservation.reservationNumber}`}
-                onClick={() => setSelected(reservation)}
-                style={{ cursor: 'pointer' }}
-              >
-                {isOperator && (
-                  <Table.Td onClick={(event) => event.stopPropagation()}>
-                    <Checkbox
-                      aria-label={`Selecionar a reserva ${reservation.reservationNumber}`}
-                      checked={selection.has(reservation)}
-                      onChange={(event) => toggle(reservation, event.currentTarget.checked)}
-                    />
-                  </Table.Td>
-                )}
-                <Table.Td>
-                  {hotelNames.get(reservation.hotelCode) ?? reservation.hotelCode}
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={6} wrap="nowrap">
-                    {reservation.reservationNumber}
-                    {reservation.legacy && <LegacyBadge />}
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <GuestName reservation={reservation} />
-                </Table.Td>
-                <Table.Td>{reservation.channel ?? '—'}</Table.Td>
-                <Table.Td>{formatDate(reservation.checkIn)}</Table.Td>
-                <Table.Td>{formatDate(reservation.checkOut)}</Table.Td>
-                <Table.Td>{formatMoney(reservation.totalAmount)}</Table.Td>
-                <Table.Td>
-                  <ChargedAmount treatment={reservation.treatment} />
-                </Table.Td>
-                <Table.Td>
-                  <SituationBadge treatment={reservation.treatment} />
-                </Table.Td>
-                <Table.Td>
-                  <StatusBadge label={RESERVATION_STATUS_LABELS[reservation.reservationStatus]} />
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+                reservationNumber={reservation.reservationNumber}
+                {...text}
+                situation={<SituationBadges items={situationBadges(reservation)} />}
+                nameBadge={
+                  reservation.legacy ? (
+                    <StatusBadge tone={LEGACY_BADGE.tone} title={LEGACY_BADGE.title}>
+                      {LEGACY_BADGE.label}
+                    </StatusBadge>
+                  ) : undefined
+                }
+                selectable={isOperator}
+                selected={selection.has(reservation)}
+                onSelectedChange={(checked) => toggle(reservation, checked)}
+                opened={
+                  opened?.hotelCode === reservation.hotelCode &&
+                  opened.reservationNumber === reservation.reservationNumber
+                }
+                onOpen={() => setOpened(reservation)}
+              />
+            );
+          })}
+        </ListCard>
       )}
-      {list.hasNextPage && (
-        <Group>
-          <Button
-            variant="default"
-            onClick={() => void list.fetchNextPage()}
-            disabled={offline}
-            loading={list.isFetchingNextPage}
-          >
-            Carregar mais
-          </Button>
+      {items.length > 0 && (
+        <Group justify="space-between" gap={8}>
+          <Text size="xs" c="dimmed">
+            {footerText({
+              shown: items.length,
+              total,
+              selected: isOperator ? selectedCount : 0,
+              selectedHere: selectedOnPage.length,
+              legacyOrigin: origin === 'legacy',
+            })}
+          </Text>
+          {list.hasNextPage && (
+            <Action
+              variant="secondary"
+              onClick={() => void list.fetchNextPage()}
+              disabled={offline}
+              loading={list.isFetchingNextPage}
+            >
+              Carregar mais
+            </Action>
+          )}
         </Group>
       )}
 
-      <Drawer
-        opened={selected !== null}
-        onClose={() => setSelected(null)}
-        position="right"
-        size="xl"
-        title={<Title order={3}>Detalhe da reserva</Title>}
-        closeButtonProps={{ 'aria-label': 'Fechar detalhe' }}
-        transitionProps={{ duration: 0 }}
+      <AppDrawer
+        opened={opened !== null}
+        onClose={() => setOpened(null)}
+        title="Detalhe da reserva"
+        closeLabel="Fechar detalhe"
       >
-        {selected && <ReservationDetailLoader initial={selected} />}
-      </Drawer>
+        {opened && <ReservationDetailLoader initial={opened} />}
+      </AppDrawer>
 
       <SelectionDrawer
         opened={selectionOpen}
@@ -470,7 +513,7 @@ export function ReservationsScreen({
           reservations={batch.reservations}
           onClose={(result) => {
             setBatch(null);
-            // Depois do lote, só as que falharam continuam marcadas, para repetir (FR-006a).
+            // Depois do lote, só as que falharam continuam marcadas, para repetir (FR-006a da 003).
             if (result) selection.keepOnly(result.failedKeys);
           }}
         />
@@ -502,7 +545,7 @@ export function ReservationsScreen({
 
       {copying && (
         <CopyDialog
-          filters={applied}
+          filters={listFilters}
           hotels={hotels.data ?? []}
           hotelNames={hotelNames}
           selected={isOperator ? selection.items : []}
@@ -511,6 +554,38 @@ export function ReservationsScreen({
       )}
     </Stack>
   );
+}
+
+/**
+ * Rodapé da lista (research R-08; telas 4.1, 4.4 e 4.10): "Mostrando X de Y reservas" e, depois, as
+ * selecionadas (com as que estão fora das linhas carregadas), a origem "sistema anterior" ou a ordem.
+ */
+export function footerText({
+  shown,
+  total,
+  selected,
+  selectedHere,
+  legacyOrigin,
+}: {
+  shown: number;
+  total: number | null;
+  selected: number;
+  selectedHere: number;
+  legacyOrigin: boolean;
+}): string {
+  const noun = (count: number | null) => (count === 1 ? 'reserva' : 'reservas');
+  const showing =
+    total === null
+      ? `Mostrando ${shown.toLocaleString('pt-BR')} ${noun(shown)}`
+      : `Mostrando ${shown.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')} ${noun(total)}`;
+  if (selected > 0) {
+    const outside = selected - selectedHere;
+    const word = selected === 1 ? 'selecionada' : 'selecionadas';
+    const away = outside > 0 ? ` (${outside.toLocaleString('pt-BR')} fora desta página)` : '';
+    return `${showing} · ${selected.toLocaleString('pt-BR')} ${word}${away}`;
+  }
+  if (legacyOrigin) return `${showing} · origem: sistema anterior (importadas do sistema anterior)`;
+  return `${showing} · ordenadas por hotel e check-in`;
 }
 
 /** O detalhe busca a reserva atualizada no servidor; enquanto isso, mostra a linha da lista. */

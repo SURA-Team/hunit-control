@@ -27,12 +27,14 @@ escritos nas telas.
 | `DocumentAction` | `kind`: `download` · `revert` · `undo` · `remove`, cada um com cor e ícone fixos (FR-010) | "Ação de documento" `80:89` |
 | `MenuButton` | Botão com menu (▾) para ações agrupadas: "Anexar ▾", "Confirmar ▾" | "Botão com menu" `182:1171` |
 | `FilterChip` | Chip com rótulo e contagem; estados ativo (preto) e padrão; contagem abreviada com o número inteiro no `title` | "Chip de filtro" `53:58` |
+| `FilterBar`, `FilterBarSearch`, `FilterPanel`, `FilterPanelWide` | A barra da lista (card de 12 px com busca, Origem e "Filtros", que quebra linha) e o painel "Filtros avançados": card flutuante à direita, abaixo da barra, campos em duas colunas (uma no conteúdo estreito), valendo na hora; fecha pelo X ("Fechar os filtros"), por Esc ou pelo botão; não fecha ao clicar fora (os seletores de dentro abrem listas fora dele). Não é diálogo: região "Filtros avançados" (T033) | Telas 4.1 e 4.12 |
+| `AppliedFilters`, `RemovableChip` | A linha "Filtros aplicados": um chip por filtro do painel em vigor, com o X "Tirar o filtro …", e "Limpar busca e filtros"; só nomes cortam, com o texto inteiro na dica (T033) | R-11 (o design não desenha a linha) |
 
 ## Formulário
 
 | Componente | Variantes e regras | Origem |
 |---|---|---|
-| `Field`, `SelectField`, `MultiSelectField`, `PasswordField`, `NumberField` | Fundo sutil, foco com contorno preto; rótulo e ajuda acima. Altura `size`: `sm` 36 px (padrão: é a das telas do design), `md` 40 px (barra de busca, como a biblioteca) e `lg` 50 px (token) | "Campo" `21:113` |
+| `Field`, `SelectField`, `MultiSelectField`, `PasswordField`, `NumberField` | Fundo sutil, foco com contorno preto; rótulo e ajuda acima. Altura `size`: `sm` 36 px (padrão: é a das telas do design), `md` 40 px (barra de busca, como a biblioteca) e `lg` 50 px (token). `SelectField` aceita `inlineLabel` (rótulo à esquerda: "Origem") e `optionDescriptions` (segunda linha da opção: "Só ativas — Esconde as canceladas") | "Campo" `21:113` |
 | `SelectionBox` | Caixa de seleção: desmarcada, marcada (preta com check lima) e parcial | "Caixa de seleção" `76:71` |
 | `CheckboxField`, `RadioField`, `SwitchField` | Com rótulo | "Checkbox" `21:195`, "Rádio" `21:145`, "Switch" `21:198` |
 | `PeriodPicker` | Calendário de período: hoje com contorno, escolhido em preto, intervalo em lima suave, hoje escolhido em círculo lima | "Calendário" `135:1405` |
@@ -64,7 +66,7 @@ escritos nas telas.
 | `RunningJobCard` | Card escuro do que está em andamento: a execução (data, período, cliente, "N de M hotéis concluídos", progresso, %, "Ver detalhes" em lima) e o envio ao Comercial na aba "Envios" ("N de M reservas verificadas", "Ver envio"; research R-13) | "Card — execução em andamento" `53:131`; envio: tela 7.7a (frame `211:9212`), aprovada pela UX em 2026-11-18 |
 | `IndicatorCard` | Número grande com rótulo (FR-004, US1-3) | "Card de indicador" `91:73` |
 | `AppDialog` | `size`: `sm` (520 px) · `lg` (780 px); 24 px de espaçamento; título no estilo do design (e `subtitle`); `dark` para o token; limitado à área visível, rola por dentro, fechar sempre alcançável ("Fechar o diálogo", FR-042, FR-047); `onCancel`, `onSubmit` (formulário), `zIndex` e `instant` | Telas 2.4, 2.5, 2.9, 3.3, 4.6, 7.1, 7.6 |
-| `AppDrawer` | Gaveta à direita, `min(780px, 100vw − 96px)`, cards de 16 px | Telas 3.2, 4.2, 7.5 |
+| `AppDrawer` | Gaveta à direita, `min(780px, 100vw − 96px)`, cards de 16 px; `closeLabel` dá o nome do fechar ("Fechar detalhe" na gaveta da reserva, o que os roteiros procuram) | Telas 3.2, 4.2, 7.5 |
 
 ## Listas
 

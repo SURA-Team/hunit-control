@@ -15,6 +15,7 @@ import {
   ORIGIN_OPTIONS,
   RESERVATION_STATUS_LABELS,
 } from '../../presentation/labels';
+import { QUICK_FILTER_LABELS } from '../../presentation/reservations';
 import type { SelectedReservation } from '../../state/selection';
 
 /** Os filtros da pesquisa em português, para a linha acima da tabela. */
@@ -37,6 +38,8 @@ export function describeFilters(filters: ReservationFilters, hotels: readonly Ho
       `Ativa ou cancelada: ${filters.reservationStatus.map((value) => RESERVATION_STATUS_LABELS[value].name).join(', ')}`,
     );
   }
+  // Filtro rápido em vigor na lista (specs/006, FR-016).
+  if (filters.quickFilter) parts.push(QUICK_FILTER_LABELS[filters.quickFilter]);
   if (filters.pendingCharge) parts.push('Falta cobrar');
   if (filters.needsReview) parts.push('A verificar');
   if (filters.channel) parts.push(`Canal: ${filters.channel}`);

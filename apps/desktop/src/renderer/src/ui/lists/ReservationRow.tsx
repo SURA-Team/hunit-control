@@ -6,7 +6,8 @@
  * A linha inteira abre o detalhe (clique ou Enter com o foco nela); a seta é o botão "Abrir a reserva
  * N" para o leitor de tela. A caixa de seleção não abre a reserva. Aberta ou marcada, a linha fica em
  * lima suave. Nomes cortam em até duas linhas, com o texto inteiro na dica; valores nunca cortam. Em
- * conteúdo estreito, o hotel vai para a segunda linha do hóspede.
+ * conteúdo estreito, o hotel vai para a segunda linha do hóspede e, no mais estreito (janela mínima
+ * com zoom), o período também.
  *
  * Os textos chegam prontos (formatação em presentation/): a linha não conhece regra de negócio.
  */
@@ -90,6 +91,7 @@ export function ReservationRow({
         <div className={classes.secondary}>
           {detail}
           <span className={classes.hotelInline}> · {hotelName}</span>
+          <span className={classes.periodInline}> · {period}</span>
         </div>
       </td>
       <td data-col="hotel">

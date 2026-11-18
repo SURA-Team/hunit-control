@@ -86,7 +86,7 @@ describe('envio ao Comercial (US1)', () => {
   it('envia 3, informa o token pelo aviso e acompanha até "Concluído" com 1 retirada', async () => {
     const { window, app } = launched;
     await window.getByRole('navigation').getByText('Reservas', { exact: true }).click();
-    await window.getByRole('cell', { name: '3103', exact: true }).waitFor();
+    await window.getByRole('checkbox', { name: 'Selecionar a reserva 3103' }).waitFor();
     await window.getByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }).check();
     await window.getByRole('button', { name: 'Enviar ao Comercial' }).click();
 

@@ -2,7 +2,7 @@
  * Origem "Sistema anterior" no app (specs/004, FR-011, FR-024; data-model §6) — tasks.md, T031:
  * selo na lista e no detalhe, filtro "Origem", seção "Sistema anterior" e autor no histórico.
  */
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
@@ -92,9 +92,10 @@ describe('lista', () => {
     const rows = await screen.findAllByRole('row');
     const imported = rows.find((row) => row.textContent?.includes('900001'));
     const other = rows.find((row) => row.textContent?.includes('7001'));
-    expect(within(imported!).getByTestId('legacy-badge')).toHaveTextContent('Sistema anterior');
+    // O selo fica ao lado do nome (specs/006, tela 4.10).
+    expect(within(imported!).getByText('Sistema anterior', { exact: true })).toBeInTheDocument();
     expect(imported).toHaveTextContent('A revisar (sistema anterior)');
-    expect(within(other!).queryByTestId('legacy-badge')).toBeNull();
+    expect(within(other!).queryByText('Sistema anterior', { exact: true })).toBeNull();
   });
 
   it('filtro "Origem": Todas, Sistema anterior e HUNIT Control viram fromLegacy', async () => {
@@ -108,13 +109,12 @@ describe('lista', () => {
       .find((element) => element.tagName === 'INPUT')!;
     await userEvent.click(origin);
     await userEvent.click(await screen.findByRole('option', { name: 'Sistema anterior' }));
-    await userEvent.click(screen.getByRole('button', { name: /^buscar$/i }));
-    expect(lastQuery().fromLegacy).toBe(true);
+    // Vale na hora, sem "Buscar" (specs/006, research R-11).
+    await waitFor(() => expect(lastQuery().fromLegacy).toBe(true));
 
     await userEvent.click(origin);
     await userEvent.click(await screen.findByRole('option', { name: 'HUNIT Control' }));
-    await userEvent.click(screen.getByRole('button', { name: /^buscar$/i }));
-    expect(lastQuery().fromLegacy).toBe(false);
+    await waitFor(() => expect(lastQuery().fromLegacy).toBe(false));
   });
 });
 

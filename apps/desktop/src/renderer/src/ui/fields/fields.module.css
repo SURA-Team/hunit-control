@@ -205,3 +205,36 @@
 :global([data-dark]) .error {
   color: var(--hc-vermelho-6);
 }
+
+/* Rótulo à esquerda do seletor, na mesma linha ("Origem" na barra de busca, tela 4.1). */
+.inline {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline > :last-child {
+  width: 200px;
+}
+
+.inlineLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+  white-space: nowrap;
+}
+
+/* Opção com descrição na segunda linha ("Ativa ou cancelada", tela 4.12). */
+.describedOption {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.describedOptionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

@@ -16,6 +16,8 @@ export interface AppDrawerProps {
   onClose: () => void;
   title: ReactNode;
   children: ReactNode;
+  /** Nome do fechar para o leitor de tela (a gaveta da reserva: "Fechar detalhe"). */
+  closeLabel?: string;
   'data-testid'?: string;
 }
 
@@ -24,6 +26,7 @@ export function AppDrawer({
   onClose,
   title,
   children,
+  closeLabel = 'Fechar',
   'data-testid': testId,
 }: AppDrawerProps) {
   return (
@@ -49,7 +52,7 @@ export function AppDrawer({
       <Drawer.Content data-testid={testId}>
         <Drawer.Header>
           <Drawer.Title>{title}</Drawer.Title>
-          <Drawer.CloseButton icon={<CloseIcon />} aria-label="Fechar" />
+          <Drawer.CloseButton icon={<CloseIcon />} aria-label={closeLabel} />
         </Drawer.Header>
         <Drawer.Body>
           <Surface>{children}</Surface>

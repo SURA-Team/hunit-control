@@ -7,7 +7,8 @@
  * abaixo de 1 180 px, o menu só com os ícones e a área ativa identificável. App compilado contra a API da 001 com o Hunit simulado.
  *
  * Cada história do redesenho acrescenta aqui as telas dela (tarefas "registrar no roteiro de
- * larguras"): um `it` por estado, com `checkAllSizes`. Hoje: Configuração e Executar (US1).
+ * larguras"): um `it` por estado, com `checkAllSizes`. Hoje: Configuração e Executar (US1) e
+ * Reservas (US2: lista com a barra de seleção, painel "Filtros avançados" e nenhum resultado).
  */
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import type { FakeScenario } from '../../../server/test/helpers/fake-hunit-gateway.js';
@@ -19,8 +20,11 @@ import {
   daysFromToday,
   isoDate,
   launchApp,
+  openReservationFilters,
   pickPeriod,
   resizeWindow,
+  searchReservations,
+  waitForReservationRows,
   type LaunchedApp,
   type WindowSize,
 } from './app-fixture.js';
@@ -94,6 +98,21 @@ beforeAll(async () => {
   // Prazo do token folgado: o diálogo fica aberto enquanto a janela passa pelos quatro tamanhos.
   server = await startE2eServer({ scenario: SCENARIO, twoFactorTimeoutMs: 120_000 });
   for (const hotel of HOTELS) await server.insertHotel(hotel.code, hotel.name);
+  // Reservas com nome longo, valor alto e selo comprido, para o corte e as quebras (FR-045).
+  for (const [index, hotel] of HOTELS.entries()) {
+    await server.insertReservation({
+      hotelCode: hotel.code,
+      reservationNumber: `R-${index + 1}`,
+      guestName: 'Maria Aparecida de Albuquerque Figueiredo Nogueira da Silva',
+      channel: 'Booking.com',
+      checkIn: isoDate(daysFromToday(index)),
+      checkOut: isoDate(daysFromToday(index + 2)),
+      totalAmount: '123456.78',
+      chargedAmount: index % 2 === 0 ? '123456.78' : null,
+      classification:
+        index % 2 === 0 ? 'virtual_card_already_charged' : 'virtual_card_validated_only',
+    });
+  }
   tls = await startTlsTerminator({ certificate: certificates.server, targetPort: server.port });
   launched = await launchApp();
 });
@@ -300,5 +319,90 @@ describe('larguras: Configuração e Executar (US9, SC-007)', () => {
     });
     await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
     await window.getByText('Resultado da execução').waitFor({ timeout: 20_000 });
+  });
+});
+
+describe('larguras: Reservas (US2 e US4, SC-007)', () => {
+  const chip = (label: string) =>
+    launched.window
+      .getByRole('group', { name: 'Filtros rápidos' })
+      .getByRole('button', { name: new RegExp(`^${label}`) });
+
+  it('lista com a barra de seleção (telas 4.1 e 4.4)', async () => {
+    const { window } = launched;
+    await goTo('Reservas');
+    await window.locator('table[aria-label="Reservas"] tbody tr').first().waitFor();
+    for (const number of ['R-1', 'R-2']) {
+      await window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).check();
+    }
+    const bar = window.getByTestId('selection-bar');
+    try {
+      await checkAllSizes({
+        name: 'Reservas com seleção',
+        area: 'Reservas',
+        reachable: () => [
+          button('Copiar para e-mail'),
+          window.getByRole('textbox', { name: 'Buscar reservas' }),
+          window.getByRole('combobox', { name: 'Origem' }),
+          button('Filtros'),
+          chip('Todas'),
+          chip('Concluídas'),
+          button('Selecionar todas do filtro'),
+          bar.getByRole('button', { name: 'Ver seleção' }),
+          bar.getByRole('button', { name: 'Anexar' }),
+          bar.getByRole('button', { name: 'Confirmar' }),
+          bar.getByRole('button', { name: 'Enviar ao Comercial' }),
+          bar.getByRole('button', { name: 'Desmarcar todas' }),
+          window.getByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }),
+          button('Abrir a reserva R-1'),
+          window.getByText(/^Mostrando \d+ de \d+ reservas/),
+        ],
+      });
+    } finally {
+      await bar.getByRole('button', { name: 'Desmarcar todas' }).click();
+    }
+  });
+
+  it('painel "Filtros avançados" aberto (tela 4.12)', async () => {
+    const { window } = launched;
+    const panel = await openReservationFilters(window);
+    try {
+      await checkAllSizes({
+        name: 'painel de filtros',
+        area: 'Reservas',
+        reachable: () => [
+          panel,
+          panel.getByRole('button', { name: 'Fechar os filtros' }),
+          panel.getByPlaceholder('Todos os hotéis'),
+          panel.getByLabel('Período de check-in'),
+          panel.getByPlaceholder('Todas as situações'),
+          panel.getByRole('combobox', { name: 'Ativa ou cancelada' }),
+          panel.getByPlaceholder('Todos os canais'),
+          panel.getByRole('checkbox', { name: /não encontradas/ }),
+        ],
+      });
+    } finally {
+      await panel.getByRole('button', { name: 'Fechar os filtros' }).click();
+    }
+  });
+
+  it('nenhum resultado (tela 4.3)', async () => {
+    const { window } = launched;
+    await searchReservations(window, 'Fulano Inexistente');
+    await window.getByText('Nenhuma reserva encontrada').waitFor();
+    try {
+      await checkAllSizes({
+        name: 'Reservas sem resultado',
+        area: 'Reservas',
+        reachable: () => [
+          window.getByText('Nenhuma reserva encontrada'),
+          button('Limpar busca e filtros'),
+          chip('Todas'),
+        ],
+      });
+    } finally {
+      await button('Limpar busca e filtros').click();
+      await waitForReservationRows(window, 8);
+    }
   });
 });

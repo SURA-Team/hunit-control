@@ -2,7 +2,8 @@
  * Seleção do lote na tela Reservas (specs/003, T037 e T042; US3 cenários 4 a 6, US4, FR-006a,
  * FR-015): as marcas se mantêm entre pesquisas, filtros e páginas, a lista da seleção mostra
  * também o que saiu do resultado, e depois do lote só as que falharam continuam marcadas. Inclui o
- * atalho "Falta cobrar", o filtro de tratativa e o perfil consulta.
+ * atalho "Falta cobrar", o filtro de tratativa e o perfil consulta. Desde a 006 (T036, T041): busca
+ * única, filtros rápidos, painel "Filtros avançados" e os menus "Anexar ▾" e "Confirmar ▾" da barra.
  */
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -31,6 +32,13 @@ import {
   treatment,
 } from './treatment-fixtures';
 import { render, renderHook } from '@testing-library/react';
+import {
+  chooseFromMenu,
+  findRow,
+  openFiltersPanel,
+  quickFilterChip,
+  typeSearch,
+} from './reservations-helpers';
 
 let hunit: FakeHunit;
 
@@ -68,11 +76,9 @@ const checkbox = (number: string) =>
   screen.findByRole('checkbox', { name: `Selecionar a reserva ${number}` });
 
 async function searchFor(user: ReturnType<typeof userEvent.setup>, number: string) {
-  const field = screen.getByLabelText(/busca livre/i);
-  await user.clear(field);
-  await user.type(field, number);
-  await user.click(screen.getByRole('button', { name: /^buscar$/i }));
+  await typeSearch(user, number);
   await waitFor(() => expect(lastQuery()).toMatchObject({ q: number }));
+  await findRow(number);
 }
 
 describe('seleção que não se perde (US3 cenários 4 e 5)', () => {
@@ -87,10 +93,10 @@ describe('seleção que não se perde (US3 cenários 4 e 5)', () => {
     await user.click(await checkbox('9001'));
 
     // As três continuam selecionadas, embora só a 9001 esteja no resultado.
-    expect(screen.queryByText('7001')).not.toBeInTheDocument();
-    expect(screen.getByTestId('selection-bar')).toHaveTextContent(
-      '3 reservas selecionadas — total de R$ 300,00',
-    );
+    expect(screen.queryByRole('row', { name: /7001/ })).not.toBeInTheDocument();
+    const bar = screen.getByTestId('selection-bar');
+    expect(bar).toHaveTextContent('3 reservas selecionadas');
+    expect(bar.textContent?.replace(/\u00a0/g, ' ')).toContain('total de R$ 300,00');
 
     // Voltar à primeira pesquisa: a reserva reaparece já marcada.
     await searchFor(user, '7001');
@@ -102,16 +108,16 @@ describe('seleção que não se perde (US3 cenários 4 e 5)', () => {
     const user = userEvent.setup();
     await user.click(await checkbox('7002'));
 
-    await user.click(screen.getByRole('button', { name: 'Falta cobrar' }));
-    await waitFor(() => expect(lastQuery()).toMatchObject({ pendingCharge: true }));
+    await user.click(quickFilterChip('Falta cobrar'));
+    await waitFor(() => expect(lastQuery()).toMatchObject({ quickFilter: 'pending_charge' }));
     expect(await checkbox('7002')).toBeChecked();
 
-    await user.click(screen.getByRole('button', { name: 'Limpar' }));
-    await waitFor(() => expect(lastQuery()).not.toHaveProperty('pendingCharge'));
+    await user.click(quickFilterChip('Todas'));
+    await waitFor(() => expect(lastQuery()).not.toHaveProperty('quickFilter'));
     expect(await checkbox('7002')).toBeChecked();
 
     await user.click(await screen.findByRole('button', { name: /carregar mais/i }));
-    await screen.findByText('7003');
+    await findRow('7003');
     expect(await checkbox('7002')).toBeChecked();
     expect(await checkbox('7003')).not.toBeChecked();
   });
@@ -187,11 +193,10 @@ describe('aplicar em lote (US3 cenários 1, 2 e 6)', () => {
     await searchFor(user, '8001');
     await user.click(await checkbox('8001'));
 
-    await user.click(screen.getByRole('button', { name: 'Anexar comprovante' }));
+    await chooseFromMenu(user, 'Anexar', 'Anexar comprovante');
 
-    expect(
-      await screen.findByRole('dialog', { name: /anexar comprovante a 2 reservas/i }),
-    ).toBeVisible();
+    const dialog = await screen.findByRole('dialog', { name: /anexar comprovante a 2 reservas/i });
+    expect(dialog).toBeVisible();
     await screen.findByTestId('attach-summary');
     expect(mocked(hunit.api.treatments.check).mock.calls[0]?.[0]).toEqual({
       kind: 'proof',
@@ -201,9 +206,10 @@ describe('aplicar em lote (US3 cenários 1, 2 e 6)', () => {
       ],
     });
 
-    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    // "Confirmar" do diálogo (a barra também tem o menu "Confirmar").
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar' }));
     await screen.findByTestId('attach-result');
-    await user.click(screen.getByRole('button', { name: 'Fechar' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Fechar' }));
 
     // A que foi registrada sai da seleção; a que falhou fica, para repetir (FR-006a).
     expect(screen.getByTestId('selection-bar')).toHaveTextContent('1 reserva selecionada');
@@ -216,7 +222,7 @@ describe('aplicar em lote (US3 cenários 1, 2 e 6)', () => {
     const user = userEvent.setup();
     await user.click(await checkbox('7001'));
 
-    await user.click(screen.getByRole('button', { name: 'Anexar tratativa' }));
+    await chooseFromMenu(user, 'Anexar', 'Anexar tratativa');
 
     await waitFor(() =>
       expect(hunit.api.treatments.pickFile).toHaveBeenCalledWith({ kind: 'request' }),
@@ -338,34 +344,33 @@ describe('tratativas na lista (US4, FR-015)', () => {
   it('"Falta cobrar" vale na hora e só envia o pedido: a regra é do servidor', async () => {
     renderWithApp(<ReservationsScreen />, hunit);
     const user = userEvent.setup();
-    await screen.findByText('7001');
-    const shortcut = screen.getByRole('button', { name: 'Falta cobrar' });
-    expect(shortcut).toHaveAttribute('aria-pressed', 'false');
+    await findRow('7001');
+    expect(quickFilterChip('Falta cobrar')).toHaveAttribute('aria-pressed', 'false');
 
-    await user.click(shortcut);
+    await user.click(quickFilterChip('Falta cobrar'));
 
-    await waitFor(() => expect(lastQuery()).toMatchObject({ pendingCharge: true }));
+    await waitFor(() => expect(lastQuery()).toMatchObject({ quickFilter: 'pending_charge' }));
     // A tela não monta a lista de classificações por conta própria.
     expect(lastQuery()).not.toHaveProperty('classification');
     expect(lastQuery()).not.toHaveProperty('treatmentStatus');
     expect(lastQuery()).not.toHaveProperty('detailedSituation');
-    expect(shortcut).toHaveAttribute('aria-pressed', 'true');
+    expect(quickFilterChip('Falta cobrar')).toHaveAttribute('aria-pressed', 'true');
 
-    await user.click(shortcut);
-    await waitFor(() => expect(lastQuery()).not.toHaveProperty('pendingCharge'));
+    await user.click(quickFilterChip('Falta cobrar'));
+    await waitFor(() => expect(lastQuery()).not.toHaveProperty('quickFilter'));
   });
 
   it('o filtro único "Situação da reserva" aceita mais de uma e vai como detailedSituation (FR-015; specs/005)', async () => {
     renderWithApp(<ReservationsScreen />, hunit);
     const user = userEvent.setup();
-    await screen.findByText('7001');
+    await findRow('7001');
+    const panel = await openFiltersPanel(user);
 
     expect(screen.queryByPlaceholderText('Com ou sem tratativa')).not.toBeInTheDocument();
-    expect(screen.getByText('Ativa ou cancelada')).toBeInTheDocument();
-    await user.click(screen.getByPlaceholderText('Todas as situações'));
+    expect(within(panel).getByText('Ativa ou cancelada')).toBeInTheDocument();
+    await user.click(within(panel).getByPlaceholderText('Todas as situações'));
     await user.click(await screen.findByRole('option', { name: 'Tratativa enviada' }));
     await user.click(await screen.findByRole('option', { name: 'Comprovante enviado' }));
-    await user.click(screen.getByRole('button', { name: /^buscar$/i }));
 
     await waitFor(() =>
       expect(lastQuery()).toMatchObject({ detailedSituation: ['treatment_sent', 'proof_sent'] }),
@@ -374,18 +379,18 @@ describe('tratativas na lista (US4, FR-015)', () => {
     expect(lastQuery()).not.toHaveProperty('treatmentStatus');
   });
 
-  it('"A verificar" vale na hora e só envia o pedido (FR-002a)', async () => {
+  it('"A verificar" vale na hora e só envia o pedido (FR-002a; specs/006, FR-016)', async () => {
     renderWithApp(<ReservationsScreen />, hunit);
     const user = userEvent.setup();
-    await screen.findByText('7001');
-    const shortcut = screen.getByRole('button', { name: 'A verificar' });
+    await findRow('7001');
 
-    await user.click(shortcut);
+    await user.click(quickFilterChip('A verificar'));
 
-    await waitFor(() => expect(lastQuery()).toMatchObject({ needsReview: true }));
-    expect(shortcut).toHaveAttribute('aria-pressed', 'true');
-    await user.click(shortcut);
-    await waitFor(() => expect(lastQuery()).not.toHaveProperty('needsReview'));
+    await waitFor(() => expect(lastQuery()).toMatchObject({ quickFilter: 'to_review' }));
+    expect(lastQuery()).not.toHaveProperty('needsReview');
+    expect(quickFilterChip('A verificar')).toHaveAttribute('aria-pressed', 'true');
+    await user.click(quickFilterChip('A verificar'));
+    await waitFor(() => expect(lastQuery()).not.toHaveProperty('quickFilter'));
   });
 });
 
@@ -410,6 +415,9 @@ describe('perfil consulta (FR-014, FR-017)', () => {
     expect(screen.queryByRole('checkbox', { name: /selecionar/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId('selection-bar')).not.toBeInTheDocument();
     // Os filtros de consulta continuam disponíveis.
-    expect(screen.getByRole('button', { name: 'Falta cobrar' })).toBeInTheDocument();
+    expect(quickFilterChip('Falta cobrar')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Selecionar todas do filtro' }),
+    ).not.toBeInTheDocument();
   });
 });

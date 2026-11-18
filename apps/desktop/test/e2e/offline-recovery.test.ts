@@ -56,7 +56,10 @@ describe('servidor indisponível (FR-005, SC-006)', () => {
       await window.getByText('Servidor indisponível', { exact: true }).waitFor({ timeout: 40_000 });
       await window.getByText(/dados de \d{2}:\d{2} — servidor indisponível/).waitFor();
       expect(await window.getByText('9001').isVisible()).toBe(true);
-      expect(await window.getByRole('button', { name: 'Buscar' }).isDisabled()).toBe(true);
+      // Sem "Buscar" desde a 006 (a busca vale sozinha): a ação da página fica desabilitada.
+      expect(await window.getByRole('button', { name: 'Copiar para e-mail' }).isDisabled()).toBe(
+        true,
+      );
 
       const restartedAt = Date.now();
       await tls.start();
@@ -64,7 +67,9 @@ describe('servidor indisponível (FR-005, SC-006)', () => {
         .getByText('Servidor indisponível', { exact: true })
         .waitFor({ state: 'hidden', timeout: 30_000 });
       expect(Date.now() - restartedAt).toBeLessThanOrEqual(30_000);
-      expect(await window.getByRole('button', { name: 'Buscar' }).isEnabled()).toBe(true);
+      expect(await window.getByRole('button', { name: 'Copiar para e-mail' }).isEnabled()).toBe(
+        true,
+      );
     },
   );
 

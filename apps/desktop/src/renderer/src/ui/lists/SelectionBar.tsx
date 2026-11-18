@@ -22,7 +22,12 @@ export interface SelectionBarProps {
 export function SelectionBar({ count, total, actions, onClearAll }: SelectionBarProps) {
   return (
     <Surface dark>
-      <section className={classes.bar} data-block="seleção do lote" aria-label="Seleção do lote">
+      <section
+        className={classes.bar}
+        data-block="seleção do lote"
+        data-testid="selection-bar"
+        aria-label="Seleção do lote"
+      >
         <span className={classes.partialBox} aria-hidden="true">
           <MinusIcon />
         </span>

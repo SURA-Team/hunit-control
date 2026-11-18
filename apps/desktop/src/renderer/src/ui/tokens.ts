@@ -146,6 +146,11 @@ export const breakpoints = {
   narrowList: 1000,
   /** Conteúdo abaixo disto: as grades de dados dos cards passam de 3 para 2 colunas. */
   narrowGrid: 820,
+  /**
+   * Conteúdo abaixo disto (janela mínima com zoom de 125 %): o período também vai para a segunda
+   * linha do hóspede, para Valor e Situação, que nunca cortam, caberem (FR-044, FR-045).
+   */
+  compactList: 720,
 } as const;
 
 /** Variável CSS de um nome do design: `cssVarName('superfície/escura 2')` = `--hc-superficie-escura-2`. */

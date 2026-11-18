@@ -7,7 +7,7 @@
  *
  * Cada história do redesenho acrescenta aqui o estado dela (filtros, seleção, gaveta aberta, aba
  * ativa, texto de diálogo): um `it` que monta o estado, `keepsAcrossSizes` e a leitura do estado.
- * Hoje: Executar (US1) e um diálogo aberto.
+ * Hoje: Executar (US1), um diálogo aberto e Reservas (US2: busca, filtro do painel e filtro rápido).
  */
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -17,8 +17,11 @@ import {
   configureApp,
   daysFromToday,
   launchApp,
+  openReservationFilters,
   pickPeriod,
   resizeWindow,
+  searchReservations,
+  waitForReservationRows,
   type LaunchedApp,
   type WindowSize,
 } from './app-fixture.js';
@@ -45,6 +48,14 @@ beforeAll(async () => {
   const certificates = await createTestCertificates();
   server = await startE2eServer({ scenario: { hotels: [] } });
   for (const hotel of HOTELS) await server.insertHotel(hotel.code, hotel.name);
+  for (const [index, guestName] of ['Ana Ribeiro', 'Ana Costa', 'Bruno Carvalho'].entries()) {
+    await server.insertReservation({
+      hotelCode: HOTELS[index % 2]?.code ?? '201',
+      reservationNumber: `R-${index + 1}`,
+      guestName,
+      channel: index === 0 ? 'Expedia' : 'Booking.com',
+    });
+  }
   tls = await startTlsTerminator({ certificate: certificates.server, targetPort: server.port });
   launched = await launchApp({ window: START });
   await configureApp(launched, {
@@ -132,5 +143,39 @@ describe('redimensionar sem perder nada (US9, SC-008)', () => {
 
     await dialog.getByRole('button', { name: 'Não', exact: true }).click();
     await dialog.waitFor({ state: 'hidden' });
+  });
+
+  it('Reservas: busca digitada, filtro do painel aberto e filtro rápido continuam', async () => {
+    const { window } = launched;
+    await window.getByRole('navigation').getByRole('button', { name: 'Reservas' }).click();
+    await waitForReservationRows(window, 3);
+    await searchReservations(window, 'Ana');
+    await waitForReservationRows(window, 2);
+    const panel = await openReservationFilters(window);
+    await panel.getByPlaceholder('Todos os canais').click();
+    await window.getByRole('option', { name: 'Expedia' }).click();
+    await waitForReservationRows(window, 1);
+    const quick = window
+      .getByRole('group', { name: 'Filtros rápidos' })
+      .getByRole('button', { name: /^Falta cobrar/ });
+    await quick.click();
+
+    const read = async () => ({
+      search: await window.getByRole('textbox', { name: 'Buscar reservas' }).inputValue(),
+      panelOpen: await panel.isVisible(),
+      channel: await panel.getByPlaceholder('Todos os canais').inputValue(),
+      applied: await window.getByRole('group', { name: 'Filtros aplicados' }).innerText(),
+      quick: await quick.getAttribute('aria-pressed'),
+      rows: await window.locator('table[aria-label="Reservas"] tbody tr').count(),
+    });
+    expect(await read()).toMatchObject({
+      search: 'Ana',
+      panelOpen: true,
+      channel: 'Expedia',
+      quick: 'true',
+      rows: 1,
+    });
+
+    await keepsAcrossSizes(read);
   });
 });

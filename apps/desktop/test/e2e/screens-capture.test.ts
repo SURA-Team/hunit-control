@@ -46,9 +46,12 @@ import {
   daysFromToday,
   isoDate,
   launchApp,
+  openReservationFilters,
   pickPeriod,
+  searchReservations,
   stubMessageBox,
   stubOpenDialog,
+  waitForReservationRows,
   type LaunchedApp,
 } from './app-fixture.js';
 
@@ -173,6 +176,43 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
   async function goTo(area: string) {
     await closeOverlays();
     await launched.window.getByRole('navigation').getByText(area, { exact: true }).click();
+  }
+
+  /** A linha da reserva: o número abre a segunda linha do hóspede (specs/006). */
+  function rowOf(number: string) {
+    const { window } = launched;
+    return window
+      .locator('table[aria-label="Reservas"] tbody tr')
+      .filter({ has: window.getByText(new RegExp(`^${number}( ·|$)`)) });
+  }
+
+  function quickFilter(label: string) {
+    return launched.window
+      .getByRole('group', { name: 'Filtros rápidos' })
+      .getByRole('button', { name: new RegExp(`^${label}`) });
+  }
+
+  /** Volta a lista ao início: sem busca, Origem "Todas", sem filtros do painel, "Todas". */
+  async function resetReservations() {
+    const { window } = launched;
+    await searchReservations(window, '');
+    const origin = window.getByRole('combobox', { name: 'Origem' });
+    if ((await origin.inputValue()) !== 'Todas') {
+      await origin.click();
+      await window.getByRole('option', { name: 'Todas', exact: true }).click();
+    }
+    const clear = window
+      .getByRole('group', { name: 'Filtros aplicados' })
+      .getByRole('button', { name: 'Limpar busca e filtros' });
+    if ((await clear.count()) > 0) await clear.click();
+    await quickFilter('Todas').click();
+  }
+
+  /** Abre um menu da barra de seleção ("Anexar", "Confirmar") e escolhe o item. */
+  async function chooseFromMenu(menu: string, item: string) {
+    const { window } = launched;
+    await window.getByTestId('selection-bar').getByRole('button', { name: menu }).click();
+    await window.getByRole('menuitem', { name: item }).click();
   }
 
   async function connect(apiKey: string, profile: 'Operador' | 'Consulta', capture: boolean) {
@@ -307,11 +347,19 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByTestId('reservation-detail').waitFor();
       await shot('4.2', 'reservas-detalhe-da-reserva');
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
-      await window.getByLabel('Busca livre').fill('Maria Oliveira');
-      await window.getByRole('button', { name: 'Buscar' }).click();
-      await window.getByText('Nenhuma reserva encontrada com estes filtros.').waitFor();
+
+      // Painel "Filtros avançados" com a lista de "Ativa ou cancelada" aberta, como no design.
+      const panel = await openReservationFilters(window);
+      await panel.getByRole('combobox', { name: 'Ativa ou cancelada' }).click();
+      await window.getByRole('option', { name: /Só ativas/ }).waitFor();
+      await shot('4.12', 'reservas-filtros-avancados');
+      await window.keyboard.press('Escape');
+      await panel.getByRole('button', { name: 'Fechar os filtros' }).click();
+
+      await searchReservations(window, 'Maria Oliveira');
+      await window.getByText('Nenhuma reserva encontrada').waitFor();
       await shot('4.3', 'reservas-nenhum-resultado');
-      await window.getByRole('button', { name: 'Limpar' }).click();
+      await resetReservations();
     });
 
     // Tratativas (specs/003): documentos fictícios registrados pela API antes das telas.
@@ -408,16 +456,15 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       );
 
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      await resetReservations();
       await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
       for (const number of ['101-1002', '101-1003', '101-1005']) {
         await window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).check();
       }
-      await window.getByLabel('Busca livre').fill('104-1015');
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await searchReservations(window, '104-1015');
+      await waitForReservationRows(window, 1);
       await window.getByRole('checkbox', { name: 'Selecionar a reserva 104-1015' }).check();
-      await window.getByLabel('Busca livre').fill('');
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await searchReservations(window, '');
       await window.getByRole('checkbox', { name: 'Selecionar a reserva 101-1002' }).waitFor();
       await shot('4.4', 'reservas-selecao-do-lote');
 
@@ -427,10 +474,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByRole('button', { name: 'Fechar seleção' }).click();
 
       await stubOpenDialog(launched.app, comprovante);
-      await window
-        .getByTestId('selection-bar')
-        .getByRole('button', { name: 'Anexar comprovante' })
-        .click();
+      await chooseFromMenu('Anexar', 'Anexar comprovante');
       const batch = window.getByRole('dialog', { name: /Anexar comprovante a 4 reservas/ });
       await batch.getByTestId('attach-summary').waitFor({ timeout: 15_000 });
       await shot('4.6', 'reservas-anexar-comprovante-em-lote', true);
@@ -441,7 +485,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         .getByRole('button', { name: 'Desmarcar todas' })
         .click();
 
-      await window.getByRole('cell', { name: '101-1000', exact: true }).click();
+      await rowOf('101-1000').click();
       await window
         .getByTestId('treatment-section')
         .getByText('Histórico')
@@ -449,7 +493,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('4.7', 'reservas-detalhe-com-tratativa', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
 
-      await window.getByRole('cell', { name: '101-1005', exact: true }).click();
+      await rowOf('101-1005').click();
       await stubOpenDialog(launched.app, pedido);
       await window
         .getByTestId('treatment-section')
@@ -462,7 +506,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await single.waitFor({ state: 'detached' });
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
 
-      await window.getByRole('cell', { name: '102-1007', exact: true }).click();
+      await rowOf('102-1007').click();
       await window.getByTestId('review-alert').waitFor({ timeout: 15_000 });
       await shot('4.9', 'reservas-detalhe-verificar', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
@@ -512,15 +556,18 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       }
 
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      const origin = window.getByLabel('Origem').and(window.locator('input'));
-      await origin.click();
+      await resetReservations();
+      await window.getByRole('combobox', { name: 'Origem' }).click();
       await window.getByRole('option', { name: 'Sistema anterior' }).click();
-      await window.getByRole('button', { name: 'Buscar' }).click();
-      await window.getByTestId('legacy-badge').first().waitFor({ timeout: 15_000 });
+      await window
+        .getByRole('table', { name: 'Reservas' })
+        .getByText('Sistema anterior', { exact: true })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await waitForReservationRows(window, 2);
       await shot('4.10', 'reservas-filtro-sistema-anterior');
 
-      await window.getByRole('cell', { name: 'SA-2002 Sistema anterior', exact: true }).click();
+      await rowOf('SA-2002').click();
       await window.getByTestId('legacy-origin').waitFor({ timeout: 15_000 });
       await window
         .getByTestId('treatment-section')
@@ -528,15 +575,15 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         .waitFor({ timeout: 15_000 });
       await shot('4.11', 'reservas-detalhe-sistema-anterior', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      await resetReservations();
     });
 
     // Envio ao Comercial (specs/005): envio com token, retornos na planilha em memória, validação,
     // área "Comercial" e as ações novas da lista de reservas.
     await step('7.1 a 7.4 envio ao Comercial', async () => {
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      await window.getByRole('button', { name: 'Falta cobrar' }).click();
+      await resetReservations();
+      await quickFilter('Falta cobrar').click();
       await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
       await window.getByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }).check();
       await window.getByRole('button', { name: 'Enviar ao Comercial' }).click();
@@ -605,9 +652,11 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await server.test.sync?.runRound();
 
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      if (first) await window.getByLabel('Busca livre').fill(first.number);
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await resetReservations();
+      if (first) {
+        await searchReservations(window, first.number);
+        await waitForReservationRows(window, 1);
+      }
       await window.locator('tbody tr').first().click();
       await window.getByTestId('commercial-return').waitFor({ timeout: 15_000 });
       await shot('7.5', 'reservas-detalhe-validar-comprovante', true);
@@ -638,8 +687,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
 
     await step('7.11 a 7.14 ações da seleção e cópia para e-mail', async () => {
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await resetReservations();
       await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
       await window
         .getByRole('button', { name: 'Desmarcar todas' })
@@ -649,12 +697,12 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByText(/selecionadas do filtro/).waitFor({ timeout: 15_000 });
       await shot('7.11', 'reservas-selecionar-todas-do-filtro');
 
-      await window.getByRole('button', { name: 'Confirmar retornos' }).click();
+      await chooseFromMenu('Confirmar', 'Confirmar retornos');
       await window.getByTestId('batch-summary').waitFor();
       await shot('7.12', 'reservas-confirmar-retornos-em-lote');
       await closeOverlays();
 
-      await window.getByRole('button', { name: 'Confirmar "Verificar"' }).click();
+      await chooseFromMenu('Confirmar', 'Confirmar "Verificar"');
       await window.getByTestId('batch-summary').waitFor();
       await shot('7.13', 'reservas-confirmar-verificar-em-lote');
       await closeOverlays();

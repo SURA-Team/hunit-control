@@ -100,7 +100,7 @@ describe('"Enviar ao Comercial" na seleção (FR-025)', () => {
       okResult({ items: [pendingReservation('7001')], nextCursor: null }),
     );
     renderWithApp(<ReservationsScreen />, hunit);
-    await screen.findByText('7001');
+    await screen.findByRole('row', { name: /7001/ });
     expect(screen.queryByRole('button', { name: 'Enviar ao Comercial' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('checkbox', { name: 'Selecionar a reserva 7001' }),

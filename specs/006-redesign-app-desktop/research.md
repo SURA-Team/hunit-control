@@ -167,7 +167,10 @@ parecidos com significados diferentes.
   - conteúdo abaixo de 1 000 px: a lista de reservas tira a coluna Hotel e mostra o hotel na segunda
     linha do hóspede; Período e Valor estreitam; os filtros rápidos e a barra de lote quebram linha;
   - conteúdo abaixo de 820 px: as grades de dados dos cards passam de 3 para 2 colunas; as abas da
-    área Comercial quebram linha.
+    área Comercial quebram linha;
+  - conteúdo abaixo de 720 px (a janela mínima com zoom de 125 %; acrescentado na T037, quando o
+    roteiro de larguras achou 27 px de rolagem horizontal): o período também vai para a segunda
+    linha do hóspede, porque Valor e Situação, que nunca cortam, não cabem com ele.
 - **Nunca cortar** valores em reais, selos e rótulos de ação (`white-space: nowrap`, sem
   reticências); só nomes de hóspede e de hotel cortam, em até duas linhas, com o texto inteiro no
   `title` e no detalhe (FR-045).
