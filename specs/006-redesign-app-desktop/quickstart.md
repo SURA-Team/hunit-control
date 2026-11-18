@@ -38,8 +38,9 @@ Repita a captura em 960 × 640 e 1 280 × 820 (variável `HUNIT_SCREENS_WIDTH`, 
 para registrar como as telas ficaram nas larguras menores (research, UX-5; ajustes numa feature
 seguinte).
 
-Antes de implementar o card do envio em andamento, a tela de exemplo 7.7a fica pronta no Figma e
-aprovada pela UX ([contracts/screens.md](./contracts/screens.md), "Tela para aprovação").
+O card do envio em andamento segue a tela de exemplo 7.7a, aprovada pela UX em 2026-11-18
+([contracts/screens.md](./contracts/screens.md), "Tela para aprovação"); compare-o com o print
+`7.7a` do roteiro.
 
 Ao concluir a feature, sem diferenças pendentes: rode a skill `figma-screens-sync` (simulação, ok do
 usuário, aplicação) para marcar as telas da 006 com ✅ e as das páginas 002 a 005 com ❌ (FR-032).

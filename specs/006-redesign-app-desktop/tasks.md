@@ -231,8 +231,8 @@ anterior)" (telas 4.10 e 4.11).
 **Independent Test**: percorrer as telas 7.1 a 7.14 com dados de teste e abrir o envio a partir de
 uma seleção em no máximo 2 cliques (quickstart, cenários 11 e 16).
 
-- [ ] T049 [US8] ⛔ FIGMA/UX: montar no Figma a tela de exemplo **7.7a Comercial — Envios com envio em andamento (para aprovação)** (research R-13; [contracts/screens.md](./contracts/screens.md), "Tela para aprovação"): numa seção nova "Para aprovação da UX" da página `006-redesign-app-desktop`, a partir da tela 7.7 (`190:7635`) e só com componentes de `Componentes — nova identidade`, com o card escuro no topo (data, cliente, "N de M reservas verificadas", progresso lima, percentual e "Ver envio" lima) e o histórico abaixo; dados fictícios. Não alterar nenhum frame existente. Carregar antes `skill://figma/figma-use/SKILL.md`. Pedir ao usuário que leve à UX e registrar a resposta em `research.md` (R-13)
-  _Andamento (2026-11-18):_ tela montada na seção "Para aprovação da UX" (node `211:9211`), frame `211:9212`, a partir de uma cópia da 7.7 com uma instância do "Card — execução em andamento" (`53:131`) entre as abas e o "Histórico"; exemplo com 8 de 16 reservas (50 %), porque a largura da barra não pode ser mudada numa instância sem desconectá-la da biblioteca. Falta a resposta da UX.
+- [X] T049 [US8] ⛔ FIGMA/UX: montar no Figma a tela de exemplo **7.7a Comercial — Envios com envio em andamento (para aprovação)** (research R-13; [contracts/screens.md](./contracts/screens.md), "Tela para aprovação"): numa seção nova "Para aprovação da UX" da página `006-redesign-app-desktop`, a partir da tela 7.7 (`190:7635`) e só com componentes de `Componentes — nova identidade`, com o card escuro no topo (data, cliente, "N de M reservas verificadas", progresso lima, percentual e "Ver envio" lima) e o histórico abaixo; dados fictícios. Não alterar nenhum frame existente. Carregar antes `skill://figma/figma-use/SKILL.md`. Pedir ao usuário que leve à UX e registrar a resposta em `research.md` (R-13)
+  _Implementação:_ tela montada na seção "Para aprovação da UX" (node `211:9211`), frame `211:9212`, a partir de uma cópia da 7.7 com uma instância do "Card — execução em andamento" (`53:131`) entre as abas e o "Histórico"; exemplo com 8 de 16 reservas (50 %), porque a largura da barra não pode ser mudada numa instância sem desconectá-la da biblioteca. Aprovada pela UX em 2026-11-18, sem ajustes (registrado no R-13).
 - [ ] T050 [P] [US8] Envio (telas 7.1 a 7.4): `renderer/screens/dispatch/DispatchDialog.tsx` e `DispatchView.tsx` com `AppDialog` (`lg`), conferência com aceitas e as que ficam de fora com o motivo, andamento com `ProgressBar` e a lista de resultados, token no `TwoFactorDialog` escuro, concluído com as contagens. Atualizar `apps/desktop/test/renderer/dispatch.test.tsx`; `apps/desktop/test/e2e/dispatch.test.ts` continua passando
 - [ ] T051 [P] [US8] Gaveta "Validar comprovante" e recusa (telas 7.5 e 7.6): `renderer/screens/reservations/CommercialSection.tsx` com o card "Comercial" de 16 px (FR-042), retorno com hotel diferente e diferença de valor em destaque, "Confirmar" `primary` e "Recusar" `secondary`; `RejectDialog` com `AppDialog` `sm`, motivos rápidos e campo de texto (FR-038). Atualizar `apps/desktop/test/renderer/commercial-validation.test.tsx`
 - [ ] T052 [US8] Área Comercial (telas 7.7 a 7.10): `renderer/screens/commercial/CommercialScreen.tsx` com `PageHeader` e `Tabs` (Envios, Retornos a validar com contagem, Retornos com problema com contagem, Planilha; FR-039); `DispatchesTab.tsx` com `ListCard` e linhas de lista e, para envio em andamento, o `RunningJobCard` no topo **como aprovado no T049**; `ReturnsTab.tsx`, `ProblemsTab.tsx` e `SheetTab.tsx` com os componentes de `ui/`. Tirar os arquivos da `NOT_YET_MIGRATED`; atualizar `apps/desktop/test/renderer/commercial-screen.test.tsx` (inclui o card do envio em andamento)
@@ -267,7 +267,7 @@ Figma e implantar.
 
 - [ ] T059 Migrar o que sobrou (`renderer/components/DocumentPreview.tsx` e qualquer arquivo ainda em `NOT_YET_MIGRATED`) e **esvaziar e remover** a `NOT_YET_MIGRATED` de `eslint.config.js`: `pnpm lint` verde sem exceções (FR-030, research R-05). Apagar de `renderer/components/` os componentes substituídos por `ui/` sem uso
 - [ ] T060 [P] Rótulos (research R-15): conferir em `renderer/presentation/labels.ts` os nomes do design (selos em maiúsculas pelo estilo "Badge", não pelo texto) e os tons de cada situação nas cores de significado fixo (FR-005: verde concluído, âmbar atenção, vermelho erro, cinza neutro, lima em andamento). Atualizar `apps/desktop/test/renderer/labels.test.ts`
-- [ ] T061 [P] Roteiro de captura `apps/desktop/test/e2e/screens-capture.test.ts`: as telas 1.1 a 7.14 com os estados do design, a 4.12 (painel "Filtros avançados") nova e o card do envio em andamento na 7.7; atualizar o catálogo `.claude/skills/figma-screens-sync/references/screens.md` (linha da 4.12, coluna "Código" conforme [contracts/screens.md](./contracts/screens.md))
+- [ ] T061 [P] Roteiro de captura `apps/desktop/test/e2e/screens-capture.test.ts`: as telas 1.1 a 7.14 com os estados do design, a 4.12 (painel "Filtros avançados") nova, a 7.7 sem envio em andamento (como no design) e um print à parte, `7.7a`, com o card do envio em andamento (tela aprovada no T049); atualizar o catálogo `.claude/skills/figma-screens-sync/references/screens.md` (linha da 4.12, coluna "Código" conforme [contracts/screens.md](./contracts/screens.md))
 - [ ] T062 Comparação com o design (SC-001, quickstart §2): capturar em 1 440 × 900 e comparar cada print com o frame do design; registrar as diferenças em `research.md` ("Comparação com o design") e corrigir até não sobrar diferença sem aceite. Capturar também em 960 e 1 280 px e guardar para a revisão da UX (research UX-5; os prints ficam fora do Git)
 - [ ] T063 [P] Documentação: `AGENTS.md` (estrutura com `renderer/src/ui/` e a regra de lint; contrato 1.8.0 com a cópia em `specs/006-redesign-app-desktop/contracts/`; a cópia da 005 congelada na 1.7.0; parágrafo "Desde a feature 006"; comando do `generate-icon.mjs`) e `README.md` (instalação do app: ícone novo; se o atalho mostrar o ícone antigo, cache do Windows)
 - [ ] T064 Verificação completa: `pnpm build`, `pnpm lint`, `pnpm typecheck` e `pnpm test` (todos os grupos, com o Docker) verdes; `git diff --cached --name-only` sem prints, planilhas ou dados reais
@@ -294,8 +294,8 @@ Figma e implantar.
 - **US4 (Phase 7)**: depende da US2 (lista e filtros rápidos).
 - **US5 (Phase 8)**: depende da Foundational; T045 depois de T038 (mesmo arquivo).
 - **US7 (Phase 9)**: depende da US2 (T035) e da US5 (T044, T045).
-- **US8 (Phase 10)**: depende da US4 (barra de seleção) e da US5 (gaveta); **T052 espera a aprovação
-  do T049** só na parte do card do envio em andamento.
+- **US8 (Phase 10)**: depende da US4 (barra de seleção) e da US5 (gaveta); o card do envio em
+  andamento do T052 segue a tela 7.7a, aprovada pela UX em 2026-11-18 (T049).
 - **US6 (Phase 11)**: depende da Foundational e da US1 (T020, para o resultado em Executar).
 - **Polish (Phase 12)**: depois de todas as histórias. T059 → T064; T061 → T062 → T065 → T066;
   T065 → T067.
@@ -315,8 +315,7 @@ Figma e implantar.
 - US2: T025 com T027; T028 com T029; as telas (T033 a T035) começam depois de T032.
 - US3: T039 e T040 em paralelo com T038.
 - US5 e US6 podem andar em paralelo com a US2 (arquivos diferentes), se houver mais de uma pessoa.
-- US8: T049 (Figma) pode ser feito logo no início da feature, para a aprovação chegar a tempo; T050,
-  T051 e T053 em paralelo.
+- US8: T049 (Figma) concluído; T050, T051 e T053 em paralelo.
 - Polish: T060, T061 e T063.
 
 ---

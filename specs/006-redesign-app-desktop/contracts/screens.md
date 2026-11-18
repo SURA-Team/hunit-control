@@ -63,13 +63,14 @@ Para implementar uma tela: `get_screenshot` e `get_design_context` com o `node-i
 
 Biblioteca de componentes: página `Componentes — nova identidade`, frame `135:1361`.
 
-O roteiro de captura ganha a tela 4.12 (o painel "Filtros avançados"), que hoje não tem print.
+O roteiro de captura ganha a tela 4.12 (o painel "Filtros avançados"), que hoje não tem print, e
+um print à parte da 7.7a, com o envio em andamento (T061).
 
 ## Tela para aprovação
 
 | Nº | Tela | Onde | História | Situação |
 |---|---|---|---|---|
-| 7.7a | Comercial — Envios com envio em andamento (para aprovação) | Seção "Para aprovação da UX" da página `006-redesign-app-desktop`, montada pelo agente com os componentes de `Componentes — nova identidade` (research R-13) | US8, FR-039 | Montada em 2026-11-18 (seção `211:9211`, frame `211:9212`); aguardando a UX. A implementação do card do envio espera a aprovação |
+| 7.7a | Comercial — Envios com envio em andamento (para aprovação) | Seção "Para aprovação da UX" da página `006-redesign-app-desktop`, montada pelo agente com os componentes de `Componentes — nova identidade` (research R-13) | US8, FR-039 | Montada e aprovada pela UX em 2026-11-18, sem ajustes (seção `211:9211`, frame `211:9212`). É a referência do card do envio em andamento (T052) e do print `7.7a` do roteiro de captura (T061) |
 
-Depois de aprovada, a UX decide se ela vira a tela 7.7 (ou um número novo) da página; a marcação ✅/❌
-só considera frames com número `x.y`, então a 7.7a não entra nela.
+A tela fica onde está no Figma. Se ela vira a tela 7.7 ou ganha um número novo, quem decide é a
+UX; enquanto se chamar 7.7a, a marcação ✅/❌ não a considera (só vale para frames com número `x.y`).

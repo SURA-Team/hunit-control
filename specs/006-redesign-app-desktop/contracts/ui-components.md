@@ -58,7 +58,7 @@ escritos nas telas.
 | `Tabs` | Abas da área Comercial com contagem; quebram linha quando não cabem | "Aba" `182:1232` |
 | `PageHeader` | Título da página (34 px), subtítulo opcional e ação à direita ("Copiar para e-mail") | Telas 4.1, 7.7 |
 | `Card` | Branco, cantos de 20 px, sombra "card", sem borda; `padding` 16 (gaveta) ou 24 (página) | "Cards e relatórios" `135:1466` |
-| `RunningJobCard` | Card escuro do que está em andamento: a execução (data, período, cliente, "N de M hotéis concluídos", progresso, %, "Ver detalhes" em lima) e o envio ao Comercial na aba "Envios" ("N de M reservas verificadas", "Ver envio"; research R-13) | "Card — execução em andamento" `53:131`; envio: tela de exemplo 7.7a, para aprovação |
+| `RunningJobCard` | Card escuro do que está em andamento: a execução (data, período, cliente, "N de M hotéis concluídos", progresso, %, "Ver detalhes" em lima) e o envio ao Comercial na aba "Envios" ("N de M reservas verificadas", "Ver envio"; research R-13) | "Card — execução em andamento" `53:131`; envio: tela 7.7a (frame `211:9212`), aprovada pela UX em 2026-11-18 |
 | `IndicatorCard` | Número grande com rótulo (FR-004, US1-3) | "Card de indicador" `91:73` |
 | `AppDialog` | `size`: `sm` (520 px) · `lg` (780 px); 24 px de espaçamento; título no estilo do design; `dark` para o token; limitado à área visível, rola por dentro, fechar sempre alcançável (FR-042, FR-047) | Telas 2.4, 3.3, 4.6, 7.1, 7.6 |
 | `AppDrawer` | Gaveta à direita, `min(780px, 100vw − 96px)`, cards de 16 px | Telas 3.2, 4.2, 7.5 |

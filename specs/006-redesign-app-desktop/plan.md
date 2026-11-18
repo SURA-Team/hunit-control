@@ -198,7 +198,7 @@ Figma (node da tela, contracts/screens.md) ─► get_screenshot + get_design_co
 |---|---|---|
 | Mexer nas telas da UX no Figma | Perda de trabalho da UX | A skill só renomeia e oculta frames, simula antes e aplica com o ok do usuário; a tela de exemplo fica numa seção própria (R-13, R-17) |
 | Cores do design abaixo de 4,5:1 (texto apagado, placeholder, selo "Verificar") | Leitura mais difícil para algumas pessoas | Exceções explícitas no SC-005 e no teste de contraste; ajuste numa próxima spec com a UX (UX-1) |
-| Card do envio em andamento sem desenho | Retrabalho | Tela de exemplo 7.7a aprovada pela UX antes da implementação (R-13) |
+| Card do envio em andamento sem desenho | Retrabalho | Tela de exemplo 7.7a, aprovada pela UX em 2026-11-18, antes da implementação (R-13) |
 | Ícone antigo no atalho depois de atualizar | Usuária não vê a marca nova | Cache de ícones do Windows; o instalador recria o atalho (quickstart, cenário 17) |
 | Reescrever 35 telas e componentes quebra jornadas | Regressão (SC-002) | Os testes `desktop-ui` e `desktop-e2e` existentes rodam a cada tela; seletores por papel e nome acessível |
 | Contagens lentas com muitas reservas | Filtros rápidos demoram | Uma consulta só com `count(*) filter`; teste de desempenho com 20 000 reservas (R-16) |

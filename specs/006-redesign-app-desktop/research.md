@@ -311,8 +311,9 @@ progresso, percentual e "Ver envio" em lima. É o mesmo componente do card da ex
 componentes da `Componentes — nova identidade`, numa seção "Para aprovação da UX" da página
 `006-redesign-app-desktop`, sem tocar nas telas existentes; a implementação segue o que a UX aprovar.
 Ajustes posteriores ficam para uma feature seguinte. Montada em 2026-11-18 (frame `211:9212`): cópia da
-7.7 com uma instância do "Card — execução em andamento" (`53:131`) e o título "Histórico" da 3.1;
-aguardando a UX.
+7.7 com uma instância do "Card — execução em andamento" (`53:131`) e o título "Histórico" da 3.1.
+**Aprovada pela UX em 2026-11-18, sem ajustes**: o card do envio em andamento (T052) segue essa
+tela.
 
 ## R-14 — Diálogos e gavetas padronizados
 
@@ -405,6 +406,6 @@ Achados do levantamento que divergiam da spec ou entre si, com a decisão de 202
 | UX-1 | **Contraste (SC-005, 4,5:1)**: "texto/apagado" `#787b83` dá 4,23:1 no branco e 3,62:1 no fundo do app; o placeholder `#a6a9b0` dá 2,16:1 no fundo do campo; o selo "Verificar" (texto branco em `#d97a00`) dá 3,12:1. Valores que passariam: `#686b71` (texto apagado, 4,56:1), `#6d6f74` (placeholder, 4,61:1), texto `#0e0e10` no selo (6,18:1) | A 006 usa as cores do design; os três pares viram exceção do SC-005 e vão para a UX numa próxima spec |
 | UX-2 | Rodapé "ordenadas por hotel e check-in" × API ordenada por hotel e número | Hotel e check-in (R-18) |
 | UX-3 | "Ativa ou cancelada" no painel tem 3 opções (Ativas e canceladas, Só ativas, Só canceladas); o filtro de hoje também tem "Não identificada" | **Pendente** de resposta do usuário. Enquanto isso, quarta opção "Só não identificadas" |
-| UX-4 | Não há desenho do envio em andamento na aba "Envios" | Card escuro com lima e progresso, com tela de exemplo para aprovação da UX (R-13) |
+| UX-4 | Não há desenho do envio em andamento na aba "Envios" | Card escuro com lima e progresso; tela de exemplo 7.7a aprovada pela UX em 2026-11-18, sem ajustes (R-13) |
 | UX-5 | O design só existe em 1 440 px | Responsivo como na R-07; ajustes numa feature seguinte |
 | UX-6 | A skill do espelho escreveria na página da UX | Skill reescrita para só marcar ✅/❌ (R-17) |
