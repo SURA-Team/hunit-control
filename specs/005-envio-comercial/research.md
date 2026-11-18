@@ -456,8 +456,8 @@ própria (R-17); dados fictícios. A homologação não acessa o Hunit: o envio 
 | "Enviar ao Comercial" pelo app sem Hunit: falha no acesso e nada vai para a planilha | Aprovado (esperado) |
 | Logs do servidor sem o ID da planilha, o e-mail da conta de serviço, a chave e nomes de hóspede | Aprovado |
 
-SC-002 (20 reservas na planilha em até 5 min depois do token) depende do Hunit real: medir na
-primeira semana da produção (T066).
+SC-002 (20 reservas na planilha em até 5 min depois do token) depende do Hunit real: medido na
+produção (T066): ver "Produção".
 
 **Ajustes pedidos**: aparência da planilha — formatação de tabela, bordas tracejadas fora do
 cabeçalho, cabeçalho preto e lima e a coluna "Validação do Financeiro" colorida pelo status (lima,
@@ -475,3 +475,23 @@ setup` rodado de novo na planilha de teste.
 | Retorno completo e "Ler retornos agora": coluna J em laranja | Aprovado |
 | Recusa e retorno só com o código: coluna J em vermelho | Aprovado |
 | Desfazer o envio e reverter: as linhas acrescentadas em "Concluídas" e de volta em "A cobrar" chegam com as bordas | Aprovado |
+
+## Produção (T066, 2026-11-17)
+
+No PC de produção, no clone `C:\Dev\producao\hunit-control`, com a planilha real do Comercial
+(quickstart §4).
+
+| Passo | Resultado |
+|---|---|
+| Versão | Clone de produção no merge do PR #10 |
+| Cópia de segurança antes da subida | A mais nova tinha menos de 24 h (a rotina faz uma por dia); nenhuma cópia extra foi feita |
+| `.env` | `COMMERCIAL_SHEET_ID` e `COMMERCIAL_SHEET_KEY_FILE` acrescentados; a pasta da chave é a padrão (`./deploy/secrets`) |
+| Subida | `server`, `db`, `proxy` e `backup` no ar, `/v1/health` OK, migrations 0011 e 0012 aplicadas ao subir |
+| `commercial-sheet setup` | Acesso OK; abas criadas; cabeçalhos gravados; aparência e proteções aplicadas |
+| `commercial-sheet check` | Acesso OK; as duas abas "OK", com 0 linhas. O "OK" já confere cabeçalho e proteções (o README e o quickstart prometiam a lista deles; o texto foi corrigido) |
+| Compartilhamento | Planilha compartilhada como Editor com as contas do Comercial |
+| App | Instalador 0.2.163 nas máquinas do Financeiro e da Controladoria. A primeira geração falhou com `MISSING_EXPORT`: o app empacota o `dist` do `@hunit/domain`, que estava antigo. Com `pnpm build` antes do `dist`, funcionou; o passo entrou no README ("Gerar o instalador") e no AGENTS.md |
+| Planilha no app | "Comercial → Planilha" mostra "Funcionando" |
+| Logs | Nenhuma ocorrência do e-mail da conta de serviço nem da chave, antes e depois dos envios reais |
+| Primeiro envio real | 2 ou 3 reservas: linhas na planilha em menos de 1 s |
+| SC-002 | 50 reservas em 45 s, do pedido do token até as linhas aparecerem (inclui cerca de 10 s para informar o token). Meta: até 5 min para cerca de 20 reservas — **atendida** |

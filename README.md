@@ -213,8 +213,12 @@ Numa máquina de desenvolvimento:
 
 ```powershell
 pnpm install
+pnpm build                          # compila o @hunit/domain e o @hunit/contracts que o app empacota
 pnpm --filter @hunit/desktop dist
 ```
+
+Sem o `pnpm build`, o instalador usa o `dist` antigo dos pacotes e a compilação falha com
+`MISSING_EXPORT` quando o domínio ganhou funções novas (aconteceu na implantação da 005).
 
 O instalador fica em `apps/desktop/release/` (`HUNIT Control Setup <versão>.exe`). Ele instala só
 para o usuário do Windows, sem pedir administrador, e cria o atalho no Menu Iniciar.
@@ -334,8 +338,9 @@ leitura. Sem as duas variáveis da planilha, o envio ao Comercial fica desligado
    docker compose exec server node dist/cli.js commercial-sheet setup
    docker compose exec server node dist/cli.js commercial-sheet check
    ```
-   O `check` deve dizer "acesso OK", as duas abas, os cabeçalhos e as proteções. Ele não muda
-   nada; se alguém alterar o formato da planilha, ele aponta o que mudou (rode o `setup` de novo).
+   O `check` deve dizer "acesso OK" e "OK" nas duas abas, com a quantidade de linhas: o "OK" já
+   quer dizer que o cabeçalho e as proteções estão certos. Ele não muda nada; se alguém alterar o
+   formato da planilha, ele aponta o que mudou (rode o `setup` de novo).
    A aparência (cabeçalho preto e lima, listras, bordas tracejadas e a coluna "Validação do
    Financeiro" em lima, laranja ou vermelho, conforme o status) não é conferida: se alguém mudá-la,
    o `setup` a refaz. As regras de formatação condicional das duas abas são do sistema: o `setup`
