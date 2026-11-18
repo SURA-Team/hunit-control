@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Updated**: 2026-11-18 (telas do sistema anterior — página 004 —, do envio ao Comercial — página 005 —, padronização final dos diálogos e telas responsivas)
+**Updated**: 2026-11-18 (telas do sistema anterior — página 004 —, do envio ao Comercial — página 005 —, padronização final dos diálogos e telas responsivas; depois, revisão para o plano: a 006 assume as telas da 004 e da 005, grupos dos filtros rápidos e contagens pela API)
 
 **Input**: User description: "Levar para o app desktop o design oficial da UX (arquivo Hunit Control no Figma): (1) nova identidade visual em todas as telas — fundo cinza claro, conteúdo em cards brancos de cantos bem arredondados e sombra suave, sem bordas; menu lateral flutuante com ícones, com o item ativo numa pílula preta com o ícone em lima; cabeçalho transparente com a marca nova (H lima no quadrado preto) e o cliente num selo branco; fonte Manrope, títulos maiores e números grandes nos indicadores; paleta monocromática com um único acento, o lima. (2) Hierarquia de botões e cores: preto é a ação principal (uma por bloco), lima é a principal só em fundo escuro, contorno é secundária, só texto é cancelar ou sair, âmbar é atenção e vermelho é destrutiva; ações destrutivas ('Limpar acesso', 'Desfazer', 'Remover valor' em vermelho suave; 'Sim, cancelar' em vermelho cheio) nunca parecem seguras; Baixar, Reverter e Desfazer com cores e ícones diferentes; 'Cancelar' só em texto nos diálogos; 'Substituir tratativa' e 'Substituir comprovante' com o mesmo peso; sai o botão 'Leve'. (3) Listas: reservas com 5 colunas (hóspede, hotel, período, valor, situação), duas linhas de texto em cada, coluna única 'Situação da reserva' com o selo 'Verificar' em âmbar cheio quando precisa; filtros viram uma busca, um botão 'Filtros' (painel) e filtros rápidos com contagem (Todas · Falta cobrar · A verificar · Com erro · Concluídas); linha inteira clicável com seta e a linha aberta ou marcada em lima suave; execuções com a que está em andamento num card escuro no topo, com progresso, e o resto no 'Histórico'; hotéis e documentos como linhas simples; estado vazio com ícone, explicação e 'Limpar busca e filtros'. (4) Seleção em lote: caixa de seleção preta com check em lima e cabeçalho com estado parcial; barra escura de seleção com o total e as ações, e 'Anexar comprovante' em lima; no diálogo de anexar, ícone verde para as reservas aceitas e âmbar para as ignoradas. (5) Detalhes da reserva: quadro 'Status do Hunit' com selo e 'Classificação anterior'; valor salvo (com Remover) separado do campo 'Corrigir o valor' com 'Informar valor' em preto; histórico com 5 itens e 'Mostrar mais'; card 'Verificações'; tela nova com o alerta 'Verificar', 'Confirmar' em preto e anexos desabilitados com a explicação do motivo. (6) Organização e consistência: o que se repete é componente único, para que uma mudança valha para todas as telas."
 
@@ -33,7 +33,8 @@ da área, ações em lote, "Copiar para e-mail" e valor cobrado nas listas); e (
 final** dos diálogos e cards. Além disso, **todas as telas precisam ser responsivas**: a mesma
 informação e as mesmas ações devem funcionar em qualquer largura de janela suportada, e não só no
 tamanho em que o design foi desenhado. O comportamento de negócio da importação e do envio ao Comercial
-pertence às features 004 e 005; aqui entram a apresentação e a organização da informação dessas telas.
+pertence às features 004 e 005, que já foram entregues com o visual anterior; esta feature leva as
+telas delas ao design oficial, cuidando da apresentação e da organização da informação.
 
 O espelho do app no Figma (feature de manutenção das telas) passa a ser comparado com o design
 oficial: a feature termina quando os dois mostram as mesmas telas.
@@ -41,13 +42,18 @@ oficial: a feature termina quando os dois mostram as mesmas telas.
 Ficam **fora do escopo**: novas funções de negócio (as regras da importação do sistema anterior e do
 envio ao Comercial são das features 004 e 005), mudança de permissões, tema escuro, versão para outros
 sistemas operacionais além do Windows, versão para celular ou tablet, e qualquer mudança no servidor
-ou no contrato da API.
+ou no contrato da API além do acréscimo compatível para as contagens dos filtros rápidos (FR-017).
 
 ## Clarifications
 
 ### Session 2026-11-18
 
-- Q: As telas do sistema anterior (4.10 a 4.12) e do Comercial (seção 7) são implementadas na 006 ou junto das features 004 e 005? → A: A 006 entrega identidade, listas, componentes e responsividade; as telas 4.10 a 4.12 e a seção 7 são implementadas junto das features 004 e 005, já com o visual e a responsividade da 006.
+- Q: As telas do sistema anterior (4.10 a 4.12) e do Comercial (seção 7) são implementadas na 006 ou junto das features 004 e 005? → A: ~~A 006 entrega identidade, listas, componentes e responsividade; as telas 4.10 a 4.12 e a seção 7 são implementadas junto das features 004 e 005, já com o visual e a responsividade da 006.~~ Substituída na revisão para o plano (abaixo): a 004 e a 005 foram entregues com o visual anterior.
+- Q: Com a 004 e a 005 entregues com o visual anterior, quem leva as telas delas ao design oficial? → A: A 006. As histórias 7 e 8 e os FR-033 a FR-041 fazem parte desta feature (só apresentação; as regras continuam as da 004 e da 005). As telas já estão no Figma.
+- Q: As contagens dos filtros rápidos podem exigir mudança na API, que hoje não informa o total da lista? → A: Sim, como acréscimo compatível no contrato (nada do que existe muda).
+- Q: Quais reservas entram em cada filtro rápido? → A: Falta cobrar = o filtro "Falta cobrar" de hoje; A verificar = alerta "Verificar", "A revisar (sistema anterior)" e "Validar comprovante"; Com erro = "Erro na cobrança" e "Erro de análise"; Concluídas = "Comprovante enviado", "Faturada", "Já cobrada", "Cancelada sem cobrança" e "Ignorada (Hotelbeds 258)". Uma reserva pode estar em mais de um filtro.
+- Q: O que são as "áreas de hotéis e de documentos" do FR-020? → A: Não há áreas com esses nomes no menu; são a lista de hotéis dentro da execução e a lista de documentos dentro dos detalhes da reserva.
+- Q: O critério de sucesso do teste com 4 pessoas (antigo SC-004) fica? → A: Não; os critérios seguintes foram renumerados. A validação é a homologação com os perfis de acesso; a adoção pelas usuárias é acompanhada em produção, sem meta.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -215,17 +221,18 @@ da confirmação de verificação.
 
 ---
 
-### User Story 6 - Acompanhar execuções e consultar hotéis e documentos (Priority: P3)
+### User Story 6 - Acompanhar execuções e ler as listas de hotéis e de documentos (Priority: P3)
 
 A execução em andamento ganha um card escuro no topo, com o progresso; as demais ficam num
-"Histórico". Hotéis e documentos aparecem como linhas simples, com nome, uma linha de resumo e a
-situação.
+"Histórico". A lista de hotéis dentro da execução e a lista de documentos dentro dos detalhes da
+reserva aparecem como linhas simples, com nome, uma linha de resumo e a situação.
 
 **Why this priority**: melhora a leitura de telas de uso menos frequente que a lista de reservas; pode
 vir por último sem prejudicar o resto.
 
-**Independent Test**: com uma execução em andamento e várias concluídas, abrir a área de execuções;
-abrir as áreas de hotéis e de documentos e conferir com o design oficial.
+**Independent Test**: com uma execução em andamento e várias concluídas, abrir a área de execuções e
+os hotéis de uma execução; abrir os detalhes de uma reserva com documentos e conferir com o design
+oficial.
 
 **Acceptance Scenarios**:
 
@@ -235,18 +242,18 @@ abrir as áreas de hotéis e de documentos e conferir com o design oficial.
 2. **Given** execuções já encerradas, **When** a área é exibida, **Then** ficam na seção "Histórico".
 3. **Given** nenhuma execução em andamento, **When** a área é exibida, **Then** não aparece o card
    escuro e o histórico ocupa a tela.
-4. **Given** as áreas de hotéis e de documentos, **When** exibidas, **Then** cada item é uma linha
-   simples com o nome, uma linha de resumo e a situação, sem colunas vazias.
+4. **Given** a lista de hotéis dentro da execução e a lista de documentos dentro dos detalhes da
+   reserva, **When** exibidas, **Then** cada item é uma linha simples com o nome, uma linha de resumo e
+   a situação, sem colunas vazias.
 
 ---
 
 ### User Story 7 - Reconhecer as reservas do sistema anterior nas listas e nos detalhes (Priority: P2)
 
-**Escopo nesta feature**: a 006 entrega os componentes e o visual que sustentam estas telas (selos,
-barra de lote agrupada, "Botão com menu", "Aba", ícone Comercial, linha de reserva com "Selo extra",
-diálogos padronizados); as telas em si e o comportamento são implementados junto da feature 004,
-que MUST seguir este design e a responsividade da história 9. Os cenários abaixo são o critério de
-aceite dessa implementação.
+**Escopo nesta feature**: a feature 004 já entregou o comportamento (importação, origem "Sistema
+anterior", filtro, "A revisar (sistema anterior)") com o visual anterior. A 006 leva estas telas
+(4.10 a 4.12 do design) ao design oficial, com a responsividade da história 9, sem mudar as regras da
+004.
 
 A pessoa filtra por origem "Sistema anterior" na própria barra de busca, reconhece de relance as
 reservas importadas e abre uma delas numa gaveta que mostra o que foi importado e o que ainda não foi
@@ -282,11 +289,10 @@ a lista e abrir uma reserva "A revisar (sistema anterior)" comparando com as tel
 
 ### User Story 8 - Enviar ao Comercial e trabalhar na área Comercial (Priority: P2)
 
-**Escopo nesta feature**: a 006 entrega os componentes e o visual que sustentam estas telas (selos,
-barra de lote agrupada, "Botão com menu", "Aba", ícone Comercial, linha de reserva com "Selo extra",
-diálogos padronizados); as telas em si e o comportamento são implementados junto da feature 005,
-que MUST seguir este design e a responsividade da história 9. Os cenários abaixo são o critério de
-aceite dessa implementação.
+**Escopo nesta feature**: a feature 005 já entregou o comportamento (envio, pedido de token,
+"Validar comprovante", área Comercial, lote, "Copiar para e-mail", valor cobrado) com o visual
+anterior. A 006 leva estas telas (seção 7 do design) ao design oficial, com a responsividade da
+história 9, sem mudar as regras da 005.
 
 A pessoa seleciona reservas e, na barra de seleção, envia ao Comercial: confere, acompanha o envio,
 responde ao pedido de token quando aparece e vê o resultado. Quando o Comercial devolve, valida o retorno
@@ -350,8 +356,7 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
    na área visível.
 6. **Given** os diálogos do app (token, cancelar execução, recusar retorno, confirmações), **When**
    exibidos, **Then** têm o mesmo espaçamento interno (24 px), só duas larguras (520 px e 780 px) e o
-   mesmo estilo de título; os diálogos do token e o de cancelar execução ficam um pouco mais largos que
-   antes.
+   mesmo estilo de título.
 7. **Given** o card "Comercial" da gaveta, **When** exibido, **Then** tem o mesmo espaçamento interno
    (16 px) dos demais cards.
 8. **Given** a janela redimensionada com a tela aberta, **When** a pessoa a redimensiona, **Then** a tela
@@ -435,16 +440,28 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
   botão "Filtros" que abre um painel com os demais filtros detalhados que o app já oferece, e os filtros
   rápidos Todas, Falta cobrar, A verificar, Com erro e Concluídas, cada um com a contagem de reservas;
   "Selecionar todas do filtro" MUST ficar no fim da linha dos filtros rápidos e "Copiar para e-mail" ao
-  lado do título.
+  lado do título. Os filtros rápidos MUST agrupar as reservas assim:
+  - **Todas**: todas as que atendem à busca e aos filtros em vigor;
+  - **Falta cobrar**: as do filtro "Falta cobrar" que o app já oferece;
+  - **A verificar**: as com o alerta "Verificar", as "A revisar (sistema anterior)" e as em "Validar
+    comprovante";
+  - **Com erro**: as em "Erro na cobrança" e "Erro de análise";
+  - **Concluídas**: as em "Comprovante enviado", "Faturada", "Já cobrada", "Cancelada sem cobrança" e
+    "Ignorada (Hotelbeds 258)".
+
+  Uma reserva pode estar em mais de um grupo (por exemplo, "Validar comprovante" está em Falta cobrar e
+  em A verificar); a soma das contagens pode passar do total de Todas, e a reserva que não está em
+  nenhum grupo aparece só em Todas.
 - **FR-017**: As contagens dos filtros rápidos MUST refletir a busca e os filtros em vigor e MUST ser
-  atualizadas quando eles mudam ou quando os dados são recarregados.
+  atualizadas quando eles mudam ou quando os dados são recarregados. Se a API não as informar, MAY
+  ganhar um acréscimo compatível no contrato para isso (nada do que existe muda).
 - **FR-018**: A linha inteira da reserva MUST abrir os detalhes ao ser clicada, MUST exibir uma seta no
   fim e MUST destacar em lima suave a linha aberta ou marcada; a caixa de seleção MUST funcionar sem
   abrir os detalhes.
 - **FR-019**: A área de execuções MUST mostrar a execução em andamento num card escuro no topo, com
   hotel atual, progresso e tempo estimado, e as demais num "Histórico".
-- **FR-020**: As áreas de hotéis e de documentos MUST ser linhas simples com nome, uma linha de resumo e
-  situação.
+- **FR-020**: A lista de hotéis dentro da execução e a lista de documentos dentro dos detalhes da
+  reserva MUST ser linhas simples, com nome, uma linha de resumo e situação.
 - **FR-021**: Toda lista sem resultado MUST mostrar o estado vazio com ícone, explicação e, quando
   houver busca ou filtro em vigor, o botão "Limpar busca e filtros".
 
@@ -471,6 +488,18 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
 - **FR-029**: Para a reserva que pede verificação, os detalhes MUST mostrar o alerta "Verificar" com
   "Confirmar" como ação principal; enquanto não confirmada, os botões de anexar tratativa e comprovante
   MUST ficar desabilitados e MUST explicar o motivo ao lado.
+
+**Consistência**
+
+- **FR-030**: Elementos que se repetem (linhas, barra de lote, ações de documento, calendário, selos,
+  estado vazio, cards) MUST ter uma única definição reutilizada em todas as telas, de modo que uma
+  mudança vale para todas.
+- **FR-031**: O redesenho MUST NOT alterar regras de negócio, permissões por perfil nem o
+  comportamento das funções já entregues (consulta, execução, tratativas, evidências, importação do
+  sistema anterior, envio ao Comercial); só a apresentação e a organização da informação. O contrato
+  da API só MAY receber o acréscimo compatível de FR-017.
+- **FR-032**: Ao final, o espelho do app no Figma MUST mostrar as mesmas telas do design oficial, com
+  o guia de paleta, leis de UX e hierarquia de ações disponível para o time manter o padrão.
 
 **Sistema anterior (página 004)**
 
@@ -506,7 +535,7 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
 - **FR-042**: Todos os diálogos do app MUST ter o mesmo espaçamento interno (24 px), só duas larguras
   (520 px e 780 px), o mesmo estilo de título e ficar centralizados na área visível; o card "Comercial"
   da gaveta MUST ter o mesmo espaçamento interno (16 px) dos demais cards.
-- **FR-043**: Todas as telas, gavetas e diálogos do app (inclusive os das features 004, 005 e 007)
+- **FR-043**: Todas as telas, gavetas e diálogos do app (inclusive os das features 004 e 005)
   MUST ser responsivos: funcionar em qualquer largura entre a mínima suportada pelo app (hoje 960 px,
   da feature 002) e a de monitores grandes, sem rolagem horizontal da página e sem perder informação ou
   ação em relação ao design de referência.
@@ -520,17 +549,6 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
   fechar alcançável.
 - **FR-048**: Redimensionar a janela MUST reorganizar a tela na hora, sem recarregar dados e sem perder
   filtros, seleção, texto digitado, aba ativa nem gaveta aberta.
-
-**Consistência**
-
-- **FR-030**: Elementos que se repetem (linhas, barra de lote, ações de documento, calendário, selos,
-  estado vazio, cards) MUST ter uma única definição reutilizada em todas as telas, de modo que uma
-  mudança vale para todas.
-- **FR-031**: O redesenho MUST NOT alterar regras de negócio, permissões por perfil, o contrato da API
-  nem o comportamento das funções já entregues (consulta, execução, tratativas, evidências); só a
-  apresentação e a organização da informação.
-- **FR-032**: Ao final, o espelho do app no Figma MUST mostrar as mesmas telas do design oficial, com
-  o guia de paleta, leis de UX e hierarquia de ações disponível para o time manter o padrão.
 
 ### Key Entities
 
@@ -549,45 +567,43 @@ execuções, hotéis, documentos e o histórico de cada reserva).
   pela mesma bateria de testes do app.
 - **SC-003**: Uma pessoa do Financeiro chega a "reservas que faltam cobrar" em um único toque a partir
   da lista, e abre os detalhes de qualquer reserva em um único clique na linha.
-- **SC-004**: Em teste com 4 pessoas (as usuárias iniciais), pelo menos 3 de 4 identificam, sem ajuda,
-  qual é a ação principal de cada uma de 5 telas sorteadas e quais botões são destrutivos.
-- **SC-005**: A lista de reservas exibe todos os dados de uma reserva comum com 5 colunas sem rolagem
+- **SC-004**: A lista de reservas exibe todos os dados de uma reserva comum com 5 colunas sem rolagem
   horizontal na janela padrão do app, e nenhum nome longo quebra o layout.
-- **SC-006**: O texto de todas as telas atende a contraste suficiente para leitura (relação mínima de
+- **SC-005**: O texto de todas as telas atende a contraste suficiente para leitura (relação mínima de
   4,5:1 no texto comum) e nenhuma informação depende só de cor.
-- **SC-008**: Em cada tela, gaveta e diálogo do app, verificados na largura mínima suportada, numa
+- **SC-006**: Nenhum pedido de ajuda registrado pelas usuárias, na semana seguinte à entrega, sobre
+  "onde foi parar" uma informação que saiu das colunas da lista.
+- **SC-007**: Em cada tela, gaveta e diálogo do app, verificados na largura mínima suportada, numa
   intermediária e numa de monitor grande, 100% das informações e ações do design de referência estão
   acessíveis, sem rolagem horizontal e sem valores, selos ou rótulos cortados.
-- **SC-009**: Redimensionar a janela nunca perde filtros, seleção, aba ativa, texto digitado nem gaveta
+- **SC-008**: Redimensionar a janela nunca perde filtros, seleção, aba ativa, texto digitado nem gaveta
   aberta, em 100% dos casos verificados.
-- **SC-010**: 100% dos diálogos do app usam o mesmo espaçamento e uma das duas larguras definidas.
-- **SC-011**: Uma pessoa distingue as reservas do sistema anterior das novas numa lista em até 5
+- **SC-009**: 100% dos diálogos do app usam o mesmo espaçamento e uma das duas larguras definidas.
+- **SC-010**: Uma pessoa distingue as reservas do sistema anterior das novas numa lista em até 5
   segundos, e abre o envio ao Comercial a partir de uma seleção em no máximo 2 cliques.
-- **SC-007**: Nenhum pedido de ajuda registrado pelas usuárias, na semana seguinte à entrega, sobre
-  "onde foi parar" uma informação que saiu das colunas da lista.
 
 ## Assumptions
 
 - **Fonte da verdade do visual**: o design oficial do arquivo "Hunit Control" do Figma; a numeração
   das telas (4.2, 4.4–4.7, 4.9, 4.10 etc.) refere-se a ele. Em caso de dúvida de detalhe, vale o
   Figma, e esta spec é atualizada se ele mudar.
-- **Dependências das features 004 e 005**: as telas do sistema anterior (4.10 a 4.12) e do Comercial (seção
-  7) dependem do comportamento das features 004 (importação do histórico) e 005 (envio ao Comercial,
-  "Validar comprovante", valor cobrado), que definem as regras; esta feature trata da apresentação. As
-  telas desses blocos (histórias 7 e 8, FR-033 a FR-041) são implementadas junto das features 004 e 005, e não por esta; a 006 entrega os componentes e o visual que elas usam. A numeração das
-  telas no Figma (4.x, 6.x, 7.x) refere-se ao design oficial.
+- **Features 004 e 005**: as telas do sistema anterior (4.10 a 4.12) e do Comercial (seção 7) usam o
+  comportamento das features 004 (importação do histórico) e 005 (envio ao Comercial, "Validar
+  comprovante", valor cobrado), que definem as regras. As duas já estão na `master`, com o visual
+  anterior; esta feature leva essas telas ao design oficial (histórias 7 e 8, FR-033 a FR-041). A
+  numeração das telas no Figma (4.x, 6.x, 7.x) refere-se ao design oficial.
 - **Responsividade**: o design oficial é desenhado numa largura de referência; o comportamento nas demais
   larguras (quebras, empilhamento, largura máxima) é decidido na implementação conforme FR-043 a FR-048,
-  com revisão da UX. Não há versão para celular ou tablet. As demais features (004, 005 e 007) seguem
-  esta regra em suas telas.
-- **Dependência da 003**: vários elementos do design (tratativas, comprovantes, "Status do Hunit",
-  "Verificações", "Verificar", valor manual, lote) existem a partir da feature 003. Esta feature parte
-  do app com a 003 incorporada; a branch só começa a ser implementada depois que a 003 estiver na
-  `master`.
+  com revisão da UX. Não há versão para celular ou tablet.
+- **Ponto de partida**: esta feature parte do app com as features 003, 004 e 005 incorporadas, todas já
+  na `master`; vários elementos do design (tratativas, comprovantes, "Status do Hunit", "Verificações",
+  "Verificar", valor manual, lote) vêm da 003.
 - **Dados já disponíveis**: tudo que o design mostra (situações, classificação anterior, verificações,
-  histórico, progresso, contagens) vem de informação que o servidor e a API já fornecem. Se alguma
-  contagem dos filtros rápidos exigir dado novo da API, isso é decidido no plano, como acréscimo
-  compatível, e não altera o escopo desta spec.
+  histórico, progresso) vem de informação que o servidor e a API já fornecem. A exceção possível são as
+  contagens dos filtros rápidos: a lista de reservas da API é paginada e não informa o total, então o
+  plano decide o acréscimo compatível no contrato (FR-017).
+- **Validação**: a homologação percorre o app com os dois perfis de acesso (operador e consulta). A
+  adoção pelas usuárias é acompanhada em produção, sem meta numérica.
 - **Contagem dos filtros rápidos**: refere-se a todas as reservas que atendem à busca e aos filtros em
   vigor, não só às mostradas na página atual.
 - **Uso**: 4 pessoas do Financeiro e da Controladoria, em computadores Windows, em tela de

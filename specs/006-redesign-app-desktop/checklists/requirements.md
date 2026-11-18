@@ -33,9 +33,14 @@
 
 - A fonte (Manrope), as cores e os rótulos aparecem na spec porque fazem parte do design oficial (requisito
   visual), não de uma escolha de tecnologia.
-- A dependência da feature 003 (ainda na branch `003-tratativas-manuais`, fora da `master`) está nas
-  premissas; o número da feature (006) foi definido pelo usuário.
+- O número da feature (006) foi definido pelo usuário. As features 003, 004 e 005, de que esta parte,
+  já estão na `master` (premissas, "Ponto de partida").
 - Atualização de 2026-11-18: incluídas as histórias 7 (sistema anterior, página 004), 8 (Comercial, página
   005) e 9 (telas responsivas e padronização dos diálogos), FR-033 a FR-048 e SC-008 a SC-011. As regras de
   negócio da importação e do envio ao Comercial ficam nas features 004 e 005 (dependências nas premissas).
   Revalidado: sem marcadores `[NEEDS CLARIFICATION]`.
+- Revisão para o plano (2026-11-18): a 006 assume as telas da 004 e da 005, já entregues com o visual
+  anterior (histórias 7 e 8 no escopo); grupos dos filtros rápidos definidos no FR-016; acréscimo
+  compatível na API permitido para as contagens (FR-017, FR-031); FR-020 e história 6 corrigidos (não
+  há áreas de hotéis e de documentos no menu); SC-004 (teste com 4 pessoas) removido e os critérios
+  renumerados; a menção à 007 saiu do FR-043 (fica para a spec da 007). Revalidado.
