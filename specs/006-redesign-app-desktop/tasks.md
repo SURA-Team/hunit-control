@@ -1,0 +1,384 @@
+---
+
+description: "Task list for feature 006 — Redesign visual do app desktop"
+---
+
+# Tasks: Redesign visual do app desktop
+
+**Input**: Design documents from `/specs/006-redesign-app-desktop/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
+[data-model.md](./data-model.md), [contracts/api-changes.md](./contracts/api-changes.md),
+[contracts/ipc.md](./contracts/ipc.md), [contracts/ui-components.md](./contracts/ui-components.md),
+[contracts/screens.md](./contracts/screens.md), [quickstart.md](./quickstart.md)
+
+**Tests**: INCLUÍDOS, porque a constitution exige (princípio VII: domínio com testes unitários,
+contrato com teste, testes junto com cada tarefa). Escreva os testes de cada bloco antes da
+implementação e confirme que falham. Grupos: `domain`, `contracts`, `server-db`, `desktop`,
+`desktop-ui` e `desktop-e2e` (research R-16).
+
+**Organization**: fundação visual primeiro (todos os componentes de `ui/`, research R-01); depois uma
+fase por história, aplicando os componentes nas telas, na ordem de prioridade da spec: US1, US9 e US2
+(P1); US3, US4, US5, US7 e US8 (P2); US6 (P3).
+
+**Base**: a 005 está na `master` (PR #10 e #13); a `006-redesign-app-desktop` foi atualizada com a
+`master` em 2026-11-18.
+
+**Como construir cada tela**: abrir o frame do design pelo node de
+[contracts/screens.md](./contracts/screens.md) (`get_screenshot` e `get_design_context` do Figma,
+`fileKey` `YCbxTAacFxbGuOF8uwoLtt`) e montar a tela **só com os componentes de `ui/`**
+([contracts/ui-components.md](./contracts/ui-components.md)), adaptando, nunca copiando o código
+gerado. A lógica das telas (consultas, estados, seleção, mutações) não muda (FR-031). Os testes
+`desktop-ui` e `desktop-e2e` que já existem são adaptados aos componentes novos mantendo os seletores
+por papel e nome acessível; uma jornada que passava antes tem de continuar passando (SC-002).
+
+**Dados**: nenhuma tarefa acessa o Hunit real. Prints, Figma e testes só com os dados fictícios do
+roteiro de captura (hóspedes "Ana Ribeiro"…, hotéis "Hotel Praia Azul"…) ou os dos testes. Sem nomes
+de hotéis ou da empresa (AGENTS.md).
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: pode rodar em paralelo (arquivos diferentes, sem dependência de tarefa incompleta)
+- **[Story]**: história atendida (US1 a US9)
+- **⛔ UX / HOMOLOGAÇÃO / PRODUÇÃO / FIGMA**: depende de aprovação da UX, do PC do servidor ou do ok
+  do usuário para escrever no Figma
+
+## Path Conventions
+
+Monorepo pnpm (ver plan.md). Renderer: `apps/desktop/src/renderer/src/` (abreviado `renderer/`
+abaixo), com `ui/`, `components/`, `screens/`, `presentation/`, `state/`. Testes do app:
+`apps/desktop/test/{main,renderer,e2e}`. Servidor: `apps/server/src/{persistence,http}`,
+`apps/server/test/{contract,integration}`. Domínio: `packages/domain/{src,test}`.
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: dependência nova, recursos exportados do design e a trava de lint que impede telas novas
+fora do padrão.
+
+- [ ] T001 Em `apps/desktop/package.json`, acrescentar `@fontsource-variable/manrope` `5.3.0` (OFL-1.1) em `devDependencies` (o app não tem `dependencies`, AGENTS.md). Rodar `pnpm install` e conferir que o pacote não pede script de instalação (o `allowBuilds` do `pnpm-workspace.yaml` não muda) e que o `minimumReleaseAge` aceita a versão (research R-03)
+- [ ] T002 [P] Exportar do Figma os SVGs do design (research R-04): a marca "Marca/Ícone — nova identidade" (node `24:70`) em `apps/desktop/resources/brand.svg`; os ícones de "Marca e ícones" (`135:1368`: Fechar, Seta esquerda, Seta direita, Olho, Seletor; menu: Executar, Execuções, Reservas, Comercial, Configuração — **sem** Relatórios, que é da 007) e os ícones usados dentro das telas 1.1 a 7.14 (documento, aceito, ignorado, alerta, upload, cópia, calendário, menu ▾, check, seta da linha). Gravar os SVGs crus em `apps/desktop/resources/icons/` (nome em inglês, `kebab-case`), com traço em `currentColor` e sem `width`/`height` fixos
+- [ ] T003 Em `eslint.config.js`, no bloco de `apps/desktop/src/renderer/**`, acrescentar ao `no-restricted-imports` que já existe (os `paths` são somados aos de `forbiddenInRenderer`, porque um segundo bloco com a mesma regra substituiria o primeiro) a proibição de importar `Button`, `ActionIcon`, `Badge`, `Modal`, `Drawer`, `Checkbox`, `Alert`, `Table`, `Tabs`, `NavLink`, `Paper`, `Menu`, `AppShell`, `TextInput`, `PasswordInput`, `Select`, `MultiSelect`, `Radio`, `Switch` e `Progress` de `@mantine/core` (mensagem: "use o componente de ui/ — specs/006, FR-030"), valendo para `screens/**`, `components/**` e `App.tsx` e **não** para `ui/**`. Para não quebrar o lint antes da migração, criar a lista `NOT_YET_MIGRATED` com os arquivos atuais que importam esses nomes (ignorados pela regra) e o comentário "esvaziar até a T082" (research R-05)
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites)
+
+**Purpose**: tokens, tema, fonte, ícones e todos os componentes de `ui/`
+([contracts/ui-components.md](./contracts/ui-components.md)), com testes. Nenhuma tela muda aqui,
+exceto o tema global.
+
+**⚠️ CRITICAL**: nenhuma história começa antes desta fase.
+
+### Fundação visual
+
+- [ ] T004 Criar `renderer/ui/tokens.ts` com os valores das variáveis do design e os mesmos nomes (research R-02): cores (`fundo/app` `#ecedf0`, `fundo/padrão` `#ffffff`, `fundo/sutil` `#f4f5f7`, `superfície/escura` `#0e0e10`, `destaque/lima` `#d4f25a`, `destaque/lima suave` `#f0fad2`, `texto/padrão` `#0e0e10`, `texto/ícone` `#2a2c31`, `texto/apagado` `#787b83`, `texto/placeholder` `#a6a9b0`, `texto/inverso` `#ffffff`, `texto/inverso apagado` `#9a9ca3`, `borda/padrão` `#e7e8eb`, `borda/campo` `#dcdee2`, `verde/1` `#e2f5e7`, `verde/9` `#17703d`, `amarelo/1` `#fff0d9`, `amarelo/8` `#d97a00`, `amarelo/9` `#9a5500`, `vermelho/1` `#fde5e2`, `vermelho/9` `#a3282c`, `cinza/1` `#eeeff1`), sombras "card" e "flutuante", raios (cards 20 px; campos e botões 12 px) e os estilos de texto "Nova identidade/…" (Título da página Bold 34/1.15/-2.5; Título do app Bold 17; Corpo Medium 14/1.55; Corpo forte Bold 14; Rótulo SemiBold 13; Rótulo grande SemiBold 15; Descrição Medium 12/1.4; Botão SemiBold 14; Badge Bold 10 com espaçamento 6 %; Tabela cabeçalho SemiBold 12 com espaçamento 2 %). Exportar também `TEXT_COLOR_PAIRS` (pares texto/fundo usados nas telas) e `CONTRAST_EXCEPTIONS` = os três pares do design abaixo de 4,5:1 (`texto/apagado` em branco, em `fundo/app` e em `fundo/sutil`; `texto/placeholder` em `fundo/sutil`; texto branco em `amarelo/8`), com o comentário "SC-005: ficam para uma próxima spec (research UX-1)"
+- [ ] T005 [P] Teste `apps/desktop/test/renderer/tokens-contrast.test.ts` (SC-005): calcula a relação de contraste WCAG de cada par de `TEXT_COLOR_PAIRS` e falha se algum par fora de `CONTRAST_EXCEPTIONS` ficar abaixo de 4,5:1; confere também que as exceções continuam abaixo (para a lista não ficar velha quando a UX ajustar as cores)
+- [ ] T006 Criar `renderer/ui/theme.ts` (`createTheme` do Mantine a partir dos tokens: `fontFamily` "Manrope Variable", `primaryColor` preto, `defaultRadius` 12, paletas de 10 tons `lima`, `cinza`, `verde`, `amarelo`, `vermelho` com os tons 1, 8 e 9 do design nas posições certas) e `renderer/ui/global.css` (variáveis `--hc-*` de todos os tokens, `body` com `fundo/app` e a fonte). Em `renderer/main.tsx`, importar `@fontsource-variable/manrope`, `./ui/global.css` e trocar o tema atual (azul, Segoe UI) pelo de `ui/theme.ts`. Em `apps/desktop/test/renderer/render.tsx`, usar o mesmo tema no `MantineProvider`
+- [ ] T007 [P] Teste de build `apps/desktop/test/main/renderer-assets.test.ts` (FR-004, research R-03): depois do `pnpm --filter @hunit/desktop build`, `out/renderer` tem um `.woff2` da Manrope e nenhum arquivo do build referencia `fonts.googleapis.com`, `fonts.gstatic.com` ou outra URL `http(s)` de fonte; a política de conteúdo do `index.html` continua igual (`font-src 'self'`, `connect-src 'none'`)
+- [ ] T008 [P] Criar os ícones em `renderer/ui/icons/` (um componente React por SVG de `apps/desktop/resources/icons/`, T002): `size` (padrão 20), traço em `currentColor`, `aria-hidden="true"`, e um `index.ts` com os nomes em inglês (`CloseIcon`, `ChevronRightIcon`, `RunIcon`, `ExecutionsIcon`, `ReservationsIcon`, `CommercialIcon`, `SettingsIcon`, `DocumentIcon`…) e o `BrandMark` (marca do cabeçalho). Teste `apps/desktop/test/renderer/ui-icons.test.tsx`: todos renderizam um `svg` oculto do leitor de tela e herdam a cor
+- [ ] T009 [P] Criar `renderer/ui/Surface.tsx` (contexto `light` | `dark`, `useSurface()`) e `renderer/ui/Action.tsx` (research R-06): `variant` só `primary` | `secondary` | `text` | `warning` | `danger-light` | `danger`; `size` `xs` | `md` | `lg`; `primary` vira lima dentro de `Surface dark`; `data-variant` no elemento; estilos em `Action.module.css` a partir das variáveis `--hc-*`; sem prop `color`. Junto, `renderer/ui/DocumentAction.tsx` (`kind` `download` | `revert` | `undo` | `remove`, cada um com cor e ícone fixos, FR-010), `renderer/ui/MenuButton.tsx` (botão com ▾ e itens) e `renderer/ui/FilterChip.tsx` (rótulo, contagem abreviada "12,3 mil" com o número inteiro no `title`, `aria-pressed`). Teste `apps/desktop/test/renderer/ui-actions.test.tsx`: variantes, troca para lima em superfície escura, os quatro tipos de ação de documento com ícones diferentes, menu acessível pelo teclado e a contagem abreviada
+- [ ] T010 [P] Criar os campos em `renderer/ui/fields/`: `Field` (texto, 40 px, fundo sutil, foco com contorno preto, rótulo acima, erro), `PasswordField` (ícone Olho), `SelectField`, `MultiSelectField` (ícone Seletor), `SelectionBox` (desmarcada, marcada preta com check lima, parcial), `CheckboxField`, `RadioField`, `SwitchField`, e mover o `PeriodPicker` de `renderer/screens/run/PeriodPicker.tsx` para `renderer/ui/PeriodPicker.tsx` com o calendário do design (hoje com contorno; escolhido preto; intervalo em lima suave; hoje escolhido em círculo lima), atualizando quem o importa. Teste `apps/desktop/test/renderer/ui-fields.test.tsx`: rótulo e erro acessíveis, estados da caixa de seleção (`aria-checked="mixed"` na parcial) e escolha de período
+- [ ] T011 [P] Criar os status em `renderer/ui/`: `StatusBadge` (`tone` `lime` | `amber` | `green` | `red` | `gray` | `alert`, sempre com texto, `data-no-truncate`), `SituationBadges` (pilha: situação, "Verificar" em `alert`, "Sistema anterior", "Não identificada"; empilhados, nunca cortados), `Notice` (tom `lime` | `green` | `red` | `amber`, ícone e ação opcional), `ProgressBar`, `CountCard`, `IndicatorCard` (número grande, FR-004/US1-3) e `EmptyState` (ícone, título, explicação e ação opcional "Limpar busca e filtros"). Teste `apps/desktop/test/renderer/ui-status.test.tsx`
+- [ ] T012 [P] Criar a estrutura em `renderer/ui/`: `Card` (`padding` 16 ou 24, cantos 20, sombra card, sem borda, `data-block`), `PageHeader` (título 34 px, subtítulo, ação à direita), `AppDialog` (`size` `sm` = 520 px e `lg` = 780 px, limitados a `100vw − 48px` e à altura visível; espaçamento 24 px; título no estilo do design; `dark` usa `Surface dark`; rola por dentro com o fechar fixo; rodapé com "Cancelar" `text` à esquerda da principal) e `AppDrawer` (direita, `min(780px, 100vw − 96px)`, cards de 16 px, fechar com `aria-label`) (FR-042, FR-047). Teste `apps/desktop/test/renderer/ui-structure.test.tsx`: as duas larguras, o `data-block` e o fechar acessível
+- [ ] T013 [P] Criar a navegação em `renderer/ui/`: `AppHeader` (transparente, 72 px, `BrandMark` + "HUNIT Control", selo branco com o cliente e o perfil: operador, consulta, sem conexão), `SideMenu`/`SideMenuItem` (card flutuante 196 px; ativo em pílula preta com ícone lima, `aria-current="page"`; abaixo de 1 180 px de janela só ícones de 64 px com `aria-label` e dica) e `Tabs` (abas com contagem, quebram linha). Teste `apps/desktop/test/renderer/ui-navigation.test.tsx`
+- [ ] T014 [P] Criar as listas em `renderer/ui/lists/`: `ListCard` + `ListHeader` (cabeçalho "Tabela cabeçalho"), `ReservationRow` (research R-08: `<tr>` com caixa de seleção, Hóspede — nome; número · canal —, Hotel, Período `17/11 → 19/11/2026` e noites, Valor — total; "cobrado R$ X · Hunit/· manual" só quando houver, nunca "R$ 0,00" —, `SituationBadges` e seta como botão "Abrir a reserva N"; linha inteira clicável e com Enter; caixa de seleção sem abrir; aberta ou marcada em lima suave; nomes cortados em 2 linhas com `title`; valores com `data-no-truncate`; o hotel vai para a segunda linha do hóspede quando o contêiner tem menos de 1 000 px, por `@container`), `CompactReservationRow`, `ExecutionRow`, `HotelRow` (nome, resumo, situação; também para documentos), `SelectionBar` (barra escura com estado parcial, "N reservas selecionadas · total de R$ X", "Ver seleção", `MenuButton` "Anexar ▾" e "Confirmar ▾", "Enviar ao Comercial" `primary` em superfície escura = lima, "Desmarcar todas" `text`; quebra linha) e `RunningJobCard` (card escuro: título, linhas de apoio, "N de M …", `ProgressBar`, percentual e ação principal lima). Teste `apps/desktop/test/renderer/ui-lists.test.tsx`: clique na linha × na caixa, teclado, segunda linha do valor só com valor cobrado, nome longo com `title`
+- [ ] T015 Criar o auxiliar de teste `apps/desktop/test/renderer/hierarchy.ts` (`expectOnePrimaryPerBlock(container)`: no máximo um `[data-variant="primary"]` por `[data-block]` e por diálogo, research R-06) e usá-lo no `ui-structure.test.tsx`. Em `apps/desktop/test/e2e/app-fixture.ts`, `launchApp` ganha `window?: { width; height }` e `zoomFactor?`, e o arquivo novo `apps/desktop/test/e2e/layout-checks.ts` exporta `expectNoHorizontalScroll(page)` (`scrollWidth ≤ clientWidth` no documento) e `expectNothingTruncated(page)` (todo `[data-no-truncate]` com `scrollWidth ≤ clientWidth`) (research R-16)
+
+**Checkpoint**: `pnpm lint`, `pnpm typecheck` e `pnpm test --project desktop-ui` verdes; o app abre com a
+fonte e as cores novas (as telas ainda com a estrutura antiga).
+
+---
+
+## Phase 3: User Story 1 - Reconhecer o app e navegar com a nova identidade (Priority: P1) 🎯 MVP
+
+**Goal**: estrutura nova (cabeçalho, menu flutuante, fundo, cards), a marca como ícone do app e as
+áreas Configuração e Executar no visual novo.
+
+**Independent Test**: abrir o app, percorrer todas as áreas pelo menu e comparar fundo, cards, menu,
+cabeçalho, tipografia e paleta com as telas 1.1 a 2.10 e 5.1; conferir o ícone do app instalado
+(quickstart, cenários 1, 2 e 17).
+
+- [ ] T016 [US1] Em `renderer/App.tsx`, trocar o `AppShell`/`NavLink` pelo `AppHeader` e pelo `SideMenu` de `ui/` (ícone por área, item ativo em pílula; perfil consulta sem "Executar"; sem conexão só "Configuração"), com a área de conteúdo como contêiner (`container-type: inline-size`, largura máxima 1 600 px, centralizada, FR-046) em `renderer/App.module.css`. Ajustar `apps/desktop/test/renderer/*` que dependem do menu (papéis `navigation` e `link`/`button` com o nome da área) e acrescentar em `apps/desktop/test/renderer/app-shell.test.tsx`: item ativo com `aria-current`, os dois perfis e "sem conexão" (FR-002, FR-003, US1-1, US1-2)
+- [ ] T017 [P] [US1] Avisos de conexão no visual novo: `renderer/components/ConnectionBanner.tsx` com `Notice` e `renderer/components/StaleDataNotice.tsx` ("dados de HH:MM — servidor indisponível") legível no `PageHeader` (tela 5.1, caso de borda). Atualizar `apps/desktop/test/renderer/connection-banner.test.tsx`
+- [ ] T018 [P] [US1] Ícone do app (FR-003, US1-6, research R-04): reescrever `apps/desktop/scripts/generate-icon.mjs` para rasterizar `resources/brand.svg` com o Chromium do `playwright` (já em `devDependencies`) em 16, 24, 32, 48, 64, 128 e 256 px e gravar `resources/icon.ico` (os 7 tamanhos, PNG dentro do ICO) e `resources/icon.png` (256 px); rodar o script e versionar os arquivos gerados. Teste `apps/desktop/test/main/icon.test.ts`: o `.ico` tem exatamente os 7 tamanhos e o `.png` tem 256 × 256. Em `apps/desktop/src/main/window.ts`, passar `icon` (o `icon.png`) só quando `!app.isPackaged` (em desenvolvimento a janela não usa o ícone do executável). Em `apps/desktop/src/renderer/index.html`, `<link rel="icon" type="image/svg+xml" href="…brand.svg">` servido pelo Vite (política `img-src 'self'` sem mudança). O `electron-builder.yml` continua apontando para `resources/icon.ico` (conferir no `apps/desktop/test/main/builder-config.test.ts`)
+- [ ] T019 [P] [US1] Configuração (telas 1.1 a 1.3, nodes `24:757`, `24:786`, `24:821`): `renderer/screens/setup/SetupScreen.tsx` e `PreferencesForm.tsx` com `PageHeader`, `Card`, campos de `ui/fields`, `Notice` e `Action` ("Limpar acesso" = `danger-light`, FR-009). Tirar os dois arquivos da `NOT_YET_MIGRATED` (T003). Atualizar `apps/desktop/test/renderer/setup-screen.test.tsx` e acrescentar `expectOnePrimaryPerBlock`
+- [ ] T020 [US1] Executar (telas 2.1 a 2.5 e 2.8 a 2.10, nodes em [contracts/screens.md](./contracts/screens.md)): `renderer/screens/run/RunScreen.tsx`, `CredentialsForm.tsx`, `HotelSelect.tsx` e `renderer/components/HunitAccess.tsx` com os componentes de `ui/` (período pelo `ui/PeriodPicker`); `renderer/components/TwoFactorDialog.tsx` com `AppDialog` `dark` (token, cronômetro, aceito em verde, recusado em vermelho; "Enviar" = `primary` lima). Tirar os arquivos da `NOT_YET_MIGRATED`. Atualizar `apps/desktop/test/renderer/run-screen.test.tsx` e `two-factor-dialog.test.tsx`; os roteiros `apps/desktop/test/e2e/us1-run-and-token.test.ts` continuam passando
+
+**Checkpoint**: navegação, Configuração e Executar no visual novo; ícone novo no instalador.
+
+---
+
+## Phase 4: User Story 9 - Janelas de tamanhos diferentes e diálogos padronizados (Priority: P1)
+
+**Goal**: o roteiro que prova a responsividade e a padronização, valendo para o que já foi migrado e
+crescendo a cada história.
+
+**Independent Test**: `pnpm test --project desktop-e2e responsive resize` verde para as áreas já
+migradas (quickstart, cenário 12).
+
+- [ ] T021 [US9] Roteiro `apps/desktop/test/e2e/responsive.test.ts` (SC-007, FR-043 a FR-045): com o app contra a API da 001 com o Hunit simulado (como os outros roteiros), abrir cada área já migrada em 960 × 640, 1 280 × 820 e 1 920 × 1 080 e em 960 × 640 com zoom 125 %, e aplicar `expectNoHorizontalScroll` e `expectNothingTruncated`; em 960 px, conferir o menu só com ícones e a área ativa ainda identificável. Começa com Configuração e Executar; cada história seguinte acrescenta as telas dela (tarefas "registrar no roteiro de larguras")
+- [ ] T022 [P] [US9] Roteiro `apps/desktop/test/e2e/resize.test.ts` (SC-008, FR-048): com a janela em 1 440 px, preencher o formulário de Executar (período e hotéis), redimensionar para 960 px e de volta para 1 920 px e conferir que nada se perdeu; cada história seguinte acrescenta o próprio estado (filtros, seleção, gaveta aberta, aba ativa, texto de diálogo)
+- [ ] T023 [P] [US9] Teste `apps/desktop/test/renderer/dialogs-standard.test.tsx` (SC-009, FR-042): renderiza cada diálogo do app (token, cancelar execução e, à medida que forem migrados, anexar, recusar retorno, confirmações em lote, cópia para e-mail, envio) e confere que usam `AppDialog` com largura `sm` ou `lg`, o espaçamento de 24 px e um título; começa com os diálogos já migrados e cresce com as histórias
+- [ ] T024 [US9] Em `apps/desktop/test/e2e/screens-capture.test.ts`, aceitar `HUNIT_SCREENS_WIDTH` (960 ou 1280; padrão 1440 × 900) para capturar as mesmas telas nas larguras menores (quickstart §2, research UX-5)
+
+**Checkpoint**: larguras e redimensionamento provados para as áreas migradas.
+
+---
+
+## Phase 5: User Story 2 - Achar e abrir reservas numa lista mais enxuta (Priority: P1)
+
+**Goal**: lista de 5 colunas ordenada por hotel e check-in, busca única, Origem na barra, painel
+"Filtros avançados", "Filtros aplicados", filtros rápidos com contagem e estado vazio.
+
+**Independent Test**: com reservas em várias situações, usar a busca, cada filtro rápido e o painel, e
+abrir uma reserva pela linha (quickstart, cenários 3 a 7 e 15; telas 4.1, 4.3, 4.12 e 6.2).
+
+### Domínio e API (contrato 1.8.0)
+
+- [ ] T025 [P] [US2] Testes `packages/domain/test/quick-filters.test.ts` com os exemplos de [data-model.md](./data-model.md) §1: pendente sem tratativa → `pending_charge`; "Validar comprovante" → `pending_charge` e `to_review`; tratativa e Hunit "Já cobrada" com o alerta → `to_review` e `done`; "A revisar (sistema anterior)" → `to_review`; erro na cobrança ou de análise sem comprovante → `with_error` e `pending_charge`; cobrar na maquininha sem comprovante → `pending_charge`; faturada sem tratativa → `done`; comprovante enviado → `done`
+- [ ] T026 [US2] Implementar `packages/domain/src/quick-filters.ts` (`QUICK_FILTERS = ['pending_charge', 'to_review', 'with_error', 'done'] as const`, `QuickFilter`, `quickFiltersOf({ pendingCharge, needsReview, detailedSituation })` com as regras do data-model §1) e exportar no `packages/domain/src/index.ts`
+- [ ] T027 [US2] Contrato 1.8.0 ([contracts/api-changes.md](./contracts/api-changes.md)): em `packages/contracts/openapi.yaml`, versão 1.8.0 e a descrição dos acréscimos; enums `ReservationQuickFilter` (`pending_charge`, `to_review`, `with_error`, `done`) e `ReservationOrder` (`hotel_number`, `hotel_check_in`); parâmetros opcionais `quickFilter` e `order` em `GET /reservations` e `GET /reservations/selection`; rota `GET /reservations/quick-filter-counts` (mesmos filtros da lista, sem `quickFilter`, `cursor`, `limit` e `order`; resposta `ReservationQuickFilterCounts` = `{ all, pendingCharge, toReview, withError, done }`, inteiros ≥ 0 obrigatórios; 400 `invalid_parameters`; 401). Rodar `pnpm --filter @hunit/contracts generate` e copiar o arquivo para `specs/006-redesign-app-desktop/contracts/openapi.yaml` (idêntico; a cópia da 005 fica na 1.7.0). Conferir que `apps/server/test/unit/contract-frozen-enums.test.ts` continua verde
+- [ ] T028 [P] [US2] Testes de contrato `apps/server/test/contract/reservations-quick-filters.test.ts`: `quickFilter` e `order` aceitos nas duas rotas e 400 com valor fora do enum; `/reservations/quick-filter-counts` validado contra o esquema, com e sem filtros, para operador e consulta; 401 sem chave
+- [ ] T029 [P] [US2] Testes `server-db` `apps/server/test/integration/reservations-quick-filters.test.ts` (research R-09, R-18): semear reservas em todas as situações (inclusive com tratativa, comprovante, retorno aguardando, alerta "Verificar" e "A revisar (sistema anterior)"); para cada grupo, a contagem é igual ao tamanho da lista com aquele `quickFilter` e ao que `quickFiltersOf` diz de cada reserva; `order=hotel_check_in` percorre todas as páginas por cursor sem repetir nem pular, na ordem hotel → check-in → número; cursor de uma ordem com a outra → 400 `invalid_cursor`; cursor no formato da 1.7.0 (`[hotel, número]`) aceito como `hotel_number`; seleção com `order` corta nas 2 000 primeiras dessa ordem. Desempenho: com 20 000 reservas, a contagem responde em até 1 s (como `legacy-import-perf.test.ts`)
+- [ ] T030 [US2] Em `apps/server/src/persistence/reservations-repo.ts`: `quickFilterCondition(filter)` montada com as condições existentes (`pending_charge` = `pendingChargeCondition()`; `to_review` = `or(needsReviewCondition(), situationCondition('not_virtual_card'), detailedSituationCondition('return_pending'))`; `with_error` e `done` = `or` de `detailedSituationCondition` com as listas de [contracts/api-changes.md](./contracts/api-changes.md)); `quickFilter` em `ReservationFilters`/`filterConditions`; `countQuickFilters(db, filters)` numa consulta só com `count(*) filter (where …)`; `order` em `listReservations` e `selectReservations` (`hotel_check_in` = `hotel_code`, `check_in`, `reservation_number`), com o cursor `[order, hotelCode, checkIn, reservationNumber]` e o formato antigo `[hotelCode, reservationNumber]` aceito como `hotel_number` (data-model §5). Nenhuma migration (índice `reservations_hotel_check_in_idx` já existe)
+- [ ] T031 [US2] Em `apps/server/src/http/handlers/reservations.ts`: ler e validar `quickFilter` e `order` nas duas rotas e registrar `GET /reservations/quick-filter-counts` (perfis operador e consulta), respondendo com `countQuickFilters`. T028 e T029 verdes
+- [ ] T032 [US2] Ponte do app ([contracts/ipc.md](./contracts/ipc.md)): em `apps/desktop/src/shared/ipc-types.ts`, `ReservationQuickFilter`, `ReservationOrder`, `quickFilter` e `order` em `ReservationListInput`, `ReservationCountFilters` e `ReservationQuickFilterCounts`; em `ipc-schemas.ts`, os campos novos e `reservationCountFiltersSchema` (`strictObject`, sem `cursor`, `limit`, `quickFilter` e `order`); em `ipc-channels.ts`, `reservationsQuickFilterCounts: 'reservations:quickFilterCounts'`; `apps/desktop/src/main/api-client.ts` (rota nova e parâmetros), `ipc-handlers.ts` e `apps/desktop/src/preload/index.ts` (`reservations.quickFilterCounts`). Testes em `apps/desktop/test/main/api-client.test.ts` e `ipc-handlers.test.ts` (entrada inválida → `invalid_input`)
+
+### Telas
+
+- [ ] T033 [US2] Barra e painel de filtros (telas 4.1 e 4.12, nodes `71:9228` e `125:3670`; research R-10, R-11): reescrever `renderer/screens/reservations/ReservationFilters.tsx` como a barra (campo único "Buscar por hóspede, nº da reserva, transação, autorização ou valor", aplicado 400 ms depois da última tecla: texto com centavos ou "R$" → `amount`, o resto → `q` com mínimo de 2 caracteres e a mensagem de hoje; "Origem" com Todas / Sistema anterior / HUNIT Control; botão "Filtros") e o painel "Filtros avançados" (hotéis, período de check-in com `ui/PeriodPicker`, situação da reserva, "Ativa ou cancelada" como seleção única — Ativas e canceladas, Só ativas, Só canceladas e, provisoriamente, Só não identificadas (research UX-3: **confirmar com o usuário antes de fechar a fase**) —, canal e "Só as não encontradas na última verificação"), valendo na hora; e a linha "Filtros aplicados" com um chip removível por filtro do painel em vigor e o da execução, sem a Origem (FR-034). "Falta cobrar" e "A verificar" saem do painel
+- [ ] T034 [US2] Filtros rápidos e contagens (FR-016, FR-017; research R-09): em `renderer/screens/reservations/ReservationsScreen.tsx`, os `FilterChip` Todas · Falta cobrar · A verificar · Com erro · Concluídas com as contagens de `reservations.quickFilterCounts` (consulta própria do TanStack Query com os mesmos filtros da lista; invalidada junto com a lista: mudança de filtro, volta do servidor, tratativa, envio, confirmação, revisão); o chip escolhido vira `quickFilter` da lista, da seleção do filtro e da cópia para e-mail; falha nas contagens não esconde a lista (chips sem número)
+- [ ] T035 [US2] Lista (tela 4.1, research R-08): em `ReservationsScreen.tsx`, `PageHeader` "Reservas" com "Copiar para e-mail" (`secondary`) à direita; `ListCard` com `ReservationRow` (5 colunas, "Ativa/Cancelada" só no detalhe, FR-014); pedido sempre com `order: 'hotel_check_in'`; rodapé "Mostrando X de Y reservas · ordenadas por hotel e check-in" (Y = `all` das contagens) e "Carregar mais" quando houver próxima página; linha aberta em lima suave; estado vazio com `EmptyState` e "Limpar busca e filtros" quando houver busca ou filtro (tela 4.3, FR-021); perfil consulta sem caixas de seleção (tela 6.2). Trocar `ChargedAmount`, `SituationBadge`, `StatusBadge` e `LegacyBadge` de `renderer/components/` pelos de `ui/` (apagar os antigos quando ninguém mais os usar). Tirar `ReservationsScreen.tsx` e `ReservationFilters.tsx` da `NOT_YET_MIGRATED`
+- [ ] T036 [P] [US2] Testes `desktop-ui`: atualizar `apps/desktop/test/renderer/reservations-screen.test.tsx` e acrescentar `apps/desktop/test/renderer/reservations-quick-filters.test.tsx` (contagens nos chips, filtro rápido aplicado na lista, abreviação de contagem grande, falha das contagens), `reservations-search.test.tsx` (busca única: `380,00` vira `amount`, `101-1000` vira `q`, 1 caractere mostra o erro, espera de 400 ms) e `reservations-filters-panel.test.tsx` (painel, "Filtros aplicados" sem a Origem, remover um chip, "Limpar busca e filtros"); os roteiros `apps/desktop/test/e2e/us3-reservations.test.ts` continuam passando
+- [ ] T037 [US2] Registrar a área Reservas (lista, painel aberto, estado vazio) em `apps/desktop/test/e2e/responsive.test.ts` e o estado "busca digitada + filtro do painel + filtro rápido" em `resize.test.ts`
+
+**Checkpoint**: MVP — identidade, navegação e a lista de reservas nova, com contagens e ordem por
+check-in, funcionando nas três larguras.
+
+---
+
+## Phase 6: User Story 3 - Ver a hierarquia das ações de relance (Priority: P2)
+
+**Goal**: cada botão do app na variante certa, uma principal por bloco, destrutivas inconfundíveis.
+
+**Independent Test**: percorrer telas e diálogos e classificar cada botão (quickstart, cenário 2;
+`expectOnePrimaryPerBlock` verde em todos os testes de tela).
+
+- [ ] T038 [US3] Em `renderer/screens/reservations/TreatmentSection.tsx`, documentos com `DocumentAction` ("Baixar", "Reverter", "Desfazer" e "Remover valor" = `remove`, FR-009, FR-010) e "Substituir tratativa" e "Substituir comprovante" na mesma variante `secondary` (FR-012). Atualizar `apps/desktop/test/renderer/treatment-section.test.tsx`
+- [ ] T039 [P] [US3] Em `renderer/screens/reservations/AttachDialog.tsx`: `AppDialog`, "Cancelar" = `text` e "Escolher outro arquivo" = `secondary` (FR-011), uma principal. Atualizar `apps/desktop/test/renderer/attach-dialog.test.tsx`
+- [ ] T040 [P] [US3] Teste `apps/desktop/test/renderer/actions-audit.test.ts` (FR-013, FR-007): varre o código de `renderer/` e falha se aparecer `variant="light"` ou outro nome fora das variantes de `Action`, e roda `expectOnePrimaryPerBlock` nas telas principais já migradas (a lista cresce com as histórias)
+
+**Checkpoint**: nenhuma ação destrutiva com cara de segura; nenhum "Leve".
+
+---
+
+## Phase 7: User Story 4 - Operar um lote de reservas pela barra de seleção (Priority: P2)
+
+**Goal**: caixa de seleção e barra escura do design, com as ações agrupadas, e o resumo do anexo em
+lote.
+
+**Independent Test**: marcar reservas de situações variadas em pesquisas diferentes e anexar um
+comprovante (quickstart, cenário 8; telas 4.4 a 4.6).
+
+- [ ] T041 [US4] Em `ReservationsScreen.tsx`, trocar a barra atual pela `SelectionBar` (tela 4.4, node `71:10052`): oculta sem seleção; "Ver seleção"; "Anexar ▾" (Anexar tratativa, Anexar comprovante); "Confirmar ▾" (Confirmar retornos, Confirmar "Verificar"); "Enviar ao Comercial" lima; "Desmarcar todas"; total marcado e soma; caixa do cabeçalho com estado parcial; "Selecionar todas do filtro" no fim da linha dos filtros rápidos (FR-016) e os avisos de limite com `Notice`. A seleção continua em `renderer/state/selection.tsx` sem mudança (US4-4). Atualizar `apps/desktop/test/renderer/selection.test.tsx`
+- [ ] T042 [P] [US4] `renderer/screens/reservations/SelectionDrawer.tsx` com `AppDrawer` e `CompactReservationRow` (tela 4.5) e `AttachDialog.tsx` com o resumo de aceitas (ícone verde) e ignoradas (ícone âmbar) e a quantidade de cada grupo antes da confirmação (tela 4.6, FR-024; tela 4.8 para o e-mail). Tirar os arquivos da `NOT_YET_MIGRATED`; testes em `selection.test.tsx` e `attach-dialog.test.tsx`; `apps/desktop/test/e2e/treatments.test.ts` continua passando
+- [ ] T043 [US4] Registrar a barra de seleção (com muitas ações em 960 px) em `responsive.test.ts` e "seleção feita + gaveta da seleção aberta" em `resize.test.ts`
+
+**Checkpoint**: lote completo no visual novo.
+
+---
+
+## Phase 8: User Story 5 - Entender e corrigir uma reserva nos detalhes (Priority: P2)
+
+**Goal**: gaveta da reserva reorganizada, com "Status do Hunit", valor salvo × "Corrigir o valor",
+histórico, "Verificações" e o alerta "Verificar" bloqueando novos anexos.
+
+**Independent Test**: abrir reservas comum, com valor salvo, com muito histórico e com "Verificar"
+(quickstart, cenário 9; telas 4.2, 4.7 e 4.9).
+
+- [ ] T044 [US5] `renderer/screens/reservations/ReservationDetail.tsx` (tela 4.2, node `71:9562`) com `AppDrawer`: cabeçalho com "Reserva N", hotel e `SituationBadges` + Ativa/Cancelada; dados (hóspede, canal, forma de pagamento, check-in, check-out, valor total, "Valor cobrado"); card "Status do Hunit" (selo, motivo e, quando houver `previousClassification`, "Classificação anterior", FR-025); card "Cobrança" ("Valor cobrado no Hunit", FR-040); card "Verificações" (primeira, última, quantidade, FR-028). Tirar da `NOT_YET_MIGRATED`; atualizar `apps/desktop/test/renderer/reservation-detail.test.tsx`
+- [ ] T045 [US5] `renderer/screens/reservations/TreatmentSection.tsx` (telas 4.7 e 4.9): card "Tratativa" com os documentos em `HotelRow` (nome, resumo, situação; FR-020) e as ações de documento; valor salvo com "Remover" separado do campo "Corrigir o valor" com "Informar valor" `primary` (o digitado não substitui o salvo antes de confirmar, FR-026); histórico com os 5 mais recentes e "Mostrar mais" (FR-027); com o alerta "Verificar", `Notice` no topo com "Confirmar" `primary` e "Anexar tratativa"/"Anexar comprovante" desabilitados com o motivo ao lado, documentos existentes ainda com "Baixar" (FR-029; research R-12: só apresentação, o servidor não muda). Testes em `treatment-section.test.tsx` (anexos desabilitados com o texto do motivo; ao confirmar, liberam)
+- [ ] T046 [US5] Registrar a gaveta da reserva em `responsive.test.ts` (as três larguras; fechar sempre alcançável) e "gaveta aberta + valor digitado em Corrigir o valor" em `resize.test.ts`
+
+**Checkpoint**: detalhe da reserva completo no visual novo.
+
+---
+
+## Phase 9: User Story 7 - Reconhecer as reservas do sistema anterior (Priority: P2)
+
+**Goal**: telas 4.10 e 4.11 no visual novo (o comportamento é da 004).
+
+**Independent Test**: filtrar Origem "Sistema anterior" e abrir uma reserva "A revisar (sistema
+anterior)" (telas 4.10 e 4.11).
+
+- [ ] T047 [US7] Na lista: selo "Sistema anterior" ao lado do nome do hóspede e os selos empilhados ("Selo extra" para "Verificar" e "Não identificada", FR-033); com Origem "Sistema anterior", a barra mostra a Origem escolhida e nem "Filtros aplicados" nem o painel a repetem (FR-034); "A revisar (sistema anterior)" conta e aparece em "A verificar" (vem do T030). Arquivos: `renderer/ui/lists/ReservationRow.tsx` (se preciso) e `renderer/screens/reservations/ReservationsScreen.tsx`. Atualizar `apps/desktop/test/renderer/legacy-origin.test.tsx`
+- [ ] T048 [US7] Na gaveta (tela 4.11, node `150:5826`): selos aplicáveis no topo, "Status do Hunit", tratativa importada com "Baixar" e "Desfazer", "Cobrança", "Verificações" com o aviso "Ainda não verificada…" e o card "Sistema anterior" (FR-035), em `ReservationDetail.tsx` e `TreatmentSection.tsx`. Testes em `legacy-origin.test.tsx`
+
+**Checkpoint**: reservas do sistema anterior reconhecíveis em até 5 s numa lista (SC-010).
+
+---
+
+## Phase 10: User Story 8 - Enviar ao Comercial e trabalhar na área Comercial (Priority: P2)
+
+**Goal**: telas 7.1 a 7.14 no visual novo e o envio em andamento como card escuro (o comportamento é da
+005).
+
+**Independent Test**: percorrer as telas 7.1 a 7.14 com dados de teste e abrir o envio a partir de
+uma seleção em no máximo 2 cliques (quickstart, cenários 11 e 16).
+
+- [ ] T049 [US8] ⛔ FIGMA/UX: montar no Figma a tela de exemplo **7.7a Comercial — Envios com envio em andamento (para aprovação)** (research R-13; [contracts/screens.md](./contracts/screens.md), "Tela para aprovação"): numa seção nova "Para aprovação da UX" da página `006-redesign-app-desktop`, a partir da tela 7.7 (`190:7635`) e só com componentes de `Componentes — nova identidade`, com o card escuro no topo (data, cliente, "N de M reservas verificadas", progresso lima, percentual e "Ver envio" lima) e o histórico abaixo; dados fictícios. Não alterar nenhum frame existente. Carregar antes `skill://figma/figma-use/SKILL.md`. Pedir ao usuário que leve à UX e registrar a resposta em `research.md` (R-13)
+  _Andamento (2026-11-18):_ tela montada na seção "Para aprovação da UX" (node `211:9211`), frame `211:9212`, a partir de uma cópia da 7.7 com uma instância do "Card — execução em andamento" (`53:131`) entre as abas e o "Histórico"; exemplo com 8 de 16 reservas (50 %), porque a largura da barra não pode ser mudada numa instância sem desconectá-la da biblioteca. Falta a resposta da UX.
+- [ ] T050 [P] [US8] Envio (telas 7.1 a 7.4): `renderer/screens/dispatch/DispatchDialog.tsx` e `DispatchView.tsx` com `AppDialog` (`lg`), conferência com aceitas e as que ficam de fora com o motivo, andamento com `ProgressBar` e a lista de resultados, token no `TwoFactorDialog` escuro, concluído com as contagens. Atualizar `apps/desktop/test/renderer/dispatch.test.tsx`; `apps/desktop/test/e2e/dispatch.test.ts` continua passando
+- [ ] T051 [P] [US8] Gaveta "Validar comprovante" e recusa (telas 7.5 e 7.6): `renderer/screens/reservations/CommercialSection.tsx` com o card "Comercial" de 16 px (FR-042), retorno com hotel diferente e diferença de valor em destaque, "Confirmar" `primary` e "Recusar" `secondary`; `RejectDialog` com `AppDialog` `sm`, motivos rápidos e campo de texto (FR-038). Atualizar `apps/desktop/test/renderer/commercial-validation.test.tsx`
+- [ ] T052 [US8] Área Comercial (telas 7.7 a 7.10): `renderer/screens/commercial/CommercialScreen.tsx` com `PageHeader` e `Tabs` (Envios, Retornos a validar com contagem, Retornos com problema com contagem, Planilha; FR-039); `DispatchesTab.tsx` com `ListCard` e linhas de lista e, para envio em andamento, o `RunningJobCard` no topo **como aprovado no T049**; `ReturnsTab.tsx`, `ProblemsTab.tsx` e `SheetTab.tsx` com os componentes de `ui/`. Tirar os arquivos da `NOT_YET_MIGRATED`; atualizar `apps/desktop/test/renderer/commercial-screen.test.tsx` (inclui o card do envio em andamento)
+- [ ] T053 [P] [US8] Lote e e-mail (telas 7.11 a 7.14): aviso de "Selecionar todas do filtro" com `Notice`; `renderer/screens/reservations/ConfirmBatchDialog.tsx` (retornos em lote e "Verificar" em lote) e `CopyDialog.tsx` com `AppDialog` e `CompactReservationRow`; a cópia usa o filtro rápido e a ordem da lista (T034, T035). Atualizar `apps/desktop/test/renderer/commercial-reservations.test.tsx`
+- [ ] T054 [US8] Registrar a área Comercial (as quatro abas) e os diálogos do envio em `responsive.test.ts`, a aba ativa e o motivo da recusa digitado em `resize.test.ts`, e os diálogos de T050, T051 e T053 em `dialogs-standard.test.tsx`
+
+**Checkpoint**: Comercial e envio no visual novo; envio em andamento conforme aprovado pela UX.
+
+---
+
+## Phase 11: User Story 6 - Acompanhar execuções e ler hotéis e documentos (Priority: P3)
+
+**Goal**: execuções ativas em cards escuros e o "Histórico"; hotéis da execução como linhas simples;
+resultado da execução no visual novo.
+
+**Independent Test**: com uma execução em andamento e várias encerradas, abrir Execuções e o detalhe
+(quickstart, cenário 10; telas 2.6, 2.7, 3.1 a 3.4 e 6.1).
+
+- [ ] T055 [US6] `renderer/screens/executions/ExecutionsScreen.tsx` (tela 3.1, node `24:1524`): `PageHeader`; um `RunningJobCard` por execução com `active = true` (data, período, cliente, "N de M hotéis concluídos", progresso, percentual, "Ver detalhes" lima), sem card quando não houver (US6-3); seção "Histórico" com `ListCard` e `ExecutionRow` (data, período, cliente, resultado, situação). Envios não aparecem aqui (research R-13). Atualizar `apps/desktop/test/renderer/executions-screen.test.tsx` (uma ativa, duas ativas de contas diferentes, nenhuma)
+- [ ] T056 [US6] `renderer/screens/executions/ExecutionDetail.tsx` (telas 3.2 a 3.4) com `AppDrawer`: hotel atual, tempo restante, contagens com `CountCard`/`IndicatorCard`, hotéis em `HotelRow` (FR-020), evidências (`renderer/components/EvidenceList.tsx` no visual novo), "Cancelar execução" e o diálogo "Cancelar a execução?" com `AppDialog` e "Sim, cancelar" `danger` (FR-009). Atualizar os testes; `apps/desktop/test/e2e/us2-monitor-cancel-resume.test.ts` continua passando
+- [ ] T057 [P] [US6] Resultado da execução em Executar (telas 2.6 e 2.7): `renderer/screens/run/ExecutionResult.tsx` e `renderer/components/ClassificationCountsGrid.tsx` com `IndicatorCard`/`CountCard` (números grandes, US1-3) e hotéis em `HotelRow`. Atualizar `apps/desktop/test/renderer/execution-result.test.tsx`
+- [ ] T058 [US6] Registrar Execuções (lista e gaveta) em `responsive.test.ts`, o diálogo de cancelamento em `dialogs-standard.test.tsx` e a gaveta aberta em `resize.test.ts`
+
+**Checkpoint**: todas as áreas no visual novo.
+
+---
+
+## Phase 12: Polish & Cross-Cutting Concerns
+
+**Purpose**: fechar a regra dos componentes, documentar, comparar com o design, homologar, marcar no
+Figma e implantar.
+
+- [ ] T059 Migrar o que sobrou (`renderer/components/DocumentPreview.tsx` e qualquer arquivo ainda em `NOT_YET_MIGRATED`) e **esvaziar e remover** a `NOT_YET_MIGRATED` de `eslint.config.js`: `pnpm lint` verde sem exceções (FR-030, research R-05). Apagar de `renderer/components/` os componentes substituídos por `ui/` sem uso
+- [ ] T060 [P] Rótulos (research R-15): conferir em `renderer/presentation/labels.ts` os nomes do design (selos em maiúsculas pelo estilo "Badge", não pelo texto) e os tons de cada situação nas cores de significado fixo (FR-005: verde concluído, âmbar atenção, vermelho erro, cinza neutro, lima em andamento). Atualizar `apps/desktop/test/renderer/labels.test.ts`
+- [ ] T061 [P] Roteiro de captura `apps/desktop/test/e2e/screens-capture.test.ts`: as telas 1.1 a 7.14 com os estados do design, a 4.12 (painel "Filtros avançados") nova e o card do envio em andamento na 7.7; atualizar o catálogo `.claude/skills/figma-screens-sync/references/screens.md` (linha da 4.12, coluna "Código" conforme [contracts/screens.md](./contracts/screens.md))
+- [ ] T062 Comparação com o design (SC-001, quickstart §2): capturar em 1 440 × 900 e comparar cada print com o frame do design; registrar as diferenças em `research.md` ("Comparação com o design") e corrigir até não sobrar diferença sem aceite. Capturar também em 960 e 1 280 px e guardar para a revisão da UX (research UX-5; os prints ficam fora do Git)
+- [ ] T063 [P] Documentação: `AGENTS.md` (estrutura com `renderer/src/ui/` e a regra de lint; contrato 1.8.0 com a cópia em `specs/006-redesign-app-desktop/contracts/`; a cópia da 005 congelada na 1.7.0; parágrafo "Desde a feature 006"; comando do `generate-icon.mjs`) e `README.md` (instalação do app: ícone novo; se o atalho mostrar o ícone antigo, cache do Windows)
+- [ ] T064 Verificação completa: `pnpm build`, `pnpm lint`, `pnpm typecheck` e `pnpm test` (todos os grupos, com o Docker) verdes; `git diff --cached --name-only` sem prints, planilhas ou dados reais
+- [ ] T065 ⛔ HOMOLOGAÇÃO: quickstart §4 — servidor de homologação na API 1.8.0 e instalador novo; cenários 1 a 17 da seção 3 com os dois perfis; o app 0.2 contra a 1.8.0 continua funcionando. Registrar em `research.md` ("Homologação")
+- [ ] T066 ⛔ FIGMA: rodar a skill `figma-screens-sync` com `FEATURE = '006-redesign-app-desktop'`: simulação, relatório ao usuário e, com o ok dele, aplicação — telas da 006 com ✅ e as das páginas 002 a 005 com ❌ e ocultas (FR-032, research R-17). Atualizar a coluna "Ativa em" do catálogo
+- [ ] T067 ⛔ PRODUÇÃO: quickstart §5 — servidor de produção na 1.8.0 **antes** do app; instalador novo nas máquinas do Financeiro e da Controladoria. Registrar em `research.md` ("Produção")
+
+---
+
+## Dependencies & Execution Order
+
+### Phase Dependencies
+
+- **Setup (Phase 1)**: sem dependências. T002 antes de T008 e T018.
+- **Foundational (Phase 2)**: depende do Setup; **bloqueia** todas as histórias. T004 → T005, T006;
+  T006 → T009 a T014; T009 a T014 em paralelo entre si (arquivos diferentes); T012, T014 → T015.
+- **US1 (Phase 3)**: depende da Foundational. T016 antes de T019 e T020 (o menu e o contêiner);
+  T017 e T018 em paralelo.
+- **US9 (Phase 4)**: depende de US1 (precisa de áreas migradas para testar). Cada história seguinte
+  acrescenta as telas dela aos roteiros (T037, T043, T046, T054, T058).
+- **US2 (Phase 5)**: depende da Foundational. API: T025 → T026; T027 → T028, T029 → T030 → T031 →
+  T032. Telas: T032 → T033, T034, T035 → T036 → T037.
+- **US3 (Phase 6)**: depende da US2 (T035) para a lista; T038 a T040 em paralelo.
+- **US4 (Phase 7)**: depende da US2 (lista e filtros rápidos).
+- **US5 (Phase 8)**: depende da Foundational; T045 depois de T038 (mesmo arquivo).
+- **US7 (Phase 9)**: depende da US2 (T035) e da US5 (T044, T045).
+- **US8 (Phase 10)**: depende da US4 (barra de seleção) e da US5 (gaveta); **T052 espera a aprovação
+  do T049** só na parte do card do envio em andamento.
+- **US6 (Phase 11)**: depende da Foundational e da US1 (T020, para o resultado em Executar).
+- **Polish (Phase 12)**: depois de todas as histórias. T059 → T064; T061 → T062 → T065 → T066;
+  T065 → T067.
+
+### Within Each User Story
+
+- Testes escritos antes e falhando; domínio → repositório → rotas → ponte do app → telas.
+- Cada tela migrada sai da `NOT_YET_MIGRATED` na mesma tarefa.
+- Uma tarefa só está concluída com os testes dela passando (constitution VII).
+
+### Parallel Opportunities
+
+- Setup: T002 com T001.
+- Foundational: T005 e T007 com T006; T008 a T014 entre si.
+- US1: T017, T018 e T019 em paralelo depois de T016.
+- US9: T022 e T023 em paralelo com T021.
+- US2: T025 com T027; T028 com T029; as telas (T033 a T035) começam depois de T032.
+- US3: T039 e T040 em paralelo com T038.
+- US5 e US6 podem andar em paralelo com a US2 (arquivos diferentes), se houver mais de uma pessoa.
+- US8: T049 (Figma) pode ser feito logo no início da feature, para a aprovação chegar a tempo; T050,
+  T051 e T053 em paralelo.
+- Polish: T060, T061 e T063.
+
+---
+
+## Parallel Example: Foundational
+
+```bash
+# Depois de T004 e T006, em paralelo:
+Task: "T009 Action, DocumentAction, MenuButton e FilterChip"
+Task: "T010 Campos e PeriodPicker"
+Task: "T011 Selos, avisos, progresso e estado vazio"
+Task: "T012 Card, PageHeader, AppDialog e AppDrawer"
+Task: "T013 AppHeader, SideMenu e Tabs"
+Task: "T014 Linhas de lista, SelectionBar e RunningJobCard"
+```
+
+## Parallel Example: User Story 2
+
+```bash
+# API, em paralelo:
+Task: "T025 Testes de quickFiltersOf"
+Task: "T027 Contrato 1.8.0"
+# Depois de T027:
+Task: "T028 Testes de contrato do quickFilter, order e contagens"
+Task: "T029 Paridade, ordem por check-in e desempenho (server-db)"
+```
+
+---
+
+## Implementation Strategy
+
+### MVP First (US1 + US9 + US2)
+
+1. Phase 1 (Setup) e Phase 2 (Foundational): o app já abre com a fonte e as cores novas.
+2. Phase 3 (US1): navegação, Configuração, Executar e o ícone novo.
+3. Phase 4 (US9): roteiros de larguras e redimensionamento.
+4. Phase 5 (US2): lista de reservas com filtros rápidos, contagem e ordem por check-in.
+5. **PARAR E VALIDAR**: quickstart, cenários 1 a 7, 12 e 15; os roteiros `desktop-e2e` antigos verdes.
+
+### Incremental Delivery
+
+1. Setup + Foundational → base visual.
+2. US1 → identidade e navegação.
+3. US9 → prova das larguras (cresce com cada história).
+4. US2 → lista de reservas (MVP).
+5. US3 → hierarquia das ações.
+6. US4 → lote.
+7. US5 → detalhe da reserva.
+8. US7 → sistema anterior.
+9. US8 → Comercial e envio (o T049 vai para a UX logo no início da feature).
+10. US6 → execuções.
+11. Polish → lint sem exceções, comparação com o design, homologação, marcação no Figma e produção.
+
+O app só é instalado nas máquinas no fim (T067): entre as fases, as telas novas convivem com as
+antigas apenas no ambiente de desenvolvimento.
+
+---
+
+## Notes
+
+- [P] = arquivos diferentes, sem dependência de tarefa incompleta.
+- Commits pequenos, em português, citando a spec (ex.: `feat(specs/006): lista de reservas com filtros rápidos (T033-T035)`).
+- Antes de cada commit: `git diff --cached --name-only` sem prints, `.env`, planilhas ou dados reais
+  (AGENTS.md).
+- Ponto aberto: "Só não identificadas" no filtro "Ativa ou cancelada" (research UX-3) — confirmar com
+  o usuário durante a T033.
+- Se a implementação mostrar que a spec está errada ou incompleta, **parar e atualizar a spec** antes
+  de seguir.

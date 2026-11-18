@@ -44,3 +44,8 @@
   compatível na API permitido para as contagens (FR-017, FR-031); FR-020 e história 6 corrigidos (não
   há áreas de hotéis e de documentos no menu); SC-004 (teste com 4 pessoas) removido e os critérios
   renumerados; a menção à 007 saiu do FR-043 (fica para a spec da 007). Revalidado.
+- Decisões do plano (2026-11-18), registradas em "Session 2026-11-18 (plano)": ordem por hotel e
+  check-in (FR-014, acréscimo na API); exceções de contraste do design no SC-005 e no FR-006 (próxima
+  spec); marca nova também como ícone do app (FR-003, US1-6); card escuro do envio em andamento com
+  tela de exemplo para a UX (FR-039); marcação ✅/❌ no Figma em vez de espelho (FR-032, premissas).
+  Revalidado.

@@ -36,13 +36,14 @@ tamanho em que o design foi desenhado. O comportamento de negócio da importaç�
 pertence às features 004 e 005, que já foram entregues com o visual anterior; esta feature leva as
 telas delas ao design oficial, cuidando da apresentação e da organização da informação.
 
-O espelho do app no Figma (feature de manutenção das telas) passa a ser comparado com o design
-oficial: a feature termina quando os dois mostram as mesmas telas.
+O app passa a ser comparado tela a tela com o design oficial: a feature termina quando os dois
+mostram as mesmas telas. Ao concluir, as telas da 006 ficam marcadas no Figma como as em uso.
 
 Ficam **fora do escopo**: novas funções de negócio (as regras da importação do sistema anterior e do
 envio ao Comercial são das features 004 e 005), mudança de permissões, tema escuro, versão para outros
 sistemas operacionais além do Windows, versão para celular ou tablet, e qualquer mudança no servidor
-ou no contrato da API além do acréscimo compatível para as contagens dos filtros rápidos (FR-017).
+ou no contrato da API além dos acréscimos compatíveis para as contagens dos filtros rápidos (FR-017)
+e para a ordem da lista por hotel e check-in (FR-014).
 
 ## Clarifications
 
@@ -54,6 +55,15 @@ ou no contrato da API além do acréscimo compatível para as contagens dos filt
 - Q: Quais reservas entram em cada filtro rápido? → A: Falta cobrar = o filtro "Falta cobrar" de hoje; A verificar = alerta "Verificar", "A revisar (sistema anterior)" e "Validar comprovante"; Com erro = "Erro na cobrança" e "Erro de análise"; Concluídas = "Comprovante enviado", "Faturada", "Já cobrada", "Cancelada sem cobrança" e "Ignorada (Hotelbeds 258)". Uma reserva pode estar em mais de um filtro.
 - Q: O que são as "áreas de hotéis e de documentos" do FR-020? → A: Não há áreas com esses nomes no menu; são a lista de hotéis dentro da execução e a lista de documentos dentro dos detalhes da reserva.
 - Q: O critério de sucesso do teste com 4 pessoas (antigo SC-004) fica? → A: Não; os critérios seguintes foram renumerados. A validação é a homologação com os perfis de acesso; a adoção pelas usuárias é acompanhada em produção, sem meta.
+
+### Session 2026-11-18 (plano)
+
+- Q: O rodapé do design diz "ordenadas por hotel e check-in", mas a lista hoje é ordenada por hotel e número da reserva. Qual vale? → A: Hotel e check-in, que é melhor para ler; entra como acréscimo compatível na API (o app atual continua com a ordem de hoje).
+- Q: Algumas cores do design ficam abaixo de 4,5:1 (texto secundário, placeholder, selo "Verificar"). Ajustar agora? → A: Não. A 006 usa as cores do design; o ajuste de contraste vai para a UX e para uma próxima spec.
+- Q: O envio ao Comercial em andamento não tem desenho na aba "Envios". Como mostrar? → A: Num card escuro com lima e barra de progresso, como a execução em andamento; uma tela de exemplo vai ao Figma para a UX aprovar antes da implementação, e ajustes ficam para uma feature seguinte.
+- Q: As quebras para janelas menores não estão desenhadas. → A: A 006 implementa as telas responsivas como o plano define; ajustes finos ficam para uma feature seguinte.
+- Q: A marca nova vale também para o ícone do app? → A: Sim: o ícone do app no Windows (janela, barra de tarefas, atalho e instalador) e o da página do app passam a ser a marca nova.
+- Q: Como fica o Figma ao concluir a 006? → A: Nenhuma tela é redesenhada pelo agente: as telas em uso ficam marcadas com ✅ e as substituídas com ❌ e ocultas, em todas as páginas de feature (skill `figma-screens-sync`).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -85,6 +95,8 @@ design oficial, o fundo, os cards, o menu, o cabeçalho, a tipografia e a paleta
    (erro ou ação destrutiva).
 5. **Given** o computador sem acesso à internet, **When** o app abre, **Then** a fonte e os ícones da
    identidade aparecem normalmente.
+6. **Given** o app instalado, **When** a pessoa olha a barra de tarefas, o Menu Iniciar, a janela e o
+   instalador, **Then** vê a marca nova (H lima no quadrado preto), nítida também no tamanho pequeno.
 
 ---
 
@@ -401,7 +413,9 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
 - **FR-002**: O menu lateral MUST ser flutuante, com ícone e nome por área, e MUST destacar a área
   atual como pílula preta com o ícone em lima.
 - **FR-003**: O cabeçalho MUST ser transparente e mostrar a marca nova (H em lima num quadrado preto)
-  e o cliente conectado num selo branco.
+  e o cliente conectado num selo branco. A mesma marca MUST ser o ícone do app no Windows (janela,
+  barra de tarefas, atalho do Menu Iniciar e instalador), nítida nos tamanhos pequenos, e o ícone da
+  página do app.
 - **FR-004**: O app MUST usar a fonte definida no design oficial (Manrope), com títulos maiores que o
   texto corrido e indicadores numéricos em tamanho grande, e MUST exibi-la sem depender de acesso à
   internet.
@@ -409,7 +423,8 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
   verde, âmbar e vermelho MUST ser usados só para concluído/aceito, atenção e erro/destrutivo,
   respectivamente.
 - **FR-006**: Toda informação transmitida por cor MUST também ser transmitida por texto, ícone ou
-  forma, e o contraste entre texto e fundo MUST ser suficiente para leitura confortável.
+  forma, e o contraste entre texto e fundo MUST ser suficiente para leitura confortável, com as
+  exceções do design já conhecidas (SC-005), que ficam para uma próxima spec.
 
 **Hierarquia de ações**
 
@@ -433,7 +448,9 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
   —, com até duas linhas de texto em cada; todo dado que saiu das colunas antigas MUST continuar
   acessível nos detalhes da reserva. Quando houver valor cobrado, a coluna Valor MUST mostrar, numa
   segunda linha, "cobrado R$ X · Hunit" ou "· manual", e a coluna MUST ser dimensionada para que o texto
-  caiba (Hotel e Período um pouco mais estreitos).
+  caiba (Hotel e Período um pouco mais estreitos). A lista MUST ser ordenada por hotel e, dentro do
+  hotel, por data de check-in (a mais antiga primeiro), como diz o rodapé "ordenadas por hotel e
+  check-in"; a lista da seleção e a cópia para e-mail seguem a mesma ordem.
 - **FR-015**: A coluna "Situação da reserva" MUST ser única e MUST mostrar, ao lado, o selo "Verificar"
   em âmbar cheio quando a reserva pede verificação.
 - **FR-016**: A área de reservas MUST oferecer uma busca, o filtro "Origem" visível na própria barra, um
@@ -497,9 +514,11 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
 - **FR-031**: O redesenho MUST NOT alterar regras de negócio, permissões por perfil nem o
   comportamento das funções já entregues (consulta, execução, tratativas, evidências, importação do
   sistema anterior, envio ao Comercial); só a apresentação e a organização da informação. O contrato
-  da API só MAY receber o acréscimo compatível de FR-017.
-- **FR-032**: Ao final, o espelho do app no Figma MUST mostrar as mesmas telas do design oficial, com
-  o guia de paleta, leis de UX e hierarquia de ações disponível para o time manter o padrão.
+  da API só MAY receber os acréscimos compatíveis de FR-017 (contagens) e FR-014 (ordem).
+- **FR-032**: Ao final, o app MUST mostrar as mesmas telas do design oficial, e as telas da 006 MUST
+  ficar marcadas no Figma como as em uso (✅), com as versões anteriores marcadas como substituídas
+  (❌) e ocultas; o guia de paleta, leis de UX e hierarquia de ações continua disponível para o time
+  manter o padrão.
 
 **Sistema anterior (página 004)**
 
@@ -523,7 +542,9 @@ numa grande, e redimensionar com o app aberto, conferindo conteúdo e ações.
   retorno (hotel diferente e diferença de valor em destaque), "Confirmar" e "Recusar"; o diálogo de
   recusa MUST ter motivos rápidos e um campo de texto.
 - **FR-039**: A área "Comercial" MUST ter as abas "Envios", "Retornos a validar", "Retornos com problema"
-  e "Planilha".
+  e "Planilha". Na aba "Envios", o envio em andamento MUST aparecer num card escuro no topo, com lima e
+  barra de progresso, como a execução em andamento (FR-019); a tela de exemplo MUST ser aprovada pela
+  UX no Figma antes da implementação.
 - **FR-040**: As gavetas MUST mostrar o campo "Valor cobrado" nos dados da reserva e, no card Cobrança, o
   rótulo "Valor cobrado no Hunit"; os componentes "Botão com menu" e "Aba" e o ícone Comercial MUST ser
   definições únicas (FR-030).
@@ -570,7 +591,9 @@ execuções, hotéis, documentos e o histórico de cada reserva).
 - **SC-004**: A lista de reservas exibe todos os dados de uma reserva comum com 5 colunas sem rolagem
   horizontal na janela padrão do app, e nenhum nome longo quebra o layout.
 - **SC-005**: O texto de todas as telas atende a contraste suficiente para leitura (relação mínima de
-  4,5:1 no texto comum) e nenhuma informação depende só de cor.
+  4,5:1 no texto comum), exceto os pares de cor do design já conhecidos — texto secundário
+  ("texto/apagado"), placeholder dos campos e selo "Verificar" —, que ficam para uma próxima spec; e
+  nenhuma informação depende só de cor.
 - **SC-006**: Nenhum pedido de ajuda registrado pelas usuárias, na semana seguinte à entrega, sobre
   "onde foi parar" uma informação que saiu das colunas da lista.
 - **SC-007**: Em cada tela, gaveta e diálogo do app, verificados na largura mínima suportada, numa
@@ -610,6 +633,7 @@ execuções, hotéis, documentos e o histórico de cada reserva).
   computador (não celular); janela redimensionável, com tamanho mínimo já definido na feature 002.
 - **Tema**: só o tema claro; tema escuro fica para outra spec.
 - **Rótulos**: continuam em português do Brasil, com os nomes exatamente como no design oficial.
-- **Manutenção do Figma**: o espelho do app é atualizado com a skill `figma-screens-sync` ao concluir
-  a feature (AGENTS.md); o guia de paleta, leis de UX e hierarquia de ações já existe ao lado das
-  telas do design oficial.
+- **Manutenção do Figma**: o agente não redesenha telas; ao concluir a feature, a skill
+  `figma-screens-sync` marca as telas em uso (✅) e as substituídas (❌, ocultas) em todas as páginas
+  de feature (AGENTS.md, "Telas no Figma"); o guia de paleta, leis de UX e hierarquia de ações já
+  existe ao lado das telas do design oficial.
