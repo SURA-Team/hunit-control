@@ -23,6 +23,55 @@ const forbiddenInRenderer = ['electron', 'undici', 'openapi-fetch', 'eventsource
 const rendererStorageMessage =
   'A interface não grava nada no navegador: dados de reservas e credenciais ficam só em memória (specs/002, research R-14, FR-008a).';
 
+/** Importações proibidas em toda a interface (specs/002, research R-02). */
+const rendererImportRestrictions = {
+  paths: forbiddenInRenderer.map((name) => ({ name, message: rendererIsolationMessage })),
+  patterns: [
+    {
+      group: ['node:*', 'electron/*', 'undici/*'],
+      message: rendererIsolationMessage,
+    },
+    {
+      group: ['**/main', '**/main/**', '**/preload', '**/preload/**'],
+      message: rendererIsolationMessage,
+    },
+  ],
+};
+
+/**
+ * Componentes únicos (specs/006, FR-030, research R-05): as telas montam a interface só com os
+ * componentes de src/renderer/src/ui/. Os componentes visuais do Mantine e o calendário só podem ser
+ * importados dentro de ui/; layout neutro (Stack, Group, Text, Title, SimpleGrid, Box…) continua livre.
+ */
+const uiOnlyMessage =
+  'Use o componente de src/renderer/src/ui/: as telas não estilizam componentes do Mantine por conta própria (specs/006, FR-030, research R-05).';
+const mantineOnlyInUi = [
+  'ActionIcon',
+  'Alert',
+  'AppShell',
+  'Badge',
+  'Button',
+  'Checkbox',
+  'Chip',
+  'CloseButton',
+  'Drawer',
+  'Menu',
+  'Modal',
+  'MultiSelect',
+  'NavLink',
+  'NumberInput',
+  'Paper',
+  'PasswordInput',
+  'Progress',
+  'Radio',
+  'Select',
+  'Switch',
+  'Table',
+  'Tabs',
+  'TextInput',
+  'Textarea',
+];
+
 export default defineConfig(
   globalIgnores([
     '**/node_modules/',
@@ -83,22 +132,7 @@ export default defineConfig(
   {
     files: ['apps/desktop/src/renderer/**/*.{ts,tsx}'],
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: forbiddenInRenderer.map((name) => ({ name, message: rendererIsolationMessage })),
-          patterns: [
-            {
-              group: ['node:*', 'electron/*', 'undici/*'],
-              message: rendererIsolationMessage,
-            },
-            {
-              group: ['**/main', '**/main/**', '**/preload', '**/preload/**'],
-              message: rendererIsolationMessage,
-            },
-          ],
-        },
-      ],
+      'no-restricted-imports': ['error', rendererImportRestrictions],
       'no-restricted-globals': [
         'error',
         { name: 'localStorage', message: rendererStorageMessage },
@@ -110,6 +144,28 @@ export default defineConfig(
         { object: 'window', property: 'localStorage', message: rendererStorageMessage },
         { object: 'window', property: 'sessionStorage', message: rendererStorageMessage },
         { object: 'window', property: 'indexedDB', message: rendererStorageMessage },
+      ],
+    },
+  },
+  {
+    // Telas e componentes de tela: só os componentes de ui/ (specs/006, FR-030). Este bloco repete
+    // as restrições de toda a interface, porque a regra declarada aqui substitui a do bloco acima.
+    files: [
+      'apps/desktop/src/renderer/src/App.tsx',
+      'apps/desktop/src/renderer/src/components/**/*.{ts,tsx}',
+      'apps/desktop/src/renderer/src/screens/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            ...rendererImportRestrictions.paths,
+            { name: '@mantine/core', importNames: mantineOnlyInUi, message: uiOnlyMessage },
+            { name: '@mantine/dates', message: uiOnlyMessage },
+          ],
+          patterns: rendererImportRestrictions.patterns,
+        },
       ],
     },
   },

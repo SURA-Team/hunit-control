@@ -2,27 +2,27 @@
  * Configuração da máquina (specs/002, FR-001 a FR-004, FR-025, research R-03 e R-07): endereço do
  * servidor, certificado raiz (o operador confere a impressão digital) e chave de acesso. A conexão
  * é testada antes de salvar; um teste só vale para os dados com que foi feito.
+ *
+ * Desde a 006 (T019; telas 1.1 a 1.3): cards de 760 px com os componentes de ui/, "Limpar" e
+ * "Remover" em vermelho suave e "Sim, remover" em vermelho cheio (FR-009).
  */
-import {
-  Alert,
-  Button,
-  Code,
-  Divider,
-  Group,
-  Loader,
-  Modal,
-  Paper,
-  PasswordInput,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
+import { Divider, Group, Loader, Stack, Text } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ClientIdentity, PickedCertificate, PublicConfig } from '../../../../shared/ipc-types';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDate } from '../../presentation/format';
+import {
+  Action,
+  AppDialog,
+  Card,
+  CodeText,
+  Field,
+  Notice,
+  PageHeader,
+  PasswordField,
+  SectionTitle,
+} from '../../ui';
 import { PreferencesForm } from './PreferencesForm';
 
 const ROLE_NAMES: Record<ClientIdentity['role'], string> = {
@@ -39,8 +39,8 @@ export function SetupScreen() {
   const info = useQuery({ queryKey: ['app-info'], queryFn: () => unwrap(hunit.app.info()) });
 
   return (
-    <Stack gap="lg" maw={760}>
-      <Title order={2}>Configuração</Title>
+    <Stack gap={16} maw={760}>
+      <PageHeader title="Configuração" />
       {config.isPending ? (
         <Loader size="sm" />
       ) : (
@@ -117,103 +117,98 @@ function ConnectionForm({ saved }: { saved: PublicConfig | null }) {
   const testValid = tested !== null && tested.signature === signature;
 
   return (
-    <Paper withBorder p="md" radius="md">
-      <Stack gap="md">
-        <Title order={4}>Conexão com o servidor</Title>
-        <TextInput
-          label="Endereço do servidor"
-          description="Como recebido do responsável, com https:// (ex.: https://192.168.0.50)"
-          value={serverUrl}
-          onChange={(event) => setServerUrl(event.currentTarget.value)}
-          autoComplete="off"
-          spellCheck={false}
-        />
+    <Card block="Conexão com o servidor">
+      <SectionTitle>Conexão com o servidor</SectionTitle>
+      <Field
+        label="Endereço do servidor"
+        description="Como recebido do responsável, com https:// (ex.: https://192.168.0.50)"
+        value={serverUrl}
+        onChange={(event) => setServerUrl(event.currentTarget.value)}
+        autoComplete="off"
+        spellCheck={false}
+      />
 
-        <Stack gap={6}>
-          <Group gap="sm">
-            <Button variant="default" onClick={() => pick.mutate()} loading={pick.isPending}>
-              Escolher certificado raiz…
-            </Button>
-            <Text size="sm" c="dimmed">
-              Arquivo hunit-raiz.crt exportado do servidor
-            </Text>
-          </Group>
-          {pickError && (
-            <Text size="sm" c="red">
-              {pickError}
-            </Text>
-          )}
-          {certificate && (
-            <Paper bg="gray.0" p="sm" radius="sm">
-              <Stack gap={4}>
-                <Text size="sm">
-                  Autoridade: <Text span>{certificate.info.issuer}</Text>
-                </Text>
-                <Text size="sm">
-                  Impressão digital (SHA-256): <Code>{certificate.info.fingerprint256}</Code>
-                </Text>
-                <Text size="sm">Válido até {formatDate(certificate.info.validTo)}</Text>
-                <Text size="xs" c="dimmed">
-                  Confira a impressão digital com o responsável pelo servidor.
-                </Text>
-              </Stack>
-            </Paper>
-          )}
-        </Stack>
-
-        <PasswordInput
-          label="Chave de acesso"
-          description={
-            saved?.hasApiKey
-              ? 'Chave guardada protegida nesta máquina. Deixe em branco para manter.'
-              : 'Chave desta máquina, recebida do responsável pelo servidor'
-          }
-          value={apiKey}
-          onChange={(event) => setApiKey(event.currentTarget.value)}
-          autoComplete="off"
-        />
-
-        <Group>
-          <Button
-            variant="light"
-            onClick={() => test.mutate()}
-            loading={test.isPending}
-            disabled={!canTest}
-          >
-            Testar conexão
-          </Button>
-          <Button
-            onClick={() => save.mutate()}
-            loading={save.isPending}
-            disabled={!testValid || save.isPending}
-          >
-            Salvar conexão
-          </Button>
-        </Group>
-
-        {test.isError && (
-          <Alert color="red" title="O teste falhou" role="alert">
-            {messageOf(test.error)}
-          </Alert>
-        )}
-        {testValid && (
-          <Alert color="green" title="Conexão confirmada" role="status">
-            Cliente <b>{tested.client.name}</b>, perfil {ROLE_NAMES[tested.client.role]}. Salve para
-            usar esta conexão.
-          </Alert>
-        )}
-        {save.isError && (
-          <Alert color="red" title="Não foi possível salvar" role="alert">
-            {messageOf(save.error)}
-          </Alert>
-        )}
-        {save.isSuccess && !testValid && (
-          <Text size="sm" c="green.8" role="status">
-            Conexão salva.
+      <Group gap={12}>
+        <Action
+          variant="secondary"
+          size="sm"
+          onClick={() => pick.mutate()}
+          loading={pick.isPending}
+        >
+          Escolher certificado raiz…
+        </Action>
+        <Text size="sm" c="dimmed">
+          Arquivo hunit-raiz.crt exportado do servidor
+        </Text>
+      </Group>
+      {pickError && <Notice tone="red">{pickError}</Notice>}
+      {certificate && (
+        <Card tone="subtle" padding={12} block="Certificado escolhido">
+          <Text size="sm">Autoridade: {certificate.info.issuer}</Text>
+          <Text size="sm">Impressão digital (SHA-256):</Text>
+          <CodeText>{certificate.info.fingerprint256}</CodeText>
+          <Text size="sm">Válido até {formatDate(certificate.info.validTo)}</Text>
+          <Text size="xs" c="dimmed">
+            Confira a impressão digital com o responsável pelo servidor.
           </Text>
-        )}
-      </Stack>
-    </Paper>
+        </Card>
+      )}
+
+      <PasswordField
+        label="Chave de acesso"
+        description={
+          saved?.hasApiKey
+            ? 'Chave guardada protegida nesta máquina. Deixe em branco para manter.'
+            : 'Chave desta máquina, recebida do responsável pelo servidor'
+        }
+        value={apiKey}
+        onChange={(event) => setApiKey(event.currentTarget.value)}
+        autoComplete="off"
+      />
+
+      <Group gap={16}>
+        <Action
+          variant="secondary"
+          size="sm"
+          onClick={() => test.mutate()}
+          loading={test.isPending}
+          disabled={!canTest}
+        >
+          Testar conexão
+        </Action>
+        <Action
+          variant="primary"
+          size="sm"
+          onClick={() => save.mutate()}
+          loading={save.isPending}
+          disabled={!testValid || save.isPending}
+        >
+          Salvar conexão
+        </Action>
+      </Group>
+
+      {test.isError && (
+        <Notice tone="red" title="O teste falhou">
+          {messageOf(test.error)}
+        </Notice>
+      )}
+      {testValid && (
+        <Notice tone="green" title="Conexão confirmada" role="status">
+          Cliente <strong>{tested.client.name}</strong>, perfil {ROLE_NAMES[tested.client.role]}.
+          Salve para usar esta conexão.
+        </Notice>
+      )}
+      {save.isError && (
+        <Notice tone="red" title="Não foi possível salvar">
+          {messageOf(save.error)}
+        </Notice>
+      )}
+      {save.isSuccess && !testValid && (
+        <Notice tone="green" role="status" compact>
+          Conexão salva.
+        </Notice>
+      )}
+    </Card>
   );
 }
 
@@ -221,21 +216,24 @@ function AttentionTest() {
   const hunit = useHunit();
   const test = useMutation({ mutationFn: () => unwrap(hunit.attention.test()) });
   return (
-    <Paper withBorder p="md" radius="md">
-      <Stack gap="sm">
-        <Title order={4}>Aviso do pedido de token</Title>
-        <Text size="sm">
-          Quando o Hunit pedir o token, o app mostra uma notificação do Windows, vem para a frente e
-          toca um som. Teste para conferir se a notificação aparece nesta máquina.
-        </Text>
-        <Divider />
-        <Group>
-          <Button variant="default" onClick={() => test.mutate()} loading={test.isPending}>
-            Testar aviso
-          </Button>
-        </Group>
-      </Stack>
-    </Paper>
+    <Card block="Aviso do pedido de token">
+      <SectionTitle>Aviso do pedido de token</SectionTitle>
+      <Text size="sm">
+        Quando o Hunit pedir o token, o app mostra uma notificação do Windows, vem para a frente e
+        toca um som. Teste para conferir se a notificação aparece nesta máquina.
+      </Text>
+      <Divider />
+      <Group>
+        <Action
+          variant="secondary"
+          size="sm"
+          onClick={() => test.mutate()}
+          loading={test.isPending}
+        >
+          Testar aviso
+        </Action>
+      </Group>
+    </Card>
   );
 }
 
@@ -253,42 +251,40 @@ function RemoveConfiguration() {
   });
 
   return (
-    <Paper withBorder p="md" radius="md">
-      <Stack gap="sm">
-        <Title order={4}>Remover a configuração</Title>
-        <Text size="sm">
-          Apaga desta máquina o endereço do servidor, o certificado e a chave de acesso guardada.
-          Para usar o app de novo, será preciso configurar outra vez.
-        </Text>
-        <Group>
-          <Button color="red" variant="light" onClick={() => setConfirming(true)}>
-            Remover a configuração desta máquina
-          </Button>
-        </Group>
-        {remove.isError && (
-          <Alert color="red" role="alert">
-            {messageOf(remove.error)}
-          </Alert>
-        )}
-      </Stack>
-      <Modal
+    <Card block="Remover a configuração">
+      <SectionTitle>Remover a configuração</SectionTitle>
+      <Text size="sm">
+        Apaga desta máquina o endereço do servidor, o certificado e a chave de acesso guardada. Para
+        usar o app de novo, será preciso configurar outra vez.
+      </Text>
+      <Group>
+        <Action variant="danger-light" size="sm" onClick={() => setConfirming(true)}>
+          Remover a configuração desta máquina
+        </Action>
+      </Group>
+      {remove.isError && <Notice tone="red">{messageOf(remove.error)}</Notice>}
+      <AppDialog
         opened={confirming}
         onClose={() => setConfirming(false)}
         title="Remover a configuração?"
-        centered
-      >
-        <Stack>
-          <Text size="sm">A chave de acesso guardada nesta máquina será apagada.</Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setConfirming(false)}>
+        actions={
+          <>
+            <Action variant="secondary" size="sm" onClick={() => setConfirming(false)}>
               Não
-            </Button>
-            <Button color="red" onClick={() => remove.mutate()} loading={remove.isPending}>
+            </Action>
+            <Action
+              variant="danger"
+              size="sm"
+              onClick={() => remove.mutate()}
+              loading={remove.isPending}
+            >
               Sim, remover
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-    </Paper>
+            </Action>
+          </>
+        }
+      >
+        <Text size="sm">A chave de acesso guardada nesta máquina será apagada.</Text>
+      </AppDialog>
+    </Card>
   );
 }

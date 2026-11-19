@@ -81,7 +81,7 @@ async function waitForDialog() {
 }
 
 async function closeDialog() {
-  await launched.window.getByRole('button', { name: 'Fechar' }).click();
+  await launched.window.getByRole('button', { name: 'Fechar', exact: true }).click();
 }
 
 describe('US1 — executar e responder ao token', () => {

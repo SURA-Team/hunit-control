@@ -4,9 +4,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  formatCount,
   formatDate,
   formatDateTime,
   formatDuration,
+  formatInteger,
   formatMoney,
   formatRemaining,
   formatTime,
@@ -85,5 +87,22 @@ describe('parseAmountInput (campo de valor da busca)', () => {
 
   it.each(['', 'abc', '1,2,3', '12,345', '-5', '1.23.4'])('texto inválido (%s) → null', (input) => {
     expect(parseAmountInput(input)).toBeNull();
+  });
+});
+
+describe('formatCount e formatInteger (contagens dos filtros rápidos, specs/006)', () => {
+  it.each([
+    [0, '0'],
+    [999, '999'],
+    [1000, '1 mil'],
+    [1234, '1,2 mil'],
+    [12345, '12,3 mil'],
+    [1234567, '1,2 mi'],
+  ])('%i → %s', (count, text) => {
+    expect(plain(formatCount(count))).toBe(text);
+  });
+
+  it('contagem inteira com separador de milhar', () => {
+    expect(formatInteger(12345)).toBe('12.345');
   });
 });

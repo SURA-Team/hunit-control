@@ -1,0 +1,15 @@
+# HUNIT Control — ambiente de homologação (specs/003, T056; passo a passo no README.md, seção
+# "Homologação").
+#
+# Acrescentado ao docker-compose.yml pelo COMPOSE_FILE do arquivo de variáveis da homologação
+# (deploy/homolog/homolog.env.example → .env.homolog). Sobe uma pilha separada da de produção, no
+# mesmo PC: outro nome de projeto (volumes, rede e containers próprios), outras portas e outra
+# pasta de cópias e, desde a 005, outra planilha do Comercial e outra pasta da chave dela.
+# Nunca use este arquivo com o .env de produção.
+name: hunit-homolog
+
+services:
+  db:
+    # Só para a carga dos dados fictícios (homolog-prepare.test.ts), e só no próprio PC.
+    ports:
+      - '127.0.0.1:${HOMOLOG_DB_PORT:?defina HOMOLOG_DB_PORT no arquivo .env.homolog}:5432'

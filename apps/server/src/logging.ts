@@ -91,6 +91,25 @@ export function serializeError(error: unknown): unknown {
   return serialized;
 }
 
+/**
+ * Serializa uma requisição HTTP para o log: só o método e o **caminho, sem a query**. A query
+ * pode ter dados pessoais — o nome do hóspede na busca de reservas (`?q=`) e o nome do arquivo no
+ * envio de documentos (`?name=`) — e cabeçalhos, endereço e corpo não vão para o log
+ * (specs/003, research R-13).
+ */
+export function serializeRequest(request: unknown): unknown {
+  if (typeof request !== 'object' || request === null) return request;
+
+  const { method, url } = request as { method?: unknown; url?: unknown };
+  return {
+    method: typeof method === 'string' ? method : undefined,
+    url: typeof url === 'string' ? (url.split('?', 1)[0] ?? '') : undefined,
+  };
+}
+
+/** Serializadores do log, inclusive os que o Fastify usa ao registrar cada requisição. */
+const SERIALIZERS = { err: serializeError, req: serializeRequest };
+
 export interface LoggerSetup {
   level: LogLevel;
   /** Segredos em uso: toda linha de log passa por `scrub` antes de ser escrita. */
@@ -101,6 +120,8 @@ export interface LoggerSetup {
 
 /**
  * Cria o logger do servidor: JSON estruturado, uma linha por registro, sem dados sensíveis.
+ *
+ * As requisições HTTP são registradas só pelo método e pelo caminho, sem a query (`serializeRequest`).
  *
  * Três proteções se somam:
  * 1. `redact`: campos com nome sensível (senha, token, autorização...) são trocados por
@@ -115,9 +136,12 @@ export function createLogger(setup: LoggerSetup): Logger {
     level: setup.level,
     timestamp: pino.stdTimeFunctions.isoTime,
     redact: { paths: [...REDACT_PATHS], censor: REDACTED },
-    serializers: { err: serializeError },
+    serializers: SERIALIZERS,
     ...(secrets && { hooks: { streamWrite: (line: string) => secrets.scrub(line) } }),
   };
 
-  return setup.destination ? pino(options, setup.destination) : pino(options);
+  const logger = setup.destination ? pino(options, setup.destination) : pino(options);
+  // O Fastify troca o serializador de `req` pelo padrão dele (que registra a URL com a query),
+  // a menos que o logger recebido exponha os seus em `serializers` (research R-13).
+  return Object.assign(logger, { serializers: SERIALIZERS });
 }

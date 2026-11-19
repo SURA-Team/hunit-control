@@ -2,13 +2,17 @@
  * Evidências de falha de uma execução (ou de um hotel dela), com "Salvar" para cada arquivo
  * (specs/002, FR-024, US3 cenário 6). O processo principal baixa e grava onde o operador escolher;
  * a interface só recebe o caminho gravado. Evidência vencida é avisada como indisponível.
+ *
+ * Desde a 006 (T056; telas 3.2 e 3.4): card "Evidências de falha", cada evidência com o tipo em
+ * negrito, o motivo, as datas e os botões em contorno.
  */
-import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { EvidenceFile, EvidenceSummary } from '../../../shared/ipc-types';
 import { messageOf, unwrap, useHunit } from '../hunit';
 import { formatDateTime } from '../presentation/format';
+import { Action, Card, SectionTitle } from '../ui';
 
 const KIND_NAMES: Record<EvidenceSummary['kind'], string> = {
   navigation_failure: 'Falha de navegação',
@@ -66,14 +70,12 @@ export function EvidenceList({ executionId, hotelCode }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <Paper withBorder p="sm" radius="sm" data-testid="evidence-list">
-      <Title order={5} mb="xs">
-        Evidências de falha
-      </Title>
-      <Stack gap="sm">
+    <Card block="Evidências de falha" data-testid="evidence-list">
+      <SectionTitle order={3}>Evidências de falha</SectionTitle>
+      <Stack gap={16}>
         {items.map((item) => (
           <Stack key={item.id} gap={4}>
-            <Text size="sm" fw={600}>
+            <Text size="sm" fw={700}>
               {KIND_NAMES[item.kind]}
               {item.hotelCode ? ` — hotel ${item.hotelCode}` : ''}
               {item.reservationNumber ? `, reserva ${item.reservationNumber}` : ''}
@@ -83,12 +85,12 @@ export function EvidenceList({ executionId, hotelCode }: Props) {
               Registrada em {formatDateTime(item.createdAt)}; disponível até{' '}
               {formatDateTime(item.expiresAt)}
             </Text>
-            <Group gap="xs">
+            <Group gap={8} mt={4}>
               {item.files.map((file) => (
-                <Button
+                <Action
                   key={file}
                   size="xs"
-                  variant="default"
+                  variant="secondary"
                   onClick={() => save.mutate({ item, file })}
                   loading={
                     save.isPending &&
@@ -97,17 +99,22 @@ export function EvidenceList({ executionId, hotelCode }: Props) {
                   }
                 >
                   {FILE_NAMES[file]}
-                </Button>
+                </Action>
               ))}
             </Group>
             {messages[item.id] && (
-              <Text size="sm" c={messages[item.id]?.error ? 'red' : 'green.8'} role="status">
+              <Text
+                size="xs"
+                c={messages[item.id]?.error ? 'var(--hc-vermelho-9)' : 'var(--hc-verde-9)'}
+                role="status"
+                style={{ overflowWrap: 'anywhere' }}
+              >
                 {messages[item.id]?.text}
               </Text>
             )}
           </Stack>
         ))}
       </Stack>
-    </Paper>
+    </Card>
   );
 }

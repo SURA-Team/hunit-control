@@ -1,0 +1,369 @@
+/*
+ * Status e avisos do design (specs/006, FR-006, FR-021): "Badge" (21:102), "Alerta" (21:163),
+ * "Progresso da execução" (26:1648), "Card de contagem" (21:153), "Card de indicador" (91:73) e o
+ * estado vazio da tela 4.3.
+ */
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 18px;
+  padding-inline: 10px;
+  border-radius: var(--hc-radius-pill);
+  font: var(--hc-font-badge);
+  letter-spacing: var(--hc-font-badge-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge[data-size='md'] {
+  height: 20px;
+}
+
+/* Selo que pode quebrar linha numa coluna estreita (`wrap`, T068). */
+.badge[data-wrap] {
+  max-width: 100%;
+  height: auto;
+  min-height: 18px;
+  padding-block: 4px;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.badge[data-tone='lime'] {
+  background: var(--hc-azul-1);
+  color: var(--hc-azul-9);
+}
+
+.badge[data-tone='amber'] {
+  background: var(--hc-amarelo-1);
+  color: var(--hc-amarelo-9);
+}
+
+.badge[data-tone='green'] {
+  background: var(--hc-verde-1);
+  color: var(--hc-verde-9);
+}
+
+.badge[data-tone='red'] {
+  background: var(--hc-vermelho-1);
+  color: var(--hc-vermelho-9);
+}
+
+.badge[data-tone='gray'] {
+  background: var(--hc-cinza-1);
+  color: var(--hc-cinza-9);
+}
+
+/* Âmbar cheio: só para o que pede ação ("Verificar"). */
+.badge[data-tone='alert'] {
+  background: var(--hc-amarelo-8);
+  color: var(--hc-texto-inverso);
+}
+
+.stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: var(--hc-radius-notice);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.notice[data-tone='lime'] {
+  --notice-title: var(--hc-azul-9);
+  background: var(--hc-azul-1);
+}
+
+.notice[data-tone='green'] {
+  --notice-title: var(--hc-verde-9);
+  background: var(--hc-verde-1);
+}
+
+.notice[data-tone='red'] {
+  --notice-title: var(--hc-vermelho-9);
+  background: var(--hc-vermelho-1);
+}
+
+.notice[data-tone='amber'] {
+  --notice-title: var(--hc-amarelo-9);
+  background: var(--hc-amarelo-1);
+}
+
+/*
+ * Compacto: só o texto, em negrito, na cor do título do tom (tela 5.1, "dados de HH:MM — …" na linha
+ * do título). O design usa amarelo/8, abaixo de 4,5:1 no fundo da página; o tom 9 é legível.
+ */
+.notice[data-compact] {
+  display: inline-flex;
+  gap: 8px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--notice-title);
+  font: var(--hc-font-corpo-forte);
+  white-space: nowrap;
+}
+
+.noticeIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--notice-title);
+  color: var(--hc-texto-inverso);
+}
+
+.noticeText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.noticeTitle {
+  color: var(--notice-title);
+  font: var(--hc-font-corpo-forte);
+}
+
+.track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-cinza-1);
+}
+
+.track[data-surface='dark'] {
+  background: var(--hc-superficie-escura-2);
+}
+
+.fill {
+  height: 100%;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-superficie-escura);
+}
+
+.track[data-surface='dark'] .fill {
+  background: var(--hc-destaque-lima);
+}
+
+.countCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--hc-radius-notice);
+  background: var(--hc-fundo-sutil);
+}
+
+.countLabel {
+  font: var(--hc-font-contagem-rotulo);
+}
+
+.countCard[data-tone='amber'] .countLabel {
+  color: var(--hc-amarelo-8);
+}
+
+.countCard[data-tone='red'] .countLabel {
+  color: var(--hc-vermelho-8);
+}
+
+.countCard[data-tone='green'] .countLabel {
+  color: var(--hc-verde-8);
+}
+
+.countNumber {
+  display: block;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-contagem-numero);
+  letter-spacing: var(--hc-font-contagem-numero-tracking);
+  white-space: nowrap;
+}
+
+.indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 20px 22px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+.indicatorLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-rotulo);
+}
+
+.indicatorHelp {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 56px 24px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--hc-texto-placeholder);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-da-secao);
+  letter-spacing: var(--hc-font-titulo-da-secao-tracking);
+}
+
+.emptyText {
+  margin: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+
+/* Contagem regressiva do token (tela 2.4). */
+.countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.countdownLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+
+.countdown[data-surface='dark'] .countdownLabel {
+  color: var(--hc-texto-inverso-apagado);
+}
+
+.countdownValue {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-cronometro);
+  letter-spacing: var(--hc-font-cronometro-tracking);
+  white-space: nowrap;
+}
+
+.countdown[data-surface='dark'] .countdownValue {
+  color: var(--hc-destaque-lima);
+}
+
+.countdownValue[data-urgent],
+.countdown[data-surface='dark'] .countdownValue[data-urgent] {
+  color: var(--hc-vermelho-6);
+}
+
+/* Código em fonte monoespaçada (impressão digital do certificado, tela 1.2). */
+.code {
+  color: var(--hc-texto-padrao);
+  font: 500 11px/1.4 var(--hc-font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* Resumo do lote (tela 4.6, "Resumo do lote"): linhas com o ícone num círculo do tom e a caixa cinza
+   das reservas que ficam de fora. */
+.batchSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.summaryLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+.summaryLine[data-tone='green'] {
+  --summary-bg: var(--hc-verde-1);
+  --summary-fg: var(--hc-verde-9);
+}
+.summaryLine[data-tone='amber'] {
+  --summary-bg: var(--hc-amarelo-1);
+  --summary-fg: var(--hc-amarelo-9);
+}
+.summaryLine[data-tone='red'] {
+  --summary-bg: var(--hc-vermelho-1);
+  --summary-fg: var(--hc-vermelho-9);
+}
+.summaryIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--summary-bg);
+  color: var(--summary-fg);
+}
+.reasonList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-sutil);
+  list-style: none;
+}
+.reasonItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+  overflow-wrap: anywhere;
+}
+.reasonTitle {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+}
+
+.countCard[data-tone='gray'] .countLabel {
+  color: var(--hc-texto-apagado);
+}
+
+/* Grade dos cards de contagem (telas 2.7 e 3.4). */
+.countGridFrame {
+  container-type: inline-size;
+}
+.countGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+@container (max-width: 639.98px) {
+  .countGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@container (max-width: 479.98px) {
+  .countGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

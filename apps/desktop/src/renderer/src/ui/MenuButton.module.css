@@ -1,0 +1,29 @@
+/*
+ * "Botão com menu" (node 182:1171) e o menu aberto. O design não desenha o menu desse botão; o
+ * suspenso segue o da tela 4.12 ("Opções — Ativa ou cancelada", node 125:3775).
+ */
+.dropdown {
+  min-width: 240px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-dialogo);
+}
+
+.item {
+  padding: 8px 10px;
+  border-radius: var(--hc-radius-option);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.item:where([data-hovered]) {
+  background: var(--hc-fundo-sutil);
+}
+
+.description {
+  display: block;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}

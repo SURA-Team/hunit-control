@@ -56,7 +56,11 @@ export async function insertExecution(db: Database, overrides: Partial<NewExecut
 /** Insere uma reserva; cria o hotel e a execução se não forem informados. */
 export async function insertReservation(db: Database, overrides: Partial<NewReservation> = {}) {
   const hotelCode = overrides.hotelCode ?? (await insertHotel(db)).code;
-  const lastExecutionId = overrides.lastExecutionId ?? (await insertExecution(db)).id;
+  // `null` explícito = reserva só do sistema anterior, sem execução (specs/004).
+  const lastExecutionId =
+    overrides.lastExecutionId === undefined
+      ? (await insertExecution(db)).id
+      : overrides.lastExecutionId;
   const now = new Date();
   const [row] = await db
     .insert(reservations)

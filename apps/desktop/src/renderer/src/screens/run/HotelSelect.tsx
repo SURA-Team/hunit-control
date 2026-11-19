@@ -2,9 +2,11 @@
  * Hotéis da execução (specs/002, FR-009): todos ou uma seleção do catálogo conhecido, com busca
  * pelo nome ou pelo código. Sem catálogo (primeira execução), só "todos": o catálogo será lido
  * nessa execução.
+ * Desde a 006 (T020; telas 2.1 e 2.3): rádios e o seletor com busca do design.
  */
-import { MultiSelect, Radio, Stack, Text } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 import type { Hotel } from '../../../../shared/ipc-types';
+import { MultiSelectField, RadioField } from '../../ui';
 
 export type HotelMode = 'all' | 'some';
 
@@ -25,17 +27,16 @@ export function HotelSelect({ hotels, mode, selected, onMode, onSelected, error 
   }));
 
   return (
-    <Stack gap="xs">
-      <Radio.Group
+    <Stack gap={16}>
+      <RadioField
         label="Hotéis"
         value={empty ? 'all' : mode}
         onChange={(value) => onMode(value === 'some' ? 'some' : 'all')}
-      >
-        <Stack gap={6} mt={4}>
-          <Radio value="all" label="Todos os hotéis do catálogo" />
-          <Radio value="some" label="Escolher hotéis" disabled={empty} />
-        </Stack>
-      </Radio.Group>
+        options={[
+          { value: 'all', label: 'Todos os hotéis do catálogo' },
+          { value: 'some', label: 'Escolher hotéis', disabled: empty },
+        ]}
+      />
       {empty && (
         <Text size="sm" c="dimmed">
           O catálogo de hotéis ainda não foi lido: ele será obtido nesta execução, com todos os
@@ -43,7 +44,7 @@ export function HotelSelect({ hotels, mode, selected, onMode, onSelected, error 
         </Text>
       )}
       {!empty && mode === 'some' && (
-        <MultiSelect
+        <MultiSelectField
           label="Hotéis escolhidos"
           placeholder="Busque pelo nome ou pelo código"
           data={data}

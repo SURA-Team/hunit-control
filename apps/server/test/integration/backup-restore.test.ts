@@ -9,6 +9,7 @@
  * Usa um container próprio (não o banco compartilhado dos testes), porque os scripts rodam
  * dentro dele.
  */
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { sql } from 'drizzle-orm';
@@ -18,14 +19,43 @@ import {
   runMigrations,
   type DatabaseConnection,
 } from '../../src/persistence/db.js';
+import { ensureLegacyAuthor } from '../../src/persistence/legacy-import-repo.js';
+import {
+  legacyImports,
+  legacyReservations,
+  treatmentDocuments,
+} from '../../src/persistence/schema.js';
+import { saveTreatmentFile } from '../../src/persistence/treatment-files-repo.js';
+import { registerDocuments, setManualAmount } from '../../src/persistence/treatments-repo.js';
+import { MemorySheetGateway } from '../../src/commercial-sheet/memory-sheet-gateway.js';
+import { CommercialSheetSync } from '../../src/commercial-sheet/sync.js';
+import {
+  insertCommercialReservation,
+  insertDispatch,
+  insertLine,
+  insertReturn,
+  seedTestHotels,
+} from '../helpers/commercial-fixtures.js';
 import { insertClient, insertExecution, insertReservation } from '../helpers/factories.js';
+import { captureLogs } from '../helpers/log-capture.js';
 
 const POSTGRES_IMAGE = 'postgres:17';
 const SCRIPTS_DIR = fileURLToPath(new URL('../../../../deploy/backup', import.meta.url));
 const PASSPHRASE = 'frase-secreta-das-copias-de-teste';
 const GUEST_NAME = 'Hóspede Fictício da Cópia';
 const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * Documento de uma tratativa (specs/003, FR-010, SC-007): um "PDF" com todos os valores de byte,
+ * para conferir que o conteúdo binário atravessa a cópia e a restauração sem mudar.
+ */
+const DOCUMENT = Buffer.concat([
+  Buffer.from('%PDF-1.7\n'),
+  Buffer.from(Array.from({ length: 256 }, (_unused, index) => index)),
+]);
+const DOCUMENT_SHA256 = createHash('sha256').update(DOCUMENT).digest('hex');
 const BACKUP_NAME = /^hunit-\d{8}-\d{6}\.dump\.gpg$/;
+/** Reserva enviada ao Comercial, com retorno confirmado (specs/005, T059). */
+const COMMERCIAL_KEY = { hotelCode: 'hml_um', reservationNumber: '900001' };
 
 let container: StartedPostgreSqlContainer;
 let source: DatabaseConnection;
@@ -44,11 +74,86 @@ beforeAll(async () => {
     guestName: GUEST_NAME,
     lastExecutionId: execution.id,
   });
-  await insertReservation(source.db, {
+  const second = await insertReservation(source.db, {
     reservationNumber: '9002',
     guestName: null,
     lastExecutionId: execution.id,
   });
+
+  // Uma tratativa completa: arquivo, documento, evento e valor informado à mão (specs/003).
+  const key = { hotelCode: second.hotelCode, reservationNumber: second.reservationNumber };
+  const now = new Date();
+  const treatmentFile = await saveTreatmentFile(source.db, {
+    sha256: DOCUMENT_SHA256,
+    content: DOCUMENT,
+    mediaType: 'application/pdf',
+    clientId: client.id,
+    now,
+  });
+  await registerDocuments(source.db, {
+    kind: 'proof',
+    file: treatmentFile,
+    fileName: 'comprovante-ficticio.pdf',
+    keys: [key],
+    clientId: client.id,
+    batchId: '00000000-0000-4000-8000-000000000001',
+    now,
+  });
+  await setManualAmount(source.db, { key, amount: '123.45', clientId: client.id, now });
+
+  // Uma reserva importada do sistema anterior, com a origem e um documento importado (specs/004,
+  // FR-023): ainda não verificada pelo HUNIT Control (sem execução).
+  const author = await ensureLegacyAuthor(source.db);
+  const [legacyImport] = await source.db
+    .insert(legacyImports)
+    .values({ kind: 'simulation', fingerprint: 'f', status: 'completed', finishedAt: now })
+    .returning({ id: legacyImports.id });
+  const imported = await insertReservation(source.db, {
+    hotelCode: second.hotelCode,
+    reservationNumber: 'L-9003',
+    classification: 'not_virtual_card',
+    reservationStatus: 'unknown',
+    lastExecutionId: null,
+  });
+  await source.db.insert(legacyReservations).values({
+    hotelCode: imported.hotelCode,
+    reservationNumber: imported.reservationNumber,
+    legacyHotelKey: 'legacy_hml_um',
+    originalClassification: 'not_virtual_card',
+    firstVerifiedAt: now,
+    lastVerifiedAt: now,
+    verificationCount: 2,
+    merged: false,
+    appliedCount: 2,
+    rowHash: 'h',
+    firstImportId: legacyImport!.id,
+    lastImportId: legacyImport!.id,
+  });
+  await source.db.insert(treatmentDocuments).values({
+    hotelCode: imported.hotelCode,
+    reservationNumber: imported.reservationNumber,
+    kind: 'request',
+    fileSha256: DOCUMENT_SHA256,
+    originalName: 'pedido-importado.pdf',
+    sizeBytes: DOCUMENT.length,
+    mediaType: 'application/pdf',
+    attachedAt: now,
+    attachedByClientId: author,
+    legacyImportId: legacyImport!.id,
+  });
+
+  // Envio ao Comercial (specs/005, T059): uma reserva enviada com retorno confirmado, o envio e a
+  // linha já escrita na planilha (sem pendência).
+  await seedTestHotels(source.db);
+  await insertCommercialReservation(source.db, 1, { lastExecutionId: execution.id });
+  const dispatch = await insertDispatch(source.db, { clientId: client.id });
+  await insertLine(source.db, COMMERCIAL_KEY, {
+    state: 'concluded',
+    dispatchId: dispatch.id,
+    clientId: client.id,
+  });
+  await source.db.execute(sql`update commercial_lines set synced_version = version`);
+  await insertReturn(source.db, COMMERCIAL_KEY, { state: 'confirmed', chargedAmount: '1200.00' });
 }, 180_000);
 
 afterAll(async () => {
@@ -111,7 +216,25 @@ async function dumpOf(database: string) {
       `select hotel_code, reservation_number, coalesce(guest_name, '-'), total_amount ` +
       `from reservations order by reservation_number; ` +
       `select id, status from executions order by id; ` +
-      `select name, role from api_clients order by name"`,
+      `select name, role from api_clients order by name; ` +
+      // Tratativas (specs/003): o SHA-256 é recalculado sobre o conteúdo guardado.
+      `select sha256, encode(sha256(content), 'hex'), size_bytes, media_type from treatment_files; ` +
+      `select id, reservation_number, kind, state, original_name, file_sha256 ` +
+      `from treatment_documents; ` +
+      `select id, type, document_id, amount from treatment_events order by id; ` +
+      `select reservation_number, amount from reservation_manual_amounts; ` +
+      // Importação do histórico (specs/004, FR-023).
+      `select reservation_number, coalesce(last_execution_id::text, 'sem-execucao') ` +
+      `from reservations order by reservation_number; ` +
+      `select reservation_number, original_classification, merged, applied_count ` +
+      `from legacy_reservations; ` +
+      `select kind, status, fingerprint from legacy_imports; ` +
+      // Envio ao Comercial (specs/005, T059).
+      `select status, account_key from commercial_dispatches order by id; ` +
+      `select reservation_number, state, version, synced_version from commercial_lines; ` +
+      `select reservation_number, state, charged_amount, authorization_code from commercial_returns; ` +
+      `select reservation_number, legacy_import_id is not null from treatment_documents ` +
+      `order by reservation_number"`,
   );
   return rows.trim();
 }
@@ -176,6 +299,19 @@ describe('backup.sh once (FR-030, SC-011)', () => {
     expect(restored.output).not.toContain(PASSPHRASE);
     const original = await dumpOf(container.getDatabase());
     expect(original).toContain(GUEST_NAME);
+    // O documento da tratativa está na cópia, com o conteúdo intacto (specs/003, SC-007).
+    expect(original).toContain(
+      `${DOCUMENT_SHA256}|${DOCUMENT_SHA256}|${DOCUMENT.length}|application/pdf`,
+    );
+    expect(original).toContain('comprovante-ficticio.pdf');
+    expect(original).toContain('9002|123.45');
+    // A reserva importada volta com a origem e o documento importado (specs/004, FR-023).
+    expect(original).toContain('L-9003|sem-execucao');
+    expect(original).toContain('L-9003|not_virtual_card|f|2');
+    expect(original).toContain('L-9003|t');
+    // O envio, a linha e o retorno confirmado do Comercial (specs/005, T059).
+    expect(original).toContain('900001|concluded');
+    expect(original).toContain('900001|confirmed|1200.00|AUT123');
     expect(await dumpOf('restaurado')).toBe(original);
   });
 
@@ -318,7 +454,20 @@ describe('restauração completa', () => {
       const result = await connection.db.execute<{ count: string }>(
         sql`select count(*)::text as count from reservations`,
       );
-      expect(result.rows[0]?.count).toBe('2');
+      // 2 do HUNIT Control + 1 importada (specs/004) + 1 enviada ao Comercial (specs/005).
+      expect(result.rows[0]?.count).toBe('4');
+
+      // Planilha nova e vazia: a primeira rodada a reconstrói a partir do banco (research R-15).
+      const sheet = new MemorySheetGateway();
+      const sync = new CommercialSheetSync({
+        db: connection.db,
+        gateway: sheet,
+        logger: captureLogs().logger,
+        doneRetentionDays: 90,
+      });
+      expect((await sync.runRound()).ok).toBe(true);
+      expect(sheet.rows('done').map((row) => row[1])).toEqual([COMMERCIAL_KEY.reservationNumber]);
+      expect(sheet.rows('toCharge')).toEqual([]);
     } finally {
       await connection.close();
     }

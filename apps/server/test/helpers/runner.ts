@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { DispatchEventBus } from '../../src/dispatches/events.js';
+import { DispatchRunner } from '../../src/dispatches/runner.js';
 import { ExecutionEventBus } from '../../src/executions/events.js';
 import { ExecutionRunner, type StartExecutionInput } from '../../src/executions/runner.js';
 import { EvidenceStore } from '../../src/evidence/store.js';
@@ -17,6 +19,9 @@ export const TEST_PASSWORD = 'SENHA-SECRETA-DE-TESTE-987';
 
 export interface RunnerHarness {
   runner: ExecutionRunner;
+  /** Envios ao Comercial (specs/005), com o mesmo Hunit simulado. */
+  dispatches: DispatchRunner;
+  dispatchEvents: DispatchEventBus;
   hunit: FakeHunit;
   events: ExecutionEventBus;
   evidence: EvidenceStore;
@@ -70,8 +75,23 @@ export async function createRunnerHarness(
     logger: logs.logger,
   });
 
+  const dispatchEvents = new DispatchEventBus({ db: database.db, secrets, logger: logs.logger });
+  const dispatches = new DispatchRunner({
+    db: database.db,
+    events: dispatchEvents,
+    evidence,
+    secrets,
+    createGateway: hunit.createGateway,
+    accountKeySecret: TEST_ACCOUNT_KEY_SECRET,
+    twoFactorTimeoutMs: options.twoFactorTimeoutMs ?? 60_000,
+    ...(options.cancelGraceMs !== undefined && { cancelGraceMs: options.cancelGraceMs }),
+    logger: logs.logger,
+  });
+
   return {
     runner,
+    dispatches,
+    dispatchEvents,
     hunit,
     events,
     evidence,
@@ -80,6 +100,7 @@ export async function createRunnerHarness(
     logs,
     async close() {
       await runner.shutdown();
+      await dispatches.shutdown();
       await rm(evidenceDir, { recursive: true, force: true });
     },
   };

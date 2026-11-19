@@ -1,0 +1,602 @@
+/*
+ * Listas do design (specs/006, FR-014, FR-018 a FR-020, research R-07 e R-08): cabeçalhos (53:94,
+ * 53:126), "Linha de reserva" (53:93), "Linha de reserva compacta" (76:223), "Linha de execução"
+ * (53:125), "Linha de hotel" (55:2262), "Barra de seleção em lote" (76:117) e "Card — execução em
+ * andamento" (53:131). As larguras das colunas são as do design; o espaço entre colunas (20 px) vai
+ * no início de cada célula.
+ *
+ * Cada lista tem uma coluna sem largura fixa (o hóspede, o hotel da cobrança, a mensagem, a execução),
+ * que fica com o que sobra. Os pontos de quebra das listas em card (`hc-list`) saem da largura mínima
+ * dela (homologação da 006, T068): abaixo de cada um, uma coluna passa para a segunda linha antes de a
+ * coluna livre ficar apertada e o texto dela passar por cima da vizinha.
+ */
+.card {
+  container: hc-list / inline-size;
+  padding: 4px 0;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+/* Lista dentro de uma caixa cinza (diálogos de lote, telas 7.12 e 7.13). */
+.inset {
+  container-type: inline-size;
+  padding: 2px 0;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-sutil);
+}
+
+.inset .row:hover {
+  background: transparent;
+}
+
+/* Na lista interna, a linha de uma informação só fica com 48 px (tela 7.13); as de duas crescem. */
+.inset .row td {
+  height: 28px;
+}
+
+/* Faixa de ações da lista (tela 7.8), no topo do card. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 0;
+  padding: 12px 20px;
+  border-start-start-radius: var(--hc-radius-card);
+  border-start-end-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-sutil);
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  box-sizing: content-box;
+  padding: 0 0 0 20px;
+  text-align: start;
+  vertical-align: middle;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-inline-end: 16px;
+}
+
+/* A célula vazia da seta, no cabeçalho, também leva a borda até o fim da linha. */
+.table thead td {
+  border-bottom: 1px solid var(--hc-borda-padrao);
+}
+
+.table th {
+  height: 40px;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-tabela-cabecalho);
+  letter-spacing: var(--hc-font-tabela-cabecalho-tracking);
+  white-space: nowrap;
+}
+
+/* Larguras das colunas (conteúdo; o espaço entre colunas vem do padding). */
+.table [data-col='select'],
+.table [data-col='arrow'] {
+  width: 20px;
+}
+
+.table [data-col='hotel'] {
+  width: 180px;
+}
+
+.table [data-col='period'] {
+  width: 150px;
+}
+
+.table [data-col='amount'] {
+  width: 160px;
+  text-align: end;
+}
+
+.table [data-col='situation'] {
+  width: 260px;
+}
+
+.table [data-col='result'] {
+  width: 360px;
+}
+
+.table [data-col='status'] {
+  width: 150px;
+}
+
+/* Colunas da área Comercial (telas 7.8 e 7.9; T052). Hotel da cobrança e mensagem ocupam o resto. */
+.table [data-col='reservation'] {
+  width: 140px;
+}
+
+.table [data-col='amounts'] {
+  width: 150px;
+}
+
+.table [data-col='difference'] {
+  width: 100px;
+  text-align: end;
+}
+
+.table [data-col='responsible'] {
+  width: 150px;
+}
+
+.table [data-col='actions'] {
+  width: 180px;
+}
+
+.table [data-col='problem'] {
+  width: 170px;
+}
+
+.table [data-col='when'] {
+  width: 120px;
+}
+
+.table [data-col='count'] {
+  width: 100px;
+  text-align: end;
+}
+
+/*
+ * As células são `content-box` (as larguras acima não contam o espaçamento): a altura é a do
+ * conteúdo, e a linha fica com a do design somando os 10 px de cima e de baixo (64 e 68 px).
+ */
+.row td {
+  height: 44px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+}
+
+.row[data-kind='execution'] td {
+  height: 48px;
+}
+
+.row:last-child td {
+  border-bottom: none;
+}
+
+.row {
+  cursor: pointer;
+}
+
+/* Linhas da área Comercial: só as que abrem um detalhe são clicáveis. */
+.row[data-kind='list']:not([data-clickable]) {
+  cursor: default;
+}
+
+.row:hover {
+  background: var(--hc-fundo-sutil);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: -2px;
+}
+
+/* Linha aberta na gaveta ou marcada para o lote. */
+.row[data-selected] {
+  background: var(--hc-destaque-lima-suave);
+}
+
+.primary {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.strong {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+}
+
+.secondary {
+  margin-top: 2px;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+/* "Resultado" das linhas de execução e de envio: Corpo em cinza (telas 3.1, 6.1 e 7.7). */
+.result {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+
+/* Nomes de hóspede e de hotel: até duas linhas, com o texto inteiro na dica (FR-045). */
+.clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.value {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.hotelInline {
+  display: none;
+}
+
+.periodInline {
+  display: none;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-start: -4px;
+  padding: 0;
+  border: none;
+  border-radius: var(--hc-radius-pill);
+  background: transparent;
+  color: var(--hc-texto-icone);
+  cursor: pointer;
+}
+
+.arrow:hover {
+  background: var(--hc-cinza-1);
+}
+
+.arrow:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+}
+
+/* O texto da segunda linha quebra em qualquer ponto em vez de passar da célula (T068). */
+.table .secondary {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Lista de reservas: o hóspede nunca fica com menos de 200 px (T068). Conteúdo abaixo de 1 150 px
+ * (tokens.breakpoints.narrowList): o hotel vai para a linha do hóspede.
+ */
+@container hc-list (max-width: 1149.98px) {
+  .table [data-col='hotel'] {
+    display: none;
+  }
+
+  .hotelInline {
+    display: inline;
+  }
+
+  .table [data-col='amount'] {
+    width: 130px;
+  }
+
+  .table [data-col='situation'] {
+    width: 230px;
+  }
+}
+
+/* Abaixo de 1 000 px: o resultado das execuções e dos envios mais estreito. */
+@container (max-width: 999.98px) {
+  .table [data-col='result'] {
+    width: 240px;
+  }
+}
+
+/*
+ * Conteúdo abaixo de 890 px (tokens.breakpoints.compactList): o período também vai para a linha do
+ * hóspede, para Valor e Situação caberem sem cortar.
+ */
+@container hc-list (max-width: 889.98px) {
+  .table [data-col='period'] {
+    display: none;
+  }
+
+  .periodInline {
+    display: inline;
+  }
+}
+
+/*
+ * Conteúdo abaixo de 730 px (tokens.breakpoints.tightList; perto da janela mínima com zoom de 125 %):
+ * o valor mais estreito e 12 px entre as colunas, em todas as listas em card.
+ */
+@container hc-list (max-width: 729.98px) {
+  .table th,
+  .table td {
+    padding-inline-start: 12px;
+  }
+
+  .table [data-col='amount'] {
+    width: 110px;
+  }
+}
+
+/* Linhas simples (hotéis da execução, documentos da reserva, reservas da seleção). */
+.rowList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simpleRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+}
+
+.simpleRow:last-child {
+  border-bottom: none;
+}
+
+.simpleRow[data-with-icon] {
+  padding-block: 14px;
+}
+
+.simpleMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.iconTile {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--hc-radius-field);
+  background: var(--hc-fundo-sutil);
+  color: var(--hc-texto-icone);
+}
+
+.simpleActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.compactAmount {
+  flex-shrink: 0;
+  width: 110px;
+  text-align: end;
+}
+
+.compactSituation {
+  flex-shrink: 0;
+  width: 210px;
+}
+
+/* Barra de lote: escura, com a principal em lima; quebra linha quando não cabe. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 12px 12px 12px 20px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-superficie-escura);
+  box-shadow: var(--hc-shadow-flutuante);
+}
+
+.partialBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--hc-radius-checkbox);
+  color: var(--hc-destaque-lima);
+}
+
+.barSummary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 200px;
+  margin: 0 0 0 8px;
+}
+
+.barCount {
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo-grande);
+  letter-spacing: var(--hc-font-rotulo-grande-tracking);
+  white-space: nowrap;
+}
+
+.barTotal {
+  color: var(--hc-texto-inverso-apagado);
+  font: var(--hc-font-corpo);
+  white-space: nowrap;
+}
+
+/* Card escuro do que está em andamento (execução ou envio ao Comercial). */
+.job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 32px;
+  padding: 20px 20px 20px 24px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-superficie-escura);
+  box-shadow: var(--hc-shadow-flutuante);
+}
+
+.jobMain {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.jobTitle {
+  margin: 0;
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo-grande);
+  letter-spacing: var(--hc-font-rotulo-grande-tracking);
+}
+
+.jobDetail {
+  margin: 0;
+  color: var(--hc-texto-inverso-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.jobProgress {
+  display: flex;
+  flex: 0 1 340px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.jobLegend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo);
+}
+
+.jobPercent {
+  color: var(--hc-destaque-lima);
+  font: var(--hc-font-corpo-forte);
+}
+
+/*
+ * Pedaços de célula que só aparecem quando a coluna de onde vieram some (T052): `narrowOnly` abaixo
+ * de 1 000 px e `compactOnly` abaixo de 720 px. As ações da linha ficam lado a lado.
+ */
+.narrowOnly,
+.compactOnly {
+  display: none;
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+/*
+ * "Retornos a validar": o hotel da cobrança fica com pelo menos 205 px, o do selo "Diferente do hotel
+ * da reserva" (T068); só perto da janela mínima com zoom o selo quebra linha. Abaixo de 1 105 px
+ * (tokens.breakpoints.returnsNarrow), o responsável vai para a linha da reserva.
+ */
+@container hc-list (max-width: 1104.98px) {
+  .table [data-col='responsible'] {
+    display: none;
+  }
+
+  .narrowOnly {
+    display: block;
+  }
+}
+
+/* Abaixo de 935 px (tokens.breakpoints.returnsStacked): as ações da linha, uma embaixo da outra. */
+@container hc-list (max-width: 934.98px) {
+  .table [data-col='actions'] {
+    width: 96px;
+  }
+
+  .rowActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/*
+ * Abaixo de 850 px (tokens.breakpoints.returnsCompact), a diferença dos retornos e o "Quando" dos
+ * retornos com problema vão para a linha da reserva. Nas listas dos diálogos (`InsetList`, sem o
+ * nome `hc-list`), abaixo de 720 px, como antes.
+ */
+@container hc-list (max-width: 849.98px) {
+  .table [data-col='difference'],
+  .table [data-col='when'] {
+    display: none;
+  }
+
+  .compactOnly {
+    display: block;
+  }
+}
+
+@container (max-width: 719.98px) {
+  .table [data-col='difference'],
+  .table [data-col='when'] {
+    display: none;
+  }
+
+  .compactOnly {
+    display: block;
+  }
+}
+
+/* Texto da célula que abre o detalhe (o número da reserva, tela 7.8): sem cara de botão. */
+.cellButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cellButton:hover {
+  text-decoration: underline;
+}
+
+.cellButton:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+/* Faixa escura de progresso (telas 2.6 e 3.2). */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 14px 20px;
+  border-radius: var(--hc-radius-notice);
+  background: var(--hc-superficie-escura);
+}
+
+.stripLabel {
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo);
+  white-space: nowrap;
+}
+
+.stripBar {
+  flex: 1 1 160px;
+  min-width: 120px;
+}

@@ -13,6 +13,10 @@
 *.p12
 **/credentials*.json
 **/service_account*.json
+# Chave da conta de serviço da planilha do Comercial (specs/005, research R-04): só o README da
+# pasta é versionado.
+deploy/secrets/*
+!deploy/secrets/README.md
 
 # ============================================================
 # Dados operacionais (reservas, cartões virtuais, planilhas)

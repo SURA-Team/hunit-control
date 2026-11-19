@@ -1,0 +1,168 @@
+/*
+ * "Calendário — período" (node 134:255) e "Dia do calendário" (134:105) do design: hoje com contorno,
+ * escolhidos em preto, o intervalo em lima suave e hoje escolhido em círculo lima. Os textos do
+ * calendário não têm estilo no design: usam os estilos mais próximos dos tokens.
+ */
+.target {
+  max-width: 360px;
+  text-align: start;
+}
+
+.placeholder {
+  color: var(--hc-texto-placeholder);
+}
+
+.clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--hc-radius-pill);
+  background: transparent;
+  color: var(--hc-texto-icone);
+  cursor: pointer;
+}
+
+.clear:hover {
+  background: var(--hc-cinza-1);
+}
+
+.dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: none;
+  border-radius: var(--hc-radius-menu);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-flutuante);
+}
+
+.levelsGroup {
+  gap: 28px;
+}
+
+.calendarHeader {
+  height: 36px;
+  max-width: none;
+  margin-bottom: 4px;
+}
+
+.calendarHeaderLevel {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+  text-transform: capitalize;
+}
+
+.calendarHeaderControl {
+  color: var(--hc-texto-icone);
+}
+
+.month {
+  border-collapse: separate;
+  border-spacing: 0 4px;
+}
+
+.weekday {
+  height: 24px;
+  padding: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+  font-weight: 600;
+}
+
+.monthCell {
+  padding: 0;
+}
+
+.day {
+  --hc-day-circle: transparent;
+  --hc-day-band: transparent;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+  font-weight: 500;
+  background:
+    radial-gradient(
+      circle closest-side,
+      var(--hc-day-circle) calc(100% - 0.75px),
+      transparent 100%
+    ),
+    var(--hc-day-band);
+}
+
+.day:hover:not([data-selected], [data-in-range]) {
+  --hc-day-circle: var(--hc-fundo-sutil);
+}
+
+.day[data-outside] {
+  color: var(--hc-texto-placeholder);
+}
+
+/* Hoje: contorno de 1,5 px. */
+.day[data-today] {
+  font-weight: 700;
+  background:
+    radial-gradient(
+      circle closest-side,
+      transparent calc(100% - 1.5px),
+      var(--hc-superficie-escura) calc(100% - 1.5px),
+      var(--hc-superficie-escura) calc(100% - 0.5px),
+      transparent 100%
+    ),
+    var(--hc-day-band);
+}
+
+.day[data-in-range] {
+  --hc-day-band: var(--hc-destaque-lima-suave);
+}
+
+.day[data-first-in-range] {
+  --hc-day-band: linear-gradient(to right, transparent 50%, var(--hc-destaque-lima-suave) 50%);
+}
+
+.day[data-last-in-range] {
+  --hc-day-band: linear-gradient(to left, transparent 50%, var(--hc-destaque-lima-suave) 50%);
+}
+
+.day[data-first-in-range][data-last-in-range] {
+  --hc-day-band: transparent;
+}
+
+.day[data-selected] {
+  --hc-day-circle: var(--hc-superficie-escura);
+  color: var(--hc-texto-inverso);
+  font-weight: 700;
+  background:
+    radial-gradient(
+      circle closest-side,
+      var(--hc-day-circle) calc(100% - 0.75px),
+      transparent 100%
+    ),
+    var(--hc-day-band);
+}
+
+.day[data-selected][data-today] {
+  --hc-day-circle: var(--hc-destaque-lima);
+  color: var(--hc-texto-padrao);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hc-borda-padrao);
+}
+
+.summary {
+  flex: 1;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+}

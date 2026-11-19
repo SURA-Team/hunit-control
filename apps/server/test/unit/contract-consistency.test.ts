@@ -1,4 +1,10 @@
-import { CLASSIFICATIONS, RESERVATION_STATUSES } from '@hunit/domain';
+import {
+  CLASSIFICATIONS,
+  RESERVATION_STATUSES,
+  TREATMENT_DOCUMENT_KINDS,
+  TREATMENT_DOCUMENT_STATES,
+  TREATMENT_STATUSES,
+} from '@hunit/domain';
 import { describe, expect, it } from 'vitest';
 import { OPERATOR_ONLY_OPERATIONS } from '../../src/http/auth.js';
 import { PROBLEMS } from '../../src/http/problem.js';
@@ -10,6 +16,9 @@ import {
   executionStatusEnum,
   hotelRunStatusEnum,
   reservationStatusEnum,
+  treatmentDocumentKindEnum,
+  treatmentDocumentStateEnum,
+  treatmentEventTypeEnum,
 } from '../../src/persistence/schema.js';
 import { contractDocument, contractOperations } from '../helpers/contract.js';
 
@@ -67,6 +76,22 @@ describe('domínio × banco × contrato', () => {
     );
   });
 
+  it('tipos, estados e eventos das tratativas são os mesmos (feature 003)', () => {
+    const schemas = contractDocument.components?.['schemas'] as Record<
+      string,
+      { properties?: Record<string, { enum?: string[] }> }
+    >;
+
+    expect(treatmentDocumentKindEnum.enumValues).toEqual([...TREATMENT_DOCUMENT_KINDS]);
+    expect(contractEnum('TreatmentDocumentKind')).toEqual([...TREATMENT_DOCUMENT_KINDS]);
+    expect(treatmentDocumentStateEnum.enumValues).toEqual([...TREATMENT_DOCUMENT_STATES]);
+    expect(contractEnum('TreatmentDocumentState')).toEqual([...TREATMENT_DOCUMENT_STATES]);
+    expect(contractEnum('TreatmentStatus')).toEqual([...TREATMENT_STATUSES]);
+    expect(schemas['TreatmentEvent']?.properties?.['type']?.enum).toEqual(
+      treatmentEventTypeEnum.enumValues,
+    );
+  });
+
   it('os códigos de erro do servidor são exatamente os do contrato', () => {
     const schemas = contractDocument.components?.['schemas'] as Record<
       string,
@@ -103,11 +128,16 @@ describe('operações do contrato × níveis de acesso (FR-007)', () => {
     expect(publicOperations).toEqual(['getHealth']);
   });
 
-  it('toda operação com corpo aceita somente JSON', () => {
+  it('toda operação com corpo aceita somente JSON, menos o envio de documentos', () => {
+    // O envio do arquivo de uma tratativa é a única operação com corpo binário (specs/003, R-03).
+    const binaryUploads = ['uploadTreatmentFile'];
+
     for (const operation of contractOperations) {
-      if (operation.requestBodyTypes) {
-        expect(operation.requestBodyTypes, operation.operationId).toEqual(['application/json']);
-      }
+      if (!operation.requestBodyTypes) continue;
+      const expected = binaryUploads.includes(operation.operationId)
+        ? ['application/octet-stream']
+        : ['application/json'];
+      expect(operation.requestBodyTypes, operation.operationId).toEqual(expected);
     }
   });
 });

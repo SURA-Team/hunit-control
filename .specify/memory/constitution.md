@@ -47,9 +47,20 @@ Hunit.
   mudanças incompatíveis MUST incrementar a versão da API.
 - O app Electron e, futuramente, o Sura são clientes da mesma API. O Electron MUST NOT
   conter lógica de negócio nem acessar diretamente o banco ou o navegador automatizado.
+- Exceção: **comandos administrativos de implantação** MAY existir só no servidor, sem rota na
+  API. São os rodados por quem administra o servidor, no próprio computador do servidor (ex.:
+  cadastrar e revogar chaves de API, importação única do histórico do sistema anterior). Cada
+  um MUST cumprir as três condições abaixo e MUST estar descrito numa spec:
+  - MUST NOT ser usado pelos clientes (app, Sura) na operação do dia a dia;
+  - MUST NOT acessar o Hunit;
+  - todo dado de negócio que gravar (reservas, tratativas, documentos) MUST ficar visível pela
+    API, pelo contrato. Segredos, como as chaves de API, continuam nunca expostos (princípio VI).
 
 **Justificativa**: integração com o Sura independe de linguagem; um contrato único
-evita que desktop e integrações divirjam.
+evita que desktop e integrações divirjam. Tarefas de implantação feitas uma vez, por quem
+administra o servidor, não são funcionalidade de cliente: expô-las na API só abriria rotas de
+alto risco (chaves, carga de dados pessoais) sem uso pelos clientes. O que elas gravam continua
+sob o contrato.
 
 ### IV. Jobs Assíncronos com Intervenção Humana
 
@@ -142,4 +153,4 @@ de execução) que aumentaram o custo de manutenção.
 - Toda revisão de plan, tasks e código MUST verificar conformidade com estes princípios.
 - Orientações operacionais para agentes de código ficam em `AGENTS.md`.
 
-**Version**: 1.1.1 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-12
+**Version**: 1.2.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-16

@@ -13,6 +13,41 @@ export function formatMoney(value: string | null | undefined): string {
   return Number.isFinite(number) ? money.format(number) : DASH;
 }
 
+/** Tamanho de arquivo: "532 B", "12,4 KB", "3,1 MB". */
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return DASH;
+  if (bytes < 1024) return `${bytes} B`;
+  const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+  if (bytes < 1024 * 1024) return `${decimal.format(bytes / 1024)} KB`;
+  return `${decimal.format(bytes / (1024 * 1024))} MB`;
+}
+
+/** Soma valores da API ("1234.56") em centavos, só para exibir um total na tela. */
+export function sumMoney(values: ReadonlyArray<string | null | undefined>): string {
+  let cents = 0n;
+  for (const value of values) {
+    const match = /^(\d+)\.(\d{2})$/.exec(value ?? '');
+    if (match) cents += BigInt(match[1] ?? '0') * 100n + BigInt(match[2] ?? '0');
+  }
+  return `${cents / 100n}.${(cents % 100n).toString().padStart(2, '0')}`;
+}
+
+const compactCount = new Intl.NumberFormat('pt-BR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+const integerCount = new Intl.NumberFormat('pt-BR');
+
+/** Contagem curta dos filtros rápidos (specs/006, research R-09): "999", "1,2 mil", "12,3 mil", "1,2 mi". */
+export function formatCount(count: number): string {
+  return compactCount.format(count);
+}
+
+/** Contagem inteira, para a dica da contagem curta: "12.345". */
+export function formatInteger(count: number): string {
+  return integerCount.format(count);
+}
+
 const two = (value: number) => String(value).padStart(2, '0');
 
 /** Data da API (YYYY-MM-DD) em DD/MM/AAAA, sem passar pelo fuso horário. */
