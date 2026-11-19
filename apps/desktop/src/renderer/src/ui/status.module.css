@@ -333,3 +333,27 @@
   color: var(--hc-texto-padrao);
   font: var(--hc-font-corpo-forte);
 }
+
+.countCard[data-tone='gray'] .countLabel {
+  color: var(--hc-texto-apagado);
+}
+
+/* Grade dos cards de contagem (telas 2.7 e 3.4). */
+.countGridFrame {
+  container-type: inline-size;
+}
+.countGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+@container (max-width: 639.98px) {
+  .countGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@container (max-width: 479.98px) {
+  .countGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

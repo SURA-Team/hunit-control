@@ -3,18 +3,25 @@
  * FR-013, data-model §6): situação, contagens por situação de cobrança, hotéis concluídos e com
  * falha (com o motivo) e a mensagem do motivo de término. Depois de prazo do token esgotado ou
  * token recusado, oferece "Iniciar de novo" com os mesmos dados.
+ *
+ * Desde a 006 (T057; telas 2.6, 2.7, 2.8 e 2.10): card com "Execução em andamento" ou "Resultado da
+ * execução", o selo ("Em andamento" em lima) e o período à direita; o motivo de término num aviso
+ * (vermelho, ou âmbar se cancelada) com "Iniciar de novo" como principal; enquanto roda, a faixa
+ * escura "N de M hotéis concluídos"; as contagens em caixas e os hotéis em linhas simples.
  */
-import { Alert, Button, Group, Paper, Stack, Table, Text, Title } from '@mantine/core';
+import { Group, Text } from '@mantine/core';
 import type { Execution, ExecutionEndReason } from '../../../../shared/ipc-types';
 import { ClassificationCountsGrid } from '../../components/ClassificationCountsGrid';
 import { EvidenceList } from '../../components/EvidenceList';
-import { StatusBadge } from '../../components/StatusBadge';
-import { formatDate, formatDuration } from '../../presentation/format';
+import { formatDate } from '../../presentation/format';
+import { jobStatusBadge } from '../../presentation/jobs';
+import { END_REASON_MESSAGES, EXECUTION_STATUS_LABELS } from '../../presentation/labels';
+import { Action, Card, Notice, SectionTitle, StatusBadge } from '../../ui';
 import {
-  END_REASON_MESSAGES,
-  EXECUTION_STATUS_LABELS,
-  HOTEL_STATUS_LABELS,
-} from '../../presentation/labels';
+  ACTIVE_EXECUTION,
+  ExecutionHotels,
+  ExecutionProgressStrip,
+} from '../executions/ExecutionParts';
 
 /** Motivos em que basta iniciar de novo com os mesmos dados (US1, cenário 5). */
 const RESTARTABLE: ReadonlySet<ExecutionEndReason> = new Set([
@@ -30,75 +37,43 @@ interface Props {
 
 export function ExecutionResult({ execution, onRestart, restarting = false }: Props) {
   const { status, endReason } = execution;
-  const finished = status === 'completed' || status === 'failed' || status === 'cancelled';
+  const active = ACTIVE_EXECUTION.has(status);
+  const title = active ? 'Execução em andamento' : 'Resultado da execução';
+  const badge = jobStatusBadge(EXECUTION_STATUS_LABELS[status], status);
 
   return (
-    <Paper withBorder p="md" radius="md" data-testid="execution-result">
-      <Stack gap="md">
-        <Group justify="space-between">
-          <Group gap="sm">
-            <Title order={4}>{finished ? 'Resultado da execução' : 'Execução em andamento'}</Title>
-            <StatusBadge label={EXECUTION_STATUS_LABELS[status]} size="md" />
-          </Group>
-          <Text size="sm" c="dimmed">
-            Check-in de {formatDate(execution.period.from)} a {formatDate(execution.period.to)}
-          </Text>
+    <Card block={title} data-testid="execution-result">
+      <Group justify="space-between" gap={8}>
+        <Group gap={8}>
+          <SectionTitle>{title}</SectionTitle>
+          <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
         </Group>
+        <Text size="sm" c="dimmed">
+          Check-in de {formatDate(execution.period.from)} a {formatDate(execution.period.to)}
+        </Text>
+      </Group>
 
-        {endReason && (
-          <Alert color={status === 'cancelled' ? 'gray' : 'red'} role="status">
-            <Group justify="space-between" wrap="nowrap">
-              <Text size="sm">{END_REASON_MESSAGES[endReason]}</Text>
-              {onRestart && RESTARTABLE.has(endReason) && (
-                <Button size="xs" onClick={onRestart} loading={restarting}>
-                  Iniciar de novo
-                </Button>
-              )}
-            </Group>
-          </Alert>
-        )}
+      {endReason && (
+        <Notice
+          tone={status === 'cancelled' ? 'amber' : 'red'}
+          role="status"
+          action={
+            onRestart &&
+            RESTARTABLE.has(endReason) && (
+              <Action variant="primary" size="xs" onClick={onRestart} loading={restarting}>
+                Iniciar de novo
+              </Action>
+            )
+          }
+        >
+          {END_REASON_MESSAGES[endReason]}
+        </Notice>
+      )}
 
-        <ClassificationCountsGrid counts={execution.counts} />
-
-        {execution.hotels.length > 0 && (
-          <Table striped highlightOnHover verticalSpacing={6}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Hotel</Table.Th>
-                <Table.Th>Situação</Table.Th>
-                <Table.Th>Reservas</Table.Th>
-                <Table.Th>Duração</Table.Th>
-                <Table.Th>Motivo</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {execution.hotels.map((hotel) => (
-                <Table.Tr key={hotel.hotelCode}>
-                  <Table.Td>
-                    {hotel.hotelName ?? hotel.hotelCode}{' '}
-                    <Text span size="xs" c="dimmed">
-                      ({hotel.hotelCode})
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <StatusBadge label={HOTEL_STATUS_LABELS[hotel.status]} />
-                  </Table.Td>
-                  <Table.Td>{hotel.reservationsSeen ?? 0}</Table.Td>
-                  <Table.Td>{formatDuration(hotel.durationSeconds)}</Table.Td>
-                  <Table.Td>
-                    {hotel.failureReason && (
-                      <Text size="sm" c="red.8">
-                        {hotel.failureReason}
-                      </Text>
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        )}
-        <EvidenceList executionId={execution.id} />
-      </Stack>
-    </Paper>
+      {active && <ExecutionProgressStrip execution={execution} />}
+      <ClassificationCountsGrid counts={execution.counts} />
+      <ExecutionHotels execution={execution} />
+      <EvidenceList executionId={execution.id} />
+    </Card>
   );
 }

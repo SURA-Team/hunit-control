@@ -515,3 +515,25 @@
   outline: 2px solid var(--hc-superficie-escura);
   outline-offset: 2px;
 }
+
+/* Faixa escura de progresso (telas 2.6 e 3.2). */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 14px 20px;
+  border-radius: var(--hc-radius-notice);
+  background: var(--hc-superficie-escura);
+}
+
+.stripLabel {
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo);
+  white-space: nowrap;
+}
+
+.stripBar {
+  flex: 1 1 160px;
+  min-width: 120px;
+}

@@ -15,7 +15,12 @@ export {
 } from './ListCard';
 export { ListActions, ListCell, ListRow, type ListCellProps, type ListRowProps } from './ListRow';
 export { ReservationRow, type ReservationRowProps } from './ReservationRow';
-export { RunningJobCard, type RunningJobCardProps } from './RunningJobCard';
+export {
+  ProgressStrip,
+  RunningJobCard,
+  type ProgressStripProps,
+  type RunningJobCardProps,
+} from './RunningJobCard';
 export { SelectionBar, type SelectionBarProps } from './SelectionBar';
 export {
   CompactReservationRow,

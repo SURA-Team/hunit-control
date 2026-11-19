@@ -19,11 +19,19 @@ export interface HotelRowProps {
   /** Ícone num quadrado cinza de 40 px (documentos). */
   icon?: ReactNode;
   actions?: ReactNode;
+  'data-testid'?: string;
 }
 
-export function HotelRow({ title, summary, status, icon, actions }: HotelRowProps) {
+export function HotelRow({
+  title,
+  summary,
+  status,
+  icon,
+  actions,
+  'data-testid': testId,
+}: HotelRowProps) {
   return (
-    <li className={classes.simpleRow} data-with-icon={icon ? '' : undefined}>
+    <li className={classes.simpleRow} data-with-icon={icon ? '' : undefined} data-testid={testId}>
       {icon && <span className={classes.iconTile}>{icon}</span>}
       <div className={classes.simpleMain}>
         <span className={`${classes.strong} ${classes.clamp}`} title={title}>

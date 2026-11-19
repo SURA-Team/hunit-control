@@ -58,3 +58,31 @@ export function RunningJobCard({
     </Surface>
   );
 }
+
+export interface ProgressStripProps {
+  /** "2 de 4 hotéis concluídos". */
+  label: string;
+  /** De 0 a 100. */
+  percent: number;
+}
+
+/**
+ * Faixa escura de progresso (telas 2.6 e 3.2): o texto à esquerda, a barra lima e o percentual em
+ * lima, dentro do detalhe e do resultado da execução enquanto ela roda.
+ */
+export function ProgressStrip({ label, percent }: ProgressStripProps) {
+  const rounded = Math.round(Math.max(0, Math.min(100, percent)));
+  return (
+    <Surface dark>
+      <div className={classes.strip}>
+        <span className={classes.stripLabel}>{label}</span>
+        <div className={classes.stripBar}>
+          <ProgressBar value={rounded} label={label} />
+        </div>
+        <span className={classes.jobPercent} data-no-truncate="">
+          {rounded}%
+        </span>
+      </div>
+    </Surface>
+  );
+}

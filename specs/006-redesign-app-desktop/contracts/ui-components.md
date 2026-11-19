@@ -49,7 +49,8 @@ escritos nas telas.
 | `Notice` | Alerta com tom `lime` · `green` · `red` · `amber`, ícone (num círculo cheio do tom, como o "!" do "Verificar") e ação opcionais; `block` faz dele um bloco à parte para a regra de uma principal por bloco | "Alerta" `21:163`; tela 4.9 |
 | `BatchSummary`, `SummaryLine`, `ReasonList` | Resumo de ação em lote: linhas com o ícone num círculo do tom (`green` ✓ para as aceitas; `amber` ! para as ignoradas e o que pede atenção; `red` ! para as que falharam) e o texto com o grupo e a quantidade (FR-006, FR-024); a caixa cinza com cada reserva que fica de fora e o motivo (T042) | "Resumo do lote" da tela 4.6 (`88:3565`) |
 | `ProgressBar` | Progresso da execução e do envio | "Progresso da execução" `26:1648` |
-| `CountCard` | Card de contagem (âmbar, vermelho, verde) | "Card de contagem" `21:153` |
+| `ProgressStrip` | Faixa escura com "N de M hotéis concluídos", a barra lima e o percentual, no detalhe e no resultado da execução enquanto ela roda (T056) | Telas 2.6 e 3.2 |
+| `CountCard`, `CountGrid` | Card de contagem (âmbar, vermelho, verde ou cinza para as situações neutras); a grade com cinco por linha, quatro abaixo de 640 px e três abaixo de 480 px (T057) | "Card de contagem" `21:153`; telas 2.7 e 3.4 |
 | `EmptyState` | Ícone, explicação e, com busca ou filtro em vigor, "Limpar busca e filtros" (FR-021) | Tela 4.3 |
 | `StaleDataNotice` | "dados de HH:MM — servidor indisponível" na linha do título (`Notice compact`: só o texto, em negrito; `amarelo/9` em vez do `amarelo/8` do design, que fica abaixo de 4,5:1) | Tela 5.1 |
 | `Countdown` | Contagem regressiva do token: rótulo à esquerda e o tempo no estilo "Cronômetro" (lima no escuro, vermelho no fim) | Tela 2.4 |

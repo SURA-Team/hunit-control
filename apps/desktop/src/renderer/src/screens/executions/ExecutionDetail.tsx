@@ -4,39 +4,39 @@
  * do servidor. Para o perfil operador: cancelar (com confirmação), retomar (com o acesso do cofre)
  * e o campo do token, inclusive para execuções de outras máquinas. O estado vem sempre do GET; o
  * app não decide nada sobre a execução.
+ *
+ * Desde a 006 (T056; telas 3.2 a 3.4): "Execução" com o selo e quem iniciou; o período; o hotel atual
+ * numa caixa cinza; o tempo restante; a faixa escura "N de M hotéis concluídos"; as contagens em
+ * caixas (`CountCard`); os hotéis em linhas simples (FR-020); os avisos do servidor e as evidências
+ * em cards; "Ver as reservas desta execução" em contorno; "Cancelar execução" em vermelho suave e
+ * "Retomar" como principal; os diálogos de cancelar e do acesso para retomar no padrão.
  */
-import {
-  Alert,
-  Button,
-  Group,
-  Modal,
-  Paper,
-  PasswordInput,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import type { Execution, ExecutionEvent } from '../../../../shared/ipc-types';
+import type { Execution } from '../../../../shared/ipc-types';
 import { ClassificationCountsGrid } from '../../components/ClassificationCountsGrid';
 import { EvidenceList } from '../../components/EvidenceList';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
-import { StatusBadge } from '../../components/StatusBadge';
 import { errorCode, messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDate, formatDateTime, formatDuration, formatTime } from '../../presentation/format';
-import {
-  END_REASON_MESSAGES,
-  EXECUTION_STATUS_LABELS,
-  HOTEL_STATUS_LABELS,
-} from '../../presentation/labels';
+import { jobStatusBadge, requesterName } from '../../presentation/jobs';
+import { END_REASON_MESSAGES, EXECUTION_STATUS_LABELS } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
 import { useExecution } from '../../state/executions';
-import { Action, AppDialog } from '../../ui';
+import {
+  Action,
+  AppDialog,
+  Card,
+  CardHeader,
+  Field,
+  Notice,
+  PasswordField,
+  SectionTitle,
+  StatusBadge,
+} from '../../ui';
+import { ACTIVE_EXECUTION, ExecutionHotels, ExecutionProgressStrip } from './ExecutionParts';
 
-const ACTIVE = new Set(['queued', 'running', 'awaiting_2fa']);
 const RESUMABLE = new Set(['failed', 'cancelled']);
 
 interface Props {
@@ -52,13 +52,9 @@ export function ExecutionDetail({ executionId, onOpenExecution, onOpenReservatio
   const execution = query.data;
 
   return (
-    <Stack gap="md" data-testid="execution-detail">
+    <Stack gap={16} data-testid="execution-detail">
       <StaleDataNotice updatedAt={query.dataUpdatedAt} offline={state?.status === 'offline'} />
-      {query.isError && !execution && (
-        <Alert color="red" role="alert">
-          {messageOf(query.error)}
-        </Alert>
-      )}
+      {query.isError && !execution && <Notice tone="red">{messageOf(query.error)}</Notice>}
       {execution && (
         <DetailContent
           key={execution.id}
@@ -88,24 +84,18 @@ function DetailContent({
 }) {
   const { isOperator, isOnline, client } = useConnection();
   const { current, timing, warnings } = execution;
-  const latestWarningByHotel = new Map<string, ExecutionEvent>();
-  for (const warning of warnings) {
-    if (warning.hotelCode && !latestWarningByHotel.has(warning.hotelCode)) {
-      latestWarningByHotel.set(warning.hotelCode, warning);
-    }
-  }
-  const mine = client?.name === execution.requestedClient;
+  const active = ACTIVE_EXECUTION.has(execution.status);
+  const status = jobStatusBadge(EXECUTION_STATUS_LABELS[execution.status], execution.status);
 
   return (
     <>
-      <Group justify="space-between">
-        <Group gap="sm">
-          <Title order={4}>Execução</Title>
-          <StatusBadge label={EXECUTION_STATUS_LABELS[execution.status]} size="md" />
+      <Group justify="space-between" gap={8}>
+        <Group gap={8}>
+          <SectionTitle order={3}>Execução</SectionTitle>
+          <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
         </Group>
         <Text size="sm" c="dimmed">
-          {execution.requestedClient}
-          {mine ? ' (esta máquina)' : ''}
+          {requesterName(execution.requestedClient, client?.name)}
         </Text>
       </Group>
       <Text size="sm">
@@ -115,27 +105,27 @@ function DetailContent({
       </Text>
 
       {execution.parentExecutionId && (
-        <Group gap="xs">
-          <Button
-            variant="subtle"
-            size="compact-sm"
+        <Group>
+          <Action
+            variant="text"
+            size="xs"
             onClick={() => onOpenExecution(execution.parentExecutionId ?? '')}
           >
             Retomada de {execution.parentExecutionId.slice(0, 8)}
-          </Button>
+          </Action>
         </Group>
       )}
 
       {execution.endReason && (
-        <Alert color={execution.status === 'cancelled' ? 'gray' : 'red'} role="status">
+        <Notice tone={execution.status === 'cancelled' ? 'amber' : 'red'} role="status">
           {END_REASON_MESSAGES[execution.endReason]}
-        </Alert>
+        </Notice>
       )}
 
       {current && (
-        <Paper withBorder p="sm" radius="sm">
+        <Card tone="subtle" padding={12}>
           <Text size="sm">
-            <Text span fw={600}>
+            <Text span fw={700}>
               Hotel atual:
             </Text>{' '}
             {hotelName(execution, current.hotelCode)}
@@ -144,12 +134,12 @@ function DetailContent({
               : ''}
             {current.reservationNumber ? `, reserva ${current.reservationNumber}` : ''}
           </Text>
-        </Paper>
+        </Card>
       )}
-      {ACTIVE.has(execution.status) && timing?.estimatedRemainingSeconds != null && (
+      {active && timing?.estimatedRemainingSeconds != null && (
         <Text size="sm">
           Tempo estimado restante:{' '}
-          <Text span fw={600}>
+          <Text span fw={700}>
             {formatDuration(timing.estimatedRemainingSeconds)}
           </Text>
         </Text>
@@ -159,60 +149,14 @@ function DetailContent({
         <TokenField executionId={execution.id} disabled={!isOnline} />
       )}
 
+      {active && <ExecutionProgressStrip execution={execution} />}
       <ClassificationCountsGrid counts={execution.counts} />
-
-      {execution.hotels.length > 0 && (
-        <Table striped verticalSpacing={6}>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Hotel</Table.Th>
-              <Table.Th>Situação</Table.Th>
-              <Table.Th>Páginas</Table.Th>
-              <Table.Th>Reservas</Table.Th>
-              <Table.Th>Duração</Table.Th>
-              <Table.Th>Motivo ou aviso</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {execution.hotels.map((hotel) => {
-              const warning =
-                hotel.status === 'running' ? latestWarningByHotel.get(hotel.hotelCode) : undefined;
-              return (
-                <Table.Tr key={hotel.hotelCode} data-testid={`hotel-${hotel.hotelCode}`}>
-                  <Table.Td>{hotelName(execution, hotel.hotelCode)}</Table.Td>
-                  <Table.Td>
-                    <StatusBadge label={HOTEL_STATUS_LABELS[hotel.status]} />
-                  </Table.Td>
-                  <Table.Td>
-                    {hotel.pagesTotal ? `${hotel.pagesDone ?? 0} de ${hotel.pagesTotal}` : '—'}
-                  </Table.Td>
-                  <Table.Td>{hotel.reservationsSeen ?? 0}</Table.Td>
-                  <Table.Td>{formatDuration(hotel.durationSeconds)}</Table.Td>
-                  <Table.Td>
-                    {hotel.failureReason && (
-                      <Text size="sm" c={hotel.status === 'failed' ? 'red.8' : 'orange.8'}>
-                        {hotel.failureReason}
-                      </Text>
-                    )}
-                    {warning && (
-                      <Text size="sm" c="orange.8">
-                        {formatTime(warning.at)} — {warning.message}
-                      </Text>
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
-      )}
+      <ExecutionHotels execution={execution} warnings={warnings} />
 
       {warnings.length > 0 && (
-        <Paper withBorder p="sm" radius="sm" data-testid="execution-warnings">
-          <Title order={5} mb={6}>
-            Avisos do servidor
-          </Title>
-          <Stack component="ul" gap={4} m={0} pl="md">
+        <Card block="Avisos do servidor" data-testid="execution-warnings">
+          <CardHeader title="Avisos do servidor" />
+          <Stack component="ul" gap={4} m={0} pl={18}>
             {warnings.map((warning) => (
               <Text component="li" size="sm" key={warning.id}>
                 <Text span c="dimmed">
@@ -223,16 +167,16 @@ function DetailContent({
               </Text>
             ))}
           </Stack>
-        </Paper>
+        </Card>
       )}
 
       <EvidenceList executionId={execution.id} />
 
       {onOpenReservations && (
         <Group>
-          <Button variant="default" onClick={() => onOpenReservations(execution.id)}>
+          <Action variant="secondary" onClick={() => onOpenReservations(execution.id)}>
             Ver as reservas desta execução
-          </Button>
+          </Action>
         </Group>
       )}
 
@@ -269,10 +213,11 @@ function TokenField({ executionId, disabled }: { executionId: string; disabled: 
   }
 
   return (
-    <Paper withBorder p="sm" radius="sm" bg="yellow.0">
+    <Card tone="subtle" padding={12} block="Token do autenticador">
       <form onSubmit={submit}>
-        <Group align="flex-end">
-          <TextInput
+        <Group align="flex-end" gap={8} wrap="nowrap">
+          <Field
+            flex={1}
             label="Token do autenticador"
             value={token}
             onChange={(event) => setToken(event.currentTarget.value)}
@@ -281,22 +226,28 @@ function TokenField({ executionId, disabled }: { executionId: string; disabled: 
             maxLength={10}
             error={invalid ? 'O token tem de 4 a 10 dígitos.' : null}
           />
-          <Button type="submit" loading={send.isPending} disabled={disabled}>
+          <Action
+            type="submit"
+            variant="primary"
+            size="sm"
+            loading={send.isPending}
+            disabled={disabled}
+          >
             Enviar token
-          </Button>
+          </Action>
         </Group>
       </form>
       {send.isSuccess && (
-        <Text size="sm" mt={6} role="status">
+        <Text size="sm" role="status">
           Token entregue, aguardando o Hunit…
         </Text>
       )}
       {send.isError && (
-        <Text size="sm" mt={6} c="red" role="alert">
+        <Text size="sm" c="var(--hc-vermelho-9)" role="alert">
           {messageOf(send.error)}
         </Text>
       )}
-    </Paper>
+    </Card>
   );
 }
 
@@ -358,42 +309,42 @@ function OperatorActions({
     !['credentials_missing', 'credentials_expired'].includes(errorCode(resume.error) ?? '')
       ? messageOf(resume.error)
       : null;
+  const canCancel = ACTIVE_EXECUTION.has(execution.status);
+  const canResume = RESUMABLE.has(execution.status);
 
   return (
-    <Stack gap="sm">
-      <Group>
-        {/* Sem o "Leve" (FR-013, T038): cancelar é destrutiva; abrir a retomada, secundária. */}
-        {ACTIVE.has(execution.status) && (
-          <Action variant="danger-light" onClick={() => setConfirmCancel(true)} disabled={disabled}>
-            Cancelar execução
-          </Action>
-        )}
-        {RESUMABLE.has(execution.status) && (
-          <Action
-            variant="primary"
-            onClick={() => resume.mutate()}
-            loading={resume.isPending}
-            disabled={disabled}
-          >
-            Retomar
-          </Action>
-        )}
-        {resumedId && (
-          <Action variant="secondary" onClick={() => onOpenExecution(resumedId)}>
-            Abrir a retomada
-          </Action>
-        )}
-      </Group>
-      {resumeError && (
-        <Alert color="red" role="alert">
-          {resumeError}
-        </Alert>
+    <Stack gap={12}>
+      {(canCancel || canResume || resumedId) && (
+        <Group gap={8}>
+          {/* Sem o "Leve" (FR-013, T038): cancelar é destrutiva; abrir a retomada, secundária. */}
+          {canCancel && (
+            <Action
+              variant="danger-light"
+              onClick={() => setConfirmCancel(true)}
+              disabled={disabled}
+            >
+              Cancelar execução
+            </Action>
+          )}
+          {canResume && (
+            <Action
+              variant="primary"
+              onClick={() => resume.mutate()}
+              loading={resume.isPending}
+              disabled={disabled}
+            >
+              Retomar
+            </Action>
+          )}
+          {resumedId && (
+            <Action variant="secondary" onClick={() => onOpenExecution(resumedId)}>
+              Abrir a retomada
+            </Action>
+          )}
+        </Group>
       )}
-      {cancel.isError && (
-        <Alert color="red" role="alert">
-          {messageOf(cancel.error)}
-        </Alert>
-      )}
+      {resumeError && <Notice tone="red">{resumeError}</Notice>}
+      {cancel.isError && <Notice tone="red">{messageOf(cancel.error)}</Notice>}
 
       {/* Tela 3.3: "Não" em contorno e "Sim, cancelar" em vermelho cheio (FR-009). */}
       <AppDialog
@@ -421,41 +372,43 @@ function OperatorActions({
         </Text>
       </AppDialog>
 
-      <Modal
+      <AppDialog
         opened={askAccess !== null}
         onClose={() => setAskAccess(null)}
         title="Acesso ao Hunit para retomar"
-        centered
+        onCancel={() => setAskAccess(null)}
+        actions={
+          <Action
+            variant="primary"
+            size="sm"
+            onClick={() => saveAndResume.mutate()}
+            loading={saveAndResume.isPending}
+            disabled={username.trim() === '' || password === ''}
+          >
+            Guardar e retomar
+          </Action>
+        }
       >
-        <Stack>
+        <Stack gap={16}>
           {askAccess && (
-            <Text size="sm" c="orange.8">
+            <Notice tone="amber" role="status">
               {askAccess}
-            </Text>
+            </Notice>
           )}
-          <TextInput
+          <Field
             label="Usuário do Hunit"
             value={username}
             onChange={(event) => setUsername(event.currentTarget.value)}
             autoComplete="off"
           />
-          <PasswordInput
+          <PasswordField
             label="Senha do Hunit"
             value={password}
             onChange={(event) => setPassword(event.currentTarget.value)}
             autoComplete="off"
           />
-          <Group justify="flex-end">
-            <Button
-              onClick={() => saveAndResume.mutate()}
-              loading={saveAndResume.isPending}
-              disabled={username.trim() === '' || password === ''}
-            >
-              Guardar e retomar
-            </Button>
-          </Group>
         </Stack>
-      </Modal>
+      </AppDialog>
     </Stack>
   );
 }

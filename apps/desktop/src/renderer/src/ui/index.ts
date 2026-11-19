@@ -32,6 +32,7 @@ export {
 export { Countdown, type CountdownProps } from './Countdown';
 export {
   CountCard,
+  CountGrid,
   IndicatorCard,
   type CountCardProps,
   type IndicatorCardProps,

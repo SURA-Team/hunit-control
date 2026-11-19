@@ -4,13 +4,16 @@
  * FR-013); as demais situações pelo tom do rótulo (verde concluído, vermelho falhou, âmbar aguardando
  * o token, cinza na fila ou cancelado).
  */
-import type { ExecutionStatus } from '../../../shared/ipc-types';
+import type { ExecutionStatus, HotelRunStatus } from '../../../shared/ipc-types';
 import type { SituationBadgeItem } from '../ui';
 import { formatDateTime } from './format';
 import type { Label } from './labels';
 import { badgeOf } from './reservations';
 
-export function jobStatusBadge(label: Label, status: ExecutionStatus): SituationBadgeItem {
+export function jobStatusBadge(
+  label: Label,
+  status: ExecutionStatus | HotelRunStatus,
+): SituationBadgeItem {
   return status === 'running' ? { label: label.name, tone: 'lime' } : badgeOf(label);
 }
 
