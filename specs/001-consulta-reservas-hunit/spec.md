@@ -114,6 +114,20 @@ comercial, relatórios e painéis, e exportação de planilhas.
   indisponibilidade do Hunit durou de 7 a 17 s, às vezes mais, e atingiu todos os hotéis em
   andamento ao mesmo tempo. Com 3 tentativas, 4 hotéis falharam num episódio mais longo.
 
+### Session 2026-11-19 (cartão do hóspede sem a ação de cobrar)
+
+- Q: Em produção aparecem muitas reservas em "erro de análise" que mostram o cartão do hóspede
+  com o botão "Ver dados do cartão", mas sem o botão de cobrar (coleta "Canal Collect",
+  pré-pagamento "não executado até o momento a cobrança"). Como classificar? → A: "Cobrar na
+  maquininha": o cartão está no Hunit, mas o Hunit não oferece a cobrança; o Comercial cobra o
+  cartão na maquininha (regra 6a). Uma captura de 10 dessas reservas, de um hotel com o problema,
+  mostrou em todas os dados do cartão, o pré-pagamento não executado, nenhuma cobrança ou
+  validação registrada e a ação de cobrar indisponível; 9 tinham a forma "cartão de crédito" e 1
+  vinha sem forma. Elas iam para "erro de análise" pela regra 7 ("estado indeterminado"), não pela
+  falta da forma de pagamento (research R-24).
+- Q: E a reserva cancelada nessa mesma situação? → A: Recebe a mesma classificação da ativa,
+  "cobrar na maquininha" (FR-014a); se não houver o que cobrar, o Financeiro trata como as outras.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Acesso ao Hunit com token 2FA (Priority: P1)
@@ -382,6 +396,9 @@ durante o segundo hotel e retomar, verificando que o primeiro hotel não é repr
      cartão validado (não cobrado);
   6. pré-pagamento sem registro de cobrança e com a ação de cobrar disponível → pendente de
      cobrança;
+  6a. pré-pagamento (o cartão do hóspede no Hunit, com o botão "Ver dados do cartão") sem registro
+     de cobrança, sem validação e sem a ação de cobrar → cobrar na maquininha: o Hunit não
+     oferece a cobrança, e o comercial cobra o cartão fora dele (sessão 2026-11-19);
   7. qualquer outro caso (estrutura não reconhecida, contraditória ou indeterminada) → erro de
      análise.
 - **FR-014**: Cada classificação MUST registrar o motivo que a determinou.
