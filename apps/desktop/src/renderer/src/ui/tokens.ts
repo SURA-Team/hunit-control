@@ -142,15 +142,29 @@ export const layout = {
 export const breakpoints = {
   /** Janela abaixo disto: menu lateral só com os ícones. */
   collapsedMenu: 1180,
-  /** Conteúdo abaixo disto: o hotel vai para a segunda linha do hóspede na lista de reservas. */
-  narrowList: 1000,
+  /**
+   * Lista de reservas em conteúdo abaixo disto: o hotel vai para a segunda linha do hóspede. Os três
+   * pontos da lista saem do mínimo de 200 px para a coluna do hóspede (homologação da 006, T068).
+   */
+  narrowList: 1150,
   /** Conteúdo abaixo disto: as grades de dados dos cards passam de 3 para 2 colunas. */
   narrowGrid: 820,
   /**
-   * Conteúdo abaixo disto (janela mínima com zoom de 125 %): o período também vai para a segunda
-   * linha do hóspede, para Valor e Situação, que nunca cortam, caberem (FR-044, FR-045).
+   * Lista de reservas em conteúdo abaixo disto: o período também vai para a segunda linha do
+   * hóspede, para Valor e Situação, que nunca cortam, caberem (FR-044, FR-045).
    */
-  compactList: 720,
+  compactList: 890,
+  /** Conteúdo abaixo disto (perto da janela mínima com zoom): Valor mais estreito e 12 px entre colunas. */
+  tightList: 730,
+  /**
+   * "Retornos a validar", com o mínimo de 205 px para o hotel da cobrança, o do selo "Diferente do
+   * hotel da reserva" (T068): abaixo disto, o responsável vai para a linha da reserva…
+   */
+  returnsNarrow: 1105,
+  /** …abaixo disto, as ações da linha ficam uma embaixo da outra… */
+  returnsStacked: 935,
+  /** …e abaixo disto, a diferença (e o "Quando" dos retornos com problema) vai para a linha da reserva. */
+  returnsCompact: 850,
 } as const;
 
 /** Variável CSS de um nome do design: `cssVarName('superfície/escura 2')` = `--hc-superficie-escura-2`. */

@@ -13,6 +13,11 @@
  * comprovante e valor informado), Comercial (US8: as quatro abas com envio, retorno e problema, a
  * recusa do retorno e a conferência do envio) e Execuções (US6: a lista com o card da em andamento e
  * o "Histórico", a gaveta encerrada e em andamento e o "Cancelar a execução?").
+ *
+ * Desde a homologação da 006 (T068), também nenhuma célula de tabela transbordando para a vizinha, e
+ * as listas passam por uma varredura de larguras (`sweepWidths`: janela de 960 a 1 920 px de 20 em
+ * 20, e de 960 a 1 200 px com zoom de 125 %), porque os pontos de quebra das colunas ficam entre os
+ * quatro tamanhos: a lista de reservas sobrepunha o hóspede ao período num segundo monitor.
  */
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -39,6 +44,8 @@ import {
   type WindowSize,
 } from './app-fixture.js';
 import {
+  cellOverflows,
+  expectCellsFit,
   expectDialogFits,
   expectDialogSpacing,
   expectNoHorizontalScroll,
@@ -97,6 +104,12 @@ const SIZES: Size[] = [
 ];
 
 const DEFAULT_SIZE: WindowSize = { width: 1280, height: 820 };
+
+/** Varredura de larguras (T068): cobre o conteúdo de ~630 px (mínimo com zoom) a ~1 650 px. */
+const SWEEP = [
+  { zoom: 1, from: 960, to: 1920 },
+  { zoom: 1.25, from: 960, to: 1200 },
+] as const;
 
 let certificates: TestCertificates;
 let server: E2eServer;
@@ -166,6 +179,7 @@ async function checkAllSizes(state: ScreenState): Promise<void> {
       );
       await expectNoHorizontalScroll(window, where);
       await expectNothingTruncated(window, where);
+      await expectCellsFit(window, where);
       await expectSideMenu(window, { collapsed: size.collapsedMenu, active: state.area }, where);
       if (state.dialog) {
         await expectDialogFits(state.dialog(), where);
@@ -176,6 +190,67 @@ async function checkAllSizes(state: ScreenState): Promise<void> {
   } finally {
     await resizeWindow(app, window, DEFAULT_SIZE, 1);
   }
+}
+
+/**
+ * Passa a janela por todas as larguras da varredura (`SWEEP`) e junta os problemas de cada uma: rolagem
+ * horizontal, algo cortado, célula transbordando e o que `check` devolver. Falha no fim, com a lista
+ * inteira, para mostrar todas as faixas de largura com problema de uma vez.
+ */
+async function sweepWidths(
+  check: () => Promise<string[]> = () => Promise.resolve([]),
+): Promise<void> {
+  const { app, window } = launched;
+  const problems: string[] = [];
+  try {
+    for (const { zoom, from, to } of SWEEP) {
+      for (let width = from; width <= to; width += 20) {
+        await resizeWindow(app, window, { width, height: 720 }, zoom);
+        const where = `janela de ${width} px${zoom === 1 ? '' : ' com zoom de 125 %'}`;
+        const found = [
+          ...(await window.evaluate(() =>
+            document.documentElement.scrollWidth > document.documentElement.clientWidth
+              ? ['rolagem horizontal']
+              : [],
+          )),
+          ...(await cellOverflows(window)),
+          ...(await check()),
+        ];
+        problems.push(...found.map((problem) => `${where}: ${problem}`));
+      }
+    }
+  } finally {
+    await resizeWindow(app, window, DEFAULT_SIZE, 1);
+  }
+  expect(problems).toEqual([]);
+}
+
+/**
+ * A coluna sem largura fixa de uma lista (o hóspede, o hotel da cobrança…) tem pelo menos `min` px de
+ * conteúdo quando a lista tem `from` px ou mais, e `narrowMin` abaixo disso (T068).
+ */
+async function flexColumnWidth(
+  table: Locator,
+  column: string,
+  limits: { from: number; min: number; narrowMin: number },
+): Promise<string[]> {
+  const { listWidth, columnWidth } = await table.evaluate((element, key) => {
+    const header = element.querySelector<HTMLElement>(`th[data-col="${key}"]`);
+    const style = header ? getComputedStyle(header) : null;
+    return {
+      listWidth: element.getBoundingClientRect().width,
+      columnWidth:
+        header && style
+          ? header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+          : 0,
+    };
+  }, column);
+  const min = listWidth >= limits.from ? limits.min : limits.narrowMin;
+  return columnWidth >= min
+    ? []
+    : [
+        `coluna ${column} com ${Math.round(columnWidth)} px numa lista de ${Math.round(listWidth)} px (mínimo ${min})`,
+      ];
 }
 
 function button(name: string): Locator {
@@ -402,6 +477,16 @@ describe('larguras: Reservas (US2 e US4, SC-007)', () => {
     }
   });
 
+  it('colunas sem sobrepor em qualquer largura da janela (homologação, T068)', async () => {
+    const { window } = launched;
+    await goTo('Reservas');
+    const table = window.locator('table[aria-label="Reservas"]');
+    await table.locator('tbody tr').first().waitFor();
+    await sweepWidths(() =>
+      flexColumnWidth(table, 'guest', { from: 730, min: 200, narrowMin: 150 }),
+    );
+  }, 240_000);
+
   it('gaveta da seleção e anexar em lote (telas 4.5 e 4.6)', async () => {
     const { app, window } = launched;
     for (const number of ['R-1', 'R-2', 'R-3']) {
@@ -623,6 +708,25 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
     });
   });
 
+  it('colunas das abas sem sobrepor em qualquer largura da janela (homologação, T068)', async () => {
+    const { window } = launched;
+    await goTo('Comercial');
+    await tab('Envios').click();
+    await window.getByRole('table', { name: 'Envios ao Comercial' }).waitFor({ timeout: 15_000 });
+    await sweepWidths();
+
+    await tab('Retornos a validar').click();
+    const returns = window.getByRole('table', { name: 'Retornos a validar' });
+    await returns.waitFor({ timeout: 15_000 });
+    await sweepWidths(() =>
+      flexColumnWidth(returns, 'chargeHotel', { from: 730, min: 205, narrowMin: 140 }),
+    );
+
+    await tab('Retornos com problema').click();
+    await window.getByRole('table', { name: 'Retornos com problema' }).waitFor({ timeout: 15_000 });
+    await sweepWidths();
+  }, 480_000);
+
   it('recusar o retorno (tela 7.6)', async () => {
     const { window } = launched;
     await tab('Retornos a validar').click();
@@ -699,6 +803,13 @@ describe('larguras: Execuções (US6, SC-007)', () => {
       ],
     });
   });
+
+  it('colunas sem sobrepor em qualquer largura da janela (homologação, T068)', async () => {
+    const { window } = launched;
+    await goTo('Execuções');
+    await window.getByRole('table', { name: 'Histórico das execuções' }).waitFor();
+    await sweepWidths();
+  }, 240_000);
 
   it('gaveta da execução encerrada (tela 3.4)', async () => {
     const { window } = launched;

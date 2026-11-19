@@ -83,7 +83,11 @@ export function ChargeHotel({
       <Text size="sm" fw={differs ? 700 : undefined} c={differs ? ATTENTION : undefined}>
         {chargeHotel}
       </Text>
-      {differs && <StatusBadge tone="amber">Diferente do hotel da reserva</StatusBadge>}
+      {differs && (
+        <StatusBadge tone="amber" wrap>
+          Diferente do hotel da reserva
+        </StatusBadge>
+      )}
       <Text size="xs" c="dimmed">
         Hotel da reserva: {hotelName}
       </Text>

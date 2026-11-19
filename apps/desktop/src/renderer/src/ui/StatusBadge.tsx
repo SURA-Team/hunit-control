@@ -17,14 +17,26 @@ export interface StatusBadgeProps {
   title?: string;
   /** `md` (20 px): o selo do perfil no cabeçalho. */
   size?: 'sm' | 'md';
+  /**
+   * Numa coluna que pode ficar mais estreita que o selo (o hotel da cobrança perto da janela mínima
+   * com zoom), quebra em mais linhas em vez de passar da coluna (T068). Nunca é cortado.
+   */
+  wrap?: boolean;
 }
 
-export function StatusBadge({ tone, children, title, size = 'sm' }: StatusBadgeProps) {
+export function StatusBadge({
+  tone,
+  children,
+  title,
+  size = 'sm',
+  wrap = false,
+}: StatusBadgeProps) {
   return (
     <span
       className={classes.badge}
       data-tone={tone}
       data-size={size}
+      data-wrap={wrap || undefined}
       title={title}
       data-no-truncate=""
     >

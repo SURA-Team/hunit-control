@@ -332,6 +332,9 @@ Figma e implantar.
   _Feito (19/11/2026):_ build, lint (sem exceções na regra do Mantine) e typecheck verdes; `pnpm test` com 162 arquivos e 2 265 testes passando (6 arquivos e 7 testes pulados: os roteiros que só rodam quando pedidos, como a captura de telas); os commits da fase sem prints, planilhas ou dados reais.
 - [ ] T065 ⛔ HOMOLOGAÇÃO: quickstart §4 — servidor de homologação na API 1.8.0 e instalador novo; cenários 1 a 17 da seção 3 com os dois perfis; o app 0.2 contra a 1.8.0 continua funcionando. Registrar em `research.md` ("Homologação")
   _Ambiente (19/11/2026):_ a implantação da homologação ficou padronizada no `README.md` ("Homologação"): clone próprio em `C:\hunit-homolog\hunit-control` na branch da feature, sem `.env` (um comando sem `--env-file .env.homolog` para no erro das variáveis obrigatórias, sem chegar à produção), e os roteiros de montar, atualizar para uma feature, recomeçar com dados limpos e desmontar. O quickstart §4 aponta para ele.
+  _Resultado (19/11/2026):_ aprovados os cenários 1, 2, 3.1 a 3.11 (o 3.4 com a ressalva do número com hífen, que os dados da homologação não têm), 3.13 a 3.16 e a seção 4. O 3.12 achou a lista de reservas sobrepondo as colunas num segundo monitor: virou a T068 e é conferido de novo depois dela. O 3.17 fica para o app de produção (T067). Detalhes em `research.md` ("Homologação").
+- [X] T068 Ajuste da homologação (cenário 3.12, FR-044, FR-045, SC-007): a lista de reservas sobrepõe o hóspede ao período quando o conteúdo fica entre 720 e ~890 px (um segundo monitor), porque a coluna do hóspede fica com o que sobra das larguras fixas; os "Retornos a validar" têm o mesmo problema com o hotel da cobrança. Recalcular os pontos de quebra das listas em card pelo mínimo da coluna livre (hóspede 200 px, hotel da cobrança 205 px), sem mudar o modelo das telas (as colunas continuam indo para a segunda linha), e acrescentar ao roteiro de larguras a conferência de células transbordando e uma varredura de larguras. Registrar em `research.md` (R-07). Doc da PM: item 6
+  _Feito (19/11/2026):_ pontos de quebra das listas em card (o card virou o *container* `hc-list`; as listas dos diálogos não mudam): reservas com o hotel na segunda linha abaixo de 1 150 px de conteúdo e o período abaixo de 890; "Retornos a validar" com o responsável na linha abaixo de 1 105, as ações empilhadas abaixo de 935 e a diferença abaixo de 850; abaixo de 730, 12 px entre as colunas e o valor com 110 px; a segunda linha das listas quebra em qualquer ponto; o selo "Diferente do hotel da reserva" quebra linha só perto da janela mínima com zoom. O roteiro de larguras ganhou a conferência de células transbordando (nos quatro tamanhos) e a varredura de larguras em Reservas, Comercial e Execuções; antes da correção, ela achava sobreposição em dezenas de larguras, inclusive na janela de 1 280 px nos retornos. Falta conferir de novo o cenário 3.12 no segundo monitor (T065).
 - [ ] T066 ⛔ FIGMA: rodar a skill `figma-screens-sync` com `FEATURE = '006-redesign-app-desktop'`: simulação, relatório ao usuário e, com o ok dele, aplicação — telas da 006 com ✅ e as das páginas 002 a 005 com ❌ e ocultas (FR-032, research R-17). Atualizar a coluna "Ativa em" do catálogo
 - [ ] T067 ⛔ PRODUÇÃO: quickstart §5 — servidor de produção na 1.8.0 **antes** do app; instalador novo nas máquinas do Financeiro e da Controladoria. Registrar em `research.md` ("Produção")
 
@@ -358,7 +361,8 @@ Figma e implantar.
   andamento do T052 segue a tela 7.7a, aprovada pela UX em 2026-11-18 (T049).
 - **US6 (Phase 11)**: depende da Foundational e da US1 (T020, para o resultado em Executar).
 - **Polish (Phase 12)**: depois de todas as histórias. T059 → T064; T061 → T062 → T065 → T066;
-  T065 → T067.
+  T065 → T067. O ajuste da homologação vem depois dela: T065 → T068 → o cenário 3.12 conferido de
+  novo → T066 e T067.
 
 ### Within Each User Story
 

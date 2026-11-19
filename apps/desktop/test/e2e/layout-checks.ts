@@ -138,6 +138,32 @@ export async function expectSideMenu(
   }
 }
 
+/**
+ * Células de tabela com conteúdo maior que elas (homologação da 006, T068). As colunas têm largura
+ * fixa: um texto que não cabe não alarga a coluna, passa por cima da vizinha. Devolve uma linha por
+ * célula, com a coluna, o começo do texto e as larguras.
+ */
+export async function cellOverflows(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('table th, table td')]
+      .filter((cell) => cell.getClientRects().length > 0)
+      .flatMap((cell) => {
+        // 1 px de folga para o arredondamento com zoom.
+        if (cell.scrollWidth <= cell.clientWidth + 1) return [];
+        const table = cell.closest('table')?.getAttribute('aria-label') ?? 'tabela';
+        const text = (cell.textContent ?? '').trim().slice(0, 40);
+        return [
+          `${table}, coluna ${cell.dataset['col'] ?? '?'}: "${text}" (${cell.scrollWidth} > ${cell.clientWidth})`,
+        ];
+      }),
+  );
+}
+
+/** Nenhuma célula de tabela transborda para a vizinha (`cellOverflows`). */
+export async function expectCellsFit(page: Page, where = ''): Promise<void> {
+  expect(await cellOverflows(page), `células que transbordam ${where}`.trim()).toEqual([]);
+}
+
 /** A página não rola na horizontal: o documento cabe na largura da janela. */
 export async function expectNoHorizontalScroll(page: Page, where = ''): Promise<void> {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({

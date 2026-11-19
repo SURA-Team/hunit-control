@@ -186,6 +186,32 @@ parecidos com significados diferentes.
 Os números acima são o ponto de partida; o comportamento entre as larguras é revisado pela UX
 (spec, premissa "Responsividade").
 
+**Revisão na homologação (T068, 2026-11-19)**: num segundo monitor, a lista de reservas sobrepunha o
+hóspede ao período. As colunas têm largura fixa e a do hóspede fica com o que sobra: com o conteúdo
+entre 720 e ~890 px, sobravam 40 a 200 px, e o texto que não cabia passava por cima da coluna ao
+lado. O mesmo acontecia com a janela pouco abaixo de 1 180 px e, nos "Retornos a validar", com o
+hotel da cobrança em várias faixas, inclusive na janela de 1 280 px. Os quatro tamanhos do roteiro
+caíam fora dessas faixas. Os pontos de quebra das listas em card passaram a sair do mínimo da coluna
+sem largura fixa (o card é o *container* `hc-list`; as listas dos diálogos não mudam):
+
+- lista de reservas, hóspede com pelo menos 200 px: o hotel vai para a segunda linha abaixo de
+  1 150 px de conteúdo (era 1 000) e o período abaixo de 890 px (era 720);
+- "Retornos a validar", hotel da cobrança com pelo menos 205 px (o selo "Diferente do hotel da
+  reserva" tem ~201 px): o responsável vai para a linha da reserva abaixo de 1 105 px (era 1 000), as
+  ações ficam uma embaixo da outra abaixo de 935 px (era 820) e a diferença vai para a linha abaixo de
+  850 px (era 720; o "Quando" dos retornos com problema acompanha);
+- abaixo de 730 px (perto da janela mínima com zoom de 125 %), todas as listas em card ficam com
+  12 px entre as colunas e o valor com 110 px, para a coluna livre não ficar abaixo de ~140 px; só aí
+  o selo "Diferente do hotel da reserva" pode quebrar em duas linhas (nunca é cortado);
+- a segunda linha das listas quebra em qualquer ponto (`overflow-wrap: anywhere`) em vez de passar da
+  célula.
+
+O modelo das telas não mudou: as colunas que somem continuam indo para a segunda linha, só que antes.
+Com a janela de 1 440 px (o tamanho do design), a lista de reservas continua com todas as colunas. O
+roteiro de larguras ganhou a conferência de que nenhuma célula transborda para a vizinha e uma
+varredura (janela de 960 a 1 920 px de 20 em 20, e de 960 a 1 200 px com zoom de 125 %) nas listas
+de Reservas, Comercial e Execuções.
+
 **Justificativa**: medir o conteúdo funciona igual com e sem menu recolhido. Trocar só o CSS é o que
 garante a FR-048 sem lógica extra.
 
@@ -457,6 +483,23 @@ execução aguardando o token (a mesma execução encerrada é a tela 2.10).
 
 "A confirmar com a UX" são diferenças que o app mantém de propósito; vão para a UX junto com os
 pontos acima, antes da marcação no Figma (T066).
+
+## Homologação (T065, 2026-11-19)
+
+Ambiente de homologação padronizado do `README.md` ("Homologação"), com os dados fictícios, a API
+1.8.0 e as duas janelas do app (operador e consulta). Cenários da seção 3 do quickstart:
+
+| Cenário | Resultado |
+|---|---|
+| 1, 2, 3.1 a 3.3, 3.5 a 3.11, 3.13 a 3.16 | Aprovados |
+| 3.4 (busca por valor e por número) | Aprovado. A busca pelo valor funcionou; o número com hífen (`101-1000`) não se aplica aos dados da homologação, que usam números como `100001`. A busca por um número no formato real funcionou |
+| 3.12 (janela de 960 a 1 920 px) | Na tela principal, diminuir a janela não deu problema. Num segundo monitor, a lista de reservas sobrepôs as informações das colunas (o hóspede sobre o período). Corrigido na T068 (R-07, "Revisão na homologação") e a conferir de novo nesse monitor |
+| 3.17 (instalador e ícone) | A conferir no app de produção, na máquina do usuário (T067) |
+| Seção 4 (o app 0.2 contra a API 1.8.0) | Aprovado |
+
+O pedido do usuário para a lista de reservas: colunas com espaçamento natural, como no Figma; se a
+solução fugisse do modelo atual, ir para o Figma para a UX aprovar. A correção mantém o modelo (R-07),
+então não houve proposta no Figma. O bug também está no doc da PM (item 6).
 
 ## Pontos levados à UX
 

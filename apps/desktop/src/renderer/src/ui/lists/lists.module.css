@@ -4,9 +4,14 @@
  * (53:125), "Linha de hotel" (55:2262), "Barra de seleção em lote" (76:117) e "Card — execução em
  * andamento" (53:131). As larguras das colunas são as do design; o espaço entre colunas (20 px) vai
  * no início de cada célula.
+ *
+ * Cada lista tem uma coluna sem largura fixa (o hóspede, o hotel da cobrança, a mensagem, a execução),
+ * que fica com o que sobra. Os pontos de quebra das listas em card (`hc-list`) saem da largura mínima
+ * dela (homologação da 006, T068): abaixo de cada um, uma coluna passa para a segunda linha antes de a
+ * coluna livre ficar apertada e o texto dela passar por cima da vizinha.
  */
 .card {
-  container-type: inline-size;
+  container: hc-list / inline-size;
   padding: 4px 0;
   border-radius: var(--hc-radius-card);
   background: var(--hc-fundo-padrao);
@@ -259,8 +264,16 @@
   outline: 2px solid var(--hc-superficie-escura);
 }
 
-/* Conteúdo abaixo de 1 000 px (tokens.breakpoints.narrowList): o hotel vai para a linha do hóspede. */
-@container (max-width: 999.98px) {
+/* O texto da segunda linha quebra em qualquer ponto em vez de passar da célula (T068). */
+.table .secondary {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Lista de reservas: o hóspede nunca fica com menos de 200 px (T068). Conteúdo abaixo de 1 150 px
+ * (tokens.breakpoints.narrowList): o hotel vai para a linha do hóspede.
+ */
+@container hc-list (max-width: 1149.98px) {
   .table [data-col='hotel'] {
     display: none;
   }
@@ -276,23 +289,41 @@
   .table [data-col='situation'] {
     width: 230px;
   }
+}
 
+/* Abaixo de 1 000 px: o resultado das execuções e dos envios mais estreito. */
+@container (max-width: 999.98px) {
   .table [data-col='result'] {
     width: 240px;
   }
 }
 
 /*
- * Conteúdo abaixo de 720 px (tokens.breakpoints.compactList; a janela mínima com zoom de 125 %): o
- * período também vai para a segunda linha do hóspede, para Valor e Situação caberem sem cortar.
+ * Conteúdo abaixo de 890 px (tokens.breakpoints.compactList): o período também vai para a linha do
+ * hóspede, para Valor e Situação caberem sem cortar.
  */
-@container (max-width: 719.98px) {
+@container hc-list (max-width: 889.98px) {
   .table [data-col='period'] {
     display: none;
   }
 
   .periodInline {
     display: inline;
+  }
+}
+
+/*
+ * Conteúdo abaixo de 730 px (tokens.breakpoints.tightList; perto da janela mínima com zoom de 125 %):
+ * o valor mais estreito e 12 px entre as colunas, em todas as listas em card.
+ */
+@container hc-list (max-width: 729.98px) {
+  .table th,
+  .table td {
+    padding-inline-start: 12px;
+  }
+
+  .table [data-col='amount'] {
+    width: 110px;
   }
 }
 
@@ -473,7 +504,12 @@
   gap: 8px;
 }
 
-@container (max-width: 999.98px) {
+/*
+ * "Retornos a validar": o hotel da cobrança fica com pelo menos 205 px, o do selo "Diferente do hotel
+ * da reserva" (T068); só perto da janela mínima com zoom o selo quebra linha. Abaixo de 1 105 px
+ * (tokens.breakpoints.returnsNarrow), o responsável vai para a linha da reserva.
+ */
+@container hc-list (max-width: 1104.98px) {
   .table [data-col='responsible'] {
     display: none;
   }
@@ -483,8 +519,8 @@
   }
 }
 
-/* Abaixo de 820 px (tokens.breakpoints.narrowGrid): as ações da linha, uma embaixo da outra. */
-@container (max-width: 819.98px) {
+/* Abaixo de 935 px (tokens.breakpoints.returnsStacked): as ações da linha, uma embaixo da outra. */
+@container hc-list (max-width: 934.98px) {
   .table [data-col='actions'] {
     width: 96px;
   }
@@ -492,6 +528,22 @@
   .rowActions {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/*
+ * Abaixo de 850 px (tokens.breakpoints.returnsCompact), a diferença dos retornos e o "Quando" dos
+ * retornos com problema vão para a linha da reserva. Nas listas dos diálogos (`InsetList`, sem o
+ * nome `hc-list`), abaixo de 720 px, como antes.
+ */
+@container hc-list (max-width: 849.98px) {
+  .table [data-col='difference'],
+  .table [data-col='when'] {
+    display: none;
+  }
+
+  .compactOnly {
+    display: block;
   }
 }
 

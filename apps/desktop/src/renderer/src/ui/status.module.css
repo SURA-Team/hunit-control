@@ -20,6 +20,16 @@
   height: 20px;
 }
 
+/* Selo que pode quebrar linha numa coluna estreita (`wrap`, T068). */
+.badge[data-wrap] {
+  max-width: 100%;
+  height: auto;
+  min-height: 18px;
+  padding-block: 4px;
+  line-height: 1.2;
+  white-space: normal;
+}
+
 .badge[data-tone='lime'] {
   background: var(--hc-azul-1);
   color: var(--hc-azul-9);
