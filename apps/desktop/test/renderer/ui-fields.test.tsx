@@ -15,6 +15,7 @@ import {
   SelectField,
   SelectionBox,
   SwitchField,
+  TextAreaField,
 } from '../../src/renderer/src/ui';
 import { renderUi } from './render';
 
@@ -170,5 +171,24 @@ describe('PeriodPicker', () => {
       '28/12/2026 → 03/01/2027 · 6 noites',
     );
     expect(describePeriod({ from: '2026-11-13', to: '2026-11-13' })).toBe('13/11/2026');
+  });
+});
+
+describe('TextAreaField (T051; tela 7.6)', () => {
+  it('o contador fica na linha do rótulo, fora do nome do campo; o erro fica ligado ao campo', () => {
+    renderUi(
+      <TextAreaField
+        label="Motivo da recusa"
+        value="Valor diferente"
+        onChange={vi.fn()}
+        counter="15/500"
+        error="Informe o motivo da recusa."
+      />,
+    );
+    const field = screen.getByRole('textbox', { name: 'Motivo da recusa' });
+    expect(field).toHaveValue('Valor diferente');
+    expect(screen.getByText('15/500')).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(/Informe o motivo da recusa./);
   });
 });

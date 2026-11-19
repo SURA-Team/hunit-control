@@ -238,3 +238,20 @@
   flex-direction: column;
   gap: 2px;
 }
+
+/* Campo de texto longo (tela 7.6): o contador na linha do rótulo, à direita. */
+.textAreaFrame {
+  position: relative;
+}
+.textArea {
+  height: auto;
+  min-height: 72px;
+  padding-block: 10px;
+}
+.counter {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}

@@ -8,4 +8,5 @@ export { RadioField, type RadioFieldProps, type RadioOption } from './RadioField
 export { SelectField, type SelectFieldProps } from './SelectField';
 export { SelectionBox, type SelectionBoxProps } from './SelectionBox';
 export { SwitchField, type SwitchFieldProps } from './SwitchField';
+export { TextAreaField, type TextAreaFieldProps } from './TextAreaField';
 export type { FieldSize } from './shared';

@@ -7,31 +7,22 @@
  *
  * O histórico do Comercial aparece junto com o da tratativa (`TreatmentSection`), por data. O que
  * cada ação aceita é decidido pelo servidor; o perfil consulta só vê.
+ *
+ * Desde a 006 (T051; telas 7.5 e 7.6): card "Comercial" (bloco) com o selo da linha e "Desfazer envio"
+ * em vermelho suave; os dados do envio em colunas; o retorno numa caixa cinza com o hotel da cobrança
+ * e a diferença de valor em âmbar quando chamam atenção, "Confirmar" como principal e "Recusar" em
+ * vermelho suave (como no design; a tarefa dizia contorno); a recusa num diálogo estreito com o aviso,
+ * os motivos mais comuns em pílulas, o motivo com o contador e "Recusar retorno" em vermelho cheio.
  */
-import {
-  Alert,
-  Badge,
-  Button,
-  Chip,
-  Group,
-  Modal,
-  Paper,
-  SimpleGrid,
-  Stack,
-  Table,
-  Text,
-  Textarea,
-  Title,
-} from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useId, useState } from 'react';
 import type {
   CommercialReturn,
   Reservation,
   ReservationKey,
   Result,
 } from '../../../../shared/ipc-types';
-import { StatusBadge } from '../../components/StatusBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDate, formatDateTime, formatMoney } from '../../presentation/format';
 import {
@@ -41,9 +32,27 @@ import {
   RETURN_STATE_LABELS,
   SHEET_TAB_NAMES,
 } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
+import {
+  Action,
+  AppDialog,
+  Card,
+  CardHeader,
+  DataField,
+  DataGrid,
+  FilterChip,
+  HotelRow,
+  Notice,
+  RowList,
+  StatusBadge,
+  TextAreaField,
+} from '../../ui';
 
 const MAX_REASON = 500;
+
+/** Cor de atenção do design (âmbar) para o que destoa: hotel diferente, diferença de valor. */
+const ATTENTION = 'var(--hc-amarelo-9)';
 
 export const commercialKey = (key: ReservationKey) =>
   ['commercial', key.hotelCode, key.reservationNumber] as const;
@@ -60,19 +69,6 @@ export function sameHotelName(a: string, b: string): boolean {
   return normalize(a) === normalize(b);
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed">
-        {label}
-      </Text>
-      <Text size="sm" component="div">
-        {children}
-      </Text>
-    </div>
-  );
-}
-
 /** Hotel da cobrança (o da maquininha) ao lado do hotel da reserva, destacado quando diferem. */
 export function ChargeHotel({
   chargeHotel,
@@ -83,21 +79,32 @@ export function ChargeHotel({
 }) {
   const differs = !sameHotelName(chargeHotel, hotelName);
   return (
-    <Stack gap={2}>
-      <Group gap={6}>
-        <Text size="sm" fw={differs ? 700 : undefined} c={differs ? 'orange.8' : undefined}>
-          {chargeHotel}
-        </Text>
-        {differs && (
-          <Badge color="orange" size="xs" variant="light">
-            Diferente do hotel da reserva
-          </Badge>
-        )}
-      </Group>
+    <Stack gap={2} align="flex-start">
+      <Text size="sm" fw={differs ? 700 : undefined} c={differs ? ATTENTION : undefined}>
+        {chargeHotel}
+      </Text>
+      {differs && <StatusBadge tone="amber">Diferente do hotel da reserva</StatusBadge>}
       <Text size="xs" c="dimmed">
         Hotel da reserva: {hotelName}
       </Text>
     </Stack>
+  );
+}
+
+/** Diferença entre o valor cobrado e o valor a cobrar, em âmbar quando não é zero. */
+export function AmountDifference({ value }: { value: string | null }) {
+  const differs = value !== null && Number(value) !== 0;
+  return (
+    <Text
+      span
+      size="sm"
+      fw={differs ? 700 : undefined}
+      c={differs ? ATTENTION : undefined}
+      data-no-truncate=""
+      style={{ whiteSpace: 'nowrap' }}
+    >
+      {formatMoney(value)}
+    </Text>
   );
 }
 
@@ -156,251 +163,238 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
   // Nunca enviada pela planilha e sem histórico: a seção não aparece.
   if (detail.isSuccess && line === null && returns.length === 0) return null;
 
+  const lineBadge = line ? badgeOf(LINE_STATE_LABELS[line.state]) : null;
+  const currentBadge = current ? badgeOf(RETURN_STATE_LABELS[current.state]) : null;
+
   return (
-    <Paper withBorder p="sm" radius="sm" data-testid="commercial-section">
-      <Group justify="space-between" mb="xs">
-        <Group gap="xs">
-          <Title order={5}>Comercial</Title>
-          {line && <StatusBadge label={LINE_STATE_LABELS[line.state]} />}
-          {line?.syncPending && (
-            <Badge color="yellow" variant="light" size="sm">
-              Atualização da planilha pendente
-            </Badge>
-          )}
-        </Group>
-        {canWrite && line && (
-          <Group gap="xs">
-            {line.state === 'open' && (
-              <Button
-                size="xs"
-                variant="default"
-                color="red"
-                disabled={busy}
-                onClick={() => setConfirmCancel(true)}
-              >
-                Desfazer envio
-              </Button>
-            )}
-            {line.restorableUntil && (
-              <Button
-                size="xs"
-                variant="default"
-                disabled={busy}
-                onClick={() =>
-                  void run(
-                    () => hunit.commercial.restoreLine(key),
-                    'Envio revertido: a linha voltou para "A cobrar".',
-                  )
-                }
-              >
-                Reverter envio desfeito
-              </Button>
-            )}
-          </Group>
-        )}
-      </Group>
+    <Card block="Comercial" data-testid="commercial-section">
+      <CardHeader
+        title="Comercial"
+        aside={
+          (lineBadge || line?.syncPending) && (
+            <Group gap={8}>
+              {lineBadge && <StatusBadge tone={lineBadge.tone}>{lineBadge.label}</StatusBadge>}
+              {line?.syncPending && (
+                <StatusBadge tone="amber">Atualização da planilha pendente</StatusBadge>
+              )}
+            </Group>
+          )
+        }
+        actions={
+          canWrite &&
+          line &&
+          (line.state === 'open' || line.restorableUntil) && (
+            <>
+              {line.state === 'open' && (
+                <Action
+                  size="xs"
+                  variant="danger-light"
+                  disabled={busy}
+                  onClick={() => setConfirmCancel(true)}
+                >
+                  Desfazer envio
+                </Action>
+              )}
+              {line.restorableUntil && (
+                <Action
+                  size="xs"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(
+                      () => hunit.commercial.restoreLine(key),
+                      'Envio revertido: a linha voltou para "A cobrar".',
+                    )
+                  }
+                >
+                  Reverter envio desfeito
+                </Action>
+              )}
+            </>
+          )
+        }
+      />
 
-      <Stack gap="sm">
-        {detail.isError && (
-          <Alert color="red" role="alert">
-            {messageOf(detail.error)}
-          </Alert>
-        )}
-        {message && (
-          <Alert color={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
-            {message.text}
-          </Alert>
-        )}
+      {detail.isError && <Notice tone="red">{messageOf(detail.error)}</Notice>}
+      {message && (
+        <Notice tone={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
+          {message.text}
+        </Notice>
+      )}
 
-        {line && (
-          <SimpleGrid cols={3} spacing="sm">
-            <Field label="Aba da planilha">
-              {line.tab ? SHEET_TAB_NAMES[line.tab] : 'Fora da planilha'}
-            </Field>
-            <Field label="Último envio">
-              {formatDateTime(line.lastSentAt)}
-              <Text size="xs" c="dimmed">
-                por {line.lastSentBy}
-              </Text>
-            </Field>
-            <Field label="Primeiro envio">{formatDateTime(line.firstSentAt)}</Field>
-            {line.cancelledAt && (
-              <Field label="Envio desfeito">
-                {formatDateTime(line.cancelledAt)}
-                {line.cancelledBy && (
-                  <Text size="xs" c="dimmed">
-                    por {line.cancelledBy}
-                  </Text>
-                )}
-                {line.restorableUntil && (
-                  <Text size="xs" c="dimmed">
-                    pode ser revertido até {formatDate(line.restorableUntil)}
-                  </Text>
-                )}
-              </Field>
-            )}
-            {line.concludedAt && (
-              <Field label="Concluída">{formatDateTime(line.concludedAt)}</Field>
-            )}
-          </SimpleGrid>
-        )}
-        {line?.returnProblem && (
-          <Alert color="orange" title="Retorno com problema">
-            {line.returnProblem}
-          </Alert>
-        )}
-        {line?.sheetIssue && (
-          <Text size="sm" c="dimmed">
-            Planilha: {line.sheetIssue}
-          </Text>
-        )}
-
-        {current && (
-          <Paper withBorder p="sm" radius="sm" data-testid="commercial-return">
-            <Group justify="space-between" mb={6}>
-              <Group gap="xs">
-                <Text fw={600} size="sm">
-                  Retorno do Comercial
+      {line && (
+        <DataGrid label="Envio ao Comercial">
+          <DataField label="Aba da planilha">
+            {line.tab ? SHEET_TAB_NAMES[line.tab] : 'Fora da planilha'}
+          </DataField>
+          <DataField label="Último envio">
+            {formatDateTime(line.lastSentAt)}
+            <Text size="xs" c="dimmed">
+              por {line.lastSentBy}
+            </Text>
+          </DataField>
+          <DataField label="Primeiro envio">{formatDateTime(line.firstSentAt)}</DataField>
+          {line.cancelledAt && (
+            <DataField label="Envio desfeito">
+              {formatDateTime(line.cancelledAt)}
+              {line.cancelledBy && (
+                <Text size="xs" c="dimmed">
+                  por {line.cancelledBy}
                 </Text>
-                <StatusBadge label={RETURN_STATE_LABELS[current.state]} size="xs" />
-              </Group>
+              )}
+              {line.restorableUntil && (
+                <Text size="xs" c="dimmed">
+                  pode ser revertido até {formatDate(line.restorableUntil)}
+                </Text>
+              )}
+            </DataField>
+          )}
+          {line.concludedAt && (
+            <DataField label="Concluída">{formatDateTime(line.concludedAt)}</DataField>
+          )}
+        </DataGrid>
+      )}
+      {line?.returnProblem && (
+        <Notice tone="amber" role="none" title="Retorno com problema">
+          {line.returnProblem}
+        </Notice>
+      )}
+      {line?.sheetIssue && (
+        <Text size="sm" c="dimmed">
+          Planilha: {line.sheetIssue}
+        </Text>
+      )}
+
+      {current && currentBadge && (
+        <Card
+          tone="subtle"
+          padding={12}
+          block="Retorno do Comercial"
+          data-testid="commercial-return"
+        >
+          <CardHeader
+            title="Retorno do Comercial"
+            aside={<StatusBadge tone={currentBadge.tone}>{currentBadge.label}</StatusBadge>}
+            actions={
               <Text size="xs" c="dimmed">
                 lido em {formatDateTime(current.readAt)}
               </Text>
+            }
+          />
+          <DataGrid>
+            <DataField label="Código de autorização">{current.authorizationCode}</DataField>
+            <DataField label="Hotel da cobrança">
+              <ChargeHotel chargeHotel={current.chargeHotel} hotelName={hotelName} />
+            </DataField>
+            <DataField label="Responsável pela cobrança">{current.chargedBy}</DataField>
+            <DataField label="Valor cobrado">{formatMoney(current.chargedAmount)}</DataField>
+            <DataField label="Valor a cobrar">{formatMoney(current.expectedAmount)}</DataField>
+            <DataField label="Diferença">
+              <AmountDifference value={current.difference} />
+            </DataField>
+          </DataGrid>
+          {current.decidedAt && (
+            <Text size="xs" c="dimmed">
+              {RETURN_STATE_LABELS[current.state].name} em {formatDateTime(current.decidedAt)}
+              {current.decidedBy ? ` por ${current.decidedBy}` : ''}
+              {current.rejectionReason ? `: ${current.rejectionReason}` : ''}
+            </Text>
+          )}
+          {canWrite && current.state === 'awaiting_validation' && (
+            <Group gap={8} mt={8}>
+              <Action
+                size="xs"
+                variant="primary"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => hunit.commercial.confirmReturn(current.id),
+                    'Retorno confirmado: vale como comprovante.',
+                  )
+                }
+              >
+                Confirmar
+              </Action>
+              <Action
+                size="xs"
+                variant="danger-light"
+                disabled={busy}
+                onClick={() => {
+                  setMessage(null);
+                  setRejecting(current);
+                }}
+              >
+                Recusar
+              </Action>
             </Group>
-            <SimpleGrid cols={3} spacing="sm">
-              <Field label="Código de autorização">{current.authorizationCode}</Field>
-              <Field label="Hotel da cobrança">
-                <ChargeHotel chargeHotel={current.chargeHotel} hotelName={hotelName} />
-              </Field>
-              <Field label="Responsável pela cobrança">{current.chargedBy}</Field>
-              <Field label="Valor cobrado">{formatMoney(current.chargedAmount)}</Field>
-              <Field label="Valor a cobrar">{formatMoney(current.expectedAmount)}</Field>
-              <Field label="Diferença">
-                <Text
-                  size="sm"
-                  c={
-                    current.difference && Number(current.difference) !== 0 ? 'orange.8' : undefined
-                  }
-                >
-                  <span style={{ whiteSpace: 'nowrap' }}>{formatMoney(current.difference)}</span>
-                </Text>
-              </Field>
-            </SimpleGrid>
-            {current.decidedAt && (
-              <Text size="xs" c="dimmed" mt={6}>
-                {RETURN_STATE_LABELS[current.state].name} em {formatDateTime(current.decidedAt)}
-                {current.decidedBy ? ` por ${current.decidedBy}` : ''}
-                {current.rejectionReason ? `: ${current.rejectionReason}` : ''}
-              </Text>
-            )}
-            {canWrite && current.state === 'awaiting_validation' && (
-              <Group gap="xs" mt="sm">
-                <Button
-                  size="xs"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(
-                      () => hunit.commercial.confirmReturn(current.id),
-                      'Retorno confirmado: vale como comprovante.',
-                    )
-                  }
-                >
-                  Confirmar
-                </Button>
-                <Button
-                  size="xs"
-                  variant="default"
-                  color="red"
-                  disabled={busy}
-                  onClick={() => {
-                    setMessage(null);
-                    setRejecting(current);
-                  }}
-                >
-                  Recusar
-                </Button>
-              </Group>
-            )}
-            {canWrite && current.state === 'confirmed' && (
-              <Group gap="xs" mt="sm">
-                <Button
-                  size="xs"
-                  variant="default"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(
-                      () => hunit.commercial.undoConfirmation(current.id),
-                      'Confirmação desfeita: o retorno volta a aguardar validação.',
-                    )
-                  }
-                >
-                  Desfazer confirmação
-                </Button>
-              </Group>
-            )}
-          </Paper>
-        )}
+          )}
+          {canWrite && current.state === 'confirmed' && (
+            <Group gap={8} mt={8}>
+              <Action
+                size="xs"
+                variant="danger-light"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => hunit.commercial.undoConfirmation(current.id),
+                    'Confirmação desfeita: o retorno volta a aguardar validação.',
+                  )
+                }
+              >
+                Desfazer confirmação
+              </Action>
+            </Group>
+          )}
+        </Card>
+      )}
 
-        {earlier.length > 0 && (
-          <Table verticalSpacing={2} aria-label="Retornos anteriores">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Retorno anterior</Table.Th>
-                <Table.Th>Código</Table.Th>
-                <Table.Th>Valor cobrado</Table.Th>
-                <Table.Th>Situação</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {earlier.map((item) => (
-                <Table.Tr key={item.id}>
-                  <Table.Td>{formatDateTime(item.readAt)}</Table.Td>
-                  <Table.Td>{item.authorizationCode}</Table.Td>
-                  <Table.Td>{formatMoney(item.chargedAmount)}</Table.Td>
-                  <Table.Td>
-                    <StatusBadge label={RETURN_STATE_LABELS[item.state]} size="xs" />
-                    {item.rejectionReason && (
-                      <Text size="xs" c="dimmed">
-                        {item.rejectionReason}
-                      </Text>
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        )}
-      </Stack>
+      {earlier.length > 0 && (
+        <Stack gap={8}>
+          <CardHeader title="Retornos anteriores" />
+          <RowList label="Retornos anteriores">
+            {earlier.map((item) => {
+              const badge = badgeOf(RETURN_STATE_LABELS[item.state]);
+              return (
+                <HotelRow
+                  key={item.id}
+                  title={`Lido em ${formatDateTime(item.readAt)}`}
+                  summary={`Código ${item.authorizationCode} · ${formatMoney(item.chargedAmount)}${
+                    item.rejectionReason ? ` · ${item.rejectionReason}` : ''
+                  }`}
+                  status={<StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
+                />
+              );
+            })}
+          </RowList>
+        </Stack>
+      )}
 
-      <Modal
+      {/* Destrutiva confirmada: "Desfazer envio" em vermelho cheio; "Manter" é o cancelar (FR-009). */}
+      <AppDialog
         opened={confirmCancel}
         onClose={() => setConfirmCancel(false)}
-        title={<Text fw={600}>Desfazer o envio ao Comercial?</Text>}
-        transitionProps={{ duration: 0 }}
+        title="Desfazer o envio ao Comercial?"
+        onCancel={() => setConfirmCancel(false)}
+        cancelLabel="Manter"
+        actions={
+          <Action
+            variant="danger"
+            size="sm"
+            onClick={() => {
+              setConfirmCancel(false);
+              void run(() => hunit.commercial.cancelLine(key), 'Envio desfeito.');
+            }}
+          >
+            Desfazer envio
+          </Action>
+        }
       >
-        <Stack gap="md">
-          <Text size="sm">
-            A linha vai para a aba &quot;Concluídas&quot; como &quot;Pedido cancelado pelo
-            Financeiro&quot;, e a reserva volta a ficar sem tratativa (a não ser que tenha uma por
-            e-mail). Dá para reverter em até 30 dias.
-          </Text>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setConfirmCancel(false)}>
-              Manter
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                setConfirmCancel(false);
-                void run(() => hunit.commercial.cancelLine(key), 'Envio desfeito.');
-              }}
-            >
-              Desfazer envio
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        <Text size="sm">
+          A linha vai para a aba &quot;Concluídas&quot; como &quot;Pedido cancelado pelo
+          Financeiro&quot;, e a reserva volta a ficar sem tratativa (a não ser que tenha uma por
+          e-mail). Dá para reverter em até 30 dias.
+        </Text>
+      </AppDialog>
 
       {rejecting && (
         <RejectDialog
@@ -415,11 +409,14 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
           }}
         />
       )}
-    </Paper>
+    </Card>
   );
 }
 
-/** Recusa do retorno (FR-017): motivo obrigatório, com sugestões, que o Comercial vê na planilha. */
+/**
+ * Recusa do retorno (FR-017; tela 7.6): motivo obrigatório, com os mais comuns em pílulas, que o
+ * Comercial vê na planilha. Diálogo estreito, "Voltar" em texto e "Recusar retorno" em vermelho cheio.
+ */
 export function RejectDialog({
   onCancel,
   onReject,
@@ -429,6 +426,7 @@ export function RejectDialog({
 }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const suggestionsId = useId();
 
   function submit() {
     const text = reason.trim();
@@ -440,33 +438,43 @@ export function RejectDialog({
   }
 
   return (
-    <Modal
+    <AppDialog
       opened
       onClose={onCancel}
-      title={<Text fw={600}>Recusar o retorno do Comercial</Text>}
-      transitionProps={{ duration: 0 }}
+      title="Recusar o retorno do Comercial"
+      instant
+      onCancel={onCancel}
+      cancelLabel="Voltar"
+      actions={
+        <Action variant="danger" size="sm" onClick={submit}>
+          Recusar retorno
+        </Action>
+      }
     >
-      <Stack gap="md">
-        <Alert color="yellow">
+      <Stack gap={16}>
+        <Notice tone="amber" role="none">
           O motivo aparece para o Comercial na planilha, na coluna &quot;Validação do
           Financeiro&quot;. Não escreva dados do hóspede.
-        </Alert>
-        <Group gap={6}>
-          {REJECTION_SUGGESTIONS.map((suggestion) => (
-            <Chip
-              key={suggestion}
-              checked={reason === suggestion}
-              onChange={() => {
-                setReason(suggestion);
-                setError(null);
-              }}
-              size="xs"
-            >
-              {suggestion}
-            </Chip>
-          ))}
-        </Group>
-        <Textarea
+        </Notice>
+        <Stack gap={8}>
+          <Text size="sm" fw={600} id={suggestionsId}>
+            Motivos mais comuns
+          </Text>
+          <Group gap={8} role="group" aria-labelledby={suggestionsId}>
+            {REJECTION_SUGGESTIONS.map((suggestion) => (
+              <FilterChip
+                key={suggestion}
+                label={suggestion}
+                active={reason === suggestion}
+                onClick={() => {
+                  setReason(suggestion);
+                  setError(null);
+                }}
+              />
+            ))}
+          </Group>
+        </Stack>
+        <TextAreaField
           label="Motivo da recusa"
           value={reason}
           onChange={(event) => {
@@ -476,18 +484,10 @@ export function RejectDialog({
           maxLength={MAX_REASON}
           rows={3}
           error={error}
-          description={`${reason.length}/${MAX_REASON}`}
+          counter={`${reason.length}/${MAX_REASON}`}
           data-autofocus
         />
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel}>
-            Voltar
-          </Button>
-          <Button color="red" onClick={submit}>
-            Recusar
-          </Button>
-        </Group>
       </Stack>
-    </Modal>
+    </AppDialog>
   );
 }

@@ -7,7 +7,7 @@
  * Cada história acrescenta em `DIALOGS` os diálogos que migrar (recusar retorno, confirmações em
  * lote, cópia para e-mail…). Hoje: o token, "Remover a configuração?", desde a US3 anexar (uma reserva
  * e lote), "Desfazer o comprovante?" e "Cancelar a execução?" e, desde a US8, o envio ao Comercial
- * (conferência e andamento).
+ * (conferência e andamento), a recusa do retorno e "Desfazer o envio ao Comercial?".
  */
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -16,11 +16,13 @@ import { TwoFactorDialog } from '../../src/renderer/src/components/TwoFactorDial
 import { DispatchDialog } from '../../src/renderer/src/screens/dispatch/DispatchDialog';
 import { ExecutionDetail } from '../../src/renderer/src/screens/executions/ExecutionDetail';
 import { AttachDialog } from '../../src/renderer/src/screens/reservations/AttachDialog';
+import { CommercialSection } from '../../src/renderer/src/screens/reservations/CommercialSection';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import { SetupScreen } from '../../src/renderer/src/screens/setup/SetupScreen';
 import classes from '../../src/renderer/src/ui/structure.module.css';
 import type { Execution, PublicConfig } from '../../src/shared/ipc-types';
 import { dispatchFixture } from '../helpers/commercial-fixtures';
+import { detail as commercialDetail } from './commercial-fixtures';
 import { fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
 import {
   check,
@@ -195,6 +197,26 @@ const DIALOGS: Record<string, DialogCase> = {
       const user = userEvent.setup();
       await user.click(await screen.findByRole('button', { name: 'Enviar 1 ao Comercial' }));
       await screen.findByTestId('dispatch-view');
+    },
+  },
+  'recusar o retorno do Comercial (tela 7.6)': {
+    title: 'Recusar o retorno do Comercial',
+    size: 'sm',
+    open: async () => {
+      mocked(hunit.api.commercial.get).mockImplementation(() => okResult(commercialDetail()));
+      renderWithApp(<CommercialSection reservation={pendingReservation('7001')} />, hunit);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Recusar' }));
+    },
+  },
+  'desfazer o envio ao Comercial (tela 7.5)': {
+    title: 'Desfazer o envio ao Comercial?',
+    size: 'sm',
+    open: async () => {
+      mocked(hunit.api.commercial.get).mockImplementation(() => okResult(commercialDetail()));
+      renderWithApp(<CommercialSection reservation={pendingReservation('7001')} />, hunit);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Desfazer envio' }));
     },
   },
   'cancelar a execução (tela 3.3)': {

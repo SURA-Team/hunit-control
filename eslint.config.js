@@ -90,7 +90,6 @@ const NOT_YET_MIGRATED = [
   'screens/commercial/SheetTab.tsx',
   'screens/executions/ExecutionDetail.tsx',
   'screens/executions/ExecutionsScreen.tsx',
-  'screens/reservations/CommercialSection.tsx',
   'screens/reservations/ConfirmBatchDialog.tsx',
   'screens/reservations/CopyDialog.tsx',
   'screens/run/ExecutionResult.tsx',

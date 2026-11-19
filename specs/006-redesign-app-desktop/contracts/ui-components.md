@@ -35,6 +35,7 @@ escritos nas telas.
 | Componente | Variantes e regras | Origem |
 |---|---|---|
 | `Field`, `SelectField`, `MultiSelectField`, `PasswordField`, `NumberField` | Fundo sutil, foco com contorno preto; rótulo e ajuda acima. Altura `size`: `sm` 36 px (padrão: é a das telas do design), `md` 40 px (barra de busca, como a biblioteca) e `lg` 50 px (token). `SelectField` aceita `inlineLabel` (rótulo à esquerda: "Origem") e `optionDescriptions` (segunda linha da opção: "Só ativas — Esconde as canceladas") | "Campo" `21:113` |
+| `TextAreaField` | Texto longo com rótulo acima, o contador ("15/500") à direita na linha do rótulo, fora do nome do campo, e o erro ligado ao campo (T051) | Tela 7.6 |
 | `SelectionBox` | Caixa de seleção: desmarcada, marcada (preta com check lima) e parcial | "Caixa de seleção" `76:71` |
 | `CheckboxField`, `RadioField`, `SwitchField` | Com rótulo | "Checkbox" `21:195`, "Rádio" `21:145`, "Switch" `21:198` |
 | `PeriodPicker` | Calendário de período: hoje com contorno, escolhido em preto, intervalo em lima suave, hoje escolhido em círculo lima | "Calendário" `135:1405` |
