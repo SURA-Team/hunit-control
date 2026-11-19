@@ -6,10 +6,12 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CommercialScreen } from '../../src/renderer/src/screens/commercial/CommercialScreen';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import { ReservationsScreen } from '../../src/renderer/src/screens/reservations/ReservationsScreen';
 import { RunScreen } from '../../src/renderer/src/screens/run/RunScreen';
 import { SetupScreen } from '../../src/renderer/src/screens/setup/SetupScreen';
+import { returnBrief, sheetStatus } from './commercial-fixtures';
 import { expectOnePrimaryPerBlock } from './hierarchy';
 import { fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
 import { findRow, serveReservations } from './reservations-helpers';
@@ -82,6 +84,44 @@ const SCREENS: Record<string, ScreenCase> = {
       await waitFor(() => expect(hunit.api.connection.getState).toHaveBeenCalled());
       await act(() => Promise.resolve());
       await screen.findByRole('button', { name: 'Informar valor' });
+    },
+  },
+  'Comercial — Retornos a validar (tela 7.8)': {
+    open: async () => {
+      mocked(hunit.api.commercial.sheetStatus).mockImplementation(() => okResult(sheetStatus()));
+      mocked(hunit.api.reservations.list).mockImplementation(() =>
+        okResult({
+          items: ['7001', '7002'].map((number) =>
+            pendingReservation(number, {
+              treatment: treatment({ status: 'sent', detailedSituation: 'return_pending' }),
+              commercial: {
+                lineState: 'open',
+                inSheet: true,
+                lastSentAt: '2026-11-14T12:00:00.000Z',
+                lastDispatchId: '44444444-4444-4444-8444-444444444444',
+                returnState: 'awaiting_validation',
+                currentReturn: returnBrief(),
+                returnProblem: null,
+                syncPending: false,
+              },
+            }),
+          ),
+          nextCursor: null,
+        }),
+      );
+      renderWithApp(<CommercialScreen />, hunit);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('tab', { name: /^Retornos a validar/ }));
+      await screen.findAllByRole('button', { name: 'Confirmar' });
+    },
+  },
+  'Comercial — Planilha (tela 7.10)': {
+    open: async () => {
+      mocked(hunit.api.commercial.sheetStatus).mockImplementation(() => okResult(sheetStatus()));
+      renderWithApp(<CommercialScreen />, hunit);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('tab', { name: 'Planilha' }));
+      await screen.findByRole('button', { name: 'Ler retornos agora' });
     },
   },
 };

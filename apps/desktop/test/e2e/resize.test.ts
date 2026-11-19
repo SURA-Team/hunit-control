@@ -9,8 +9,10 @@
  * ativa, texto de diálogo): um `it` que monta o estado, `keepsAcrossSizes` e a leitura do estado.
  * Hoje: Executar (US1), um diálogo aberto, Reservas (US2: busca, filtro do painel e filtro rápido)
  * e a seleção com a gaveta "Reservas selecionadas" aberta (US4), a gaveta da reserva com um valor
- * digitado em "Corrigir o valor" (US5).
+ * digitado em "Corrigir o valor" (US5) e, na área Comercial, a aba ativa com o motivo da recusa
+ * digitado (US8).
  */
+import { insertDispatch, insertLine } from '../../../server/test/helpers/commercial-fixtures.js';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestCertificates } from '../helpers/certificates.js';
@@ -49,7 +51,7 @@ let launched: LaunchedApp;
 
 beforeAll(async () => {
   const certificates = await createTestCertificates();
-  server = await startE2eServer({ scenario: { hotels: [] } });
+  server = await startE2eServer({ scenario: { hotels: [] }, commercialSheet: true });
   for (const hotel of HOTELS) await server.insertHotel(hotel.code, hotel.name);
   for (const [index, guestName] of ['Ana Ribeiro', 'Ana Costa', 'Bruno Carvalho'].entries()) {
     await server.insertReservation({
@@ -265,5 +267,51 @@ describe('redimensionar sem perder nada (US9, SC-008)', () => {
 
     await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
     await drawer.waitFor({ state: 'hidden' });
+  });
+
+  it('Comercial: a aba ativa e o motivo da recusa digitado continuam (US8, T054)', async () => {
+    const { window } = launched;
+    // R-3 na planilha, com o retorno preenchido pelo Comercial (direto no banco e na planilha em
+    // memória, sem passar pelo Hunit).
+    const { db } = server.test.database;
+    const dispatch = await insertDispatch(db);
+    await insertLine(
+      db,
+      { hotelCode: '201', reservationNumber: 'R-3' },
+      { dispatchId: dispatch.id, clientId: dispatch.clientId },
+    );
+    await server.test.sync?.runRound();
+    server.sheet?.fillReturn('Hotel Praia Azul', 'R-3', [
+      'AUT-55210',
+      'Maquininha Centro',
+      '90,00',
+      'Responsável Fictícia',
+    ]);
+    await server.test.sync?.runRound();
+
+    await window.getByRole('navigation').getByRole('button', { name: 'Comercial' }).click();
+    const returnsTab = window.getByRole('tab', { name: /^Retornos a validar/ });
+    await returnsTab.click();
+    const returns = window.getByRole('table', { name: 'Retornos a validar' });
+    await returns.getByRole('button', { name: 'Recusar', exact: true }).click({ timeout: 15_000 });
+    const dialog = window.getByRole('dialog', { name: 'Recusar o retorno do Comercial' });
+    const reason = dialog.getByLabel('Motivo da recusa');
+    await reason.fill('Código de autorização não confere com o extrato');
+
+    const read = async () => ({
+      tab: await returnsTab.getAttribute('aria-selected'),
+      dialogOpen: await dialog.isVisible(),
+      reason: await reason.inputValue(),
+    });
+    expect(await read()).toEqual({
+      tab: 'true',
+      dialogOpen: true,
+      reason: 'Código de autorização não confere com o extrato',
+    });
+
+    await keepsAcrossSizes(read);
+
+    await dialog.getByRole('button', { name: 'Voltar' }).click();
+    await dialog.waitFor({ state: 'detached' });
   });
 });

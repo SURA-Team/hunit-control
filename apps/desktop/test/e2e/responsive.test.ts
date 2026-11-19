@@ -10,11 +10,13 @@
  * larguras"): um `it` por estado, com `checkAllSizes`. Hoje: Configuração e Executar (US1) e
  * Reservas (US2: lista com a barra de seleção, painel "Filtros avançados" e nenhum resultado; US4: a
  * gaveta "Reservas selecionadas" e o diálogo de anexar em lote; US5: a gaveta da reserva com
- * comprovante e valor informado).
+ * comprovante e valor informado) e Comercial (US8: as quatro abas com envio, retorno e problema, a
+ * recusa do retorno e a conferência do envio).
  */
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { insertDispatch, insertLine } from '../../../server/test/helpers/commercial-fixtures.js';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import type { FakeScenario } from '../../../server/test/helpers/fake-hunit-gateway.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -103,7 +105,12 @@ let launched: LaunchedApp;
 beforeAll(async () => {
   certificates = await createTestCertificates();
   // Prazo do token folgado: o diálogo fica aberto enquanto a janela passa pelos quatro tamanhos.
-  server = await startE2eServer({ scenario: SCENARIO, twoFactorTimeoutMs: 120_000 });
+  server = await startE2eServer({
+    scenario: SCENARIO,
+    twoFactorTimeoutMs: 120_000,
+    // A planilha do Comercial em memória, para a área Comercial (US8).
+    commercialSheet: true,
+  });
   for (const hotel of HOTELS) await server.insertHotel(hotel.code, hotel.name);
   // Reservas com nome longo, valor alto e selo comprido, para o corte e as quebras (FR-045).
   for (const [index, hotel] of HOTELS.entries()) {
@@ -525,6 +532,145 @@ describe('larguras: Reservas (US2 e US4, SC-007)', () => {
     } finally {
       await button('Limpar busca e filtros').click();
       await waitForReservationRows(window, 8);
+    }
+  });
+});
+
+describe('larguras: Comercial e o envio (US8, SC-007)', () => {
+  const tab = (name: string) => launched.window.getByRole('tab', { name: new RegExp(`^${name}`) });
+
+  beforeAll(async () => {
+    // Duas reservas pendentes de cobrança (só as que exigem cobrança ficam em "A cobrar"), num envio
+    // encerrado; o Comercial preenche o retorno de C-1 (maquininha de outro estabelecimento, valor
+    // diferente) e deixa o de C-2 incompleto.
+    const { db } = server.test.database;
+    const dispatch = await insertDispatch(db);
+    for (const [hotelCode, reservationNumber] of [
+      ['102', 'C-1'],
+      ['104', 'C-2'],
+    ] as const) {
+      await server.insertReservation({
+        hotelCode,
+        reservationNumber,
+        guestName: 'Maria Aparecida de Albuquerque Figueiredo Nogueira da Silva',
+        totalAmount: '123456.78',
+      });
+      await insertLine(
+        db,
+        { hotelCode, reservationNumber },
+        { dispatchId: dispatch.id, clientId: dispatch.clientId },
+      );
+    }
+    await server.test.sync?.runRound();
+    server.sheet?.fillReturn(HOTELS[1]?.name ?? '', 'C-1', [
+      'AUT-55210',
+      'Maquininha do Centro de Convenções e Eventos',
+      '123000,00',
+      'Responsável Fictícia do Comercial',
+    ]);
+    server.sheet?.fillReturn(HOTELS[3]?.name ?? '', 'C-2', ['AUT-55211', '', '', '']);
+    await server.test.sync?.runRound();
+  });
+
+  it('as quatro abas da área Comercial (telas 7.7 a 7.10)', async () => {
+    const { window } = launched;
+    await goTo('Comercial');
+    await window.getByRole('table', { name: 'Envios ao Comercial' }).waitFor({ timeout: 15_000 });
+    await checkAllSizes({
+      name: 'Comercial — Envios',
+      area: 'Comercial',
+      reachable: () => [
+        tab('Envios'),
+        tab('Planilha'),
+        window.getByRole('button', { name: /^Abrir o envio de/ }),
+      ],
+    });
+
+    await tab('Retornos a validar').click();
+    const returns = window.getByRole('table', { name: 'Retornos a validar' });
+    await returns.waitFor({ timeout: 15_000 });
+    await checkAllSizes({
+      name: 'Comercial — Retornos a validar',
+      area: 'Comercial',
+      reachable: () => [
+        window.getByRole('checkbox', { name: 'Marcar todos os retornos listados' }),
+        window.getByRole('button', { name: /^Confirmar marcados/ }),
+        returns.getByRole('button', { name: 'Abrir a reserva C-1' }),
+        returns.getByRole('button', { name: 'Confirmar', exact: true }),
+        returns.getByRole('button', { name: 'Recusar', exact: true }),
+      ],
+    });
+
+    await tab('Retornos com problema').click();
+    const problems = window.getByRole('table', { name: 'Retornos com problema' });
+    await problems.waitFor({ timeout: 15_000 });
+    await checkAllSizes({
+      name: 'Comercial — Retornos com problema',
+      area: 'Comercial',
+      reachable: () => [problems.getByRole('button', { name: 'Abrir a reserva C-2' })],
+    });
+
+    await tab('Planilha').click();
+    await window.getByTestId('sheet-status').waitFor({ timeout: 15_000 });
+    await checkAllSizes({
+      name: 'Comercial — Planilha',
+      area: 'Comercial',
+      reachable: () => [
+        button('Ler retornos agora'),
+        window.getByText('Última leitura dos retornos'),
+      ],
+    });
+  });
+
+  it('recusar o retorno (tela 7.6)', async () => {
+    const { window } = launched;
+    await tab('Retornos a validar').click();
+    const returns = window.getByRole('table', { name: 'Retornos a validar' });
+    await returns.getByRole('button', { name: 'Recusar', exact: true }).click();
+    const dialog = window.getByRole('dialog', { name: 'Recusar o retorno do Comercial' });
+    await dialog.waitFor();
+    try {
+      await checkAllSizes({
+        name: 'recusar o retorno',
+        area: 'Comercial',
+        dialog: () => dialog,
+        reachable: () => [
+          dialog.getByRole('button', { name: 'Valor diferente' }),
+          dialog.getByLabel('Motivo da recusa'),
+          dialog.getByRole('button', { name: 'Voltar' }),
+          dialog.getByRole('button', { name: 'Recusar retorno' }),
+        ],
+      });
+    } finally {
+      await dialog.getByRole('button', { name: 'Voltar' }).click();
+      await dialog.waitFor({ state: 'detached' });
+    }
+  });
+
+  it('conferência do envio (tela 7.1)', async () => {
+    const { window } = launched;
+    await goTo('Reservas');
+    await window.getByRole('checkbox', { name: 'Selecionar a reserva R-1' }).check();
+    await window.getByRole('checkbox', { name: 'Selecionar a reserva R-3' }).check();
+    const bar = window.getByTestId('selection-bar');
+    await bar.getByRole('button', { name: 'Enviar ao Comercial' }).click();
+    const dialog = window.getByRole('dialog', { name: 'Enviar ao Comercial' });
+    await dialog.getByTestId('dispatch-summary').waitFor({ timeout: 15_000 });
+    try {
+      await checkAllSizes({
+        name: 'conferência do envio',
+        area: 'Reservas',
+        dialog: () => dialog,
+        reachable: () => [
+          dialog.getByTestId('dispatch-summary'),
+          dialog.getByRole('button', { name: 'Cancelar' }),
+          dialog.getByRole('button', { name: /^Enviar \d* ?ao Comercial$/ }),
+        ],
+      });
+    } finally {
+      await dialog.getByRole('button', { name: 'Cancelar' }).click();
+      await dialog.waitFor({ state: 'detached' });
+      await bar.getByRole('button', { name: 'Desmarcar todas' }).click();
     }
   });
 });

@@ -7,7 +7,8 @@
  * Cada história acrescenta em `DIALOGS` os diálogos que migrar (recusar retorno, confirmações em
  * lote, cópia para e-mail…). Hoje: o token, "Remover a configuração?", desde a US3 anexar (uma reserva
  * e lote), "Desfazer o comprovante?" e "Cancelar a execução?" e, desde a US8, o envio ao Comercial
- * (conferência e andamento), a recusa do retorno e "Desfazer o envio ao Comercial?".
+ * (conferência e andamento), a recusa do retorno, "Desfazer o envio ao Comercial?", as confirmações
+ * em lote (retornos e "Verificar") e a cópia para e-mail.
  */
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -17,12 +18,15 @@ import { DispatchDialog } from '../../src/renderer/src/screens/dispatch/Dispatch
 import { ExecutionDetail } from '../../src/renderer/src/screens/executions/ExecutionDetail';
 import { AttachDialog } from '../../src/renderer/src/screens/reservations/AttachDialog';
 import { CommercialSection } from '../../src/renderer/src/screens/reservations/CommercialSection';
+import { ConfirmBatchDialog } from '../../src/renderer/src/screens/reservations/ConfirmBatchDialog';
+import { CopyDialog } from '../../src/renderer/src/screens/reservations/CopyDialog';
+import { toSelected } from '../../src/renderer/src/state/selection';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import { SetupScreen } from '../../src/renderer/src/screens/setup/SetupScreen';
 import classes from '../../src/renderer/src/ui/structure.module.css';
 import type { Execution, PublicConfig } from '../../src/shared/ipc-types';
 import { dispatchFixture } from '../helpers/commercial-fixtures';
-import { detail as commercialDetail } from './commercial-fixtures';
+import { detail as commercialDetail, returnBrief, selectionItem } from './commercial-fixtures';
 import { fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
 import {
   check,
@@ -217,6 +221,55 @@ const DIALOGS: Record<string, DialogCase> = {
       renderWithApp(<CommercialSection reservation={pendingReservation('7001')} />, hunit);
       const user = userEvent.setup();
       await user.click(await screen.findByRole('button', { name: 'Desfazer envio' }));
+    },
+  },
+  'confirmar retornos em lote (tela 7.12)': {
+    title: 'Confirmar retornos do Comercial',
+    size: 'lg',
+    open: async () => {
+      renderWithApp(
+        <ConfirmBatchDialog
+          kind="returns"
+          items={[toSelected(selectionItem('7001', { currentReturn: returnBrief() }))]}
+          hotelNames={new Map()}
+          onClose={vi.fn()}
+        />,
+        hunit,
+      );
+      await screen.findByTestId('batch-summary');
+    },
+  },
+  'confirmar "Verificar" em lote (tela 7.13)': {
+    title: 'Confirmar "Verificar"',
+    size: 'sm',
+    open: async () => {
+      renderWithApp(
+        <ConfirmBatchDialog
+          kind="reviews"
+          items={[toSelected(selectionItem('7001', { needsReview: true }))]}
+          hotelNames={new Map()}
+          onClose={vi.fn()}
+        />,
+        hunit,
+      );
+      await screen.findByTestId('batch-summary');
+    },
+  },
+  'copiar para e-mail (tela 7.14)': {
+    title: 'Copiar para e-mail',
+    size: 'sm',
+    open: async () => {
+      renderWithApp(
+        <CopyDialog
+          filters={{}}
+          hotels={[]}
+          hotelNames={new Map()}
+          selected={[toSelected(selectionItem('7001'))]}
+          onClose={vi.fn()}
+        />,
+        hunit,
+      );
+      await screen.findByText('O que copiar');
     },
   },
   'cancelar a execução (tela 3.3)': {

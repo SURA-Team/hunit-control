@@ -97,6 +97,7 @@ export function AmountDifference({ value }: { value: string | null }) {
   return (
     <Text
       span
+      display="inline-block"
       size="sm"
       fw={differs ? 700 : undefined}
       c={differs ? ATTENTION : undefined}
