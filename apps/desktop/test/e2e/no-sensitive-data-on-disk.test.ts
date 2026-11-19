@@ -157,9 +157,11 @@ describe('nada sensível no disco (SC-004)', () => {
       await answer(TOKEN, /token aceito/i);
       await hold.reached;
       await goTo('Execuções');
+      // A em andamento fica num card escuro no topo (specs/006, tela 3.1).
       await window
-        .getByRole('row', { name: /Em andamento/ })
+        .getByRole('region', { name: /^Em andamento:/ })
         .first()
+        .getByRole('button', { name: 'Ver detalhes' })
         .click();
       const detail = window.getByTestId('execution-detail');
       await detail.getByRole('button', { name: 'Cancelar execução' }).click();

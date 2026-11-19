@@ -159,9 +159,11 @@ describe('US2 — acompanhar, cancelar e retomar', () => {
       await held.reached;
 
       await goTo('Execuções');
+      // A em andamento fica num card escuro no topo (specs/006, tela 3.1).
       await window
-        .getByRole('row', { name: /Em andamento/ })
+        .getByRole('region', { name: /^Em andamento:/ })
         .first()
+        .getByRole('button', { name: 'Ver detalhes' })
         .click();
       const detail = window.getByTestId('execution-detail');
       await detail.getByText(/Hotel atual/).waitFor({ timeout: 10_000 });
@@ -200,8 +202,10 @@ describe('US2 — acompanhar, cancelar e retomar', () => {
       const id = await startElsewhere(other, 'controladoria@hotel.test');
 
       await goTo('Execuções');
+      // O card escuro da execução em andamento (specs/006, tela 3.1), com o nome de quem iniciou.
       await window
-        .getByRole('row', { name: new RegExp(`${other.name}.*Aguardando token`) })
+        .getByRole('region', { name: /^Aguardando token:/ })
+        .filter({ hasText: other.name })
         .waitFor({ timeout: 15_000 });
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       expect(await window.getByRole('dialog', { name: 'O Hunit pediu o token' }).count()).toBe(0);

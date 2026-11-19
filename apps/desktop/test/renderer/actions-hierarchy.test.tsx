@@ -7,6 +7,8 @@ import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommercialScreen } from '../../src/renderer/src/screens/commercial/CommercialScreen';
+import { ExecutionsScreen } from '../../src/renderer/src/screens/executions/ExecutionsScreen';
+import { ExecutionResult } from '../../src/renderer/src/screens/run/ExecutionResult';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import { ReservationsScreen } from '../../src/renderer/src/screens/reservations/ReservationsScreen';
 import { RunScreen } from '../../src/renderer/src/screens/run/RunScreen';
@@ -122,6 +124,69 @@ const SCREENS: Record<string, ScreenCase> = {
       const user = userEvent.setup();
       await user.click(screen.getByRole('tab', { name: 'Planilha' }));
       await screen.findByRole('button', { name: 'Ler retornos agora' });
+    },
+  },
+  'Execuções com a gaveta de uma encerrada (telas 3.1 e 3.4)': {
+    open: async () => {
+      const base = {
+        requestedClient: 'desktop-financeiro',
+        period: { from: '2026-11-01', to: '2026-11-07' },
+        createdAt: '2026-11-12T12:00:00.000Z',
+        endReason: 'server_restarted' as const,
+        finishedAt: '2026-11-12T12:20:00.000Z',
+      };
+      const running = {
+        ...base,
+        id: '11111111-1111-4111-8111-111111111111',
+        status: 'running' as const,
+        endReason: null,
+        finishedAt: null,
+      };
+      const failed = {
+        ...base,
+        id: '22222222-2222-4222-8222-222222222222',
+        status: 'failed' as const,
+      };
+      mocked(hunit.api.executions.list).mockImplementation(() =>
+        okResult({ items: [running, failed], nextCursor: null }),
+      );
+      mocked(hunit.api.executions.get).mockImplementation((id: string) =>
+        okResult({
+          ...(id === running.id ? running : failed),
+          hotels: [],
+          counts: {},
+          recentEvents: [],
+          warnings: [],
+        }),
+      );
+      renderWithApp(<ExecutionsScreen onOpenReservations={vi.fn()} />, hunit);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /^Abrir a execução de/ }));
+      await screen.findByRole('button', { name: 'Retomar' });
+    },
+  },
+  'Executar — falhou, com "Iniciar de novo" (tela 2.10)': {
+    open: async () => {
+      renderWithApp(
+        <ExecutionResult
+          execution={{
+            id: '33333333-3333-4333-8333-333333333333',
+            requestedClient: 'desktop-financeiro',
+            status: 'failed',
+            endReason: 'invalid_token',
+            period: { from: '2026-11-01', to: '2026-11-07' },
+            createdAt: '2026-11-12T12:00:00.000Z',
+            finishedAt: '2026-11-12T12:01:00.000Z',
+            hotels: [],
+            counts: {},
+            recentEvents: [],
+            warnings: [],
+          }}
+          onRestart={vi.fn()}
+        />,
+        hunit,
+      );
+      await screen.findByRole('button', { name: 'Iniciar de novo' });
     },
   },
 };

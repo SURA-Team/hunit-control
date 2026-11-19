@@ -10,8 +10,9 @@
  * larguras"): um `it` por estado, com `checkAllSizes`. Hoje: Configuração e Executar (US1) e
  * Reservas (US2: lista com a barra de seleção, painel "Filtros avançados" e nenhum resultado; US4: a
  * gaveta "Reservas selecionadas" e o diálogo de anexar em lote; US5: a gaveta da reserva com
- * comprovante e valor informado) e Comercial (US8: as quatro abas com envio, retorno e problema, a
- * recusa do retorno e a conferência do envio).
+ * comprovante e valor informado), Comercial (US8: as quatro abas com envio, retorno e problema, a
+ * recusa do retorno e a conferência do envio) e Execuções (US6: a lista com o card da em andamento e
+ * o "Histórico", a gaveta encerrada e em andamento e o "Cancelar a execução?").
  */
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -671,6 +672,93 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
       await dialog.getByRole('button', { name: 'Cancelar' }).click();
       await dialog.waitFor({ state: 'detached' });
       await bar.getByRole('button', { name: 'Desmarcar todas' }).click();
+    }
+  });
+});
+
+describe('larguras: Execuções (US6, SC-007)', () => {
+  beforeAll(async () => {
+    // Uma execução em andamento de outra conta (direto no banco), além das encerradas dos casos
+    // anteriores.
+    await server.insertExecution({ status: 'running' });
+  });
+
+  it('lista com o card da em andamento e o "Histórico" (tela 3.1)', async () => {
+    const { window } = launched;
+    await goTo('Execuções');
+    const card = window.getByRole('region', { name: /^Em andamento:/ });
+    await card.waitFor({ timeout: 15_000 });
+    await window.getByRole('table', { name: 'Histórico das execuções' }).waitFor();
+    await checkAllSizes({
+      name: 'Execuções',
+      area: 'Execuções',
+      reachable: () => [
+        card.getByRole('button', { name: 'Ver detalhes' }),
+        window.getByRole('button', { name: /^Abrir a execução de/ }).first(),
+        window.getByText(/execuções · as mais recentes primeiro$/),
+      ],
+    });
+  });
+
+  it('gaveta da execução encerrada (tela 3.4)', async () => {
+    const { window } = launched;
+    await window
+      .getByRole('button', { name: /^Abrir a execução de/ })
+      .first()
+      .click();
+    const drawer = window.getByRole('dialog', { name: 'Detalhe da execução' });
+    await drawer
+      .getByTestId('execution-detail')
+      .getByRole('heading', { name: 'Execução' })
+      .waitFor();
+    try {
+      await checkAllSizes({
+        name: 'gaveta da execução',
+        area: 'Execuções',
+        reachable: () => [
+          drawer.getByRole('button', { name: 'Fechar detalhe' }),
+          drawer.getByRole('heading', { name: 'Execução', exact: true }),
+          drawer.getByRole('list', { name: 'Hotéis da execução' }),
+        ],
+      });
+    } finally {
+      await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
+      await drawer.waitFor({ state: 'hidden' });
+    }
+  });
+
+  it('gaveta da em andamento e o "Cancelar a execução?" (telas 3.2 e 3.3)', async () => {
+    const { window } = launched;
+    await window
+      .getByRole('region', { name: /^Em andamento:/ })
+      .getByRole('button', { name: 'Ver detalhes' })
+      .click();
+    const drawer = window.getByRole('dialog', { name: 'Detalhe da execução' });
+    const cancel = drawer.getByRole('button', { name: 'Cancelar execução' });
+    await cancel.waitFor({ timeout: 15_000 });
+    await checkAllSizes({
+      name: 'gaveta da execução em andamento',
+      area: 'Execuções',
+      reachable: () => [drawer.getByRole('button', { name: 'Fechar detalhe' }), cancel],
+    });
+    await cancel.click();
+    const dialog = window.getByRole('dialog', { name: 'Cancelar a execução?' });
+    await dialog.waitFor();
+    try {
+      await checkAllSizes({
+        name: 'cancelar a execução',
+        area: 'Execuções',
+        dialog: () => dialog,
+        reachable: () => [
+          dialog.getByRole('button', { name: 'Não', exact: true }),
+          dialog.getByRole('button', { name: 'Sim, cancelar' }),
+        ],
+      });
+    } finally {
+      await dialog.getByRole('button', { name: 'Não', exact: true }).click();
+      await dialog.waitFor({ state: 'hidden' });
+      await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
+      await drawer.waitFor({ state: 'hidden' });
     }
   });
 });

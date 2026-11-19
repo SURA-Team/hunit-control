@@ -317,9 +317,11 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
 
     await step('3.1 a 3.3 execuções em andamento', async () => {
       await goTo('Execuções');
-      await window.locator('tbody tr').first().waitFor();
+      // A em andamento fica no card escuro do topo (specs/006, tela 3.1).
+      const running = window.getByRole('region', { name: /^Em andamento:/ });
+      await running.waitFor();
       await shot('3.1', 'execucoes-lista');
-      await window.locator('tbody tr').first().click();
+      await running.getByRole('button', { name: 'Ver detalhes' }).click();
       await window.getByText('Detalhe da execução').waitFor();
       await shot('3.2', 'execucoes-detalhe-em-andamento');
       await window.getByRole('button', { name: 'Cancelar execução' }).click();

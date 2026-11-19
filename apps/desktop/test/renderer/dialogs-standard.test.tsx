@@ -8,7 +8,8 @@
  * lote, cópia para e-mail…). Hoje: o token, "Remover a configuração?", desde a US3 anexar (uma reserva
  * e lote), "Desfazer o comprovante?" e "Cancelar a execução?" e, desde a US8, o envio ao Comercial
  * (conferência e andamento), a recusa do retorno, "Desfazer o envio ao Comercial?", as confirmações
- * em lote (retornos e "Verificar") e a cópia para e-mail.
+ * em lote (retornos e "Verificar") e a cópia para e-mail e, desde a US6, o acesso ao Hunit para
+ * retomar uma execução.
  */
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -27,7 +28,7 @@ import classes from '../../src/renderer/src/ui/structure.module.css';
 import type { Execution, PublicConfig } from '../../src/shared/ipc-types';
 import { dispatchFixture } from '../helpers/commercial-fixtures';
 import { detail as commercialDetail, returnBrief, selectionItem } from './commercial-fixtures';
-import { fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
+import { errorResult, fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
 import {
   check,
   detail,
@@ -272,6 +273,36 @@ const DIALOGS: Record<string, DialogCase> = {
       await screen.findByText('O que copiar');
     },
   },
+  'acesso ao Hunit para retomar (US6)': {
+    title: 'Acesso ao Hunit para retomar',
+    size: 'sm',
+    open: async () => {
+      mocked(hunit.api.executions.get).mockImplementation(() =>
+        okResult({
+          ...RUNNING_EXECUTION,
+          id: FAILED_EXECUTION_ID,
+          status: 'failed',
+          endReason: 'server_restarted',
+          finishedAt: '2026-11-12T11:30:00.000Z',
+        }),
+      );
+      mocked(hunit.api.executions.resume).mockImplementation(() =>
+        errorResult('credentials_missing'),
+      );
+      renderWithApp(
+        <ExecutionDetail
+          executionId={FAILED_EXECUTION_ID}
+          onOpenExecution={vi.fn()}
+          onOpenReservations={vi.fn()}
+        />,
+        hunit,
+      );
+      const user = userEvent.setup();
+      const resume = await screen.findByRole('button', { name: 'Retomar' });
+      await waitFor(() => expect(resume).toBeEnabled());
+      await user.click(resume);
+    },
+  },
   'cancelar a execução (tela 3.3)': {
     title: 'Cancelar a execução?',
     size: 'sm',
@@ -328,6 +359,8 @@ function serveDispatch() {
     okResult(dispatchFixture({ status: 'running' })),
   );
 }
+
+const FAILED_EXECUTION_ID = '22222222-2222-4222-8222-222222222222';
 
 const RUNNING_EXECUTION: Execution = {
   id: EXECUTION_ID,

@@ -9,8 +9,8 @@
  * ativa, texto de diálogo): um `it` que monta o estado, `keepsAcrossSizes` e a leitura do estado.
  * Hoje: Executar (US1), um diálogo aberto, Reservas (US2: busca, filtro do painel e filtro rápido)
  * e a seleção com a gaveta "Reservas selecionadas" aberta (US4), a gaveta da reserva com um valor
- * digitado em "Corrigir o valor" (US5) e, na área Comercial, a aba ativa com o motivo da recusa
- * digitado (US8).
+ * digitado em "Corrigir o valor" (US5), na área Comercial, a aba ativa com o motivo da recusa
+ * digitado (US8), e a gaveta de uma execução aberta (US6).
  */
 import { insertDispatch, insertLine } from '../../../server/test/helpers/commercial-fixtures.js';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
@@ -313,5 +313,30 @@ describe('redimensionar sem perder nada (US9, SC-008)', () => {
 
     await dialog.getByRole('button', { name: 'Voltar' }).click();
     await dialog.waitFor({ state: 'detached' });
+  });
+
+  it('Execuções: a gaveta da execução aberta continua (US6, T058)', async () => {
+    const { window } = launched;
+    await server.insertExecution({ status: 'completed', finishedAt: new Date() });
+    await window.getByRole('navigation').getByRole('button', { name: 'Execuções' }).click();
+    await window
+      .getByRole('button', { name: /^Abrir a execução de/ })
+      .first()
+      .click();
+    const drawer = window.getByRole('dialog', { name: 'Detalhe da execução' });
+    const heading = drawer.getByRole('heading', { name: 'Execução', exact: true });
+    await heading.waitFor({ timeout: 15_000 });
+
+    const read = async () => ({
+      drawerOpen: await drawer.isVisible(),
+      status: await drawer.getByText('Concluída', { exact: true }).isVisible(),
+      period: await drawer.getByText(/^Check-in de /).innerText(),
+    });
+    expect(await read()).toMatchObject({ drawerOpen: true, status: true });
+
+    await keepsAcrossSizes(read);
+
+    await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
+    await drawer.waitFor({ state: 'hidden' });
   });
 });
