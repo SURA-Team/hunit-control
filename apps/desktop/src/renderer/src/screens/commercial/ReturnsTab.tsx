@@ -4,8 +4,14 @@
  * com o código de autorização, o hotel da cobrança ao lado do hotel da reserva, o valor cobrado, o
  * valor a cobrar e a diferença. O operador confirma uma a uma ou as marcadas (com a lista de
  * revisão) e recusa uma a uma, com o motivo.
+ *
+ * Desde a 006 (T052; tela 7.8): a lista em card com a faixa de ações no topo (marcar todos, "Confirmar
+ * marcados (N)" e "a recusa é uma a uma"), a reserva com o código, o hotel da cobrança (em âmbar e
+ * com o selo quando difere do hotel da reserva), "cobrado / a cobrar", a diferença em âmbar, o
+ * responsável e quando foi lido, e "Confirmar" (principal da linha) e "Recusar" em vermelho suave. Em
+ * conteúdo estreito, o responsável vai para a linha da reserva e a diferença para a dos valores.
  */
-import { Alert, Button, Checkbox, Drawer, Group, Stack, Table, Text, Title } from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { Reservation, ReservationTreatment, Result } from '../../../../shared/ipc-types';
@@ -14,11 +20,33 @@ import { formatDateTime, formatMoney } from '../../presentation/format';
 import { errorMessage } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
 import { selectionKey, toSelected } from '../../state/selection';
-import { ChargeHotel, RejectDialog } from '../reservations/CommercialSection';
+import {
+  Action,
+  AppDrawer,
+  ListActions,
+  ListCard,
+  ListCell,
+  ListHeader,
+  ListRow,
+  Notice,
+  SelectionBox,
+  type ListColumn,
+} from '../../ui';
+import { AmountDifference, ChargeHotel, RejectDialog } from '../reservations/CommercialSection';
 import { ConfirmBatchDialog } from '../reservations/ConfirmBatchDialog';
 import { ReservationDetailLoader } from '../reservations/ReservationsScreen';
 
 const PAGE_SIZE = 50;
+
+/** Colunas da tela 7.8; "Ações" só para o operador. */
+const COLUMNS: readonly ListColumn[] = [
+  { key: 'reservation', label: 'Reserva' },
+  { key: 'chargeHotel', label: 'Hotel da cobrança' },
+  { key: 'amounts', label: 'Cobrado / a cobrar' },
+  { key: 'difference', label: 'Diferença' },
+  { key: 'responsible', label: 'Responsável' },
+];
+const ACTIONS_COLUMN: ListColumn = { key: 'actions', label: '' };
 
 export function ReturnsTab() {
   const hunit = useHunit();
@@ -83,155 +111,152 @@ export function ReturnsTab() {
       return next;
     });
 
+  const columns = canWrite ? [...COLUMNS, ACTIONS_COLUMN] : COLUMNS;
+  const allMarked = items.length > 0 && marked.length === items.length;
+
   return (
-    <Stack gap="md">
+    <Stack gap={16}>
       {message && (
-        <Alert color={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
+        <Notice tone={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
           {message.text}
-        </Alert>
+        </Notice>
       )}
-      {list.isError && (
-        <Alert color="red" role="alert">
-          {messageOf(list.error)}
-        </Alert>
-      )}
+      {list.isError && <Notice tone="red">{messageOf(list.error)}</Notice>}
       {list.isSuccess && items.length === 0 && (
-        <Text c="dimmed">Nenhum retorno do Comercial aguardando validação.</Text>
-      )}
-      {canWrite && items.length > 0 && (
-        <Group gap="sm">
-          <Button size="xs" disabled={marked.length === 0} onClick={() => setBatchOpen(true)}>
-            Confirmar marcados ({marked.length})
-          </Button>
-          <Text size="xs" c="dimmed">
-            A recusa é uma a uma, com o motivo.
-          </Text>
-        </Group>
+        <Text size="sm" c="dimmed">
+          Nenhum retorno do Comercial aguardando validação.
+        </Text>
       )}
       {items.length > 0 && (
-        <Table striped highlightOnHover verticalSpacing={6} aria-label="Retornos a validar">
-          <Table.Thead>
-            <Table.Tr>
-              {canWrite && (
-                <Table.Th w={36}>
-                  <Checkbox
-                    aria-label="Marcar todos os retornos listados"
-                    checked={marked.length === items.length}
-                    indeterminate={marked.length > 0 && marked.length < items.length}
-                    onChange={(event) =>
-                      setChecked(
-                        event.currentTarget.checked
-                          ? new Set(items.map((item) => selectionKey(item)))
-                          : new Set(),
-                      )
-                    }
-                  />
-                </Table.Th>
-              )}
-              <Table.Th>Reserva</Table.Th>
-              <Table.Th>Código de autorização</Table.Th>
-              <Table.Th>Hotel da cobrança</Table.Th>
-              <Table.Th>Valor cobrado</Table.Th>
-              <Table.Th>Valor a cobrar</Table.Th>
-              <Table.Th>Diferença</Table.Th>
-              <Table.Th>Responsável</Table.Th>
-              <Table.Th>Lido em</Table.Th>
-              {canWrite && <Table.Th />}
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {items.map((reservation) => {
-              const brief = reservation.commercial?.currentReturn ?? null;
-              const differs =
-                brief !== null && brief.difference !== null && Number(brief.difference) !== 0;
-              return (
-                <Table.Tr key={selectionKey(reservation)}>
-                  {canWrite && (
-                    <Table.Td>
-                      <Checkbox
-                        aria-label={`Marcar a reserva ${reservation.reservationNumber}`}
-                        checked={checked.has(selectionKey(reservation))}
-                        onChange={(event) => toggle(reservation, event.currentTarget.checked)}
-                      />
-                    </Table.Td>
-                  )}
-                  <Table.Td>
-                    <Button
-                      variant="subtle"
-                      size="compact-sm"
-                      onClick={() => setOpened(reservation)}
-                    >
-                      {reservation.reservationNumber}
-                    </Button>
-                  </Table.Td>
-                  <Table.Td>{brief?.authorizationCode ?? '—'}</Table.Td>
-                  <Table.Td>
-                    {brief ? (
-                      <ChargeHotel
-                        chargeHotel={brief.chargeHotel}
-                        hotelName={hotel(reservation.hotelCode)}
-                      />
-                    ) : (
-                      '—'
-                    )}
-                  </Table.Td>
-                  <Table.Td>{formatMoney(brief?.chargedAmount)}</Table.Td>
-                  <Table.Td>{formatMoney(reservation.totalAmount)}</Table.Td>
-                  <Table.Td>
-                    <Text
-                      size="sm"
-                      c={differs ? 'orange.8' : undefined}
-                      fw={differs ? 700 : undefined}
-                    >
-                      <span style={{ whiteSpace: 'nowrap' }}>{formatMoney(brief?.difference)}</span>
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>{brief?.chargedBy ?? '—'}</Table.Td>
-                  <Table.Td>{formatDateTime(brief?.readAt)}</Table.Td>
-                  {canWrite && (
-                    <Table.Td>
-                      {brief && (
-                        <Group gap={6} wrap="nowrap">
-                          <Button
-                            size="compact-xs"
-                            disabled={busy}
-                            onClick={() =>
-                              void decide(
-                                () => hunit.commercial.confirmReturn(brief.id),
-                                `Retorno da reserva ${reservation.reservationNumber} confirmado.`,
-                              )
-                            }
-                          >
-                            Confirmar
-                          </Button>
-                          <Button
-                            size="compact-xs"
-                            variant="default"
-                            color="red"
-                            disabled={busy}
-                            onClick={() => setRejecting(reservation)}
-                          >
-                            Recusar
-                          </Button>
-                        </Group>
-                      )}
-                    </Table.Td>
-                  )}
-                </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
+        <ListCard
+          label="Retornos a validar"
+          toolbar={
+            canWrite && (
+              <>
+                <SelectionBox
+                  aria-label="Marcar todos os retornos listados"
+                  checked={allMarked}
+                  indeterminate={marked.length > 0 && !allMarked}
+                  onChange={(event) =>
+                    setChecked(
+                      event.currentTarget.checked
+                        ? new Set(items.map((item) => selectionKey(item)))
+                        : new Set(),
+                    )
+                  }
+                />
+                <Action
+                  variant="secondary"
+                  size="xs"
+                  disabled={marked.length === 0}
+                  onClick={() => setBatchOpen(true)}
+                >
+                  Confirmar marcados ({marked.length})
+                </Action>
+                <span>A recusa é uma a uma, com o motivo.</span>
+              </>
+            )
+          }
+          header={
+            <ListHeader columns={columns} withArrow={false} {...(canWrite && { select: '' })} />
+          }
+        >
+          {items.map((reservation) => {
+            const brief = reservation.commercial?.currentReturn ?? null;
+            const read = brief ? `lido em ${formatDateTime(brief.readAt)}` : null;
+            return (
+              <ListRow
+                key={selectionKey(reservation)}
+                columns={columns}
+                block={`Retorno ${reservation.reservationNumber}`}
+                selected={checked.has(selectionKey(reservation))}
+                {...(canWrite && {
+                  select: (
+                    <SelectionBox
+                      aria-label={`Marcar a reserva ${reservation.reservationNumber}`}
+                      checked={checked.has(selectionKey(reservation))}
+                      onChange={(event) => toggle(reservation, event.currentTarget.checked)}
+                    />
+                  ),
+                })}
+                cells={{
+                  reservation: (
+                    <ListCell
+                      strong
+                      primary={reservation.reservationNumber}
+                      onOpen={() => setOpened(reservation)}
+                      openLabel={`Abrir a reserva ${reservation.reservationNumber}`}
+                      secondary={brief?.authorizationCode ?? '—'}
+                      narrow={brief ? `${brief.chargedBy} · ${read}` : null}
+                    />
+                  ),
+                  chargeHotel: brief ? (
+                    <ChargeHotel
+                      chargeHotel={brief.chargeHotel}
+                      hotelName={hotel(reservation.hotelCode)}
+                    />
+                  ) : (
+                    '—'
+                  ),
+                  amounts: (
+                    <ListCell
+                      primary={`${formatMoney(brief?.chargedAmount)} cobrado`}
+                      secondary={`${formatMoney(reservation.totalAmount)} a cobrar`}
+                      compact={
+                        brief && (
+                          <>
+                            diferença <AmountDifference value={brief.difference} />
+                          </>
+                        )
+                      }
+                    />
+                  ),
+                  difference: <AmountDifference value={brief?.difference ?? null} />,
+                  responsible: brief ? (
+                    <ListCell primary={brief.chargedBy} secondary={read} />
+                  ) : (
+                    '—'
+                  ),
+                  actions: brief && (
+                    <ListActions>
+                      <Action
+                        size="xs"
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() =>
+                          void decide(
+                            () => hunit.commercial.confirmReturn(brief.id),
+                            `Retorno da reserva ${reservation.reservationNumber} confirmado.`,
+                          )
+                        }
+                      >
+                        Confirmar
+                      </Action>
+                      <Action
+                        size="xs"
+                        variant="danger-light"
+                        disabled={busy}
+                        onClick={() => setRejecting(reservation)}
+                      >
+                        Recusar
+                      </Action>
+                    </ListActions>
+                  ),
+                }}
+              />
+            );
+          })}
+        </ListCard>
       )}
       {list.hasNextPage && (
         <Group>
-          <Button
-            variant="default"
+          <Action
+            variant="secondary"
             onClick={() => void list.fetchNextPage()}
             loading={list.isFetchingNextPage}
           >
             Carregar mais
-          </Button>
+          </Action>
         </Group>
       )}
 
@@ -260,17 +285,14 @@ export function ReturnsTab() {
           }}
         />
       )}
-      <Drawer
+      <AppDrawer
         opened={opened !== null}
         onClose={() => setOpened(null)}
-        position="right"
-        size="xl"
-        title={<Title order={3}>Detalhe da reserva</Title>}
-        closeButtonProps={{ 'aria-label': 'Fechar detalhe' }}
-        transitionProps={{ duration: 0 }}
+        title="Detalhe da reserva"
+        closeLabel="Fechar detalhe"
       >
         {opened && <ReservationDetailLoader initial={opened} />}
-      </Drawer>
+      </AppDrawer>
     </Stack>
   );
 }

@@ -22,6 +22,8 @@ export {
   CardHeader,
   DataField,
   DataGrid,
+  DataTile,
+  DataTiles,
   DetailHeader,
   type CardHeaderProps,
   type DataFieldProps,

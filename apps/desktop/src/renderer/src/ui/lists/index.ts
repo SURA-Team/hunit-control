@@ -1,6 +1,7 @@
 /** Listas e barras (specs/006, research R-08). */
 export { ExecutionRow, type ExecutionRowProps } from './ExecutionRow';
 export {
+  DISPATCH_COLUMNS,
   EXECUTION_COLUMNS,
   ListCard,
   ListHeader,
@@ -11,6 +12,7 @@ export {
   type ListColumnKey,
   type ListHeaderProps,
 } from './ListCard';
+export { ListActions, ListCell, ListRow, type ListCellProps, type ListRowProps } from './ListRow';
 export { ReservationRow, type ReservationRowProps } from './ReservationRow';
 export { RunningJobCard, type RunningJobCardProps } from './RunningJobCard';
 export { SelectionBar, type SelectionBarProps } from './SelectionBar';

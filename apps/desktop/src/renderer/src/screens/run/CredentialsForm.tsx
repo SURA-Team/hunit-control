@@ -40,8 +40,8 @@ export function CredentialsForm(props: Props) {
         </Notice>
       )}
       {status?.hasPassword ? (
-        <Group justify="space-between" gap={12}>
-          <Text size="sm">
+        <Group justify="space-between" gap={12} wrap="nowrap">
+          <Text size="sm" flex={1}>
             Usuário <strong>{status.username}</strong> — senha guardada nesta sessão
           </Text>
           <Action variant="danger-light" size="xs" onClick={props.onClear}>

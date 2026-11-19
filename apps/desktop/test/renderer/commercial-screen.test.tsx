@@ -1,13 +1,14 @@
 /**
  * Área "Comercial" do app (specs/005, US3, T050; FR-013, FR-018, FR-020, FR-021): as abas
  * "Envios", "Retornos a validar", "Retornos com problema" e "Planilha", com as ações só para o
- * perfil operador. Dados fictícios.
+ * perfil operador. Dados fictícios. Desde a 006 (T052): o visual novo das quatro abas.
  */
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CommercialScreen } from '../../src/renderer/src/screens/commercial/CommercialScreen';
 import { dispatchFixture } from '../helpers/commercial-fixtures';
+import { expectOnePrimaryPerBlock } from './hierarchy';
 import { RETURN_ID, returnBrief, sheetStatus } from './commercial-fixtures';
 import {
   fakeHunit,
@@ -188,5 +189,123 @@ describe('aba "Planilha" (FR-013)', () => {
     renderWithApp(<CommercialScreen />, hunit);
     await user.click(screen.getByRole('tab', { name: 'Planilha' }));
     expect(await screen.findByText('Planilha do Comercial não configurada')).toBeInTheDocument();
+  });
+});
+
+describe('visual novo da área Comercial (specs/006, T052; telas 7.7 a 7.10)', () => {
+  it('título com a explicação e as abas com a contagem dos retornos (FR-039)', async () => {
+    renderWithApp(<CommercialScreen />, hunit);
+    expect(screen.getByRole('heading', { level: 1, name: 'Comercial' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Envios das reservas para a planilha do Comercial e os retornos que ele preenche.',
+      ),
+    ).toBeInTheDocument();
+    // 2 aguardando validação e 1 com problema (a situação da planilha do teste).
+    const returns = screen.getByRole('tab', { name: /^Retornos a validar/ });
+    await waitFor(() => expect(returns).toHaveTextContent('2'));
+    expect(screen.getByRole('tab', { name: /^Retornos com problema/ })).toHaveTextContent('1');
+  });
+
+  it('envio em andamento no card escuro (7.7a) e os encerrados no "Histórico" (7.7)', async () => {
+    mocked(hunit.api.dispatches.list).mockImplementation(() =>
+      okResult({
+        items: [
+          {
+            ...dispatchFixture({ status: 'running' }),
+            id: '55555555-5555-4555-8555-555555555555',
+            counts: { total: 16, pending: 8, sent: 8, withdrawn: 0, notVerified: 0, ignored: 0 },
+          },
+          {
+            ...dispatchFixture({ status: 'completed' }),
+            counts: { total: 15, pending: 0, sent: 14, withdrawn: 0, notVerified: 1, ignored: 0 },
+          },
+        ],
+        nextCursor: null,
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithApp(<CommercialScreen />, hunit);
+
+    const card = await screen.findByRole('region', { name: /^Em andamento: Iniciado em/ });
+    expect(card).toHaveTextContent('desktop-financeiro (esta máquina) · 16 reservas');
+    expect(card).toHaveTextContent('8 de 16 reservas verificadas');
+    expect(card).toHaveTextContent('50%');
+
+    const table = screen.getByRole('table', { name: 'Envios ao Comercial' });
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('14 enviadas · 0 retiradas · 1 não verificada');
+    expect(within(rows[0] as HTMLElement).getByText('Concluído')).toHaveAttribute(
+      'data-tone',
+      'green',
+    );
+
+    await user.click(within(card).getByRole('button', { name: 'Ver envio' }));
+    expect(await screen.findByRole('dialog', { name: 'Detalhe do envio' })).toBeInTheDocument();
+  });
+
+  it('retornos (7.8): faixa com "Confirmar marcados", "Confirmar" principal de cada linha', async () => {
+    const user = userEvent.setup();
+    renderWithApp(<CommercialScreen />, hunit);
+    await user.click(screen.getByRole('tab', { name: /^Retornos a validar/ }));
+    const table = await screen.findByRole('table', { name: 'Retornos a validar' });
+
+    const batch = screen.getByRole('button', { name: 'Confirmar marcados (0)' });
+    expect(batch).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'Marcar a reserva 7001' }));
+    expect(screen.getByRole('button', { name: 'Confirmar marcados (1)' })).toBeEnabled();
+
+    expect(within(table).getByRole('button', { name: 'Confirmar' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(within(table).getByRole('button', { name: 'Recusar' })).toHaveAttribute(
+      'data-variant',
+      'danger-light',
+    );
+    expect(within(table).getByRole('button', { name: 'Abrir a reserva 7001' })).toBeInTheDocument();
+    expectOnePrimaryPerBlock();
+  });
+
+  it('problemas (7.9): selo âmbar e a seta abre o detalhe da reserva', async () => {
+    mocked(hunit.api.reservations.get).mockImplementation(() =>
+      okResult(pendingReservation('7009')),
+    );
+    const user = userEvent.setup();
+    renderWithApp(<CommercialScreen />, hunit);
+    await user.click(screen.getByRole('tab', { name: /^Retornos com problema/ }));
+    const table = await screen.findByRole('table', { name: 'Retornos com problema' });
+    expect(within(table).getByText('Retorno incompleto')).toHaveAttribute('data-tone', 'amber');
+
+    await user.click(within(table).getByRole('button', { name: 'Abrir a reserva 7009' }));
+    expect(hunit.api.reservations.get).toHaveBeenCalledWith({
+      hotelCode: '31',
+      reservationNumber: '7009',
+    });
+    expect(await screen.findByTestId('reservation-detail')).toBeInTheDocument();
+  });
+
+  it('planilha (7.10): selo, "Ler retornos agora" principal e os números em caixas', async () => {
+    const user = userEvent.setup();
+    renderWithApp(<CommercialScreen />, hunit);
+    await user.click(screen.getByRole('tab', { name: 'Planilha' }));
+    const panel = await screen.findByTestId('sheet-status');
+
+    expect(
+      within(panel).getByRole('heading', { name: 'Situação da planilha' }),
+    ).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Ler retornos agora' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    const tiles = within(panel).getByLabelText('Situação da planilha');
+    expect([...tiles.querySelectorAll('dt')].map((term) => term.textContent)).toEqual([
+      'Atualizações pendentes',
+      'Retornos aguardando validação',
+      'Retornos com problema',
+      'Última rodada completa',
+      'Última leitura dos retornos',
+    ]);
   });
 });

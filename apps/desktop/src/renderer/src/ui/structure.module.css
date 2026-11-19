@@ -250,3 +250,26 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Caixas de indicadores (tela 7.10). */
+.dataTiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.dataTile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-sutil);
+}
+.dataTileValue {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+  overflow-wrap: anywhere;
+}

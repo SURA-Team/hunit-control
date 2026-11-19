@@ -2,23 +2,46 @@
  * Aba "Envios" da área Comercial (specs/005, FR-020): os envios, dos mais recentes para os mais
  * antigos, com quem enviou, quando, o estado e as contagens; ao abrir um, o acompanhamento e o
  * resultado de cada reserva (`DispatchView`), com cancelar e retomar para o perfil operador.
+ *
+ * Desde a 006 (T052; telas 7.7 e 7.7a, aprovada pela UX, research R-13): o envio em andamento num
+ * card escuro no topo (quando começou, quem enviou, "N de M reservas verificadas", a barra, o
+ * percentual e "Ver envio" em lima); os demais no "Histórico", como linhas de lista (quando, quem e
+ * quantas; o resultado; a situação; a seta). O detalhe abre numa gaveta.
  */
-import { Alert, Button, Drawer, Group, Stack, Table, Text, Title } from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import type { CommercialDispatch } from '../../../../shared/ipc-types';
 import { useHunitAccess } from '../../components/HunitAccess';
-import { StatusBadge } from '../../components/StatusBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
-import { formatDateTime } from '../../presentation/format';
+import { dispatchTally, formatWhen, jobStatusBadge, requesterName } from '../../presentation/jobs';
 import { DISPATCH_STATUS_LABELS } from '../../presentation/labels';
 import { useConnection } from '../../state/connection';
 import { useDispatch } from '../../state/dispatches';
+import {
+  Action,
+  AppDrawer,
+  DISPATCH_COLUMNS,
+  ExecutionRow,
+  ListCard,
+  ListHeader,
+  Notice,
+  RunningJobCard,
+  SectionTitle,
+  StatusBadge,
+} from '../../ui';
 import { DispatchView, isDispatchFinished } from '../dispatch/DispatchView';
 
 const PAGE_SIZE = 20;
 
+type DispatchItem = Pick<CommercialDispatch, 'id' | 'status' | 'createdAt' | 'requestedClient'> & {
+  counts: CommercialDispatch['counts'];
+};
+
 export function DispatchesTab() {
   const hunit = useHunit();
+  const { state } = useConnection();
+  const thisClient = state?.client?.name ?? null;
   const [openId, setOpenId] = useState<string | null>(null);
   const hotels = useQuery({ queryKey: ['hotels'], queryFn: () => unwrap(hunit.hotels.list()) });
   const hotelNames = useMemo(
@@ -39,72 +62,77 @@ export function DispatchesTab() {
     getNextPageParam: (page) => page.nextCursor,
     refetchInterval: 15_000,
   });
-  const items = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const items: DispatchItem[] = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const running = items.filter((item) => !isDispatchFinished(item));
+  const history = items.filter((item) => isDispatchFinished(item));
+  const who = (item: DispatchItem) =>
+    `${requesterName(item.requestedClient, thisClient)} · ${item.counts.total} reservas`;
 
   return (
-    <Stack gap="md">
-      {list.isError && (
-        <Alert color="red" role="alert">
-          {messageOf(list.error)}
-        </Alert>
-      )}
+    <Stack gap={16}>
+      {list.isError && <Notice tone="red">{messageOf(list.error)}</Notice>}
+
+      {running.map((item) => {
+        const processed = item.counts.total - item.counts.pending;
+        return (
+          <RunningJobCard
+            key={item.id}
+            badge={DISPATCH_STATUS_LABELS[item.status].name}
+            title={`Iniciado em ${formatWhen(item.createdAt)}`}
+            detail={who(item)}
+            progressLabel={`${processed} de ${item.counts.total} reservas verificadas`}
+            percent={item.counts.total > 0 ? (processed / item.counts.total) * 100 : 0}
+            actionLabel="Ver envio"
+            onAction={() => setOpenId(item.id)}
+          />
+        );
+      })}
+
       {list.isSuccess && items.length === 0 && (
-        <Text c="dimmed">Nenhum envio ao Comercial ainda.</Text>
+        <Text size="sm" c="dimmed">
+          Nenhum envio ao Comercial ainda.
+        </Text>
       )}
-      {items.length > 0 && (
-        <Table highlightOnHover striped verticalSpacing={6} aria-label="Envios ao Comercial">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Quando</Table.Th>
-              <Table.Th>Quem enviou</Table.Th>
-              <Table.Th>Estado</Table.Th>
-              <Table.Th>Reservas</Table.Th>
-              <Table.Th>Enviadas</Table.Th>
-              <Table.Th>Retiradas</Table.Th>
-              <Table.Th>Não verificadas</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {items.map((dispatch) => (
-              <Table.Tr
-                key={dispatch.id}
-                onClick={() => setOpenId(dispatch.id)}
-                style={{ cursor: 'pointer' }}
-              >
-                <Table.Td>{formatDateTime(dispatch.createdAt)}</Table.Td>
-                <Table.Td>{dispatch.requestedClient}</Table.Td>
-                <Table.Td>
-                  <StatusBadge label={DISPATCH_STATUS_LABELS[dispatch.status]} size="xs" />
-                </Table.Td>
-                <Table.Td>{dispatch.counts.total}</Table.Td>
-                <Table.Td>{dispatch.counts.sent}</Table.Td>
-                <Table.Td>{dispatch.counts.withdrawn}</Table.Td>
-                <Table.Td>{dispatch.counts.notVerified}</Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+      {history.length > 0 && (
+        <Stack gap={12}>
+          <SectionTitle>Histórico</SectionTitle>
+          <ListCard label="Envios ao Comercial" header={<ListHeader columns={DISPATCH_COLUMNS} />}>
+            {history.map((item) => {
+              const status = jobStatusBadge(DISPATCH_STATUS_LABELS[item.status], item.status);
+              const when = formatWhen(item.createdAt);
+              return (
+                <ExecutionRow
+                  key={item.id}
+                  when={when}
+                  detail={who(item)}
+                  result={dispatchTally(item.counts)}
+                  status={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
+                  openLabel={`Abrir o envio de ${when}`}
+                  opened={openId === item.id}
+                  onOpen={() => setOpenId(item.id)}
+                />
+              );
+            })}
+          </ListCard>
+        </Stack>
       )}
       {list.hasNextPage && (
         <Group>
-          <Button
-            variant="default"
+          <Action
+            variant="secondary"
             onClick={() => void list.fetchNextPage()}
             loading={list.isFetchingNextPage}
           >
             Carregar mais
-          </Button>
+          </Action>
         </Group>
       )}
 
-      <Drawer
+      <AppDrawer
         opened={openId !== null}
         onClose={() => setOpenId(null)}
-        position="right"
-        size="xl"
-        title={<Title order={3}>Envio ao Comercial</Title>}
-        closeButtonProps={{ 'aria-label': 'Fechar envio' }}
-        transitionProps={{ duration: 0 }}
+        title="Detalhe do envio"
+        closeLabel="Fechar envio"
       >
         {openId && (
           <DispatchDetail
@@ -114,7 +142,7 @@ export function DispatchesTab() {
             onOpen={setOpenId}
           />
         )}
-      </Drawer>
+      </AppDrawer>
     </Stack>
   );
 }
@@ -132,13 +160,7 @@ function DispatchDetail({
   const access = useHunitAccess();
   const dispatch = useDispatch(dispatchId);
 
-  if (dispatch.isError) {
-    return (
-      <Alert color="red" role="alert">
-        {messageOf(dispatch.error)}
-      </Alert>
-    );
-  }
+  if (dispatch.isError) return <Notice tone="red">{messageOf(dispatch.error)}</Notice>;
   if (!dispatch.data) return <Text size="sm">Carregando o envio…</Text>;
   const resumable =
     isOperator &&
@@ -147,7 +169,7 @@ function DispatchDetail({
     dispatch.data.counts.notVerified > 0;
 
   return (
-    <Stack gap="md">
+    <Stack gap={16}>
       {resumable && access.form}
       <DispatchView
         dispatch={dispatch.data}
@@ -157,13 +179,13 @@ function DispatchDetail({
       />
       {dispatch.data.resumedByDispatchId && (
         <Group>
-          <Button
-            variant="default"
+          <Action
+            variant="secondary"
             size="xs"
             onClick={() => onOpen(dispatch.data.resumedByDispatchId ?? dispatchId)}
           >
             Ver a retomada
-          </Button>
+          </Action>
         </Group>
       )}
     </Stack>

@@ -18,7 +18,16 @@ export type ListColumnKey =
   | 'execution'
   | 'result'
   | 'status'
-  | 'arrow';
+  | 'arrow'
+  | 'reservation'
+  | 'chargeHotel'
+  | 'amounts'
+  | 'difference'
+  | 'responsible'
+  | 'actions'
+  | 'problem'
+  | 'message'
+  | 'when';
 
 export interface ListColumn {
   key: ListColumnKey;
@@ -37,6 +46,13 @@ export const RESERVATION_COLUMNS: readonly ListColumn[] = [
 /** Colunas da lista de execuções e de envios (telas 3.1 e 7.7). */
 export const EXECUTION_COLUMNS: readonly ListColumn[] = [
   { key: 'execution', label: 'Execução' },
+  { key: 'result', label: 'Resultado' },
+  { key: 'status', label: 'Situação' },
+];
+
+/** Colunas da lista de envios ao Comercial (tela 7.7): as de execuções, com "Envio". */
+export const DISPATCH_COLUMNS: readonly ListColumn[] = [
+  { key: 'execution', label: 'Envio' },
   { key: 'result', label: 'Resultado' },
   { key: 'status', label: 'Situação' },
 ];
@@ -69,13 +85,16 @@ export interface ListCardProps {
   /** Nome da lista para o leitor de tela (ex.: "Reservas"). */
   label: string;
   header: ReactNode;
-  /** As linhas (`ReservationRow`, `ExecutionRow`). */
+  /** As linhas (`ReservationRow`, `ExecutionRow`, `ListRow`). */
   children: ReactNode;
+  /** Faixa cinza acima do cabeçalho com as ações da lista ("Confirmar marcados", tela 7.8). */
+  toolbar?: ReactNode;
 }
 
-export function ListCard({ label, header, children }: ListCardProps) {
+export function ListCard({ label, header, children, toolbar }: ListCardProps) {
   return (
     <div className={classes.card}>
+      {toolbar && <div className={classes.toolbar}>{toolbar}</div>}
       <table className={classes.table} aria-label={label}>
         {header}
         <tbody>{children}</tbody>

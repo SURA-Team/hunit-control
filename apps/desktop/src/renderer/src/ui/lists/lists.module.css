@@ -13,6 +13,21 @@
   box-shadow: var(--hc-shadow-card);
 }
 
+/* Faixa de ações da lista (tela 7.8), no topo do card. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 0;
+  padding: 12px 20px;
+  border-start-start-radius: var(--hc-radius-card);
+  border-start-end-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-sutil);
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -77,6 +92,36 @@
   width: 150px;
 }
 
+/* Colunas da área Comercial (telas 7.8 e 7.9; T052). Hotel da cobrança e mensagem ocupam o resto. */
+.table [data-col='reservation'] {
+  width: 140px;
+}
+
+.table [data-col='amounts'] {
+  width: 150px;
+}
+
+.table [data-col='difference'] {
+  width: 100px;
+  text-align: end;
+}
+
+.table [data-col='responsible'] {
+  width: 150px;
+}
+
+.table [data-col='actions'] {
+  width: 180px;
+}
+
+.table [data-col='problem'] {
+  width: 170px;
+}
+
+.table [data-col='when'] {
+  width: 120px;
+}
+
 /*
  * As células são `content-box` (as larguras acima não contam o espaçamento): a altura é a do
  * conteúdo, e a linha fica com a do design somando os 10 px de cima e de baixo (64 e 68 px).
@@ -97,6 +142,11 @@
 
 .row {
   cursor: pointer;
+}
+
+/* Linhas da área Comercial: só as que abrem um detalhe são clicáveis. */
+.row[data-kind='list']:not([data-clickable]) {
+  cursor: default;
 }
 
 .row:hover {
@@ -378,4 +428,73 @@
 .jobPercent {
   color: var(--hc-destaque-lima);
   font: var(--hc-font-corpo-forte);
+}
+
+/*
+ * Pedaços de célula que só aparecem quando a coluna de onde vieram some (T052): `narrowOnly` abaixo
+ * de 1 000 px e `compactOnly` abaixo de 720 px. As ações da linha ficam lado a lado.
+ */
+.narrowOnly,
+.compactOnly {
+  display: none;
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+@container (max-width: 999.98px) {
+  .table [data-col='responsible'] {
+    display: none;
+  }
+
+  .narrowOnly {
+    display: block;
+  }
+}
+
+/* Abaixo de 820 px (tokens.breakpoints.narrowGrid): as ações da linha, uma embaixo da outra. */
+@container (max-width: 819.98px) {
+  .table [data-col='actions'] {
+    width: 96px;
+  }
+
+  .rowActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@container (max-width: 719.98px) {
+  .table [data-col='difference'],
+  .table [data-col='when'] {
+    display: none;
+  }
+
+  .compactOnly {
+    display: block;
+  }
+}
+
+/* Texto da célula que abre o detalhe (o número da reserva, tela 7.8): sem cara de botão. */
+.cellButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cellButton:hover {
+  text-decoration: underline;
+}
+
+.cellButton:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
 }

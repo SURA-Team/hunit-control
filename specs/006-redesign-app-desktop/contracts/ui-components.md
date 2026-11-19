@@ -70,6 +70,7 @@ escritos nas telas.
 | `AppDialog` | `size`: `sm` (520 px) · `lg` (780 px); 24 px de espaçamento; título no estilo do design (e `subtitle`); `dark` para o token; limitado à área visível, rola por dentro, fechar sempre alcançável ("Fechar o diálogo", FR-042, FR-047); `onCancel`, `onSubmit` (formulário), `zIndex` e `instant` | Telas 2.4, 2.5, 2.9, 3.3, 4.6, 7.1, 7.6 |
 | `DetailHeader` | Cabeçalho do detalhe numa gaveta: "Reserva N" (estilo "Título da seção"), a linha de apoio ("hotel 101") e os selos lado a lado à direita; quebra linha quando não cabe (T044) | Telas 4.2, 4.7, 4.9 |
 | `DataGrid`, `DataField` | Dados em três colunas (rótulo "Descrição" apagado em cima, valor "Corpo" embaixo; 16 px entre colunas, 12 px entre linhas), duas abaixo de 520 px; valores longos quebram linha. Sem valor, "—" (T044) | "Dados da reserva", "Dados da cobrança" (tela 4.2) |
+| `DataTiles`, `DataTile` | Caixas cinza de indicadores lado a lado (rótulo pequeno, valor em negrito), no mínimo 150 px cada, quebrando linha (T052) | "Situação da planilha" (tela 7.10) |
 | `CardHeader`, `CardAside` | Título de card dentro da gaveta (estilo "Corpo forte": "Tratativa", "Cobrança", "Status do Hunit"), o que vai ao lado (selo ou texto apagado: "Sem tratativa") e as ações à direita (T044) | Tela 4.2 |
 | `AppDrawer` | Gaveta à direita, `min(780px, 100vw − 96px)`, cards de 16 px; `closeLabel` dá o nome do fechar ("Fechar detalhe" na gaveta da reserva, o que os roteiros procuram) | Telas 3.2, 4.2, 7.5 |
 
@@ -77,8 +78,9 @@ escritos nas telas.
 
 | Componente | Variantes e regras | Origem |
 |---|---|---|
-| `ListCard`, `ListHeader` | Card da lista com cabeçalho de colunas ("Tabela cabeçalho") | "Cabeçalho — lista de reservas" `53:94`, "… de execuções" `53:126` |
+| `ListCard`, `ListHeader` | Card da lista com cabeçalho de colunas ("Tabela cabeçalho"); `toolbar` é a faixa cinza de ações no topo do card ("Confirmar marcados", tela 7.8). Colunas prontas: `RESERVATION_COLUMNS`, `EXECUTION_COLUMNS` e `DISPATCH_COLUMNS` ("Envio") | "Cabeçalho — lista de reservas" `53:94`, "… de execuções" `53:126` |
 | `ReservationRow` | Colunas do design (research R-08); duas linhas por coluna; linha inteira clicável com seta; aberta ou marcada em lima suave; coluna Hotel some no conteúdo estreito | "Linha de reserva" `53:93` |
+| `ListRow`, `ListCell`, `ListActions` | Linha genérica das listas da área Comercial (uma célula por coluna, caixa de seleção e seta opcionais, `block` quando a linha tem a principal dela); `ListCell` com o texto em duas linhas, o principal opcionalmente um botão sem cara de botão (o número da reserva), e o que entra na célula quando a coluna de onde veio some (`narrow` abaixo de 1 000 px, `compact` abaixo de 720 px); `ListActions` lado a lado, uma embaixo da outra abaixo de 820 px (T052) | Telas 7.8 e 7.9 |
 | `RowList` | Lista (`ul`) das linhas simples: `HotelRow`, `CompactReservationRow` | — |
 | `CompactReservationRow` | Linha da seleção e dos diálogos de lote | "Linha de reserva compacta" `76:223` |
 | `ExecutionRow` | Data e período; resultado; situação; seta | "Linha de execução" `53:125` |

@@ -95,3 +95,24 @@ export function CardHeader({ title, aside, actions }: CardHeaderProps) {
 export function CardAside({ children }: { children: ReactNode }) {
   return <span className={classes.cardAside}>{children}</span>;
 }
+
+/**
+ * Caixas de indicadores (tela 7.10, "Situação da planilha"): caixas cinza lado a lado, cada uma com o
+ * rótulo pequeno e o valor em negrito; quebram linha quando não cabem (no mínimo 150 px cada).
+ */
+export function DataTiles({ children, label }: { children: ReactNode; label?: string }) {
+  return (
+    <dl className={classes.dataTiles} aria-label={label}>
+      {children}
+    </dl>
+  );
+}
+
+export function DataTile({ label, children }: DataFieldProps) {
+  return (
+    <div className={classes.dataTile}>
+      <dt className={classes.dataLabel}>{label}</dt>
+      <dd className={classes.dataTileValue}>{children ?? '—'}</dd>
+    </div>
+  );
+}

@@ -12,8 +12,11 @@ import {
   ExecutionRow,
   EXECUTION_COLUMNS,
   HotelRow,
+  ListActions,
   ListCard,
+  ListCell,
   ListHeader,
+  ListRow,
   RESERVATION_COLUMNS,
   ReservationRow,
   RowList,
@@ -202,5 +205,85 @@ describe('SelectionBar e RunningJobCard', () => {
     expect(action).toHaveAttribute('data-surface', 'dark');
     await user.click(action);
     expect(onAction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ListRow, ListCell e ListActions (T052; telas 7.8 e 7.9)', () => {
+  const columns = [
+    { key: 'reservation', label: 'Reserva' },
+    { key: 'problem', label: 'Problema' },
+  ] as const;
+
+  it('uma célula por coluna, na ordem do cabeçalho; a linha com ação própria é um bloco', () => {
+    renderUi(
+      <ListCard label="Retornos" header={<ListHeader columns={columns} withArrow={false} />}>
+        <ListRow
+          columns={columns}
+          withArrow={false}
+          block="Retorno 101-1002"
+          cells={{
+            problem: <StatusBadge tone="amber">Retorno incompleto</StatusBadge>,
+            reservation: <ListCell strong primary="101-1002" secondary="AUT-55210" />,
+          }}
+        />
+      </ListCard>,
+    );
+    const row = within(screen.getByRole('table', { name: 'Retornos' })).getAllByRole('row')[1];
+    expect(
+      [...(row?.querySelectorAll('td') ?? [])].map((cell) => cell.getAttribute('data-col')),
+    ).toEqual(['reservation', 'problem']);
+    expect(row).toHaveTextContent('101-1002AUT-55210Retorno incompleto');
+    expect(row).toHaveAttribute('data-block', 'Retorno 101-1002');
+    expect(row).not.toHaveAttribute('tabindex');
+  });
+
+  it('com onOpen, a seta e o clique na linha abrem; o texto da célula pode abrir também', async () => {
+    const onOpen = vi.fn();
+    const onCell = vi.fn();
+    renderUi(
+      <ListCard label="Problemas" header={<ListHeader columns={columns} />}>
+        <ListRow
+          columns={columns}
+          onOpen={onOpen}
+          openLabel="Abrir a reserva 101-1005"
+          cells={{
+            reservation: (
+              <ListCell
+                primary="101-1005"
+                onOpen={onCell}
+                openLabel="Abrir o detalhe de 101-1005"
+                narrow="Paula (Comercial)"
+                compact="17/11/2026 16:34"
+              />
+            ),
+          }}
+        />
+      </ListCard>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Abrir a reserva 101-1005' }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Abrir o detalhe de 101-1005' }));
+    expect(onCell).toHaveBeenCalledTimes(1);
+    // O botão da célula não abre a linha junto.
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    // O que vem de colunas que somem no estreito fica na célula (o CSS mostra conforme a largura).
+    expect(screen.getByText('Paula (Comercial)')).toBeInTheDocument();
+    expect(screen.getByText('17/11/2026 16:34')).toBeInTheDocument();
+  });
+
+  it('ListActions agrupa as ações da linha', () => {
+    renderUi(
+      <ListActions>
+        <Action variant="primary" size="xs">
+          Confirmar
+        </Action>
+        <Action variant="danger-light" size="xs">
+          Recusar
+        </Action>
+      </ListActions>,
+    );
+    const confirm = screen.getByRole('button', { name: 'Confirmar' });
+    expect(confirm.parentElement).toContainElement(screen.getByRole('button', { name: 'Recusar' }));
   });
 });

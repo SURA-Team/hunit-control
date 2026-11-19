@@ -589,13 +589,29 @@ export function footerText({
 }
 
 /** O detalhe busca a reserva atualizada no servidor; enquanto isso, mostra a linha da lista. */
-export function ReservationDetailLoader({ initial }: { initial: Reservation }) {
+/**
+ * O detalhe atualizado no servidor. Com `initial` (a reserva da lista), mostra-a enquanto busca; só
+ * com a chave (a seta de "Retornos com problema", specs/006, T052), "Carregando a reserva…".
+ */
+export function ReservationDetailLoader(
+  props: { initial: Reservation } | { reservationKey: ReservationKey },
+) {
   const hunit = useHunit();
-  const key = { hotelCode: initial.hotelCode, reservationNumber: initial.reservationNumber };
+  const key =
+    'initial' in props
+      ? { hotelCode: props.initial.hotelCode, reservationNumber: props.initial.reservationNumber }
+      : props.reservationKey;
   const detail = useQuery({
     queryKey: ['reservation', key.hotelCode, key.reservationNumber],
     queryFn: () => unwrap(hunit.reservations.get(key)),
-    initialData: initial,
+    ...('initial' in props && { initialData: props.initial }),
   });
+  if (!detail.data) {
+    return detail.isError ? (
+      <Notice tone="red">{messageOf(detail.error)}</Notice>
+    ) : (
+      <Text size="sm">Carregando a reserva…</Text>
+    );
+  }
   return <ReservationDetail reservation={detail.data} />;
 }

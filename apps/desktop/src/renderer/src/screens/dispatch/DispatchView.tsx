@@ -19,7 +19,7 @@ import type {
 } from '../../../../shared/ipc-types';
 import { useHunit } from '../../hunit';
 import { formatDateTime } from '../../presentation/format';
-import { jobStatusBadge } from '../../presentation/jobs';
+import { dispatchTally, jobStatusBadge } from '../../presentation/jobs';
 import {
   DISPATCH_IGNORED_REASONS,
   DISPATCH_OUTCOME_LABELS,
@@ -55,8 +55,6 @@ function reasonText(item: CommercialDispatchItem): string {
   }
   return item.reason;
 }
-
-const count = (value: number, one: string, many: string) => `${value} ${value === 1 ? one : many}`;
 
 export function DispatchView({
   dispatch,
@@ -106,12 +104,7 @@ export function DispatchView({
     if (action === 'resume') onResumed(result.data.id);
   }
 
-  const tally = [
-    count(counts.sent, 'enviada', 'enviadas'),
-    count(counts.withdrawn, 'retirada', 'retiradas'),
-    count(counts.notVerified, 'não verificada', 'não verificadas'),
-    ...(counts.ignored > 0 ? [`${counts.ignored} fora do envio`] : []),
-  ].join(' · ');
+  const tally = dispatchTally(counts);
 
   return (
     <Stack gap={16} data-testid="dispatch-view">
