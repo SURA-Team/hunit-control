@@ -3,7 +3,7 @@
  * situação com os nomes da spec 001, hotéis concluídos e com falha (com o motivo) e a mensagem do
  * motivo de término.
  */
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ExecutionResult } from '../../src/renderer/src/screens/run/ExecutionResult';
 import type { Execution } from '../../src/shared/ipc-types';
@@ -119,5 +119,84 @@ describe('ExecutionResult', () => {
     );
 
     expect(document.body.textContent).not.toMatch(/SENHA|senha:/);
+  });
+});
+
+describe('ExecutionResult no visual novo (specs/006, T057; telas 2.6, 2.7 e 2.10)', () => {
+  it('concluída (2.7): "Resultado da execução" com o selo verde, contagens em caixas e hotéis em linhas', () => {
+    renderWithApp(<ExecutionResult execution={execution()} />);
+
+    const card = screen.getByTestId('execution-result');
+    expect(
+      within(card).getByRole('heading', { name: 'Resultado da execução' }),
+    ).toBeInTheDocument();
+    expect(within(card).getByText('Concluída')).toHaveAttribute('data-tone', 'green');
+    expect(screen.getByTestId('count-virtual_card_already_charged')).toHaveAttribute(
+      'data-tone',
+      'green',
+    );
+    const hotels = within(within(card).getByRole('list', { name: 'Hotéis da execução' }));
+    expect(hotels.getAllByRole('listitem')).toHaveLength(2);
+    expect(within(card).queryByRole('progressbar')).toBeNull();
+  });
+
+  it('em andamento (2.6): a faixa escura com os hotéis concluídos e o selo lima', () => {
+    renderWithApp(
+      <ExecutionResult
+        execution={execution({
+          status: 'running',
+          finishedAt: null,
+          hotels: [
+            {
+              hotelCode: '31',
+              hotelName: 'Hotel Trinta e Um',
+              status: 'completed',
+              reservationsSeen: 6,
+              durationSeconds: 42,
+              counts: {},
+              failureReason: null,
+            },
+            {
+              hotelCode: '32',
+              hotelName: 'Hotel Trinta e Dois',
+              status: 'pending',
+              reservationsSeen: 0,
+              durationSeconds: null,
+              counts: {},
+              failureReason: null,
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Execução em andamento' })).toBeInTheDocument();
+    expect(screen.getAllByText('Em andamento')[0]).toHaveAttribute('data-tone', 'lime');
+    expect(screen.getByRole('progressbar', { name: '1 de 2 hotéis concluídos' })).toHaveAttribute(
+      'aria-valuenow',
+      '50',
+    );
+    expect(screen.getByText('Código 31 · 6 reservas · 42 s')).toBeInTheDocument();
+    expect(screen.getByText('Código 32 · aguardando na fila')).toBeInTheDocument();
+  });
+
+  it('token recusado (2.10): aviso vermelho com "Iniciar de novo" como principal', () => {
+    renderWithApp(
+      <ExecutionResult
+        execution={execution({
+          status: 'failed',
+          endReason: 'invalid_token',
+          hotels: [],
+          counts: {},
+        })}
+        onRestart={vi.fn()}
+      />,
+    );
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveAttribute('data-tone', 'red');
+    expect(within(notice).getByRole('button', { name: 'Iniciar de novo' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
   });
 });

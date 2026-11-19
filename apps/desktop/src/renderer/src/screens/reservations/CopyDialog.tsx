@@ -4,8 +4,11 @@
  * colunas e os nomes da planilha do Comercial, a linha de total e, acima, os filtros e o momento dos
  * dados. A tabela é montada no processo principal e vai para a área de transferência formatada e
  * como texto; nunca leva o nome do hóspede, e nada é gravado em disco.
+ *
+ * Desde a 006 (T053; tela 7.14): diálogo padrão estreito, "O que copiar" em botões de opção,
+ * "Cancelar" em texto e "Copiar" como principal; depois de copiar, o resultado em verde e "Fechar".
  */
-import { Alert, Button, Group, Modal, Radio, Stack, Text, Title } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import type { CopyResult, CopyRow, Hotel, ReservationFilters } from '../../../../shared/ipc-types';
 import { messageOf, unwrap, useHunit } from '../../hunit';
@@ -15,7 +18,9 @@ import {
   ORIGIN_OPTIONS,
   RESERVATION_STATUS_LABELS,
 } from '../../presentation/labels';
+import { QUICK_FILTER_LABELS } from '../../presentation/reservations';
 import type { SelectedReservation } from '../../state/selection';
+import { Action, AppDialog, Notice, RadioField } from '../../ui';
 
 /** Os filtros da pesquisa em português, para a linha acima da tabela. */
 export function describeFilters(filters: ReservationFilters, hotels: readonly Hotel[]): string {
@@ -37,6 +42,8 @@ export function describeFilters(filters: ReservationFilters, hotels: readonly Ho
       `Ativa ou cancelada: ${filters.reservationStatus.map((value) => RESERVATION_STATUS_LABELS[value].name).join(', ')}`,
     );
   }
+  // Filtro rápido em vigor na lista (specs/006, FR-016).
+  if (filters.quickFilter) parts.push(QUICK_FILTER_LABELS[filters.quickFilter]);
   if (filters.pendingCharge) parts.push('Falta cobrar');
   if (filters.needsReview) parts.push('A verificar');
   if (filters.channel) parts.push(`Canal: ${filters.channel}`);
@@ -115,60 +122,61 @@ export function CopyDialog({
   }
 
   return (
-    <Modal
+    <AppDialog
       opened
       onClose={onClose}
-      title={<Title order={3}>Copiar para e-mail</Title>}
-      transitionProps={{ duration: 0 }}
+      title="Copiar para e-mail"
+      instant
+      {...(copied
+        ? {
+            actions: (
+              <Action variant="primary" size="sm" onClick={onClose}>
+                Fechar
+              </Action>
+            ),
+          }
+        : {
+            onCancel: onClose,
+            actions: (
+              <Action variant="primary" size="sm" onClick={() => void copy()} loading={busy}>
+                Copiar
+              </Action>
+            ),
+          })}
     >
-      <Stack gap="md">
+      <Stack gap={16}>
         {copied ? (
-          <Alert color="green" role="status" data-testid="copy-result">
+          <Notice tone="green" role="status" data-testid="copy-result">
             {copied.copied} {copied.copied === 1 ? 'reserva copiada' : 'reservas copiadas'}. Cole no
             corpo do e-mail (Ctrl+V): a tabela vai formatada.
             {copied.truncated &&
               ` A pesquisa tem ${copied.total.toLocaleString('pt-BR')} reservas; foram copiadas as ${copied.copied.toLocaleString('pt-BR')} primeiras.`}
-          </Alert>
+          </Notice>
         ) : (
           <>
-            <Text size="sm">
+            <Text size="sm" c="dimmed">
               Copia uma tabela com hotel, reserva, check-in, canal, valor a cobrar, motivo, ativa ou
               cancelada e situação, como na planilha do Comercial, com o total. O nome do hóspede
               não vai na cópia.
             </Text>
             {selected.length > 0 && (
-              <Radio.Group
+              <RadioField
                 label="O que copiar"
                 value={source}
-                onChange={(value) => setSource(value)}
-              >
-                <Stack gap={6} mt={6}>
-                  <Radio
-                    value="selection"
-                    label={`As reservas selecionadas (${selected.length})`}
-                  />
-                  <Radio value="filter" label="O resultado da pesquisa (todas as páginas)" />
-                </Stack>
-              </Radio.Group>
+                onChange={(value) => setSource(value as 'filter' | 'selection')}
+                options={[
+                  {
+                    value: 'selection',
+                    label: `As reservas selecionadas (${selected.length})`,
+                  },
+                  { value: 'filter', label: 'O resultado da pesquisa (todas as páginas)' },
+                ]}
+              />
             )}
-            {error && (
-              <Alert color="red" role="alert">
-                {error}
-              </Alert>
-            )}
+            {error && <Notice tone="red">{error}</Notice>}
           </>
         )}
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onClose}>
-            {copied ? 'Fechar' : 'Cancelar'}
-          </Button>
-          {!copied && (
-            <Button onClick={() => void copy()} loading={busy}>
-              Copiar
-            </Button>
-          )}
-        </Group>
       </Stack>
-    </Modal>
+    </AppDialog>
   );
 }

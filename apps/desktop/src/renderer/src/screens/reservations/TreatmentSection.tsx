@@ -4,22 +4,21 @@
  * (os 5 mais recentes e "Mostrar mais", FR-017a).
  *
  * O perfil operador anexa, substitui, desfaz, reverte, informa o valor e confirma o alerta; o
- * perfil consulta só vê
- * e baixa (FR-014). O que cada reserva aceita, até quando um documento pode ser revertido e qual
- * valor vale vêm prontos do servidor.
+ * perfil consulta só vê e baixa (FR-014). O que cada reserva aceita, até quando um documento pode
+ * ser revertido e qual valor vale vêm prontos do servidor.
+ *
+ * Desde a 006 (T038 e T045; telas 4.7 e 4.9, research R-12):
+ * - card "Tratativa" com a situação ao lado do título e "Anexar/Substituir tratativa" e
+ *   "Anexar/Substituir comprovante" com o mesmo peso (FR-012);
+ * - cada documento numa linha (ícone, nome, arquivo, quem anexou, situação e as ações de documento
+ *   "Baixar", "Desfazer" e "Reverter", FR-010, FR-020);
+ * - o valor salvo numa caixa à parte, com "Remover valor", e o campo "Corrigir o valor cobrado" com
+ *   "Informar valor" como principal: o digitado não substitui o salvo antes de confirmar (FR-026);
+ * - com o alerta "Verificar", o aviso no topo com "Confirmar" (principal do aviso, que é um bloco à
+ *   parte) e os botões de anexar desabilitados com o motivo ao lado; os documentos continuam com
+ *   "Baixar" (FR-029). Só apresentação: o servidor continua aceitando o anexo (R-12).
  */
-import {
-  Alert,
-  Button,
-  Group,
-  Modal,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type {
@@ -31,8 +30,6 @@ import type {
   TreatmentDocumentKind,
   TreatmentEvent,
 } from '../../../../shared/ipc-types';
-import { StatusBadge } from '../../components/StatusBadge';
-import { SituationBadge } from '../../components/SituationBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import {
   formatDate,
@@ -51,7 +48,24 @@ import {
   TREATMENT_KIND_NAMES,
   TREATMENT_KIND_ORDER,
 } from '../../presentation/labels';
+import { badgeOf, situationBadges } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
+import {
+  Action,
+  AppDialog,
+  AttentionIcon,
+  Card,
+  CardAside,
+  CardHeader,
+  DataField,
+  DocumentAction,
+  DocumentIcon,
+  Field,
+  HotelRow,
+  Notice,
+  RowList,
+  StatusBadge,
+} from '../../ui';
 import { AttachDialog } from './AttachDialog';
 import { commercialKey } from './CommercialSection';
 
@@ -192,260 +206,242 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
     if (done) setAmountDraft('');
   }
 
+  /** Por que os botões de anexar estão desabilitados para o operador (FR-029). */
+  const attachBlocked = !treatment.acceptsDocuments
+    ? 'O status do Hunit desta reserva não exige cobrança, por isso ela não aceita novos documentos.'
+    : treatment.needsReview
+      ? 'Confirme o alerta “Verificar” antes de anexar novos documentos.'
+      : null;
+
   const documentActions = (document: TreatmentDocument) => (
-    <Group gap={6} wrap="nowrap">
+    <>
       {document.state !== 'purged' && (
-        <Button size="compact-xs" variant="default" onClick={() => void saveDocument(document)}>
-          Baixar
-        </Button>
+        <DocumentAction kind="download" onClick={() => void saveDocument(document)} />
       )}
       {canWrite && document.endedAt === null && (
-        <Button
-          size="compact-xs"
-          variant="default"
-          color="red"
-          disabled={busy}
-          onClick={() => setRemoving(document)}
-        >
-          Desfazer
-        </Button>
+        <DocumentAction kind="undo" disabled={busy} onClick={() => setRemoving(document)} />
       )}
       {canWrite && document.revertibleUntil && (
-        <Button
-          size="compact-xs"
-          variant="default"
+        <DocumentAction
+          kind="revert"
           disabled={busy || !treatment.acceptsDocuments}
           onClick={() =>
             void run(() => hunit.treatments.revert(document.id), 'Documento revertido.')
           }
-        >
-          Reverter
-        </Button>
+        />
       )}
-    </Group>
+    </>
+  );
+
+  const documentRow = (title: string, document: TreatmentDocument) => (
+    <HotelRow
+      key={document.id}
+      icon={<DocumentIcon />}
+      title={title}
+      summary={<DocumentSummary document={document} />}
+      status={
+        document.state === 'purged' ? undefined : (
+          <StatusBadge tone={badgeOf(DOCUMENT_STATE_LABELS[document.state]).tone}>
+            {DOCUMENT_STATE_LABELS[document.state].name}
+          </StatusBadge>
+        )
+      }
+      actions={documentActions(document)}
+    />
   );
 
   return (
-    <Paper withBorder p="sm" radius="sm" data-testid="treatment-section">
-      <Group justify="space-between" mb="xs">
-        <Group gap="xs">
-          <Title order={5}>Tratativa</Title>
-          {treatment.status !== 'none' && <SituationBadge treatment={treatment} />}
-          {treatment.status === 'none' && (
-            <Text size="sm" c="dimmed">
-              Sem tratativa
-            </Text>
-          )}
-        </Group>
-        {isOperator && (
-          <Group gap="xs">
-            {TREATMENT_KIND_ORDER.map((kind) => (
-              <Button
-                key={kind}
-                size="xs"
-                variant={kind === 'proof' ? 'filled' : 'default'}
-                disabled={!canWrite || !treatment.acceptsDocuments || busy}
-                onClick={() => {
-                  setMessage(null);
-                  setAttaching(kind);
-                }}
-              >
-                {treatment[kind] ? 'Substituir' : 'Anexar'}{' '}
-                {TREATMENT_KIND_NAMES[kind].toLowerCase()}
-              </Button>
-            ))}
-          </Group>
-        )}
-      </Group>
-
-      <Stack gap="sm">
-        {isOperator && !treatment.acceptsDocuments && (
-          <Text size="sm" c="dimmed">
-            O status do Hunit desta reserva não exige cobrança, por isso ela não aceita novos
-            documentos.
-          </Text>
-        )}
-        {treatment.needsReview && (
-          <Alert color="yellow" title="Verificar" data-testid="review-alert">
-            <Stack gap="xs">
-              <Text size="sm">
-                Depois da tratativa, o Hunit passou a mostrar esta reserva como{' '}
-                <b>{CLASSIFICATION_LABELS[reservation.classification].name}</b>. Confira a reserva
-                {isOperator ? ' e confirme' : ''}. A tratativa continua registrada.
-              </Text>
-              {isOperator && (
-                <Group>
-                  <Button
-                    size="xs"
-                    color="yellow"
-                    disabled={!canWrite || busy}
-                    onClick={() =>
-                      void run(() => hunit.treatments.confirmReview(key), 'Verificação confirmada.')
-                    }
-                  >
-                    Confirmar
-                  </Button>
-                </Group>
-              )}
-            </Stack>
-          </Alert>
-        )}
-        {message && (
-          <Alert color={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
-            {message.text}
-          </Alert>
-        )}
-        {detail.isError && (
-          <Alert color="red" role="alert">
-            {messageOf(detail.error)}
-          </Alert>
-        )}
-
-        <Table verticalSpacing={4} aria-label="Documentos da tratativa">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Documento</Table.Th>
-              <Table.Th>Arquivo</Table.Th>
-              <Table.Th>Anexado</Table.Th>
-              <Table.Th>Situação</Table.Th>
-              <Table.Th />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {TREATMENT_KIND_ORDER.map((kind) => {
-              const document = treatment[kind];
-              return (
-                <Table.Tr key={kind}>
-                  <Table.Td>{TREATMENT_KIND_NAMES[kind]}</Table.Td>
-                  {document ? (
-                    <DocumentCells document={document} actions={documentActions(document)} />
-                  ) : (
-                    <Table.Td colSpan={4}>
-                      <Text size="sm" c="dimmed">
-                        Nenhum
-                      </Text>
-                    </Table.Td>
-                  )}
-                </Table.Tr>
-              );
-            })}
-            {previous.map((document) => (
-              <Table.Tr key={document.id}>
-                <Table.Td>
-                  <Text size="sm" c="dimmed">
-                    {TREATMENT_KIND_NAMES[document.kind]} anterior
-                  </Text>
-                </Table.Td>
-                <DocumentCells document={document} actions={documentActions(document)} />
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-
-        <Group gap="sm" align="flex-end">
-          <div>
-            <Text size="xs" c="dimmed">
-              Valor informado à mão
-            </Text>
-            <Text size="sm">
-              {treatment.manualChargedAmount
-                ? `${formatMoney(treatment.manualChargedAmount)} (informado à mão)`
-                : '—'}
-            </Text>
-          </div>
-          {canWrite && treatment.manualChargedAmount && (
-            <Button
-              size="compact-xs"
-              variant="default"
-              disabled={busy}
-              onClick={() => void run(() => hunit.treatments.clearManualAmount(key))}
-            >
-              Remover valor
-            </Button>
-          )}
-          {canWrite && treatment.proof && (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void submitAmount();
-              }}
-            >
-              <Group gap={6} align="flex-end">
-                <TextInput
-                  size="xs"
-                  label="Valor que foi cobrado (R$)"
-                  placeholder="1.234,56"
-                  inputMode="decimal"
-                  value={amountDraft}
-                  onChange={(event) => setAmountDraft(event.currentTarget.value)}
-                />
-                <Button size="xs" type="submit" variant="default" disabled={busy}>
-                  Informar valor
-                </Button>
-              </Group>
-            </form>
-          )}
-        </Group>
-        {treatment.chargedAmountOrigin === 'hunit' && treatment.manualChargedAmount && (
-          <Text size="xs" c="dimmed">
-            O Hunit já informa o valor ({formatMoney(treatment.effectiveChargedAmount)}); é ele que
-            vale.
-          </Text>
-        )}
-
-        {history.length > 0 && (
-          <div>
-            <Text size="sm" fw={600}>
-              Histórico
-            </Text>
-            <ul aria-label="Histórico da tratativa" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-              {history.slice(0, historyShown).map((item) => (
-                <li key={item.key}>
-                  <Text size="sm" span>
-                    {formatDateTime(item.at)} — {item.text} — {item.who}
-                  </Text>
-                </li>
+    <Card block="Tratativa" data-testid="treatment-section">
+      <CardHeader
+        title="Tratativa"
+        aside={
+          treatment.status === 'none' ? (
+            <CardAside>Sem tratativa</CardAside>
+          ) : (
+            <Group gap={8}>
+              {situationBadges({ reservationStatus: 'active', treatment }).map((badge) => (
+                <StatusBadge key={badge.label} tone={badge.tone} title={badge.title}>
+                  {badge.label}
+                </StatusBadge>
               ))}
-            </ul>
-            {history.length > historyShown && (
-              <Button
-                size="compact-xs"
-                variant="subtle"
-                mt={4}
+            </Group>
+          )
+        }
+        actions={
+          isOperator && (
+            <>
+              {/* Mesmo peso para tratativa e comprovante (FR-012). */}
+              {TREATMENT_KIND_ORDER.map((kind) => (
+                <Action
+                  key={kind}
+                  size="xs"
+                  variant="secondary"
+                  disabled={!canWrite || attachBlocked !== null || busy}
+                  onClick={() => {
+                    setMessage(null);
+                    setAttaching(kind);
+                  }}
+                >
+                  {treatment[kind] ? 'Substituir' : 'Anexar'}{' '}
+                  {TREATMENT_KIND_NAMES[kind].toLowerCase()}
+                </Action>
+              ))}
+            </>
+          )
+        }
+      />
+
+      {isOperator && attachBlocked && (
+        <Text size="sm" c="dimmed" data-testid="attach-blocked">
+          {attachBlocked}
+        </Text>
+      )}
+      {treatment.needsReview && (
+        <Notice
+          tone="amber"
+          role="none"
+          title="Verificar"
+          icon={<AttentionIcon size={14} />}
+          block="Verificar"
+          data-testid="review-alert"
+          action={
+            isOperator && (
+              <Action
+                size="sm"
+                variant="primary"
+                disabled={!canWrite || busy}
+                onClick={() =>
+                  void run(() => hunit.treatments.confirmReview(key), 'Verificação confirmada.')
+                }
+              >
+                Confirmar
+              </Action>
+            )
+          }
+        >
+          Depois da tratativa, o Hunit passou a mostrar esta reserva como{' '}
+          <b>{CLASSIFICATION_LABELS[reservation.classification].name}</b>. Confira a reserva
+          {isOperator ? ' e confirme' : ''}. A tratativa continua registrada.
+        </Notice>
+      )}
+      {message && (
+        <Notice tone={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
+          {message.text}
+        </Notice>
+      )}
+      {detail.isError && <Notice tone="red">{messageOf(detail.error)}</Notice>}
+
+      <RowList label="Documentos da tratativa">
+        {TREATMENT_KIND_ORDER.map((kind) => {
+          const document = treatment[kind];
+          return document ? (
+            documentRow(TREATMENT_KIND_NAMES[kind], document)
+          ) : (
+            <HotelRow
+              key={kind}
+              icon={<DocumentIcon />}
+              title={TREATMENT_KIND_NAMES[kind]}
+              summary="Nenhum arquivo anexado"
+            />
+          );
+        })}
+        {previous.map((document) =>
+          documentRow(`${TREATMENT_KIND_NAMES[document.kind]} anterior`, document),
+        )}
+      </RowList>
+
+      {/* O valor salvo fica à parte do campo de correção (FR-026, tela 4.7). */}
+      {treatment.manualChargedAmount ? (
+        <Card tone="subtle" padding={12} data-testid="manual-amount">
+          <Group justify="space-between" wrap="nowrap" gap={16}>
+            <DataField label="Valor informado à mão">
+              <b>{formatMoney(treatment.manualChargedAmount)}</b>
+            </DataField>
+            {canWrite && (
+              <DocumentAction
+                kind="remove"
+                disabled={busy}
+                onClick={() => void run(() => hunit.treatments.clearManualAmount(key))}
+              />
+            )}
+          </Group>
+        </Card>
+      ) : (
+        <DataField label="Valor informado à mão">—</DataField>
+      )}
+      {treatment.chargedAmountOrigin === 'hunit' && treatment.manualChargedAmount && (
+        <Text size="xs" c="dimmed">
+          O Hunit já informa o valor ({formatMoney(treatment.effectiveChargedAmount)}); é ele que
+          vale.
+        </Text>
+      )}
+      {canWrite && treatment.proof && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitAmount();
+          }}
+        >
+          <Group gap={8} align="flex-end" wrap="nowrap">
+            <Field
+              flex={1}
+              label="Corrigir o valor cobrado (R$)"
+              placeholder="Ex.: 1.234,56"
+              inputMode="decimal"
+              value={amountDraft}
+              onChange={(event) => setAmountDraft(event.currentTarget.value)}
+            />
+            <Action size="sm" type="submit" variant="primary" disabled={busy}>
+              Informar valor
+            </Action>
+          </Group>
+        </form>
+      )}
+
+      {history.length > 0 && (
+        <Stack gap={8}>
+          <CardHeader title="Histórico" />
+          <ul aria-label="Histórico da tratativa" style={{ margin: 0, paddingLeft: 18 }}>
+            {history.slice(0, historyShown).map((item) => (
+              <li key={item.key}>
+                <Text size="sm" span>
+                  {formatDateTime(item.at)} — {item.text} — {item.who}
+                </Text>
+              </li>
+            ))}
+          </ul>
+          {history.length > historyShown && (
+            <Group>
+              <Action
+                size="xs"
+                variant="text"
                 onClick={() => setHistoryShown((shown) => shown + HISTORY_STEP)}
               >
                 Mostrar mais
-              </Button>
-            )}
-          </div>
-        )}
-      </Stack>
+              </Action>
+            </Group>
+          )}
+        </Stack>
+      )}
 
-      <Modal
+      {/* Destrutiva confirmada: "Desfazer" em vermelho cheio; "Manter" é o cancelar (FR-009). */}
+      <AppDialog
         opened={removing !== null}
         onClose={() => setRemoving(null)}
-        title={
-          <Text fw={600}>
-            Desfazer {removing?.kind === 'proof' ? 'o comprovante' : 'a tratativa'}?
-          </Text>
+        title={`Desfazer ${removing?.kind === 'proof' ? 'o comprovante' : 'a tratativa'}?`}
+        onCancel={() => setRemoving(null)}
+        cancelLabel="Manter"
+        actions={
+          <Action variant="danger" size="sm" onClick={() => removing && void remove(removing)}>
+            Desfazer
+          </Action>
         }
-        transitionProps={{ duration: 0 }}
       >
-        <Stack gap="md">
-          <Text size="sm">
-            {removing?.fileName ?? 'O documento'} deixa de valer para esta reserva. Ele fica
-            guardado por 30 dias e pode ser revertido nesse prazo.
-          </Text>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setRemoving(null)}>
-              Manter
-            </Button>
-            <Button color="red" onClick={() => removing && void remove(removing)}>
-              Desfazer
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        <Text size="sm">
+          {removing?.fileName ?? 'O documento'} deixa de valer para esta reserva. Ele fica guardado
+          por 30 dias e pode ser revertido nesse prazo.
+        </Text>
+      </AppDialog>
 
       {attaching && (
         <AttachDialog
@@ -458,50 +454,35 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
           }}
         />
       )}
-    </Paper>
+    </Card>
   );
 }
 
-function DocumentCells({
-  document,
-  actions,
-}: {
-  document: TreatmentDocument;
-  actions: React.ReactNode;
-}) {
+/**
+ * Resumo de um documento na linha (tela 4.7): o arquivo e o tamanho, quem anexou e quando e, para os
+ * que deixaram de valer, quando e por quem, e até quando podem ser revertidos.
+ */
+function DocumentSummary({ document }: { document: TreatmentDocument }) {
   return (
     <>
-      <Table.Td style={{ wordBreak: 'break-word' }}>
-        {document.fileName ?? (
-          <Text span size="sm" c="dimmed" fs="italic">
-            arquivo apagado
-          </Text>
-        )}{' '}
-        <Text span size="xs" c="dimmed">
-          {formatFileSize(document.sizeBytes)}
+      {document.fileName ?? <i>arquivo apagado</i>} · {formatFileSize(document.sizeBytes)}
+      <Text span size="xs" c="dimmed" display="block">
+        Anexado em {formatDateTime(document.attachedAt)} por{' '}
+        {document.fromLegacy ? LEGACY_ORIGIN_NAME : document.attachedBy}
+      </Text>
+      {document.state === 'purged' && (
+        <Text span size="xs" c="dimmed" display="block">
+          {DOCUMENT_STATE_LABELS.purged.name}
         </Text>
-      </Table.Td>
-      <Table.Td>
-        {formatDateTime(document.attachedAt)}
-        <Text size="xs" c="dimmed">
-          por {document.fromLegacy ? LEGACY_ORIGIN_NAME : document.attachedBy}
+      )}
+      {document.endedAt && document.state !== 'purged' && (
+        <Text span size="xs" c="dimmed" display="block">
+          {DOCUMENT_STATE_LABELS[document.state].name} em {formatDateTime(document.endedAt)}
+          {document.endedBy ? ` por ${document.endedBy}` : ''}
+          {document.revertibleUntil &&
+            ` · pode ser revertido até ${formatDate(document.revertibleUntil)}`}
         </Text>
-      </Table.Td>
-      <Table.Td>
-        <StatusBadge label={DOCUMENT_STATE_LABELS[document.state]} size="xs" />
-        {document.endedAt && (
-          <Text size="xs" c="dimmed">
-            {formatDateTime(document.endedAt)}
-            {document.endedBy ? ` por ${document.endedBy}` : ''}
-          </Text>
-        )}
-        {document.revertibleUntil && (
-          <Text size="xs" c="dimmed">
-            pode ser revertido até {formatDate(document.revertibleUntil)}
-          </Text>
-        )}
-      </Table.Td>
-      <Table.Td>{actions}</Table.Td>
+      )}
     </>
   );
 }

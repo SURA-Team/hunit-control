@@ -3,11 +3,13 @@
  * FR-023): a seção "Comercial" do detalhe mostra a linha e o retorno — com o hotel da cobrança ao
  * lado do hotel da reserva, destacado quando diferem —, confirma, recusa com motivo e desfaz; a
  * confirmação em lote mostra antes a lista de revisão; e o histórico do Comercial entra no da
- * tratativa, por data. Dados fictícios.
+ * tratativa, por data. Dados fictícios. Desde a 006 (T051; telas 7.5 e 7.6): o card "Comercial"
+ * com as variantes do design e a recusa num diálogo estreito com os motivos em pílulas.
  */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { expectOnePrimaryPerBlock } from './hierarchy';
 import { CommercialSection } from '../../src/renderer/src/screens/reservations/CommercialSection';
 import { ConfirmBatchDialog } from '../../src/renderer/src/screens/reservations/ConfirmBatchDialog';
 import { TreatmentSection } from '../../src/renderer/src/screens/reservations/TreatmentSection';
@@ -47,11 +49,66 @@ beforeEach(() => {
   );
 });
 
+describe('visual novo do card "Comercial" e da recusa (specs/006, T051; telas 7.5 e 7.6)', () => {
+  it('"Confirmar" principal; "Recusar" e "Desfazer envio" em vermelho suave; um bloco por card', async () => {
+    renderWithApp(<CommercialSection reservation={reservation} />, hunit);
+    const section = await screen.findByTestId('commercial-section');
+    const found = await screen.findByTestId('commercial-return');
+
+    expect(within(found).getByRole('button', { name: 'Confirmar' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(within(found).getByRole('button', { name: 'Recusar' })).toHaveAttribute(
+      'data-variant',
+      'danger-light',
+    );
+    expect(within(section).getByRole('button', { name: 'Desfazer envio' })).toHaveAttribute(
+      'data-variant',
+      'danger-light',
+    );
+    expect(within(found).getByText('Aguardando validação')).toHaveAttribute('data-tone', 'amber');
+    // O que destoa em âmbar: o selo do hotel diferente e a diferença de valor (FR-038).
+    expect(within(found).getByText('Diferente do hotel da reserva')).toHaveAttribute(
+      'data-tone',
+      'amber',
+    );
+    expect(within(found).getByText(/-R\$\s*10,00/)).toHaveStyle({ fontWeight: '700' });
+    expectOnePrimaryPerBlock();
+  });
+
+  it('a recusa: diálogo estreito, motivos em pílulas, contador e "Recusar retorno" em vermelho', async () => {
+    const user = userEvent.setup();
+    renderWithApp(<CommercialSection reservation={reservation} />, hunit);
+    await user.click(await screen.findByRole('button', { name: 'Recusar' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Recusar o retorno do Comercial' });
+
+    expect(dialog).toHaveAttribute('data-size', 'sm');
+    const suggestions = within(dialog).getByRole('group', { name: 'Motivos mais comuns' });
+    const chip = within(suggestions).getByRole('button', { name: 'Valor diferente' });
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+    expect(within(dialog).getByText('0/500')).toBeInTheDocument();
+
+    await user.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).getByLabelText('Motivo da recusa')).toHaveValue('Valor diferente');
+    expect(within(dialog).getByText('15/500')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Voltar' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Recusar retorno' })).toHaveAttribute(
+      'data-variant',
+      'danger',
+    );
+  });
+});
+
 describe('seção "Comercial" do detalhe (FR-023)', () => {
   it('mostra a aba, o último envio e o retorno com o hotel da cobrança destacado', async () => {
     renderWithApp(<CommercialSection reservation={reservation} />, hunit);
     const section = await screen.findByTestId('commercial-section');
-    expect(within(section).getByText('A cobrar', { selector: 'div' })).toBeInTheDocument();
+    expect(within(section).getByText('A cobrar', { selector: 'dd' })).toBeInTheDocument();
     expect(within(section).getByText(/por desktop-financeiro/)).toBeInTheDocument();
 
     const found = await screen.findByTestId('commercial-return');
@@ -89,7 +146,7 @@ describe('seção "Comercial" do detalhe (FR-023)', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/aparece para o Comercial na planilha/)).toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: 'Recusar' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Recusar retorno' }));
     expect(within(dialog).getByText('Informe o motivo da recusa.')).toBeInTheDocument();
     expect(hunit.api.commercial.rejectReturn).not.toHaveBeenCalled();
 
@@ -101,7 +158,7 @@ describe('seção "Comercial" do detalhe (FR-023)', () => {
       expect(within(dialog).getByText(suggestion)).toBeInTheDocument();
     }
     await user.click(within(dialog).getByText('Valor diferente'));
-    await user.click(within(dialog).getByRole('button', { name: 'Recusar' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Recusar retorno' }));
     expect(hunit.api.commercial.rejectReturn).toHaveBeenCalledWith({
       returnId: RETURN_ID,
       reason: 'Valor diferente',
@@ -239,9 +296,11 @@ describe('confirmação de retornos em lote (FR-016a)', () => {
     expect(within(review).getByText('AUT987')).toBeInTheDocument();
     expect(within(review).getByText('Maquininha Centro')).toBeInTheDocument();
     expect(within(review).getByText('Hotel da reserva: Hotel Praia')).toBeInTheDocument();
-    expect(within(review).getByText(/-R\$\s*10,00/)).toBeInTheDocument();
+    // A diferença fica na coluna e, no conteúdo estreito, na linha dos valores (o CSS mostra uma).
+    expect(within(review).getAllByText(/-R\$\s*10,00/).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole('button', { name: 'Confirmar 1' }));
+    // Tela 7.12: "Confirmar N retornos".
+    await user.click(screen.getByRole('button', { name: 'Confirmar 1 retorno' }));
     expect(hunit.api.commercial.confirmReturns).toHaveBeenCalledWith({
       reservations: [
         { hotelCode: '31', reservationNumber: '7001' },

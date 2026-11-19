@@ -9,40 +9,55 @@
  *   atual (mensagem genérica) e "Ler retornos agora".
  *
  * O perfil consulta vê tudo e não tem nenhuma ação.
+ *
+ * Desde a 006 (T052; telas 7.7 a 7.10, FR-039): o título com a explicação da área e as abas no
+ * visual novo, com a contagem dos retornos a validar e dos retornos com problema (as da situação da
+ * planilha, que a área já lê).
  */
-import { Tabs, Title, Stack } from '@mantine/core';
+import { Stack } from '@mantine/core';
 import { useState } from 'react';
+import { PageHeader, TabPanel, Tabs } from '../../ui';
 import { DispatchesTab } from './DispatchesTab';
 import { ProblemsTab } from './ProblemsTab';
 import { ReturnsTab } from './ReturnsTab';
-import { SheetTab } from './SheetTab';
+import { SheetTab, useSheetStatus } from './SheetTab';
 
 type Tab = 'dispatches' | 'returns' | 'problems' | 'sheet';
 
 export function CommercialScreen() {
   const [tab, setTab] = useState<Tab>('dispatches');
+  const sheet = useSheetStatus().data;
+  const counted = sheet?.configured === true;
+
   return (
-    <Stack gap="md">
-      <Title order={2}>Comercial</Title>
-      <Tabs value={tab} onChange={(value) => setTab((value as Tab | null) ?? 'dispatches')}>
-        <Tabs.List>
-          <Tabs.Tab value="dispatches">Envios</Tabs.Tab>
-          <Tabs.Tab value="returns">Retornos a validar</Tabs.Tab>
-          <Tabs.Tab value="problems">Retornos com problema</Tabs.Tab>
-          <Tabs.Tab value="sheet">Planilha</Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value="dispatches" pt="md">
-          {tab === 'dispatches' && <DispatchesTab />}
-        </Tabs.Panel>
-        <Tabs.Panel value="returns" pt="md">
-          {tab === 'returns' && <ReturnsTab />}
-        </Tabs.Panel>
-        <Tabs.Panel value="problems" pt="md">
-          {tab === 'problems' && <ProblemsTab />}
-        </Tabs.Panel>
-        <Tabs.Panel value="sheet" pt="md">
-          {tab === 'sheet' && <SheetTab />}
-        </Tabs.Panel>
+    <Stack gap={16}>
+      <PageHeader
+        title="Comercial"
+        subtitle="Envios das reservas para a planilha do Comercial e os retornos que ele preenche."
+      />
+      <Tabs
+        aria-label="Áreas do Comercial"
+        value={tab}
+        onChange={(value) => setTab(value as Tab)}
+        items={[
+          { value: 'dispatches', label: 'Envios' },
+          {
+            value: 'returns',
+            label: 'Retornos a validar',
+            count: counted ? sheet.awaitingValidation : null,
+          },
+          {
+            value: 'problems',
+            label: 'Retornos com problema',
+            count: counted ? sheet.problems.length : null,
+          },
+          { value: 'sheet', label: 'Planilha' },
+        ]}
+      >
+        <TabPanel value="dispatches">{tab === 'dispatches' && <DispatchesTab />}</TabPanel>
+        <TabPanel value="returns">{tab === 'returns' && <ReturnsTab />}</TabPanel>
+        <TabPanel value="problems">{tab === 'problems' && <ProblemsTab />}</TabPanel>
+        <TabPanel value="sheet">{tab === 'sheet' && <SheetTab />}</TabPanel>
       </Tabs>
     </Stack>
   );

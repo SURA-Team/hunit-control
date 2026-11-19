@@ -85,6 +85,7 @@ const hunit: HunitApi = {
     get: (input) => invoke(INVOKE.reservationsGet, input),
     channels: () => invoke(INVOKE.reservationsChannels),
     selectAll: (filters) => invoke(INVOKE.reservationsSelectAll, filters),
+    quickFilterCounts: (filters) => invoke(INVOKE.reservationsQuickFilterCounts, filters),
   },
   treatments: {
     pickFile: (input) => invoke(INVOKE.treatmentsPickFile, input),

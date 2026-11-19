@@ -113,7 +113,7 @@ async function answer(token: string, outcome: RegExp) {
   await dialog.getByLabel('Token do autenticador').fill(token);
   await dialog.getByRole('button', { name: 'Enviar token' }).click();
   await dialog.getByText(outcome).waitFor({ timeout: 15_000 });
-  await dialog.getByRole('button', { name: 'Fechar' }).click();
+  await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
 }
 
 async function filesUnder(dir: string): Promise<string[]> {
@@ -157,9 +157,11 @@ describe('nada sensível no disco (SC-004)', () => {
       await answer(TOKEN, /token aceito/i);
       await hold.reached;
       await goTo('Execuções');
+      // A em andamento fica num card escuro no topo (specs/006, tela 3.1).
       await window
-        .getByRole('row', { name: /Em andamento/ })
+        .getByRole('region', { name: /^Em andamento:/ })
         .first()
+        .getByRole('button', { name: 'Ver detalhes' })
         .click();
       const detail = window.getByTestId('execution-detail');
       await detail.getByRole('button', { name: 'Cancelar execução' }).click();
@@ -184,8 +186,8 @@ describe('nada sensível no disco (SC-004)', () => {
       server.setScenario(SCENARIO);
 
       // Consulta de reservas com os nomes dos hóspedes na tela.
+      // A lista carrega ao abrir a área (desde a 006 não há "Buscar").
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Buscar' }).click();
       for (const guest of GUESTS)
         await window.getByText(guest).first().waitFor({ timeout: 10_000 });
 

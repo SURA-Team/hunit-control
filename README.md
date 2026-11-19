@@ -18,6 +18,7 @@ servidor.
   [plan.md](specs/002-app-desktop/plan.md) e [quickstart.md](specs/002-app-desktop/quickstart.md)
 - Envio ao Comercial pela planilha do Google: [specs/005-envio-comercial/spec.md](specs/005-envio-comercial/spec.md),
   [plan.md](specs/005-envio-comercial/plan.md) e [quickstart.md](specs/005-envio-comercial/quickstart.md)
+- Homologação de cada feature, antes da produção: seção [Homologação](#homologação)
 - Guia para agentes de código, estrutura do repositório e todos os comandos: [AGENTS.md](AGENTS.md)
 
 ## Desenvolvimento
@@ -196,6 +197,33 @@ nome do cliente, e é só para essa máquina que ele avisa o pedido de token. Pa
 Siga a seção 5 do [quickstart](specs/001-consulta-reservas-hunit/quickstart.md): conexão cifrada
 de outra máquina, cópia em atraso depois de o PC ficar desligado e uma restauração de teste.
 
+### 9. Atualizar para uma versão nova
+
+Depois que a feature foi homologada (seção "Homologação") e entrou na `master`. Na pasta da
+produção, no PowerShell:
+
+1. Confira que há uma cópia de segurança de hoje (`docker compose logs backup` ou a pasta
+   `BACKUP_DIR`).
+2. Atualize o código, compile e suba o servidor de novo. As migrations novas entram sozinhas quando
+   o servidor sobe:
+   ```powershell
+   git checkout master
+   git pull
+   pnpm install
+   pnpm build
+   docker compose up -d --build
+   docker compose ps                                   # server, db, proxy e backup "Up"
+   curl.exe http://127.0.0.1:3000/v1/health            # {"status":"ok"}
+   ```
+3. Se a feature mudou a planilha do Comercial, rode o `commercial-sheet setup` e o `check` de novo
+   ("Planilha do Comercial", passo 5).
+4. Gere o instalador nesta mesma pasta ("App desktop" → "Gerar o instalador") e instale-o nas
+   máquinas do Financeiro e da Controladoria. **Sempre o servidor antes do app**: o app novo pode
+   usar rotas novas da API; o app antigo continua funcionando com o servidor novo, porque a API só
+   ganha acréscimos.
+5. Numa máquina, abra o app e confira a versão no rodapé da **Configuração** e as telas que a
+   feature mudou.
+
 ## App desktop
 
 O app desktop (`apps/desktop`) é como o Financeiro e a Controladoria usam o sistema: executar a
@@ -239,6 +267,11 @@ sempre `0`. Gere o instalador a partir de um clone completo do repositório: com
    Clique em **Mais informações** → **Executar assim mesmo**.
 3. Abra o **HUNIT Control** pelo Menu Iniciar.
 
+Desde a versão 0.3 (feature 006), o app tem o ícone novo. Ao atualizar uma máquina que já tinha o
+app, o atalho do Menu Iniciar ou da barra de tarefas pode continuar com o ícone antigo por um tempo:
+é o cache de ícones do Windows. Ele se atualiza sozinho; para forçar, desafixe e fixe o atalho de
+novo na barra de tarefas ou reinicie o Windows.
+
 ### Configurar a conexão (primeira vez)
 
 Tenha em mãos o endereço do servidor (`https://<SERVER_HOSTNAME>`), o `hunit-raiz.crt` (passo 6) e a
@@ -271,14 +304,35 @@ Fechar a janela encerra o app. Se houver uma execução desta máquina em andame
 ela continua no servidor, mas o pedido de token não chega com o app fechado. Ao abrir de novo, um
 pedido de token ainda no prazo reaparece.
 
+### Telas do app
+
+Desde a versão 0.3 (feature 006), o app tem o visual do design da UX: menu lateral (só os ícones
+quando a janela é estreita), uma ação principal por bloco, em preto (ou lima nos cards escuros), e
+selos de situação com cores fixas (verde concluído, âmbar atenção, vermelho erro, lima em andamento,
+cinza neutro). As telas se ajustam à janela de 960 a 1 920 px e ao zoom (Ctrl + / Ctrl −): nas
+listas, as colunas que não cabem passam para a segunda linha.
+
+- **Executar**: o acesso ao Hunit, o período e os hotéis; a execução em andamento e o resultado
+  aparecem logo abaixo.
+- **Execuções**: as em andamento ficam em cards escuros no topo, com o progresso; as encerradas,
+  na lista. Clicar numa abre o detalhe, com os hotéis, as contagens e as evidências.
+- **Reservas**: uma busca só, por hóspede, número da reserva, transação, autorização ou valor
+  (`380,00`); **Origem** ao lado; **Filtros** abre os filtros avançados (hotel, período, situação…),
+  e a linha **Filtros aplicados** mostra o que está valendo. Os filtros rápidos **Todas**, **Falta
+  cobrar**, **A verificar**, **Com erro** e **Concluídas** mostram quantas reservas há em cada um. A
+  lista vem ordenada por hotel e check-in. Clicar na linha abre o detalhe da reserva; a caixa à
+  esquerda só marca.
+- **Comercial**: as abas **Envios** (os em andamento em cards escuros no topo), **Retornos a
+  validar**, **Retornos com problema** e **Planilha**.
+
 ### Tratativas manuais
 
 Para as reservas que exigem cobrança (pendente de cobrança, erro na cobrança, cartão validado,
 erro de análise e cobrar na maquininha), o Financeiro registra, no detalhe da reserva:
 
 - a **tratativa** — o pedido de cobrança ao Comercial (por exemplo, o e-mail): a reserva fica
-  **Enviada** e continua pendente;
-- o **comprovante** — a prova de que o Comercial cobrou: a reserva fica **Cobrada**.
+  **Tratativa enviada** e continua pendente;
+- o **comprovante** — a prova de que o Comercial cobrou: a reserva fica **Comprovante enviado**.
 
 Aceita e-mail (.eml ou .msg), PDF e imagem (.png, .jpg), de até 25 MB. Antes de confirmar, o app
 mostra o arquivo; o servidor confere o conteúdo contra a extensão. Um documento substituído ou
@@ -286,9 +340,10 @@ desfeito fica guardado por **30 dias** e pode ser revertido nesse prazo. O valor
 informado à mão quando o Hunit não traz o valor.
 
 Para aplicar o mesmo documento a várias reservas, marque-as na lista (a seleção se mantém entre
-pesquisas, até 2 000 reservas) e use **Anexar tratativa** ou **Anexar comprovante** na barra da
-seleção. O atalho **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm
-comprovante. Nada disso acessa o Hunit.
+pesquisas, até 2 000 reservas). A barra escura da seleção mostra quantas e o total; **Ver seleção**
+lista as marcadas, e **Anexar ▾** tem **Anexar tratativa** e **Anexar comprovante**. O filtro
+rápido **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm comprovante. Nada
+disso acessa o Hunit.
 
 ### Envio ao Comercial
 
@@ -306,13 +361,16 @@ Financeiro envia os pedidos de cobrança direto para ela:
   **Validar comprovante**.
 - O Financeiro confere o retorno no detalhe da reserva ou na aba **Retornos a validar** e
   **confirma** (vale como comprovante, e o valor cobrado do Comercial passa a valer) ou **recusa**
-  com o motivo, que o Comercial vê na planilha. A confirmação pode ser em lote, com uma lista de
-  revisão antes; a recusa é sempre uma a uma.
+  com o motivo, que o Comercial vê na planilha. A confirmação pode ser em lote (**Confirmar
+  marcados** na aba, ou **Confirmar ▾** → **Confirmar retornos** na barra da seleção), com uma
+  lista de revisão antes; a recusa é sempre uma a uma.
 - A lista de reservas mostra o **valor cobrado** com a origem (Hunit, manual ou Comercial).
-- **Selecionar todas do filtro** marca até 2 000 reservas de todas as páginas; **Confirmar
-  "Verificar"** tira o alerta de várias de uma vez; **Copiar para e-mail** copia o resultado da
-  pesquisa (ou a seleção) numa tabela com as colunas da planilha, sem o nome do hóspede, para colar
-  no corpo do e-mail.
+- **Selecionar todas do filtro** marca até 2 000 reservas de todas as páginas; **Confirmar ▾** →
+  **Confirmar "Verificar"** tira o alerta de várias de uma vez; **Copiar para e-mail** copia o
+  resultado da pesquisa (ou a seleção) numa tabela com as colunas da planilha, sem o nome do
+  hóspede, para colar no corpo do e-mail.
+- Um envio em andamento aparece em card escuro no topo da aba **Envios**; fechar o diálogo do envio
+  não o interrompe.
 
 ## Planilha do Comercial
 
@@ -442,6 +500,188 @@ docker compose start server
 
 As chaves dos clientes da API continuam valendo depois da restauração. Confira o resultado como na
 seção 5 do quickstart.
+
+## Homologação
+
+Toda feature é homologada antes de ir para a produção, num ambiente próprio no PC do servidor: a
+pilha `hunit-homolog`, com dados fictícios. Ela tem containers, volumes, rede, portas, chaves e
+certificado próprios e nunca acessa o Hunit (o endereço dele é inválido de propósito). Os arquivos
+da pilha estão em [deploy/homolog/](deploy/homolog/). O que cada feature confere está no quickstart
+dela, e o resultado vai para o `research.md` dela ("Homologação").
+
+Nomes e lugares fixos:
+
+| | Produção | Homologação |
+|---|---|---|
+| Código | Clone da produção, na `master` | `C:\hunit-homolog\hunit-control`, clone próprio na branch da feature |
+| Variáveis | `.env` | `.env.homolog` no clone da homologação (modelo: `deploy\homolog\homolog.env.example`). Não há `.env` nesse clone |
+| Projeto do Docker | `hunit-control` | `hunit-homolog` |
+| Portas | 443 (HTTPS, para a rede) e 3000 (só o PC) | 8443 (HTTPS) e 3100 (só o PC); banco em `127.0.0.1:55432`, para a carga dos dados fictícios |
+| Endereço no app | `https://<SERVER_HOSTNAME>` | `https://localhost:8443` |
+| Certificado raiz | `hunit-raiz.crt` | `C:\hunit-homolog\raiz-homolog.crt` |
+| Clientes da API | Um por máquina | `homolog-operador` (perfil operador) e `homolog-consulta` (perfil consulta) |
+| App | O instalado | O compilado do clone, numa janela por perfil, com dados em `C:\hunit-homolog\app-operador` e `app-consulta` |
+| Planilha do Comercial | A real | "HUNIT Comercial — homologação", com conta de serviço e chave próprias em `C:\hunit-homolog\secrets` |
+| Cópias de segurança | `BACKUP_DIR` da produção | `C:\hunit-homolog\backups`, uma por hora, guardadas por 2 dias |
+| Dados | Reais | Fictícios: hotéis `HML1` a `HML4`, 2 000 reservas e arquivos de teste em `C:\hunit-homolog\arquivos` |
+
+Regras:
+
+- **Todo comando roda em `C:\hunit-homolog\hunit-control` e leva `--env-file .env.homolog`.** Sem
+  ele, o Docker Compose vai para o projeto da produção. Como o clone da homologação não tem `.env`,
+  um comando sem o `--env-file` para no erro "required variable POSTGRES_PASSWORD is missing" sem
+  mexer em nada. Nunca crie um `.env` nesse clone.
+- A homologação usa o código que está no GitHub: dê push na branch antes de atualizar.
+- Nunca use valores do `.env` da produção nem dados reais (reservas, documentos, a planilha real).
+- O que depende do Hunit (token, leitura das reservas, verificação do envio) não roda aqui: fica com
+  os testes automáticos, com o Hunit simulado. Executar e "Enviar ao Comercial" falham no acesso, de
+  propósito. O Hunit real só na produção e com autorização.
+- Não libere a porta 8443 no Firewall: o app da homologação roda no próprio PC.
+- O app instalado no PC continua ligado à produção. Na homologação, use sempre o app compilado do
+  clone (passo 7), que guarda a configuração em outra pasta. Instalar o app novo no PC antes de
+  atualizar a produção deixaria o app da produção mais novo que o servidor.
+
+### Montar a homologação (uma vez)
+
+No PowerShell. O PC precisa do Docker Desktop, do Node.js e do pnpm, como no desenvolvimento.
+
+1. Crie a pasta e o clone na branch da feature, e compile (o app compilado é usado no passo 7):
+   ```powershell
+   New-Item -ItemType Directory -Force C:\hunit-homolog | Out-Null
+   git clone https://github.com/SURA-Team/hunit-control.git C:\hunit-homolog\hunit-control
+   cd C:\hunit-homolog\hunit-control
+   git checkout <branch-da-feature>
+   pnpm install
+   pnpm build
+   ```
+2. Crie o `.env.homolog` (o Git ignora). O trecho abaixo copia o modelo e preenche
+   `POSTGRES_PASSWORD`, `ACCOUNT_KEY_SECRET` e `BACKUP_PASSPHRASE` com valores aleatórios novos, sem
+   mostrá-los. O modelo já tem o projeto, as portas, as pastas e o Hunit inválido; não mude essas
+   linhas.
+   ```powershell
+   $s = { node -e "console.log(require('crypto').randomBytes(24).toString('hex'))" }
+   $linhas = (Get-Content deploy\homolog\homolog.env.example) -replace '^POSTGRES_PASSWORD=$', "POSTGRES_PASSWORD=$(& $s)" -replace '^ACCOUNT_KEY_SECRET=$', "ACCOUNT_KEY_SECRET=$(& $s)" -replace '^BACKUP_PASSPHRASE=$', "BACKUP_PASSPHRASE=$(& $s)"
+   [IO.File]::WriteAllLines("$PWD\.env.homolog", $linhas)
+   ```
+3. Suba a pilha **sem** o `backup`, para a primeira cópia já sair com os dados fictícios:
+   ```powershell
+   docker compose --env-file .env.homolog up -d --build db server proxy
+   docker compose --env-file .env.homolog ps          # hunit-homolog-db, -server e -proxy "Up"
+   curl.exe http://127.0.0.1:3100/v1/health            # {"status":"ok"}
+   ```
+4. Grave os dados fictícios e gere os arquivos de teste (PDFs, PNG, .eml, .msg, um arquivo de 26 MB,
+   um executável renomeado e `reservas.txt`, com números para as pesquisas). O script recusa um banco
+   que já tenha reservas.
+   ```powershell
+   $pw = (Select-String -Path .env.homolog -Pattern '^POSTGRES_PASSWORD=(.+)$').Matches[0].Groups[1].Value
+   $env:HUNIT_HOMOLOG_DATABASE_URL = "postgres://hunit:$pw@127.0.0.1:55432/hunit"
+   $env:HUNIT_HOMOLOG_FILES_DIR = "C:\hunit-homolog\arquivos"
+   pnpm test --project desktop homolog-prepare         # "1 passed", não "skipped"
+   ```
+   Falta um .jpg: desenhe qualquer coisa no Paint, sem dados reais, e salve como
+   `C:\hunit-homolog\arquivos\imagem-teste.jpg`.
+5. Ligue o `backup` (a primeira cópia sai em alguns segundos):
+   ```powershell
+   docker compose --env-file .env.homolog up -d backup
+   Get-ChildItem C:\hunit-homolog\backups | Select-Object Name, Length, LastWriteTime
+   ```
+6. Crie as duas chaves (cada uma aparece **uma única vez**: guarde num bloco de notas temporário
+   até o passo 7) e exporte o certificado raiz:
+   ```powershell
+   docker compose --env-file .env.homolog exec server node dist/cli.js create-client --name homolog-operador --role operator
+   docker compose --env-file .env.homolog exec server node dist/cli.js create-client --name homolog-consulta --role reader
+   docker compose --env-file .env.homolog cp proxy:/data/caddy/pki/authorities/local/root.crt C:\hunit-homolog\raiz-homolog.crt
+   certutil -dump C:\hunit-homolog\raiz-homolog.crt | Select-String "sha256"
+   ```
+7. Abra o app compilado duas vezes, cada uma com a sua pasta de dados, em dois terminais
+   PowerShell, no clone:
+   ```powershell
+   Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+   $env:HUNIT_DESKTOP_USER_DATA_DIR = "C:\hunit-homolog\app-operador"   # no 2º terminal: app-consulta
+   pnpm --filter @hunit/desktop exec electron .
+   ```
+   Em cada janela, em **Configuração**, configure a conexão como em "Configurar a conexão", com o
+   endereço `https://localhost:8443`, o `C:\hunit-homolog\raiz-homolog.crt` (a impressão digital tem
+   de ser a do `certutil`) e a chave do perfil. "Testar conexão" mostra `homolog-operador` ou
+   `homolog-consulta`. A janela "operador" faz o papel da máquina do Financeiro, e a "consulta", o da
+   Controladoria.
+8. **Planilha de teste** (só para homologar o envio ao Comercial):
+   1. Numa conta Google de quem administra, crie a planilha vazia "HUNIT Comercial — homologação".
+      Crie uma conta de serviço e uma chave JSON só para ela, como no passo 1 de "Planilha do
+      Comercial", e compartilhe a planilha com o e-mail da conta de serviço como **Editor**.
+   2. Salve a chave como `C:\hunit-homolog\secrets\commercial-sheet-key.json` e preencha, no
+      `.env.homolog`, `COMMERCIAL_SHEET_ID` e
+      `COMMERCIAL_SHEET_KEY_FILE=/run/secrets/commercial-sheet/commercial-sheet-key.json`.
+   3. Suba de novo, prepare e confira a planilha:
+      ```powershell
+      docker compose --env-file .env.homolog up -d
+      docker compose --env-file .env.homolog exec server node dist/cli.js commercial-sheet setup
+      docker compose --env-file .env.homolog exec server node dist/cli.js commercial-sheet check
+      ```
+   4. Compartilhe a planilha como **Editor** com uma segunda conta Google, que faz o papel do
+      Comercial.
+   5. O "Enviar ao Comercial" do app falha sem o Hunit. Para ter linhas na planilha, grave um envio
+      fictício (12 reservas por hotel em "A cobrar" e 3 em "Concluídas", com o alerta "Verificar";
+      `C:\hunit-homolog\arquivos\envios.txt` lista os números). Elas aparecem na planilha em até 30 s:
+      ```powershell
+      $env:HUNIT_HOMOLOG_COMMERCIAL = "1"                 # com as variáveis do passo 4
+      pnpm test --project desktop homolog-commercial      # "1 passed", não "skipped"
+      ```
+
+Se a homologação já rodava a partir de outro clone, não é preciso montar de novo: faça o passo 1,
+mova o `.env.homolog` para o clone novo e siga "Atualizar". Os volumes são do projeto
+`hunit-homolog` e continuam com os dados, as chaves e o certificado.
+
+### Atualizar para uma feature (ou versão nova da mesma)
+
+```powershell
+cd C:\hunit-homolog\hunit-control
+git fetch
+git checkout <branch-da-feature>
+git pull
+pnpm install
+pnpm build
+docker compose --env-file .env.homolog up -d --build
+docker compose --env-file .env.homolog ps           # 4 containers hunit-homolog-…, "Up"
+curl.exe http://127.0.0.1:3100/v1/health             # {"status":"ok"}
+```
+
+- As migrations novas entram sozinhas quando o servidor sobe.
+- Com a planilha de teste configurada, rode o `commercial-sheet setup` e o `check` de novo quando a
+  feature mudar a planilha.
+- Feche e abra de novo as duas janelas do app (passo 7): o `pnpm build` já compilou o app novo.
+- Depois, siga o quickstart da feature. Alguns pedem dados fictícios a mais (o `homolog-commercial`
+  da 005, o `legacy-homolog-prepare` da 004).
+- Para conferir o instalador (ícone, atalho, versão), gere-o no clone com
+  `pnpm --filter @hunit/desktop dist` e instale-o numa máquina, ou conta do Windows, que não use a
+  produção. Se não houver nenhuma, confira na primeira máquina da produção, logo depois de atualizar
+  o servidor de produção. O app atualizado continua com a conexão que a máquina já tinha.
+
+### Recomeçar com dados limpos
+
+```powershell
+cd C:\hunit-homolog\hunit-control
+docker compose --env-file .env.homolog ps            # confira: só containers hunit-homolog-…
+docker compose --env-file .env.homolog down -v       # apaga só os volumes hunit-homolog_*
+```
+
+Depois, faça os passos 3 a 7 de novo. O banco volta vazio, e o certificado raiz e as chaves são
+novos: nas duas janelas do app, escolha o `raiz-homolog.crt` novo e cole as chaves novas. Com a
+planilha de teste, apague as linhas das duas abas (menos o cabeçalho) antes de subir e rode o
+`commercial-sheet setup` depois.
+
+### Desmontar
+
+```powershell
+cd C:\hunit-homolog\hunit-control
+docker compose --env-file .env.homolog down -v
+cd C:\
+Remove-Item -Recurse -Force C:\hunit-homolog
+```
+
+Isso apaga o clone, o `.env.homolog`, as cópias, os arquivos de teste, os dados do app e a chave da
+planilha de teste. Apague também a chave no Google Cloud (ou a conta de serviço inteira) e, se não
+for mais usada, a planilha de teste.
 
 ## Segurança
 

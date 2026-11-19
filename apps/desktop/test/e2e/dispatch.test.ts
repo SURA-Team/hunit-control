@@ -86,7 +86,7 @@ describe('envio ao Comercial (US1)', () => {
   it('envia 3, informa o token pelo aviso e acompanha até "Concluído" com 1 retirada', async () => {
     const { window, app } = launched;
     await window.getByRole('navigation').getByText('Reservas', { exact: true }).click();
-    await window.getByRole('cell', { name: '3103', exact: true }).waitFor();
+    await window.getByRole('checkbox', { name: 'Selecionar a reserva 3103' }).waitFor();
     await window.getByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }).check();
     await window.getByRole('button', { name: 'Enviar ao Comercial' }).click();
 
@@ -105,12 +105,12 @@ describe('envio ao Comercial (US1)', () => {
     await window.getByText('Token aceito pelo Hunit. O envio ao Comercial continua.').waitFor({
       timeout: 15_000,
     });
-    await tokenDialog.getByRole('button', { name: 'Fechar' }).click();
+    await tokenDialog.getByRole('button', { name: 'Fechar', exact: true }).click();
 
     const view = dialog.getByTestId('dispatch-view');
     await view.getByText('Concluído', { exact: true }).waitFor({ timeout: 20_000 });
     await expect.poll(() => view.textContent()).toContain('3 de 3 verificadas');
-    expect(await view.textContent()).toContain('2 enviada(s) · 1 retirada(s) · 0 não');
+    expect(await view.textContent()).toContain('2 enviadas · 1 retirada · 0 não verificadas');
     expect(await view.getByText('Retirada', { exact: true }).count()).toBe(1);
 
     // A notificação de fim chega como nas execuções.

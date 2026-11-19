@@ -1,0 +1,37 @@
+/* "Ação de documento" (node 80:89; specs/006, FR-010): cada tipo com cor e ícone próprios. */
+.root {
+  --button-radius: var(--hc-radius-pill);
+  --document-border: transparent;
+  flex-shrink: 0;
+  height: 32px;
+  padding-inline: 10px 14px;
+  border: 1px solid var(--document-border);
+  border-radius: var(--hc-radius-pill);
+  font: var(--hc-font-botao-pequeno);
+  letter-spacing: var(--hc-font-botao-pequeno-tracking);
+  white-space: nowrap;
+}
+
+.root[data-kind='download'] {
+  --document-border: var(--hc-borda-campo);
+  --button-bg: var(--hc-fundo-padrao);
+  --button-hover: var(--hc-fundo-sutil);
+  --button-color: var(--hc-texto-padrao);
+}
+
+.root[data-kind='revert'] {
+  --button-bg: var(--hc-amarelo-1);
+  --button-hover: color-mix(in srgb, var(--hc-amarelo-1), var(--hc-amarelo-9) 10%);
+  --button-color: var(--hc-amarelo-9);
+}
+
+.root[data-kind='undo'],
+.root[data-kind='remove'] {
+  --button-bg: var(--hc-vermelho-1);
+  --button-hover: color-mix(in srgb, var(--hc-vermelho-1), var(--hc-vermelho-9) 10%);
+  --button-color: var(--hc-vermelho-9);
+}
+
+.section[data-position='left'] {
+  margin-inline-end: 6px;
+}

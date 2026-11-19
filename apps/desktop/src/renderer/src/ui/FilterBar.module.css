@@ -1,0 +1,148 @@
+/*
+ * Barra de busca e filtros (tela 4.1, node 71:9228), painel "Filtros avançados" (tela 4.12, node
+ * 125:3670) e a linha "Filtros aplicados" (specs/006, research R-11).
+ */
+.anchor {
+  position: relative;
+}
+
+/* Busca, Origem e "Filtros" numa linha que quebra quando não cabe (FR-044). */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.search {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+/* Card flutuante à direita, abaixo da barra, acima da lista. */
+.panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(560px, 100%);
+  padding: 20px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-flutuante);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelTitle {
+  margin: 0;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-titulo-do-dialogo);
+  letter-spacing: var(--hc-font-titulo-do-dialogo-tracking);
+}
+
+.iconButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--hc-radius-pill);
+  background: transparent;
+  color: var(--hc-texto-icone);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--hc-fundo-sutil);
+}
+
+.iconButton:focus-visible,
+.chipRemove:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: start;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+/* Painel estreito (janela de 960 px com zoom): uma coluna. */
+@container content (max-width: 640px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* "Filtros aplicados": rótulo, chips removíveis e "Limpar busca e filtros". */
+.applied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.appliedLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  height: 32px;
+  padding-inline: 12px 4px;
+  border: 1px solid var(--hc-borda-padrao);
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-fundo-padrao);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+  letter-spacing: var(--hc-font-rotulo-tracking);
+}
+
+/* Só nomes cortam (hotel, canal); o texto inteiro fica na dica (FR-045). */
+.chipLabel {
+  overflow: hidden;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chipRemove {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--hc-radius-pill);
+  background: transparent;
+  color: var(--hc-texto-icone);
+  cursor: pointer;
+}
+
+.chipRemove:hover {
+  background: var(--hc-fundo-sutil);
+}

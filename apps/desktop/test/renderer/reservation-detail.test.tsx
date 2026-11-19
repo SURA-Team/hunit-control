@@ -147,3 +147,68 @@ describe('ReservationDetail (FR-022)', () => {
     expect(screen.getByText(/nome anonimizado/i)).toBeInTheDocument();
   });
 });
+
+describe('gaveta no visual novo (specs/006, T044; tela 4.2, research R-12)', () => {
+  const header = () => screen.getByRole('heading', { name: /Reserva 258-1234/ }).parentElement;
+
+  it('cabeçalho com o número, o hotel e os selos da situação e de ativa', () => {
+    renderWithApp(<ReservationDetail reservation={reservation()} />);
+    expect(screen.getByRole('heading', { name: /Reserva 258-1234/ })).toHaveTextContent(
+      'Reserva 258-1234 hotel 31',
+    );
+    expect(header()).toHaveTextContent('Já cobrada');
+    expect(header()).toHaveTextContent('Ativa');
+  });
+
+  it('cancelada mostra "Cancelada"; sem a situação no Hunit, "Não identificada" uma vez só', () => {
+    const { unmount } = renderWithApp(
+      <ReservationDetail reservation={reservation({ reservationStatus: 'cancelled' })} />,
+    );
+    expect(header()).toHaveTextContent('Cancelada');
+    unmount();
+
+    renderWithApp(
+      <ReservationDetail reservation={reservation({ reservationStatus: 'unknown' })} />,
+    );
+    expect(within(header() as HTMLElement).getAllByText('Não identificada')).toHaveLength(1);
+  });
+
+  it('dados da reserva com "Valor cobrado" e o card Cobrança com "Valor cobrado no Hunit" (FR-040)', () => {
+    renderWithApp(
+      <ReservationDetail
+        reservation={reservation({
+          treatment: {
+            ...reservation().treatment,
+            effectiveChargedAmount: '1234.50',
+            chargedAmountOrigin: 'hunit',
+          },
+        })}
+      />,
+    );
+    const data = screen.getByLabelText('Dados da reserva');
+    for (const label of [
+      'Hóspede',
+      'Canal',
+      'Forma de pagamento',
+      'Check-in',
+      'Check-out',
+      'Valor total',
+      'Valor cobrado',
+    ]) {
+      expect(within(data).getByText(label)).toBeInTheDocument();
+    }
+    expect(data.textContent?.replace(/\s+/g, ' ')).toContain('R$ 1.234,50 (Hunit)');
+    expect(screen.getByText('Valor cobrado no Hunit')).toBeInTheDocument();
+  });
+
+  it('"Status do Hunit" com o motivo e a "Classificação anterior" (FR-025); "Verificações" (FR-028)', () => {
+    renderWithApp(<ReservationDetail reservation={reservation()} />);
+    const status = screen.getByTestId('hunit-status');
+    expect(status).toHaveTextContent('Motivo da classificação');
+    expect(status).toHaveTextContent('Classificação anterior:');
+    expect(status).toHaveTextContent('Pendente de cobrança');
+    for (const title of ['Status do Hunit', 'Tratativa', 'Cobrança', 'Verificações']) {
+      expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
+    }
+  });
+});

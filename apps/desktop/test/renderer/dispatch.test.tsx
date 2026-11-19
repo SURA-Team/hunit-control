@@ -2,7 +2,8 @@
  * Envio ao Comercial no app (specs/005, US1, T037): a ação na barra da seleção (oculta para o perfil
  * consulta), o resumo da conferência (aceitas, as que ficam de fora com o motivo, o total), o
  * acompanhamento com cancelar e retomar, o pedido de token do envio e, ao terminar, a seleção só
- * com as não verificadas. Dados fictícios.
+ * com as não verificadas. Dados fictícios. Desde a 006 (T050; telas 7.1 a 7.4): a conferência
+ * estreita, o andamento largo, as variantes das ações e o resultado em linhas.
  */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,6 +14,7 @@ import { DispatchView } from '../../src/renderer/src/screens/dispatch/DispatchVi
 import { ReservationsScreen } from '../../src/renderer/src/screens/reservations/ReservationsScreen';
 import type { CommercialDispatch } from '../../src/shared/ipc-types';
 import { dispatchFixture } from '../helpers/commercial-fixtures';
+import { expectOnePrimaryPerBlock } from './hierarchy';
 import {
   fakeHunit,
   mocked,
@@ -100,7 +102,7 @@ describe('"Enviar ao Comercial" na seleção (FR-025)', () => {
       okResult({ items: [pendingReservation('7001')], nextCursor: null }),
     );
     renderWithApp(<ReservationsScreen />, hunit);
-    await screen.findByText('7001');
+    await screen.findByRole('row', { name: /7001/ });
     expect(screen.queryByRole('button', { name: 'Enviar ao Comercial' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('checkbox', { name: 'Selecionar a reserva 7001' }),
@@ -117,8 +119,8 @@ describe('diálogo do envio (FR-001 a FR-008)', () => {
       hunit,
     );
 
-    const ignored = await screen.findByRole('table', { name: 'Reservas que ficam de fora' });
-    expect(within(ignored).getByText('7002')).toBeInTheDocument();
+    const ignored = await screen.findByRole('list', { name: 'Reservas que ficam de fora' });
+    expect(within(ignored).getByText('7002 (Hotel Praia)')).toBeInTheDocument();
     expect(within(ignored).getByText('Já tem comprovante.')).toBeInTheDocument();
     expect(await screen.findByText(/senha guardada nesta sessão/)).toBeInTheDocument();
 
@@ -128,8 +130,8 @@ describe('diálogo do envio (FR-001 a FR-008)', () => {
     expect(view).toHaveTextContent('2 de 2 verificadas');
     expect(within(view).getByText('Não verificada')).toBeInTheDocument();
 
-    // Ao fechar depois do fim, a seleção fica só com as não verificadas.
-    await user.click(screen.getByRole('button', { name: 'Fechar' }));
+    // Ao fechar (pelo X, como na tela 7.4) depois do fim, a seleção fica só com as não verificadas.
+    await user.click(screen.getByRole('button', { name: 'Fechar o diálogo' }));
     await waitFor(() => expect(onClose).toHaveBeenCalledWith({ notVerified: [B] }));
   });
 
@@ -221,5 +223,97 @@ describe('pedido de token do envio (research R-14)', () => {
       token: '123456',
     });
     expect(hunit.api.executions.sendToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('visual novo do envio (specs/006, T050; telas 7.1 a 7.4)', () => {
+  it('conferência estreita (7.1): "Cancelar" só texto, "Enviar N ao Comercial" principal', async () => {
+    renderWithApp(
+      <DispatchDialog reservations={[A, B]} hotelNames={HOTELS} onClose={vi.fn()} />,
+      hunit,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Enviar ao Comercial' });
+    await screen.findByTestId('dispatch-summary');
+
+    expect(dialog).toHaveAttribute('data-size', 'sm');
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Enviar 1 ao Comercial' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    // As que ficam de fora no resumo com o ícone âmbar e a quantidade (como no anexo em lote).
+    expect(
+      within(dialog)
+        .getByText(/fica de fora/)
+        .closest('[data-tone]'),
+    ).toHaveAttribute('data-tone', 'amber');
+    // O acesso ao Hunit na caixa cinza, com "Limpar acesso" em vermelho suave.
+    expect(within(dialog).getByRole('button', { name: 'Limpar acesso' })).toHaveAttribute(
+      'data-variant',
+      'danger-light',
+    );
+    expectOnePrimaryPerBlock();
+  });
+
+  it('andamento largo (7.2): "Em andamento" em lima e "Cancelar envio" em vermelho suave', async () => {
+    mocked(hunit.api.dispatches.get).mockImplementation(() =>
+      okResult(
+        dispatchFixture({
+          status: 'running',
+          counts: { total: 3, pending: 2, sent: 1, withdrawn: 0, notVerified: 0, ignored: 0 },
+          current: B,
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithApp(
+      <DispatchDialog reservations={[A]} hotelNames={HOTELS} onClose={vi.fn()} />,
+      hunit,
+    );
+    await user.click(await screen.findByRole('button', { name: 'Enviar 1 ao Comercial' }));
+    const view = await screen.findByTestId('dispatch-view');
+
+    expect(screen.getByRole('dialog', { name: 'Enviar ao Comercial' })).toHaveAttribute(
+      'data-size',
+      'lg',
+    );
+    expect(within(view).getByText('Em andamento')).toHaveAttribute('data-tone', 'lime');
+    expect(view).toHaveTextContent('1 de 3 verificadas — faltam 2');
+    expect(view).toHaveTextContent('1 enviada · 0 retiradas · 0 não verificadas');
+    expect(within(view).getByRole('progressbar', { name: 'Andamento do envio' })).toHaveAttribute(
+      'aria-valuenow',
+      '33',
+    );
+    expect(within(view).getByRole('button', { name: 'Cancelar envio' })).toHaveAttribute(
+      'data-variant',
+      'danger-light',
+    );
+    expect(screen.getByText(/Fechar não interrompe o envio/)).toBeInTheDocument();
+    // Sem "Cancelar" nem outro botão no rodapé: fecha pelo X.
+    expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument();
+  });
+
+  it('concluído (7.4): cada reserva numa linha com o hotel, o motivo e o selo; retomar é a principal', async () => {
+    renderWithApp(
+      <DispatchView dispatch={finished()} hotelNames={HOTELS} onResumed={vi.fn()} />,
+      hunit,
+    );
+    const view = screen.getByTestId('dispatch-view');
+    expect(within(view).getByText('Concluído')).toHaveAttribute('data-tone', 'green');
+
+    const rows = within(
+      within(view).getByRole('list', { name: 'Resultado de cada reserva' }),
+    ).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('7001Hotel PraiaEnviada');
+    expect(rows[1]).toHaveTextContent(
+      '7002Hotel Praia · não encontrada no Hunit no check-in registrado (03/11/2026)Não verificada',
+    );
+    expect(
+      await within(view).findByRole('button', { name: 'Retomar as não verificadas (1)' }),
+    ).toHaveAttribute('data-variant', 'primary');
   });
 });

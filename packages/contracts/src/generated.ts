@@ -469,10 +469,33 @@ export interface paths {
         /**
          * Todas as reservas de um filtro, até 2 000, para a seleção e a cópia para e-mail (feature 005, FR-030)
          * @description Mesmos filtros de GET /reservations, sem paginação. Devolve até 2 000 reservas na ordem da
-         *     lista (hotel e número), só com os campos que a seleção e a cópia para e-mail usam, e o total
-         *     que o filtro encontrou. `truncated` = o total passou de 2 000; as primeiras foram devolvidas.
+         *     lista (`order`; sem ele, hotel e número), só com os campos que a seleção e a cópia para
+         *     e-mail usam, e o total que o filtro encontrou. `truncated` = o total passou de 2 000; as
+         *     primeiras foram devolvidas.
          */
         get: operations["selectReservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reservations/quick-filter-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contagem das reservas de cada filtro rápido (feature 006, FR-017)
+         * @description Mesmos filtros de GET /reservations, sem `quickFilter`, `order` e paginação. `all` conta as
+         *     reservas que atendem aos filtros ("Todas"); cada grupo conta as que, além disso, estão nele.
+         *     A soma dos grupos pode passar de `all`: uma reserva pode estar em mais de um grupo.
+         */
+        get: operations["countReservationQuickFilters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1105,6 +1128,24 @@ export interface components {
          */
         ReservationDetailedSituation: "return_pending" | "proof_sent" | "treatment_sent" | "ignored_hotelbeds_258" | "invoiced" | "charge_at_terminal" | "cancelled_no_charge" | "not_virtual_card" | "virtual_card_charge_error" | "virtual_card_already_charged" | "virtual_card_validated_only" | "virtual_card_pending_charge" | "analysis_error";
         /**
+         * @description Filtro rápido da lista (feature 006, FR-016): pending_charge = "Falta cobrar" (o mesmo de pendingCharge=true); to_review = "A verificar" (alerta "Verificar", "A revisar (sistema anterior)" ou "Validar comprovante"); with_error = "Com erro" (erro na cobrança ou de análise); done = "Concluídas" (comprovante enviado, faturada, já cobrada, cancelada sem cobrança ou ignorada). Uma reserva pode estar em mais de um.
+         * @enum {string}
+         */
+        ReservationQuickFilter: "pending_charge" | "to_review" | "with_error" | "done";
+        /**
+         * @description Ordem da lista (feature 006): hotel_number = código do hotel e número da reserva (a ordem da 1.7.0); hotel_check_in = código do hotel, check-in crescente e número da reserva.
+         * @enum {string}
+         */
+        ReservationOrder: "hotel_number" | "hotel_check_in";
+        /** @description Reservas de cada filtro rápido com os mesmos filtros (feature 006, FR-017); all = "Todas". */
+        ReservationQuickFilterCounts: {
+            all: number;
+            pendingCharge: number;
+            toReview: number;
+            withError: number;
+            done: number;
+        };
+        /**
          * @description current = documento atual; replaced = substituído; removed = desfeito; purged = arquivo apagado pelo prazo de retenção (o registro fica)
          * @enum {string}
          */
@@ -1608,6 +1649,10 @@ export interface components {
         ExecutionId: string;
         Limit: number;
         Cursor: string;
+        /** @description Só as reservas de um filtro rápido (feature 006, FR-016), combinado com os demais filtros. Omitido = "Todas". */
+        QuickFilter: components["schemas"]["ReservationQuickFilter"];
+        /** @description Ordem da lista (feature 006). Omitido = hotel_number, a ordem da 1.7.0. O cursor de uma página só vale com a mesma ordem (com outra, 400 validation_error). */
+        ReservationOrder: components["schemas"]["ReservationOrder"];
         DocumentId: string;
         HotelCode: string;
         ReservationNumber: string;
@@ -2008,6 +2053,10 @@ export interface operations {
                 fromLegacy?: boolean;
                 /** @description Situação detalhada da reserva (feature 005): qualquer uma das informadas, exatamente como em ReservationTreatment.detailedSituation — os valores de `situation` mais return_pending ("Validar comprovante"). Combinável com os demais filtros. */
                 detailedSituation?: components["schemas"]["ReservationDetailedSituation"][];
+                /** @description Só as reservas de um filtro rápido (feature 006, FR-016), combinado com os demais filtros. Omitido = "Todas". */
+                quickFilter?: components["parameters"]["QuickFilter"];
+                /** @description Ordem da lista (feature 006). Omitido = hotel_number, a ordem da 1.7.0. O cursor de uma página só vale com a mesma ordem (com outra, 400 validation_error). */
+                order?: components["parameters"]["ReservationOrder"];
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -2489,6 +2538,10 @@ export interface operations {
                 needsReview?: boolean;
                 fromLegacy?: boolean;
                 detailedSituation?: components["schemas"]["ReservationDetailedSituation"][];
+                /** @description Só as reservas de um filtro rápido (feature 006, FR-016), combinado com os demais filtros. Omitido = "Todas". */
+                quickFilter?: components["parameters"]["QuickFilter"];
+                /** @description Ordem da lista (feature 006). Omitido = hotel_number, a ordem da 1.7.0. O cursor de uma página só vale com a mesma ordem (com outra, 400 validation_error). */
+                order?: components["parameters"]["ReservationOrder"];
             };
             header?: never;
             path?: never;
@@ -2503,6 +2556,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReservationSelection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    countReservationQuickFilters: {
+        parameters: {
+            query?: {
+                executionId?: string;
+                hotelCode?: string[];
+                classification?: components["schemas"]["Classification"][];
+                reservationStatus?: components["schemas"]["ReservationStatus"][];
+                notFound?: boolean;
+                checkInFrom?: string;
+                checkInTo?: string;
+                q?: string;
+                channel?: string;
+                amount?: string;
+                treatmentStatus?: components["schemas"]["TreatmentStatus"][];
+                pendingCharge?: boolean;
+                situation?: components["schemas"]["ReservationSituation"][];
+                needsReview?: boolean;
+                fromLegacy?: boolean;
+                detailedSituation?: components["schemas"]["ReservationDetailedSituation"][];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Contagem de cada filtro rápido */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationQuickFilterCounts"];
                 };
             };
             400: components["responses"]["BadRequest"];

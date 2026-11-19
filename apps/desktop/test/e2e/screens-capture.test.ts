@@ -1,5 +1,6 @@
 /**
- * Captura das telas do app para o espelho no Figma (skill `figma-screens-sync`).
+ * Captura das telas do app para comparar com o design no Figma (spec da feature; a skill
+ * `figma-screens-sync` só marca as telas em uso depois).
  *
  * Não é um teste: fica desligado nas rodadas normais e só roda com `HUNIT_SCREENS_DIR` definida
  * (pasta onde os prints são gravados). Abre o app compilado contra a API da 001 com o Hunit
@@ -7,7 +8,12 @@
  * tela no Figma (ex.: `2.4-executar-pedido-de-token.png`). Passos que falham não interrompem a
  * captura; ficam em `falhas.txt` na mesma pasta (o console do Vitest não mostra o `console.log`).
  *
- * Mudou a lista de telas? Atualize também `.claude/skills/figma-screens-sync/references/screens.md`.
+ * A janela é a do design, 1 440 × 900. Com `HUNIT_SCREENS_WIDTH` = `960` ou `1280`, as mesmas telas
+ * saem em 960 × 640 (a mínima do app) ou 1 280 × 820, para registrar como ficam nas larguras menores
+ * (specs/006, T024, research UX-5). Os nomes dos arquivos não mudam: use uma pasta por largura.
+ *
+ * Mudou a lista de telas? Atualize também o catálogo em
+ * `.claude/skills/figma-screens-sync/references/screens.md`.
  */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -40,16 +46,33 @@ import {
   daysFromToday,
   isoDate,
   launchApp,
+  openReservationFilters,
   pickPeriod,
+  searchReservations,
   stubMessageBox,
   stubOpenDialog,
+  waitForReservationRows,
   type LaunchedApp,
 } from './app-fixture.js';
 
 const OUT = process.env['HUNIT_SCREENS_DIR'];
 const TOKEN = '246810';
-/** Janela de referência das telas no Figma. */
-const WINDOW = { width: 1440, height: 900 };
+/** Área da janela em cada largura de captura; a de 1 440 é a referência das telas no Figma. */
+const WINDOWS: Record<string, { width: number; height: number }> = {
+  '960': { width: 960, height: 640 },
+  '1280': { width: 1280, height: 820 },
+  '1440': { width: 1440, height: 900 },
+};
+
+/** Área da janela pedida em `HUNIT_SCREENS_WIDTH` (padrão: 1 440 × 900). */
+function captureWindow(): { width: number; height: number } {
+  const width = process.env['HUNIT_SCREENS_WIDTH']?.trim() || '1440';
+  const size = WINDOWS[width];
+  if (!size) {
+    throw new Error(`HUNIT_SCREENS_WIDTH deve ser 960, 1280 ou 1440 (recebido: "${width}").`);
+  }
+  return size;
+}
 
 const GUESTS = [
   'Ana Ribeiro',
@@ -123,7 +146,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       const window = BrowserWindow.getAllWindows()[0];
       window?.setContentSize(size.width, size.height);
       window?.center();
-    }, WINDOW);
+    }, captureWindow());
   }
 
   /** Grava a tela `id` (número no Figma). `fullPage` para telas mais altas que a janela. */
@@ -155,6 +178,43 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
     await launched.window.getByRole('navigation').getByText(area, { exact: true }).click();
   }
 
+  /** A linha da reserva: o número abre a segunda linha do hóspede (specs/006). */
+  function rowOf(number: string) {
+    const { window } = launched;
+    return window
+      .locator('table[aria-label="Reservas"] tbody tr')
+      .filter({ has: window.getByText(new RegExp(`^${number}( ·|$)`)) });
+  }
+
+  function quickFilter(label: string) {
+    return launched.window
+      .getByRole('group', { name: 'Filtros rápidos' })
+      .getByRole('button', { name: new RegExp(`^${label}`) });
+  }
+
+  /** Volta a lista ao início: sem busca, Origem "Todas", sem filtros do painel, "Todas". */
+  async function resetReservations() {
+    const { window } = launched;
+    await searchReservations(window, '');
+    const origin = window.getByRole('combobox', { name: 'Origem' });
+    if ((await origin.inputValue()) !== 'Todas') {
+      await origin.click();
+      await window.getByRole('option', { name: 'Todas', exact: true }).click();
+    }
+    const clear = window
+      .getByRole('group', { name: 'Filtros aplicados' })
+      .getByRole('button', { name: 'Limpar busca e filtros' });
+    if ((await clear.count()) > 0) await clear.click();
+    await quickFilter('Todas').click();
+  }
+
+  /** Abre um menu da barra de seleção ("Anexar", "Confirmar") e escolhe o item. */
+  async function chooseFromMenu(menu: string, item: string) {
+    const { window } = launched;
+    await window.getByTestId('selection-bar').getByRole('button', { name: menu }).click();
+    await window.getByRole('menuitem', { name: item }).click();
+  }
+
   async function connect(apiKey: string, profile: 'Operador' | 'Consulta', capture: boolean) {
     const { app, window } = launched;
     const certificateFile = path.join(launched.userDataDir, 'hunit-raiz.crt');
@@ -184,10 +244,11 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
     await dialog.getByRole('button', { name: 'Enviar token' }).click();
     await dialog.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
     if (capture) await shot('2.5', 'executar-token-aceito');
-    await dialog.getByRole('button', { name: 'Fechar' }).click();
+    await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
   }
 
   beforeAll(async () => {
+    captureWindow(); // Largura inválida para antes de subir o servidor.
     await mkdir(outDir, { recursive: true });
     certificates = await createTestCertificates();
     // Planilha do Comercial em memória (specs/005): telas do envio e da área Comercial.
@@ -256,9 +317,11 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
 
     await step('3.1 a 3.3 execuções em andamento', async () => {
       await goTo('Execuções');
-      await window.locator('tbody tr').first().waitFor();
+      // A em andamento fica no card escuro do topo (specs/006, tela 3.1).
+      const running = window.getByRole('region', { name: /^Em andamento:/ });
+      await running.waitFor();
       await shot('3.1', 'execucoes-lista');
-      await window.locator('tbody tr').first().click();
+      await running.getByRole('button', { name: 'Ver detalhes' }).click();
       await window.getByText('Detalhe da execução').waitFor();
       await shot('3.2', 'execucoes-detalhe-em-andamento');
       await window.getByRole('button', { name: 'Cancelar execução' }).click();
@@ -286,11 +349,19 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByTestId('reservation-detail').waitFor();
       await shot('4.2', 'reservas-detalhe-da-reserva');
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
-      await window.getByLabel('Busca livre').fill('Maria Oliveira');
-      await window.getByRole('button', { name: 'Buscar' }).click();
-      await window.getByText('Nenhuma reserva encontrada com estes filtros.').waitFor();
+
+      // Painel "Filtros avançados" com a lista de "Ativa ou cancelada" aberta, como no design.
+      const panel = await openReservationFilters(window);
+      await panel.getByRole('combobox', { name: 'Ativa ou cancelada' }).click();
+      await window.getByRole('option', { name: /Só ativas/ }).waitFor();
+      await shot('4.12', 'reservas-filtros-avancados');
+      await window.keyboard.press('Escape');
+      await panel.getByRole('button', { name: 'Fechar os filtros' }).click();
+
+      await searchReservations(window, 'Maria Oliveira');
+      await window.getByText('Nenhuma reserva encontrada').waitFor();
       await shot('4.3', 'reservas-nenhum-resultado');
-      await window.getByRole('button', { name: 'Limpar' }).click();
+      await resetReservations();
     });
 
     // Tratativas (specs/003): documentos fictícios registrados pela API antes das telas.
@@ -387,29 +458,25 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       );
 
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      await resetReservations();
       await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
       for (const number of ['101-1002', '101-1003', '101-1005']) {
         await window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).check();
       }
-      await window.getByLabel('Busca livre').fill('104-1015');
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await searchReservations(window, '104-1015');
+      await waitForReservationRows(window, 1);
       await window.getByRole('checkbox', { name: 'Selecionar a reserva 104-1015' }).check();
-      await window.getByLabel('Busca livre').fill('');
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await searchReservations(window, '');
       await window.getByRole('checkbox', { name: 'Selecionar a reserva 101-1002' }).waitFor();
       await shot('4.4', 'reservas-selecao-do-lote');
 
       await window.getByRole('button', { name: 'Ver seleção' }).click();
-      await window.getByRole('table', { name: 'Reservas selecionadas' }).waitFor();
+      await window.getByRole('list', { name: 'Reservas selecionadas' }).waitFor();
       await shot('4.5', 'reservas-reservas-selecionadas');
       await window.getByRole('button', { name: 'Fechar seleção' }).click();
 
       await stubOpenDialog(launched.app, comprovante);
-      await window
-        .getByTestId('selection-bar')
-        .getByRole('button', { name: 'Anexar comprovante' })
-        .click();
+      await chooseFromMenu('Anexar', 'Anexar comprovante');
       const batch = window.getByRole('dialog', { name: /Anexar comprovante a 4 reservas/ });
       await batch.getByTestId('attach-summary').waitFor({ timeout: 15_000 });
       await shot('4.6', 'reservas-anexar-comprovante-em-lote', true);
@@ -420,7 +487,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         .getByRole('button', { name: 'Desmarcar todas' })
         .click();
 
-      await window.getByRole('cell', { name: '101-1000', exact: true }).click();
+      await rowOf('101-1000').click();
       await window
         .getByTestId('treatment-section')
         .getByText('Histórico')
@@ -428,7 +495,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('4.7', 'reservas-detalhe-com-tratativa', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
 
-      await window.getByRole('cell', { name: '101-1005', exact: true }).click();
+      await rowOf('101-1005').click();
       await stubOpenDialog(launched.app, pedido);
       await window
         .getByTestId('treatment-section')
@@ -441,7 +508,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await single.waitFor({ state: 'detached' });
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
 
-      await window.getByRole('cell', { name: '102-1007', exact: true }).click();
+      await rowOf('102-1007').click();
       await window.getByTestId('review-alert').waitFor({ timeout: 15_000 });
       await shot('4.9', 'reservas-detalhe-verificar', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
@@ -491,15 +558,18 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       }
 
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      const origin = window.getByLabel('Origem').and(window.locator('input'));
-      await origin.click();
+      await resetReservations();
+      await window.getByRole('combobox', { name: 'Origem' }).click();
       await window.getByRole('option', { name: 'Sistema anterior' }).click();
-      await window.getByRole('button', { name: 'Buscar' }).click();
-      await window.getByTestId('legacy-badge').first().waitFor({ timeout: 15_000 });
+      await window
+        .getByRole('table', { name: 'Reservas' })
+        .getByText('Sistema anterior', { exact: true })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await waitForReservationRows(window, 2);
       await shot('4.10', 'reservas-filtro-sistema-anterior');
 
-      await window.getByRole('cell', { name: 'SA-2002 Sistema anterior', exact: true }).click();
+      await rowOf('SA-2002').click();
       await window.getByTestId('legacy-origin').waitFor({ timeout: 15_000 });
       await window
         .getByTestId('treatment-section')
@@ -507,15 +577,15 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         .waitFor({ timeout: 15_000 });
       await shot('4.11', 'reservas-detalhe-sistema-anterior', true);
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
+      await resetReservations();
     });
 
     // Envio ao Comercial (specs/005): envio com token, retornos na planilha em memória, validação,
     // área "Comercial" e as ações novas da lista de reservas.
     await step('7.1 a 7.4 envio ao Comercial', async () => {
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      await window.getByRole('button', { name: 'Falta cobrar' }).click();
+      await resetReservations();
+      await quickFilter('Falta cobrar').click();
       await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
       await window.getByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }).check();
       await window.getByRole('button', { name: 'Enviar ao Comercial' }).click();
@@ -541,7 +611,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await token.getByLabel('Token do autenticador').fill(TOKEN);
       await token.getByRole('button', { name: 'Enviar token' }).click();
       await token.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
-      await token.getByRole('button', { name: 'Fechar' }).click();
+      await token.getByRole('button', { name: 'Fechar', exact: true }).click();
       await Promise.race([reachedHotel, window.waitForTimeout(15_000)]);
       await window.waitForTimeout(1000);
       await shot('7.2', 'envio-em-andamento', true);
@@ -551,7 +621,8 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         timeout: 30_000,
       });
       await shot('7.4', 'envio-concluido', true);
-      await dialog.getByRole('button', { name: 'Fechar' }).last().click();
+      // A tela 7.4 fecha pelo X (specs/006, T050).
+      await dialog.getByRole('button', { name: 'Fechar o diálogo' }).click();
     });
 
     await step('7.5 a 7.10 retornos e área Comercial', async () => {
@@ -584,9 +655,11 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await server.test.sync?.runRound();
 
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      if (first) await window.getByLabel('Busca livre').fill(first.number);
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await resetReservations();
+      if (first) {
+        await searchReservations(window, first.number);
+        await waitForReservationRows(window, 1);
+      }
       await window.locator('tbody tr').first().click();
       await window.getByTestId('commercial-return').waitFor({ timeout: 15_000 });
       await shot('7.5', 'reservas-detalhe-validar-comprovante', true);
@@ -602,6 +675,39 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await goTo('Comercial');
       await window.getByRole('table', { name: 'Envios ao Comercial' }).waitFor();
       await shot('7.7', 'comercial-envios');
+
+      // 7.7a (aprovada pela UX, T049): um envio em andamento, criado direto no banco só para o
+      // print, com 8 de 16 reservas verificadas; depois do print ele é encerrado.
+      const created = await server.test.database.pool.query<{ id: string }>(
+        `insert into commercial_dispatches (account_key, client_id, status, started_at)
+         values ('captura-7-7a', $1, 'running', now()) returning id`,
+        [server.operator.id],
+      );
+      const runningDispatch = created.rows[0]?.id;
+      for (const [outcome, first, last] of [
+        ['sent', 1, 8],
+        ['pending', 9, 16],
+      ] as const) {
+        await server.test.database.pool.query(
+          `insert into commercial_dispatch_items
+             (dispatch_id, hotel_code, reservation_number, position, outcome, processed_at)
+           select $1, hotel_code, reservation_number, n, $2, $5::timestamptz
+           from (select hotel_code, reservation_number,
+                        row_number() over (order by hotel_code, reservation_number) as n
+                 from reservations) numbered
+           where n between $3 and $4`,
+          [runningDispatch, outcome, first, last, outcome === 'pending' ? null : new Date()],
+        );
+      }
+      await goTo('Reservas');
+      await goTo('Comercial');
+      await window.getByRole('region', { name: /^Em andamento:/ }).waitFor({ timeout: 15_000 });
+      await shot('7.7a', 'comercial-envios-em-andamento');
+      await server.test.database.pool.query(
+        `update commercial_dispatches set status = 'completed', finished_at = now() where id = $1`,
+        [runningDispatch],
+      );
+
       await window.getByRole('tab', { name: 'Retornos a validar' }).click();
       await window.getByRole('table', { name: 'Retornos a validar' }).waitFor({ timeout: 15_000 });
       await shot('7.8', 'comercial-retornos-a-validar');
@@ -617,8 +723,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
 
     await step('7.11 a 7.14 ações da seleção e cópia para e-mail', async () => {
       await goTo('Reservas');
-      await window.getByRole('button', { name: 'Limpar' }).first().click();
-      await window.getByRole('button', { name: 'Buscar' }).click();
+      await resetReservations();
       await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
       await window
         .getByRole('button', { name: 'Desmarcar todas' })
@@ -628,12 +733,12 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByText(/selecionadas do filtro/).waitFor({ timeout: 15_000 });
       await shot('7.11', 'reservas-selecionar-todas-do-filtro');
 
-      await window.getByRole('button', { name: 'Confirmar retornos' }).click();
+      await chooseFromMenu('Confirmar', 'Confirmar retornos');
       await window.getByTestId('batch-summary').waitFor();
       await shot('7.12', 'reservas-confirmar-retornos-em-lote');
       await closeOverlays();
 
-      await window.getByRole('button', { name: 'Confirmar "Verificar"' }).click();
+      await chooseFromMenu('Confirmar', 'Confirmar "Verificar"');
       await window.getByTestId('batch-summary').waitFor();
       await shot('7.13', 'reservas-confirmar-verificar-em-lote');
       await closeOverlays();
@@ -682,7 +787,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await dialog.getByRole('button', { name: 'Enviar token' }).click();
       await dialog.getByText('O Hunit recusou o token.').waitFor({ timeout: 10_000 });
       await shot('2.9', 'executar-token-recusado-dialogo');
-      await dialog.getByRole('button', { name: 'Fechar' }).click();
+      await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
       await window.getByRole('button', { name: 'Iniciar de novo' }).waitFor();
       await shot('2.10', 'executar-falhou-com-iniciar-de-novo');
     });

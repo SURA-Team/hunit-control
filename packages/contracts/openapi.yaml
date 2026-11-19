@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.7.0
+  version: 1.8.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -28,6 +28,10 @@ info:
     (`/reservations/selection`), a situação detalhada com "Validar comprovante"
     (`detailedSituation`, que não muda os valores de `situation`) e a origem do valor cobrado.
     O envio só lê o Hunit; os demais acréscimos não acessam o Hunit.
+    A feature 006 (redesenho do app desktop) acrescenta, sem quebrar os clientes existentes: os
+    filtros rápidos da lista (`quickFilter`), a ordem por hotel e check-in (`order`) e a contagem
+    das reservas de cada filtro rápido (`/reservations/quick-filter-counts`). Sem os parâmetros
+    novos, as rotas respondem como na 1.7.0. Nada disso acessa o Hunit.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -432,6 +436,8 @@ paths:
           schema: { type: array, items: { $ref: '#/components/schemas/ReservationDetailedSituation' } }
           style: form
           explode: true
+        - $ref: '#/components/parameters/QuickFilter'
+        - $ref: '#/components/parameters/ReservationOrder'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -847,8 +853,90 @@ paths:
       summary: Todas as reservas de um filtro, até 2 000, para a seleção e a cópia para e-mail (feature 005, FR-030)
       description: |
         Mesmos filtros de GET /reservations, sem paginação. Devolve até 2 000 reservas na ordem da
-        lista (hotel e número), só com os campos que a seleção e a cópia para e-mail usam, e o total
-        que o filtro encontrou. `truncated` = o total passou de 2 000; as primeiras foram devolvidas.
+        lista (`order`; sem ele, hotel e número), só com os campos que a seleção e a cópia para
+        e-mail usam, e o total que o filtro encontrou. `truncated` = o total passou de 2 000; as
+        primeiras foram devolvidas.
+      parameters:
+        - name: executionId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: hotelCode
+          in: query
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+        - name: classification
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/Classification' } }
+          style: form
+          explode: true
+        - name: reservationStatus
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationStatus' } }
+          style: form
+          explode: true
+        - name: notFound
+          in: query
+          schema: { type: boolean }
+        - name: checkInFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: checkInTo
+          in: query
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          schema: { type: string, minLength: 2, maxLength: 100 }
+        - name: channel
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: amount
+          in: query
+          schema: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        - name: treatmentStatus
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/TreatmentStatus' } }
+          style: form
+          explode: true
+        - name: pendingCharge
+          in: query
+          schema: { type: boolean }
+        - name: situation
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationSituation' } }
+          style: form
+          explode: true
+        - name: needsReview
+          in: query
+          schema: { type: boolean }
+        - name: fromLegacy
+          in: query
+          schema: { type: boolean }
+        - name: detailedSituation
+          in: query
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationDetailedSituation' } }
+          style: form
+          explode: true
+        - $ref: '#/components/parameters/QuickFilter'
+        - $ref: '#/components/parameters/ReservationOrder'
+      responses:
+        '200':
+          description: Reservas do filtro, até 2 000
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationSelection' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reservations/quick-filter-counts:
+    get:
+      tags: [reservations]
+      operationId: countReservationQuickFilters
+      summary: Contagem das reservas de cada filtro rápido (feature 006, FR-017)
+      description: |
+        Mesmos filtros de GET /reservations, sem `quickFilter`, `order` e paginação. `all` conta as
+        reservas que atendem aos filtros ("Todas"); cada grupo conta as que, além disso, estão nele.
+        A soma dos grupos pode passar de `all`: uma reserva pode estar em mais de um grupo.
       parameters:
         - name: executionId
           in: query
@@ -912,10 +1000,10 @@ paths:
           explode: true
       responses:
         '200':
-          description: Reservas do filtro, até 2 000
+          description: Contagem de cada filtro rápido
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ReservationSelection' }
+              schema: { $ref: '#/components/schemas/ReservationQuickFilterCounts' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -1446,6 +1534,20 @@ components:
       name: cursor
       in: query
       schema: { type: string }
+    QuickFilter:
+      name: quickFilter
+      in: query
+      description: >-
+        Só as reservas de um filtro rápido (feature 006, FR-016), combinado com os demais filtros.
+        Omitido = "Todas".
+      schema: { $ref: '#/components/schemas/ReservationQuickFilter' }
+    ReservationOrder:
+      name: order
+      in: query
+      description: >-
+        Ordem da lista (feature 006). Omitido = hotel_number, a ordem da 1.7.0. O cursor de uma
+        página só vale com a mesma ordem (com outra, 400 validation_error).
+      schema: { $ref: '#/components/schemas/ReservationOrder' }
     DocumentId:
       name: documentId
       in: path
@@ -1917,6 +2019,35 @@ components:
         - virtual_card_validated_only
         - virtual_card_pending_charge
         - analysis_error
+
+    ReservationQuickFilter:
+      type: string
+      description: >-
+        Filtro rápido da lista (feature 006, FR-016): pending_charge = "Falta cobrar" (o mesmo de
+        pendingCharge=true); to_review = "A verificar" (alerta "Verificar", "A revisar (sistema
+        anterior)" ou "Validar comprovante"); with_error = "Com erro" (erro na cobrança ou de
+        análise); done = "Concluídas" (comprovante enviado, faturada, já cobrada, cancelada sem
+        cobrança ou ignorada). Uma reserva pode estar em mais de um.
+      enum: [pending_charge, to_review, with_error, done]
+
+    ReservationOrder:
+      type: string
+      description: >-
+        Ordem da lista (feature 006): hotel_number = código do hotel e número da reserva (a ordem
+        da 1.7.0); hotel_check_in = código do hotel, check-in crescente e número da reserva.
+      enum: [hotel_number, hotel_check_in]
+
+    ReservationQuickFilterCounts:
+      type: object
+      description: >-
+        Reservas de cada filtro rápido com os mesmos filtros (feature 006, FR-017); all = "Todas".
+      required: [all, pendingCharge, toReview, withError, done]
+      properties:
+        all: { type: integer, minimum: 0 }
+        pendingCharge: { type: integer, minimum: 0 }
+        toReview: { type: integer, minimum: 0 }
+        withError: { type: integer, minimum: 0 }
+        done: { type: integer, minimum: 0 }
 
     TreatmentDocumentState:
       type: string

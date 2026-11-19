@@ -39,10 +39,12 @@ import type {
   Hotel,
   Page,
   Reservation,
+  ReservationCountFilters,
   ReservationFilters,
   ReservationKey,
   ReservationListInput,
   ReservationOutcome,
+  ReservationQuickFilterCounts,
   ReservationSelection,
   ReservationTreatment,
   Result,
@@ -285,6 +287,15 @@ export class ApiClient {
       this.http.GET('/reservations', { params: { query: input } }),
     );
     return result.ok ? { ok: true, data: page(result.data) } : result;
+  }
+
+  /** Contagem de cada filtro rápido com os mesmos filtros da lista (specs/006, FR-017). */
+  countReservationQuickFilters(
+    filters: ReservationCountFilters,
+  ): Promise<Result<ReservationQuickFilterCounts>> {
+    return this.call(() =>
+      this.http.GET('/reservations/quick-filter-counts', { params: { query: filters } }),
+    );
   }
 
   getReservation(key: ReservationKey): Promise<Result<Reservation>> {

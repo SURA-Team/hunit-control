@@ -38,7 +38,8 @@ const BRIDGE = {
   ],
   twoFactor: ['onClosed', 'onRequested'],
   evidence: ['list', 'save'],
-  reservations: ['channels', 'get', 'list', 'selectAll'],
+  // As contagens dos filtros rápidos (specs/006, T032).
+  reservations: ['channels', 'get', 'list', 'quickFilterCounts', 'selectAll'],
   // Tratativas manuais (specs/003, contracts/ipc.md).
   treatments: [
     'apply',

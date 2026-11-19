@@ -26,16 +26,16 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
 | `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios) |
-| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md` |
+| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
 | `deploy/caddy/Caddyfile` | Proxy HTTPS com a autoridade certificadora interna do Caddy (research R-20) |
 | `deploy/backup/` | `backup.sh` (cópia cifrada do banco) e `restore.sh` (restauração), rodados no container `backup` (research R-21) |
-| `deploy/homolog/` | Ambiente de homologação no PC do servidor, separado da produção (projeto `hunit-homolog`, dados fictícios): acréscimo ao Compose e modelo do `.env.homolog` (com a planilha de teste do Comercial). Passo a passo em `specs/003-tratativas-manuais/quickstart.md` §2.1 e, para a planilha, `specs/005-envio-comercial/quickstart.md` §3 |
+| `deploy/homolog/` | Ambiente de homologação no PC do servidor, separado da produção (projeto `hunit-homolog`, dados fictícios, clone próprio em `C:\hunit-homolog\hunit-control`): acréscimo ao Compose e modelo do `.env.homolog` (com a planilha de teste do Comercial). Passo a passo padrão (montar, atualizar para uma feature, recomeçar e desmontar) no `README.md`, seção "Homologação"; o quickstart de cada feature diz só o que ela confere |
 | `deploy/secrets/` | Chave da conta de serviço da planilha do Comercial, montada só para leitura no `server` (specs/005). **Ignorada pelo Git**, menos o `README.md` dela; nunca leia nem copie o que houver ali |
 | `README.md` | Visão geral, implantação no PC de produção, cópia de segurança e restauração |
-| `.claude/skills/`, `skills-lock.json` | Skills do Claude Code versionados: os do Spec Kit e o `playwright-best-practices` (MIT, de `currents-dev`, instalado com `npx skills`; o lock guarda a origem e a versão). Atualize com `npx skills update -p` e revise o diff antes do commit. O `figma-screens-sync` é do próprio projeto (fora do lock): mantém o espelho do app no Figma (seção "Telas no Figma") |
+| `.claude/skills/`, `skills-lock.json` | Skills do Claude Code versionados: os do Spec Kit e o `playwright-best-practices` (MIT, de `currents-dev`, instalado com `npx skills`; o lock guarda a origem e a versão). Atualize com `npx skills update -p` e revise o diff antes do commit. O `figma-screens-sync` é do próprio projeto (fora do lock): marca no Figma as telas em uso (✅) e as obsoletas (❌) (seção "Telas no Figma") |
 | `legacy/` | Sistema antigo — **somente leitura**, referência de comportamento. **Não é versionado** (está no `.gitignore`): existe só na máquina de quem desenvolve |
 
 O monorepo (pnpm + TypeScript) foi criado pela feature 001; a estrutura detalhada está em
@@ -59,22 +59,24 @@ Regras:
 
 ## Telas no Figma
 
-O arquivo [Hunit Control](https://www.figma.com/design/YCbxTAacFxbGuOF8uwoLtt/Hunit-Control) tem
-dois papéis, que não se misturam:
+O arquivo [Hunit Control](https://www.figma.com/design/YCbxTAacFxbGuOF8uwoLtt/Hunit-Control) tem uma
+página por feature, com o nome da branch (`002-app-desktop`, …, `006-redesign-app-desktop`, …), só
+com as telas que a feature criou ou mudou, e a biblioteca da UX (`Componentes — nova identidade`).
 
-- **Espelho do app, features 002 a 006**: uma página por feature, com o nome da branch
-  (`002-app-desktop`, `003-tratativas-manuais`, …), só com as telas que a feature criou ou mudou,
-  como ficaram no código. Uma tela substituída por uma feature seguinte fica com ❌ no nome e
-  oculta. As páginas `Identidade visual` e `Componentes` também são do espelho. Mantido pelo agente
-  com a skill `figma-screens-sync`, a partir de prints do app real com dados fictícios.
-- **Design oficial**: as páginas da UX. É a fonte da verdade de como o app **deve ser**. **A partir
-  da feature 007, a UX escreve as specs e desenha as telas antes do desenvolvimento**; não há
-  espelho para essas features. O agente só lê; levar o design para o código é trabalho da spec.
+- **Desde 18/11/2026, nenhuma spec começa sem passar pela PM**, e toda feature que muda telas chega
+  com elas desenhadas pela UX no Figma (da 006 em diante). O design é a fonte da verdade de como o
+  app **deve ser**; levá-lo para o código é trabalho da spec. O agente não desenha nem reconstrói
+  telas no Figma.
+- As páginas `002` a `005` (e `Identidade visual` e `Componentes`) são espelhos antigos, feitos pelo
+  agente a partir de prints do app; ficam congeladas.
+- **Marcação**: cada tela tem um número (`4.1`); a versão em uso fica com ✅ no nome, visível, e as
+  substituídas ficam com ❌, ocultas. Quem marca é a skill `figma-screens-sync`, que varre todas as
+  páginas de feature até a concluída.
 
-Regra: numa feature de 002 a 006, mudou algo visível no app desktop (`apps/desktop/src/renderer`,
-rótulos em `presentation/`, ícone ou tema)? Ao concluir a task ou a feature, antes do PR, rode a
-skill `figma-screens-sync` para atualizar a página da feature e registrar a mudança no histórico
-dela.
+Regra: ao concluir uma feature que mudou telas do app desktop (`apps/desktop/src/renderer`, rótulos
+em `presentation/`, ícone ou tema), depois de comparar o app com o design da feature (prints do
+roteiro de captura ao lado dos frames), rode a skill `figma-screens-sync` antes do PR final ou logo
+depois do merge.
 
 ## Usando o legado como referência
 
@@ -155,7 +157,8 @@ processo do app sozinhos; para `pnpm --filter @hunit/desktop dev`, rode antes
 | `pnpm test --project <nome>` | Roda um grupo: `domain`, `contracts`, `server` (unidade, sem dependências externas), `server-browser` (abre o Chromium) ou `server-db` (PostgreSQL real; exige o Docker — inclui o teste de segurança SC-004 e o de cópia e restauração, que roda os scripts de `deploy/backup/` num container `postgres:17`). Do app: `desktop` (processo principal, com servidor HTTPS local e certificados gerados no teste), `desktop-ui` (interface, jsdom) e `desktop-e2e` (o app compilado aberto pelo Playwright contra a API da 001 com o Hunit simulado; exige o Docker e abre janelas) |
 | `pnpm --filter @hunit/desktop dev` | Abre o app em desenvolvimento (electron-vite, recarga da tela na hora). Sem `ELECTRON_RUN_AS_NODE` no terminal |
 | `pnpm --filter @hunit/desktop build` | Compila o app para `apps/desktop/out/` (o `pnpm build` da raiz também compila) |
-| `$env:HUNIT_SCREENS_DIR = "<pasta>"; pnpm test --project desktop-e2e screens-capture` | Captura as telas do app para o espelho no Figma (PowerShell; ~3 min; exige o Docker): um PNG por tela, com o número da tela no Figma, e `falhas.txt`. Sem a variável, o roteiro fica desligado nas rodadas normais. Use uma pasta fora do repositório |
+| `$env:HUNIT_SCREENS_DIR = "<pasta>"; pnpm test --project desktop-e2e screens-capture` | Captura as telas do app para comparar com o design no Figma (PowerShell; ~3 min; exige o Docker): um PNG por tela, com o número da tela no Figma, e `falhas.txt`. Sem a variável, o roteiro fica desligado nas rodadas normais. Use uma pasta fora do repositório. A janela é a do design (1 440 × 900); com `$env:HUNIT_SCREENS_WIDTH = "960"` (ou `"1280"`), as mesmas telas saem em 960 × 640 (ou 1 280 × 820), com os mesmos nomes: use uma pasta por largura |
+| `node apps/desktop/scripts/generate-icon.mjs` | Gera de novo o ícone do app (`resources/icon.ico` e `icon.png`) a partir da marca `resources/brand.svg` (specs/006); os arquivos gerados são versionados. Só é preciso quando a marca mudar |
 | `pnpm --filter @hunit/desktop dist` | Gera o instalador NSIS em `apps/desktop/release/` (sem assinatura de código; research R-11 da 002). Rode antes o `pnpm build`: o app empacota o `dist` do `@hunit/domain` e do `@hunit/contracts` |
 | `pnpm build` | Compila os pacotes para `dist/`, na ordem das dependências. Use sempre este antes dos comandos `hunit:*`: `pnpm --filter @hunit/server build` compila só o servidor e usa o `dist` antigo do `@hunit/contracts` e do `@hunit/domain` (os testes leem o código-fonte e não acusam) |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
@@ -187,9 +190,10 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/005-envio-comercial/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
+  `specs/006-redesign-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
   A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua
-  na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0 e a da 004 na 1.6.0, e não devem ser alteradas
+  na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0 e a da 005 na 1.7.0, e não
+  devem ser alteradas (a da 006 entrega a 1.8.0)
   (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
   research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
   `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).
@@ -272,3 +276,20 @@ montada no processo principal do app com `@hunit/domain`, sem o hóspede). O con
 no app. Sem `COMMERCIAL_SHEET_ID` e `COMMERCIAL_SHEET_KEY_FILE`, o envio fica desligado e o resto
 funciona. O ID e a chave da planilha são segredos: entram no `SecretRegistry` e nunca aparecem em
 logs, respostas ou mensagens (teste `commercial-markers.test.ts`).
+
+Desde a feature 006 (`specs/006-redesign-app-desktop/`), o app desktop tem o visual do design
+oficial da UX (arquivo Hunit Control no Figma): fundo cinza claro com cards brancos, menu lateral
+flutuante (só os ícones abaixo de 1 180 px), a fonte Manrope, a marca e o ícone novos, uma ação
+principal por bloco (preta, ou lima na superfície escura) e cores de significado fixo nos selos
+(verde concluído, âmbar atenção, vermelho erro, lima em andamento, cinza neutro). A lista de
+reservas tem cinco colunas, a busca única (texto ou valor), o painel "Filtros avançados", a linha
+"Filtros aplicados", os filtros rápidos com contagem (Todas, Falta cobrar, A verificar, Com erro,
+Concluídas) e a ordem por hotel e check-in; a seleção em lote usa a barra escura com "Anexar ▾" e
+"Confirmar ▾"; as gavetas e os diálogos seguem dois tamanhos padrão; as execuções e os envios em
+andamento aparecem em cards escuros no topo, e as encerradas no "Histórico". O contrato passou para
+a 1.8.0 (só acréscimos: `quickFilter` e `order` em `/reservations` e `/reservations/selection` e
+`GET /reservations/quick-filter-counts`; o app 0.2 continua funcionando). Toda a interface usa os
+componentes de `src/renderer/src/ui/`, sem exceções no lint. Dois roteiros de ponta a ponta conferem
+as telas em 960, 1 280 e 1 920 px e com zoom de 125 % (`responsive.test.ts`) e o redimensionamento
+sem perder o que foi feito (`resize.test.ts`); a comparação com o design fica em
+`specs/006-redesign-app-desktop/research.md` ("Comparação com o design").

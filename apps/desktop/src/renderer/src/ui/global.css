@@ -1,0 +1,16 @@
+/*
+ * Base da nova identidade (specs/006, research R-02 e R-03). As variáveis --hc-* vêm de ui/tokens.ts
+ * e entram na raiz do documento pelo tema (ui/theme.ts, cssVariablesResolver).
+ */
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--hc-fundo-app);
+  color: var(--hc-texto-padrao);
+  font-family: var(--hc-font-family);
+  /* "Corpo" do design é Medium (500). */
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+}

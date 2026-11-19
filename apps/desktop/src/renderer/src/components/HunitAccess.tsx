@@ -73,6 +73,7 @@ export function useHunitAccess(): HunitAccessState {
         onClear={() => clear.mutate()}
         saving={save.isPending}
         notice={notice}
+        inset
       />
     ),
   };

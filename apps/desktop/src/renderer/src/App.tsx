@@ -3,10 +3,14 @@
  * Execuções, Reservas, Comercial — specs/005, research R-14 — e Configuração), navegação por
  * estado, sem roteador. Sem conexão
  * confirmada, só a Configuração fica disponível. As ações de operador somem para o perfil consulta.
+ *
+ * Desde a 006 (FR-001, FR-002, T016): cabeçalho com a marca, o cliente e o perfil, menu lateral
+ * flutuante com o ícone de cada área e a ativa em pílula, e o conteúdo com largura máxima.
  */
-import { AppShell, Badge, Group, NavLink, Stack, Text, Title } from '@mantine/core';
+import { Text } from '@mantine/core';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import alertSound from '../../../resources/sounds/token-alert.wav';
+import classes from './App.module.css';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { TwoFactorDialog } from './components/TwoFactorDialog';
 import { useHunit } from './hunit';
@@ -16,6 +20,16 @@ import { ReservationsScreen } from './screens/reservations/ReservationsScreen';
 import { RunScreen } from './screens/run/RunScreen';
 import { SetupScreen } from './screens/setup/SetupScreen';
 import { useConnection } from './state/connection';
+import {
+  AppHeader,
+  CommercialIcon,
+  ExecutionsIcon,
+  ReservationsIcon,
+  RunIcon,
+  SettingsIcon,
+  SideMenu,
+  SideMenuItem,
+} from './ui';
 
 export type Area = 'run' | 'executions' | 'reservations' | 'commercial' | 'setup';
 
@@ -28,6 +42,14 @@ const AREA_TITLES: Record<Area, string> = {
   reservations: 'Reservas',
   commercial: 'Comercial',
   setup: 'Configuração',
+};
+
+const AREA_ICONS: Record<Area, ReactNode> = {
+  run: <RunIcon />,
+  executions: <ExecutionsIcon />,
+  reservations: <ReservationsIcon />,
+  commercial: <CommercialIcon />,
+  setup: <SettingsIcon />,
 };
 
 export function App() {
@@ -105,42 +127,38 @@ export function App() {
   };
 
   return (
-    <AppShell navbar={{ width: 220, breakpoint: 0 }} header={{ height: 56 }} padding="md">
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Title order={3}>HUNIT Control</Title>
-          {client && (
-            <Group gap="xs">
-              <Text size="sm">{client.name}</Text>
-              <Badge variant="light" color={isOperator ? 'blue' : 'gray'}>
-                {isOperator ? 'Operador' : 'Consulta'}
-              </Badge>
-            </Group>
-          )}
-        </Group>
-      </AppShell.Header>
-      <AppShell.Navbar p="xs">
-        {available.map((item) => (
-          <NavLink
-            key={item}
-            label={AREA_TITLES[item]}
-            active={area === item}
-            onClick={() => {
-              if (item === 'executions') setOpenExecutionId(null);
-              if (item === 'reservations') setReservationsExecutionId(null);
-              setChosen(item);
-            }}
-          />
-        ))}
-      </AppShell.Navbar>
-      <AppShell.Main>
-        <Stack gap="md">
+    <div className={classes.shell}>
+      <div className={classes.header}>
+        <AppHeader
+          clientName={client?.name ?? null}
+          profile={client ? (isOperator ? 'operator' : 'reader') : null}
+        />
+      </div>
+      <div className={classes.menu}>
+        <SideMenu>
+          {available.map((item) => (
+            <SideMenuItem
+              key={item}
+              label={AREA_TITLES[item]}
+              icon={AREA_ICONS[item]}
+              active={area === item}
+              onClick={() => {
+                if (item === 'executions') setOpenExecutionId(null);
+                if (item === 'reservations') setReservationsExecutionId(null);
+                setChosen(item);
+              }}
+            />
+          ))}
+        </SideMenu>
+      </div>
+      <main className={classes.main}>
+        <div className={classes.content}>
           <ConnectionBanner state={state} onOpenSetup={() => setChosen('setup')} />
           {!isOnline && state === null && <Text c="dimmed">Carregando…</Text>}
           {content[area]}
-        </Stack>
-      </AppShell.Main>
+        </div>
+      </main>
       <TwoFactorDialog />
-    </AppShell>
+    </div>
   );
 }

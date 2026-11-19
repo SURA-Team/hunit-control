@@ -5,7 +5,11 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { ApiClient, fileNameFromDisposition } from '../../src/main/api-client.js';
-import { reservationListInputSchema } from '../../src/shared/ipc-schemas.js';
+import {
+  reservationCountFiltersSchema,
+  reservationFiltersSchema,
+  reservationListInputSchema,
+} from '../../src/shared/ipc-schemas.js';
 import type { AppError, Result } from '../../src/shared/ipc-types.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
 import {
@@ -357,5 +361,57 @@ describe('ApiClient — origem "Sistema anterior" (specs/004, T033)', () => {
     expect(query.get('pendingCharge')).toBe('true');
     expect(reservationListInputSchema.safeParse({ fromLegacy: false }).success).toBe(true);
     expect(reservationListInputSchema.safeParse({ fromLegacy: 'sim' }).success).toBe(false);
+  });
+});
+
+describe('ApiClient — filtros rápidos e ordem (specs/006, T032)', () => {
+  it('quickFilter e order vão na query da lista', async () => {
+    let query = new URLSearchParams();
+    server.on('GET', '/v1/reservations', (request, response) => {
+      query = request.query;
+      sendJson(response, 200, { items: [], nextCursor: null });
+    });
+
+    const result = await newClient().listReservations({
+      quickFilter: 'to_review',
+      order: 'hotel_check_in',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(query.get('quickFilter')).toBe('to_review');
+    expect(query.get('order')).toBe('hotel_check_in');
+  });
+
+  it('contagens: a rota nova com os filtros da lista', async () => {
+    let query = new URLSearchParams();
+    const counts = { all: 12, pendingCharge: 5, toReview: 0, withError: 3, done: 4 };
+    server.on('GET', '/v1/reservations/quick-filter-counts', (request, response) => {
+      query = request.query;
+      sendJson(response, 200, counts);
+    });
+
+    const result = await newClient().countReservationQuickFilters({
+      hotelCode: ['31', '32'],
+      q: 'Ana',
+    });
+
+    expect(result).toEqual({ ok: true, data: counts });
+    expect(query.getAll('hotelCode')).toEqual(['31', '32']);
+    expect(query.get('q')).toBe('Ana');
+  });
+
+  it('a ponte aceita só os valores do contrato; as contagens não aceitam filtro rápido nem ordem', () => {
+    expect(reservationListInputSchema.safeParse({ quickFilter: 'done' }).success).toBe(true);
+    expect(reservationListInputSchema.safeParse({ quickFilter: 'todas' }).success).toBe(false);
+    expect(reservationListInputSchema.safeParse({ order: 'hotel_check_in' }).success).toBe(true);
+    expect(reservationListInputSchema.safeParse({ order: 'checkin' }).success).toBe(false);
+    // "Selecionar todas do filtro" e a cópia seguem o filtro rápido e a ordem da lista.
+    expect(
+      reservationFiltersSchema.safeParse({ quickFilter: 'done', order: 'hotel_check_in' }).success,
+    ).toBe(true);
+    expect(reservationCountFiltersSchema.safeParse({ hotelCode: ['31'] }).success).toBe(true);
+    for (const extra of [{ quickFilter: 'done' }, { order: 'hotel_check_in' }, { limit: 10 }]) {
+      expect(reservationCountFiltersSchema.safeParse(extra).success).toBe(false);
+    }
   });
 });

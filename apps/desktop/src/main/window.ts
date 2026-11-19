@@ -61,7 +61,11 @@ export function createMainWindow(location: RendererLocation): BrowserWindow {
     minHeight: 640,
     show: false,
     title: 'HUNIT Control',
-    // Sem `icon`: no Windows a janela usa o ícone do executável (electron-builder.yml).
+    // Empacotado, a janela usa o ícone do executável (electron-builder.yml). Em desenvolvimento não
+    // há executável próprio: a janela recebe o mesmo ícone, gerado da marca (specs/006, R-04).
+    ...(app.isPackaged
+      ? {}
+      : { icon: path.join(import.meta.dirname, '..', '..', 'resources', 'icon.png') }),
     webPreferences: {
       preload: path.join(import.meta.dirname, '..', 'preload', 'index.cjs'),
       contextIsolation: true,

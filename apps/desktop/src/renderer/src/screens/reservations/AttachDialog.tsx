@@ -6,8 +6,15 @@
  * O arquivo fica na memória do processo principal; a interface só tem a pré-visualização e um
  * id. Cancelar antes de confirmar descarta o arquivo e não envia nada. Quem decide o que cada
  * reserva aceita é o servidor — aqui só se mostra o que ele respondeu.
+ *
+ * Desde a 006 (T039, FR-011; telas 4.6 e 4.8): diálogo padrão largo, "Cancelar" só texto,
+ * "Escolher outro arquivo" e "Tentar de novo" em contorno e uma principal ("Confirmar"; no
+ * desfecho, "Tentar de novo" quando o envio foi interrompido, senão "Fechar"). No lote (T042,
+ * FR-024, tela 4.6), o resumo antes da confirmação: as aceitas com o ícone verde e o total, as que
+ * terão o documento substituído e as ignoradas com o ícone âmbar, cada grupo com a quantidade, e a
+ * caixa com cada reserva que fica de fora e o motivo.
  */
-import { Alert, Button, Group, List, Modal, Stack, Table, Text } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -28,6 +35,15 @@ import {
   OUTCOME_REASON_MESSAGES,
   TREATMENT_KIND_NAMES,
 } from '../../presentation/labels';
+import {
+  Action,
+  AppDialog,
+  BatchSummary,
+  Notice,
+  ReasonList,
+  SummaryLine,
+  type ReasonItem,
+} from '../../ui';
 
 type Phase = 'picking' | 'checking' | 'confirm' | 'applying' | 'result';
 
@@ -52,33 +68,19 @@ function reservationLabel(outcome: ReservationKey): string {
   return `${outcome.reservationNumber} (hotel ${outcome.hotelCode})`;
 }
 
-/** Reservas que não ficaram com o documento, com o motivo de cada uma. */
+/** Reservas que não ficaram com o documento, com o motivo de cada uma (a caixa cinza da tela 4.6). */
 function LeftOut({ items }: { items: ReservationOutcome[] }) {
-  if (items.length === 0) return null;
-  return (
-    <Table withTableBorder verticalSpacing={4} aria-label="Reservas que ficam de fora">
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Reserva</Table.Th>
-          <Table.Th>Motivo</Table.Th>
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {items.map((item) => (
-          <Table.Tr key={`${item.hotelCode}/${item.reservationNumber}`}>
-            <Table.Td>{reservationLabel(item)}</Table.Td>
-            <Table.Td>
-              {item.outcome === 'failed'
-                ? 'Erro ao registrar. A reserva ficou como estava.'
-                : item.reason
-                  ? OUTCOME_REASON_MESSAGES[item.reason]
-                  : '—'}
-            </Table.Td>
-          </Table.Tr>
-        ))}
-      </Table.Tbody>
-    </Table>
-  );
+  const reasons: ReasonItem[] = items.map((item) => ({
+    key: `${item.hotelCode}/${item.reservationNumber}`,
+    title: reservationLabel(item),
+    reason:
+      item.outcome === 'failed'
+        ? 'Erro ao registrar. A reserva ficou como estava.'
+        : item.reason
+          ? OUTCOME_REASON_MESSAGES[item.reason]
+          : '—',
+  }));
+  return <ReasonList label="Reservas que ficam de fora" items={reasons} />;
 }
 
 export function AttachDialog({
@@ -217,21 +219,56 @@ export function AttachDialog({
     (item) => item.outcome === 'ignored' || item.outcome === 'failed',
   );
 
+  const retrying = phase === 'result' && pending !== null && pending.length > 0;
+  const actions =
+    phase === 'confirm' ? (
+      <>
+        <Action variant="secondary" size="sm" onClick={() => void pickAnother()}>
+          Escolher outro arquivo
+        </Action>
+        {file && !check && (
+          <Action variant="secondary" size="sm" onClick={() => void runCheck()}>
+            Tentar de novo
+          </Action>
+        )}
+        <Action
+          variant="primary"
+          size="sm"
+          onClick={() => void apply(reservations)}
+          disabled={!file || accepted === 0}
+        >
+          Confirmar
+        </Action>
+      </>
+    ) : phase === 'result' ? (
+      <>
+        <Action
+          variant={retrying ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={() => void finish()}
+        >
+          Fechar
+        </Action>
+        {retrying && (
+          <Action variant="primary" size="sm" onClick={() => void apply(pending)}>
+            Tentar de novo
+          </Action>
+        )}
+      </>
+    ) : undefined;
+
   return (
-    <Modal
+    <AppDialog
       opened
+      size="lg"
       onClose={() => void (phase === 'result' ? finish() : cancel())}
-      title={
-        <Text fw={600}>
-          Anexar {kindName}
-          {!single && ` a ${reservations.length} reservas`}
-        </Text>
-      }
-      size="xl"
+      title={`Anexar ${kindName}${single ? '' : ` a ${reservations.length} reservas`}`}
       closeOnClickOutside={false}
       closeOnEscape={!busy}
       withCloseButton={!busy}
-      transitionProps={{ duration: 0 }}
+      instant
+      actions={actions}
+      {...(phase === 'confirm' && { onCancel: () => void cancel() })}
     >
       <Stack gap="md">
         {phase === 'picking' && <Text c="dimmed">Escolha o arquivo…</Text>}
@@ -240,23 +277,20 @@ export function AttachDialog({
 
         {phase === 'checking' && <Text c="dimmed">Conferindo as reservas no servidor…</Text>}
 
-        {phase === 'confirm' && error && (
-          <Alert color="red" role="alert">
-            {errorMessage(error)}
-          </Alert>
-        )}
+        {phase === 'confirm' && error && <Notice tone="red">{errorMessage(error)}</Notice>}
 
-        {phase === 'confirm' && check && (
-          <Stack gap="xs" data-testid="attach-summary">
-            {single ? (
-              accepted === 1 ? (
+        {phase === 'confirm' &&
+          check &&
+          (single ? (
+            <div data-testid="attach-summary">
+              {accepted === 1 ? (
                 check.replacingCount === 1 ? (
-                  <Alert color="yellow" title={`Substitui ${KIND_ARTICLE[kind]} atual`}>
+                  <Notice tone="amber" role="none" title={`Substitui ${KIND_ARTICLE[kind]} atual`}>
                     {current
                       ? `${current.fileName ?? 'arquivo já apagado'}, anexado por ${current.attachedBy} em ${formatDateTime(current.attachedAt)}. `
                       : ''}
                     O documento substituído fica guardado por 30 dias e pode ser revertido.
-                  </Alert>
+                  </Notice>
                 ) : (
                   <Text size="sm">
                     Confira o arquivo acima. Ao confirmar, ele será registrado como{' '}
@@ -264,101 +298,71 @@ export function AttachDialog({
                   </Text>
                 )
               ) : (
-                <Alert color="red" role="alert">
+                <Notice tone="red">
                   {leftOutInCheck[0]?.reason
                     ? OUTCOME_REASON_MESSAGES[leftOutInCheck[0].reason]
                     : 'Esta reserva não aceita o documento.'}
-                </Alert>
-              )
-            ) : (
-              <>
-                <List size="sm" spacing={2}>
-                  <List.Item>
-                    <b>{accepted}</b> {plural(accepted, 'reserva aceita', 'reservas aceitam')} o
-                    documento — total de <b>{formatMoney(check.acceptedTotalAmount)}</b>
-                  </List.Item>
-                  {check.replacingCount > 0 && (
-                    <List.Item>
-                      <b>{check.replacingCount}</b>{' '}
-                      {plural(
-                        check.replacingCount,
-                        'já tem um documento desse tipo, que será substituído',
-                        'já têm um documento desse tipo, que será substituído',
-                      )}
-                    </List.Item>
+                </Notice>
+              )}
+            </div>
+          ) : (
+            <BatchSummary data-testid="attach-summary">
+              <SummaryLine tone={accepted > 0 ? 'green' : 'amber'}>
+                <b>{accepted}</b> {plural(accepted, 'reserva aceita', 'reservas aceitam')} o
+                documento — total de <b>{formatMoney(check.acceptedTotalAmount)}</b>
+              </SummaryLine>
+              {check.replacingCount > 0 && (
+                <SummaryLine tone="amber">
+                  <b>{check.replacingCount}</b>{' '}
+                  {plural(
+                    check.replacingCount,
+                    'já tem um documento desse tipo, que será substituído',
+                    'já têm um documento desse tipo, que será substituído',
                   )}
-                  <List.Item>
-                    <b>{check.ignoredCount}</b>{' '}
-                    {plural(check.ignoredCount, 'será ignorada', 'serão ignoradas')}
-                  </List.Item>
-                </List>
-                <LeftOut items={leftOutInCheck} />
-              </>
-            )}
-          </Stack>
-        )}
+                </SummaryLine>
+              )}
+              {check.ignoredCount > 0 && (
+                <SummaryLine tone="amber">
+                  <b>{check.ignoredCount}</b>{' '}
+                  {plural(check.ignoredCount, 'será ignorada', 'serão ignoradas')}
+                </SummaryLine>
+              )}
+              <LeftOut items={leftOutInCheck} />
+            </BatchSummary>
+          ))}
 
         {phase === 'applying' && <Text c="dimmed">Enviando o arquivo e registrando…</Text>}
 
         {phase === 'result' && (
-          <Stack gap="xs" data-testid="attach-result">
+          <BatchSummary data-testid="attach-result">
             {registered.length > 0 && (
-              <Alert color="green" role="status">
+              <Notice tone="green" role="status">
                 {single
                   ? `${TREATMENT_KIND_NAMES[kind]} registrad${kind === 'proof' ? 'o' : 'a'}.`
                   : `Documento registrado em ${registered.length} ${plural(registered.length, 'reserva', 'reservas')}.`}
-              </Alert>
+              </Notice>
             )}
             {error && (
-              <Alert color="red" role="alert">
+              <Notice tone="red">
                 {errorMessage(error)}
                 {pending !== null &&
                   ` ${pending.length} ${plural(pending.length, 'reserva ficou', 'reservas ficaram')} sem o documento. O arquivo continua pronto para enviar.`}
-              </Alert>
+              </Notice>
             )}
             {leftOutInResult.length > 0 && (
               <>
-                <Text size="sm">
-                  {leftOutInResult.length}{' '}
+                <SummaryLine
+                  tone={leftOutInResult.some((item) => item.outcome === 'failed') ? 'red' : 'amber'}
+                >
+                  <b>{leftOutInResult.length}</b>{' '}
                   {plural(leftOutInResult.length, 'reserva ficou', 'reservas ficaram')} de fora:
-                </Text>
+                </SummaryLine>
                 <LeftOut items={leftOutInResult} />
               </>
             )}
-          </Stack>
+          </BatchSummary>
         )}
-
-        <Group justify="flex-end" gap="sm">
-          {phase === 'confirm' && (
-            <>
-              <Button variant="default" onClick={() => void cancel()}>
-                Cancelar
-              </Button>
-              <Button variant="default" onClick={() => void pickAnother()}>
-                Escolher outro arquivo
-              </Button>
-              {file && !check && (
-                <Button variant="default" onClick={() => void runCheck()}>
-                  Tentar de novo
-                </Button>
-              )}
-              <Button onClick={() => void apply(reservations)} disabled={!file || accepted === 0}>
-                Confirmar
-              </Button>
-            </>
-          )}
-          {phase === 'result' && (
-            <>
-              {pending !== null && pending.length > 0 && (
-                <Button onClick={() => void apply(pending)}>Tentar de novo</Button>
-              )}
-              <Button variant="default" onClick={() => void finish()}>
-                Fechar
-              </Button>
-            </>
-          )}
-        </Group>
       </Stack>
-    </Modal>
+    </AppDialog>
   );
 }

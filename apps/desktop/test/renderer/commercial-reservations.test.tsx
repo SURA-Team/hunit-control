@@ -1,7 +1,8 @@
 /**
  * Reservas no app com o envio ao Comercial (specs/005, T051, T053, T056): a coluna "Valor
  * cobrado" com a origem (FR-024), "Selecionar todas do filtro" (FR-030), "Confirmar 'Verificar'"
- * em lote (FR-029) e "Copiar para e-mail" (FR-027, FR-028). Dados fictícios.
+ * em lote (FR-029) e "Copiar para e-mail" (FR-027, FR-028). Dados fictícios. Desde a 006 (T036):
+ * o valor cobrado na segunda linha da coluna Valor, os filtros rápidos e o menu "Confirmar ▾".
  */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -17,6 +18,7 @@ import {
   renderWithApp,
   type FakeHunit,
 } from './render';
+import { chooseFromMenu, findRow, quickFilterChip } from './reservations-helpers';
 import { pendingReservation, treatment } from './treatment-fixtures';
 
 let hunit: FakeHunit;
@@ -36,8 +38,8 @@ beforeEach(() => {
   serve();
 });
 
-describe('coluna "Valor cobrado" (FR-024)', () => {
-  it('mostra o valor com a origem e fica vazia sem valor', async () => {
+describe('valor cobrado na coluna Valor (FR-024; specs/006, FR-014)', () => {
+  it('mostra o valor com a origem e fica vazio sem valor', async () => {
     serve([
       pendingReservation('7001', {
         treatment: treatment({
@@ -49,11 +51,10 @@ describe('coluna "Valor cobrado" (FR-024)', () => {
       pendingReservation('7002'),
     ]);
     renderWithApp(<ReservationsScreen />, hunit);
-    const row = (await screen.findByText('7001')).closest('tr');
-    expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getByText(/R\$\s*90,00/)).toBeInTheDocument();
-    expect(within(row as HTMLElement).getByText('(Comercial)')).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Valor cobrado' })).toBeInTheDocument();
+    const row = await findRow('7001');
+    expect(row.textContent?.replace(/\u00a0/g, ' ')).toContain('cobrado R$ 90,00 · Comercial');
+    expect(await findRow('7002')).not.toHaveTextContent('cobrado');
+    expect(screen.queryByRole('columnheader', { name: 'Valor cobrado' })).not.toBeInTheDocument();
   });
 });
 
@@ -74,14 +75,14 @@ describe('"Selecionar todas do filtro" (FR-030)', () => {
     expect(await screen.findByText(/1.999 reservas selecionadas do filtro/)).toBeInTheDocument();
     expect(screen.getByText(/o filtro tem 5.000/)).toHaveTextContent('3.000 ficaram de fora');
     expect(screen.getByTestId('selection-bar')).toHaveTextContent('2000 reservas selecionadas');
-    expect(hunit.api.reservations.selectAll).toHaveBeenCalledWith({});
+    expect(hunit.api.reservations.selectAll).toHaveBeenCalledWith({ order: 'hotel_check_in' });
   });
 
   it('o perfil consulta não seleciona', async () => {
     hunit = fakeHunit(ONLINE_READER);
     serve();
     renderWithApp(<ReservationsScreen />, hunit);
-    await screen.findByText('7001');
+    await findRow('7001');
     expect(
       screen.queryByRole('button', { name: 'Selecionar todas do filtro' }),
     ).not.toBeInTheDocument();
@@ -121,7 +122,7 @@ describe('"Confirmar \'Verificar\'" em lote (FR-029)', () => {
     await user.click(
       await screen.findByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }),
     );
-    await user.click(screen.getByRole('button', { name: 'Confirmar "Verificar"' }));
+    await chooseFromMenu(user, 'Confirmar', 'Confirmar "Verificar"');
 
     expect(await screen.findByTestId('batch-summary')).toHaveTextContent(
       '1 reserva com o alerta "Verificar" — 1 fica de fora (sem o alerta).',
@@ -189,15 +190,16 @@ describe('"Copiar para e-mail" (FR-027, FR-028)', () => {
     );
     const user = userEvent.setup();
     renderWithApp(<ReservationsScreen />, hunit);
-    await screen.findByText('7001');
-    await user.click(screen.getByRole('button', { name: 'Falta cobrar' }));
+    await findRow('7001');
+    await user.click(quickFilterChip('Falta cobrar'));
     await user.click(screen.getByRole('button', { name: 'Copiar para e-mail' }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Copiar' }));
 
     expect(hunit.api.clipboard.copyReservations).toHaveBeenCalledWith({
       source: 'filter',
-      filters: { pendingCharge: true },
+      // A cópia segue o filtro rápido e a ordem da lista (specs/006, FR-014, FR-016).
+      filters: { quickFilter: 'pending_charge', order: 'hotel_check_in' },
       description: 'Filtros: Falta cobrar',
     });
     expect(await within(dialog).findByTestId('copy-result')).toHaveTextContent(
@@ -208,7 +210,102 @@ describe('"Copiar para e-mail" (FR-027, FR-028)', () => {
   it('sem resultado, a cópia fica indisponível', async () => {
     serve([]);
     renderWithApp(<ReservationsScreen />, hunit);
-    await screen.findByText('Nenhuma reserva encontrada com estes filtros.');
+    await screen.findByText('Nenhuma reserva encontrada');
     expect(screen.getByRole('button', { name: 'Copiar para e-mail' })).toBeDisabled();
+  });
+});
+
+describe('visual novo do lote e da cópia (specs/006, T053; telas 7.11 a 7.14)', () => {
+  it('"todas do filtro" (7.11): o texto no lugar do botão, a barra e o rodapé; desmarcar volta ao botão', async () => {
+    mocked(hunit.api.reservations.selectAll).mockImplementation(() =>
+      okResult({
+        total: 2,
+        truncated: false,
+        items: [selectionItem('7001'), selectionItem('7002')],
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithApp(<ReservationsScreen />, hunit);
+    await findRow('7001');
+    await user.click(screen.getByRole('button', { name: 'Selecionar todas do filtro' }));
+
+    expect(
+      await screen.findByText(
+        'As 2 reservas do filtro estão selecionadas (até 2.000, na ordem da lista)',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Selecionar todas do filtro' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('selection-bar')).toHaveTextContent(
+      '2 reservas selecionadas · todas do filtro',
+    );
+    expect(
+      screen.getByText(/^Mostrando 2 de \d+ reservas selecionadas do filtro$/),
+    ).toBeInTheDocument();
+    // Sem aviso: o texto já diz tudo.
+    expect(screen.queryByRole('status', { name: /selecionadas do filtro\./ })).toBeNull();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Selecionar a reserva 7001' }));
+    expect(
+      await screen.findByRole('button', { name: 'Selecionar todas do filtro' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('selection-bar')).not.toHaveTextContent('todas do filtro');
+  });
+
+  it('"Verificar" em lote (7.13): diálogo estreito, selo na contagem e "Confirmar N" principal', async () => {
+    serve([
+      pendingReservation('7001', {
+        classification: 'virtual_card_already_charged',
+        treatment: treatment({
+          status: 'sent',
+          situation: 'virtual_card_already_charged',
+          needsReview: true,
+        }),
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderWithApp(<ReservationsScreen />, hunit);
+    await user.click(await screen.findByRole('checkbox', { name: 'Selecionar a reserva 7001' }));
+    await chooseFromMenu(user, 'Confirmar', 'Confirmar "Verificar"');
+
+    const dialog = await screen.findByRole('dialog', { name: 'Confirmar "Verificar"' });
+    expect(dialog).toHaveAttribute('data-size', 'sm');
+    const counts = within(dialog).getByRole('table', { name: 'Contagem por status do Hunit' });
+    expect(within(counts).getByText('Já cobrada')).toHaveAttribute('data-tone', 'green');
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Confirmar 1' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+  });
+
+  it('copiar (7.14): diálogo estreito, "Cancelar" em texto, "Copiar" principal e depois "Fechar"', async () => {
+    mocked(hunit.api.clipboard.copyReservations).mockImplementation(() =>
+      okResult({ copied: 2, total: 2, truncated: false }),
+    );
+    const user = userEvent.setup();
+    renderWithApp(<ReservationsScreen />, hunit);
+    await findRow('7001');
+    await user.click(screen.getByRole('button', { name: 'Copiar para e-mail' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Copiar para e-mail' });
+    expect(dialog).toHaveAttribute('data-size', 'sm');
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Copiar' }));
+    expect(await within(dialog).findByTestId('copy-result')).toHaveTextContent(
+      '2 reservas copiadas.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Fechar' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(within(dialog).queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument();
   });
 });

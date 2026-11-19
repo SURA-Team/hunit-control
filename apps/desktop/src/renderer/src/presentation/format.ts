@@ -32,6 +32,22 @@ export function sumMoney(values: ReadonlyArray<string | null | undefined>): stri
   return `${cents / 100n}.${(cents % 100n).toString().padStart(2, '0')}`;
 }
 
+const compactCount = new Intl.NumberFormat('pt-BR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+const integerCount = new Intl.NumberFormat('pt-BR');
+
+/** Contagem curta dos filtros rápidos (specs/006, research R-09): "999", "1,2 mil", "12,3 mil", "1,2 mi". */
+export function formatCount(count: number): string {
+  return compactCount.format(count);
+}
+
+/** Contagem inteira, para a dica da contagem curta: "12.345". */
+export function formatInteger(count: number): string {
+  return integerCount.format(count);
+}
+
 const two = (value: number) => String(value).padStart(2, '0');
 
 /** Data da API (YYYY-MM-DD) em DD/MM/AAAA, sem passar pelo fuso horário. */

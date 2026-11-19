@@ -2,31 +2,22 @@
  * Aba "Planilha" da área Comercial (specs/005, FR-013, FR-022): a situação da integração, as
  * atualizações pendentes e desde quando, a última rodada e a última leitura, a falha atual (sempre
  * com mensagem genérica, nunca o identificador da planilha nem a chave) e "Ler retornos agora".
+ *
+ * Desde a 006 (T052; tela 7.10): o card "Situação da planilha" com o selo e "Ler retornos agora" como
+ * principal, os avisos em `Notice` e os números em caixas cinza lado a lado (`DataTiles`).
  */
-import { Alert, Button, Group, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Group, Text } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { SheetReadResult } from '../../../../shared/ipc-types';
-import { StatusBadge } from '../../components/StatusBadge';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDateTime } from '../../presentation/format';
 import { SHEET_STATUS_LABELS } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
+import { Action, Card, DataTile, DataTiles, Notice, SectionTitle, StatusBadge } from '../../ui';
 
 export const sheetStatusKey = ['commercial-sheet'] as const;
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed">
-        {label}
-      </Text>
-      <Text size="sm" component="div">
-        {children}
-      </Text>
-    </div>
-  );
-}
 
 function roundSummary(read: SheetReadResult): string {
   if (read.round === null) {
@@ -72,77 +63,71 @@ export function SheetTab() {
     }
   }
 
-  if (status.isError) {
-    return (
-      <Alert color="red" role="alert">
-        {messageOf(status.error)}
-      </Alert>
-    );
-  }
+  if (status.isError) return <Notice tone="red">{messageOf(status.error)}</Notice>;
   if (!sheet) return <Text size="sm">Carregando…</Text>;
   if (!sheet.configured) {
     return (
-      <Alert color="gray" title="Planilha do Comercial não configurada">
+      <Notice tone="lime" role="status" title="Planilha do Comercial não configurada">
         O servidor não tem a planilha do Comercial configurada; o envio ao Comercial está desligado.
         Quem administra o servidor configura a planilha (README, &quot;Planilha do Comercial&quot;).
-      </Alert>
+      </Notice>
     );
   }
+  const badge = badgeOf(SHEET_STATUS_LABELS[sheet.status]);
 
   return (
-    <Stack gap="md" data-testid="sheet-status">
-      <Paper withBorder p="md" radius="md">
-        <Stack gap="sm">
-          <Group justify="space-between">
-            <Group gap="xs">
-              <Text fw={600}>Situação</Text>
-              <StatusBadge label={SHEET_STATUS_LABELS[sheet.status]} />
-            </Group>
-            {isOperator && (
-              <Button
-                size="xs"
-                loading={reading}
-                disabled={state?.status === 'offline'}
-                onClick={() => void readNow()}
-              >
-                Ler retornos agora
-              </Button>
-            )}
-          </Group>
-          {sheet.lastError && (
-            <Alert color="red" role="alert" title="Falha atual">
-              {sheet.lastError.message} ({formatDateTime(sheet.lastError.at)})
-              {sheet.nextAttemptAt &&
-                ` O servidor tenta de novo sozinho às ${formatDateTime(sheet.nextAttemptAt)}; nada se perde enquanto isso.`}
-            </Alert>
-          )}
-          {sheet.status === 'layout_invalid' && (
-            <Text size="sm" c="red">
-              O formato da planilha foi alterado. Quem administra o servidor precisa rodar o comando
-              de preparação da planilha de novo.
+    <Card padding={24} block="Situação da planilha" data-testid="sheet-status">
+      <Group justify="space-between" gap={12}>
+        <Group gap={8}>
+          <SectionTitle>Situação da planilha</SectionTitle>
+          <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+        </Group>
+        {isOperator && (
+          <Action
+            variant="primary"
+            size="sm"
+            loading={reading}
+            disabled={state?.status === 'offline'}
+            onClick={() => void readNow()}
+          >
+            Ler retornos agora
+          </Action>
+        )}
+      </Group>
+      {sheet.lastError && (
+        <Notice tone="red" title="Falha atual">
+          {sheet.lastError.message} ({formatDateTime(sheet.lastError.at)})
+          {sheet.nextAttemptAt &&
+            ` O servidor tenta de novo sozinho às ${formatDateTime(sheet.nextAttemptAt)}; nada se perde enquanto isso.`}
+        </Notice>
+      )}
+      {sheet.status === 'layout_invalid' && (
+        <Notice tone="red" role="none">
+          O formato da planilha foi alterado. Quem administra o servidor precisa rodar o comando de
+          preparação da planilha de novo.
+        </Notice>
+      )}
+      {message && (
+        <Notice tone={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
+          {message.text}
+        </Notice>
+      )}
+      <DataTiles label="Situação da planilha">
+        <DataTile label="Atualizações pendentes">
+          {sheet.pending.count}
+          {sheet.pending.oldestChangeAt && (
+            <Text size="xs" c="dimmed">
+              desde {formatDateTime(sheet.pending.oldestChangeAt)}
             </Text>
           )}
-          {message && (
-            <Alert color={message.tone} role={message.tone === 'red' ? 'alert' : 'status'}>
-              {message.text}
-            </Alert>
-          )}
-          <SimpleGrid cols={3} spacing="sm">
-            <Field label="Atualizações pendentes">
-              {sheet.pending.count}
-              {sheet.pending.oldestChangeAt && (
-                <Text size="xs" c="dimmed">
-                  desde {formatDateTime(sheet.pending.oldestChangeAt)}
-                </Text>
-              )}
-            </Field>
-            <Field label="Retornos aguardando validação">{sheet.awaitingValidation}</Field>
-            <Field label="Retornos com problema">{sheet.problems.length}</Field>
-            <Field label="Última rodada completa">{formatDateTime(sheet.lastRoundOkAt)}</Field>
-            <Field label="Última leitura dos retornos">{formatDateTime(sheet.lastReadOkAt)}</Field>
-          </SimpleGrid>
-        </Stack>
-      </Paper>
-    </Stack>
+        </DataTile>
+        <DataTile label="Retornos aguardando validação">{sheet.awaitingValidation}</DataTile>
+        <DataTile label="Retornos com problema">{sheet.problems.length}</DataTile>
+        <DataTile label="Última rodada completa">{formatDateTime(sheet.lastRoundOkAt)}</DataTile>
+        <DataTile label="Última leitura dos retornos">
+          {formatDateTime(sheet.lastReadOkAt)}
+        </DataTile>
+      </DataTiles>
+    </Card>
   );
 }

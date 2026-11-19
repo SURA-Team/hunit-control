@@ -124,6 +124,9 @@ export const reservationListInputSchema = z.strictObject({
   fromLegacy: z.boolean().optional(),
   // Situação com o detalhe do Comercial (specs/005): os valores aceitos são conferidos pelo servidor.
   detailedSituation: z.array(z.string().min(1).max(64)).max(20).optional(),
+  // Filtro rápido e ordem da lista (specs/006, contrato 1.8.0).
+  quickFilter: z.enum(['pending_charge', 'to_review', 'with_error', 'done']).optional(),
+  order: z.enum(['hotel_number', 'hotel_check_in']).optional(),
   cursor: cursor.optional(),
   limit: limit.optional(),
 });
@@ -215,6 +218,14 @@ export const rejectReturnInputSchema = z.strictObject({
 export const reservationFiltersSchema = reservationListInputSchema.omit({
   cursor: true,
   limit: true,
+});
+
+/** Filtros das contagens dos filtros rápidos (specs/006): sem paginação, filtro rápido e ordem. */
+export const reservationCountFiltersSchema = reservationListInputSchema.omit({
+  cursor: true,
+  limit: true,
+  quickFilter: true,
+  order: true,
 });
 
 const money = z.string().regex(/^-?[0-9]+\.[0-9]{2}$/, 'valor no formato 1234.56');

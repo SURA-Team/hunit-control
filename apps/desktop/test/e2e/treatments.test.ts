@@ -25,8 +25,11 @@ import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminato
 import {
   configureApp,
   launchApp,
+  openReservationFilters,
+  searchReservations,
   stubOpenDialog,
   stubSaveDialog,
+  waitForReservationRows,
   type LaunchedApp,
   type Page,
 } from './app-fixture.js';
@@ -158,20 +161,33 @@ async function goTo(window: Page, area: string) {
   await window.getByRole('navigation').getByText(area, { exact: true }).click();
 }
 
-async function searchFor(window: Page, number: string) {
-  await window.getByLabel('Busca livre').fill(number);
-  await window.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await window.getByRole('cell', { name: number, exact: true }).waitFor();
-}
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * A linha da reserva na lista. Desde a 006, o número abre a segunda linha do hóspede ("R-PEND ·
+ * Booking.com"), não tem mais célula própria.
+ */
 const rowOf = (window: Page, number: string) =>
   window
-    .locator('tbody tr')
-    .filter({ has: window.getByRole('cell', { name: number, exact: true }) });
+    .locator('table[aria-label="Reservas"] tbody tr')
+    .filter({ has: window.getByText(new RegExp(`^${escapeRegExp(number)}( ·|$)`)) });
+
+/** Busca única (vale sozinha, sem "Buscar"): espera a lista só com a reserva procurada. */
+async function searchFor(window: Page, number: string) {
+  await searchReservations(window, number);
+  await waitForReservationRows(window, 1);
+  await rowOf(window, number).waitFor();
+}
+
+/** Chip de filtro rápido (o nome inclui a contagem). */
+const quickFilter = (window: Page, label: string) =>
+  window
+    .getByRole('group', { name: 'Filtros rápidos' })
+    .getByRole('button', { name: new RegExp(`^${label}`) });
 
 async function openDetail(window: Page, number: string) {
   await searchFor(window, number);
-  await window.getByRole('cell', { name: number, exact: true }).click();
+  await rowOf(window, number).click();
   await section(window).waitFor();
 }
 
@@ -270,7 +286,7 @@ describe('US1 — comprovante', () => {
     await confirmAttach(window, 'Comprovante registrado.');
 
     await section(window).getByText('Comprovante enviado', { exact: true }).waitFor();
-    const row = section(window).getByRole('row').filter({ hasText: 'comprovante.pdf' });
+    const row = section(window).getByRole('listitem').filter({ hasText: 'comprovante.pdf' });
     await row.getByText('Atual', { exact: true }).waitFor();
     await row.getByText(`por ${server.operator.name}`).waitFor();
 
@@ -284,10 +300,12 @@ describe('US1 — comprovante', () => {
     const { window } = launched;
     await openDetail(window, 'R-PEND');
 
-    await section(window).getByLabel('Valor que foi cobrado (R$)').fill('1.234,56');
+    await section(window).getByLabel('Corrigir o valor cobrado (R$)').fill('1.234,56');
     await section(window).getByRole('button', { name: 'Informar valor' }).click();
+    // O valor salvo aparece na caixa à parte do campo (specs/006, FR-026).
     await section(window)
-      .getByText(/1\.234,56 \(informado à mão\)/)
+      .getByTestId('manual-amount')
+      .getByText(/1\.234,56/)
       .waitFor();
     expect((await treatmentOf('R-PEND')).treatment.manualChargedAmount).toBe('1234.56');
 
@@ -306,20 +324,20 @@ describe('US1 — comprovante', () => {
     await summary.getByText(/comprovante\.pdf, anexado por/).waitFor();
     await confirmAttach(window, 'Comprovante registrado.');
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante-2.pdf' })
       .getByText('Atual', { exact: true })
       .waitFor();
 
     const revertStarted = Date.now();
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'Comprovante anterior' })
       .getByRole('button', { name: 'Reverter' })
       .click();
     await section(window).getByText('Documento revertido.').waitFor();
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante.pdf' })
       .getByText('Atual', { exact: true })
       .waitFor();
@@ -336,7 +354,7 @@ describe('US1 — comprovante', () => {
     await stubSaveDialog(launched.app, target);
 
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante.pdf' })
       .getByRole('button', { name: 'Baixar' })
       .click();
@@ -444,7 +462,7 @@ describe('US2 — tratativa', () => {
     await section(window).getByText('Comprovante enviado', { exact: true }).waitFor();
 
     await section(window)
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'tela.png' })
       .getByRole('button', { name: 'Desfazer' })
       .click();
@@ -500,9 +518,10 @@ describe('US3 — lote com seleção entre pesquisas', () => {
     expect(await window.locator('tbody tr').count()).toBe(1);
 
     await bar.getByRole('button', { name: 'Ver seleção' }).click();
-    const list = window.getByRole('table', { name: 'Reservas selecionadas' });
+    // Tela 4.5 (specs/006): linhas compactas com "número · hotel".
+    const list = window.getByRole('list', { name: 'Reservas selecionadas' });
     for (const number of BATCH) {
-      await list.getByRole('cell', { name: number, exact: true }).waitFor();
+      await list.getByText(new RegExp(`^${escapeRegExp(number)} · `)).waitFor();
     }
     await window.getByRole('button', { name: 'Fechar seleção' }).click();
     await list.waitFor({ state: 'detached' });
@@ -512,10 +531,9 @@ describe('US3 — lote com seleção entre pesquisas', () => {
     const { window } = launched;
     await stubOpenDialog(launched.app, fileOf('lote.pdf'));
 
-    await window
-      .getByTestId('selection-bar')
-      .getByRole('button', { name: 'Anexar comprovante' })
-      .click();
+    // "Anexar ▾" da barra de seleção (specs/006, tela 4.4).
+    await window.getByTestId('selection-bar').getByRole('button', { name: 'Anexar' }).click();
+    await window.getByRole('menuitem', { name: 'Anexar comprovante' }).click();
 
     const dialog = window.getByRole('dialog', { name: 'Anexar comprovante a 10 reservas' });
     await dialog.getByTestId('document-preview').getByText('lote.pdf').waitFor();
@@ -525,15 +543,20 @@ describe('US3 — lote com seleção entre pesquisas', () => {
       /8\s+reservas aceitam o documento — total de\s+R\$\s800,00/,
     );
     expect(await summary.innerText()).toMatch(/2\s+serão ignoradas/);
+    // A caixa das que ficam de fora (tela 4.6): a reserva e o motivo.
     await summary
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'B09' })
       .getByText('Esta reserva não exige cobrança.')
       .waitFor();
 
     await dialog.getByRole('button', { name: 'Confirmar' }).click();
     await dialog.getByText('Documento registrado em 8 reservas.').waitFor({ timeout: 20_000 });
-    await dialog.getByTestId('attach-result').getByRole('row').filter({ hasText: 'B10' }).waitFor();
+    await dialog
+      .getByTestId('attach-result')
+      .getByRole('listitem')
+      .filter({ hasText: 'B10' })
+      .waitFor();
     await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
     await dialog.waitFor({ state: 'detached' });
 
@@ -650,14 +673,15 @@ describe('Verificar — o Hunit mudou a situação depois da tratativa (FR-002a,
     await row.getByText('Verificar', { exact: true }).waitFor();
     expect(await row.getByText('Tratativa enviada').count()).toBe(0);
 
-    await window.getByLabel('Busca livre').fill('');
-    const shortcut = window.getByRole('button', { name: 'A verificar' });
+    await searchReservations(window, '');
+    await rowOf(window, 'R-PEND').waitFor();
+    // "A verificar" virou filtro rápido (specs/006, FR-016).
+    const shortcut = quickFilter(window, 'A verificar');
     await shortcut.click();
-    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor({ state: 'detached' });
-    await window.getByRole('cell', { name: 'R-VER', exact: true }).waitFor();
-    expect(await window.locator('tbody tr').count()).toBe(1);
+    await waitForReservationRows(window, 1);
+    await rowOf(window, 'R-VER').waitFor();
     await shortcut.click();
-    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
+    await rowOf(window, 'R-PEND').waitFor();
   });
 
   it('confirmar tira o alerta e fica no histórico, que mostra 5 itens e "Mostrar mais"', async () => {
@@ -706,41 +730,38 @@ describe('US4 — consulta com a chave de perfil consulta', () => {
 
   it('"Falta cobrar" traz as pendentes sem comprovante, inclusive a "Tratativa enviada" (FR-002)', async () => {
     const { window } = reader;
-    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
+    await rowOf(window, 'R-PEND').waitFor();
 
-    await window.getByRole('button', { name: 'Falta cobrar' }).click();
+    await quickFilter(window, 'Falta cobrar').click();
 
-    await window.getByRole('cell', { name: 'R-ENV', exact: true }).waitFor();
-    await rowOf(window, 'R-ENV').getByText('Tratativa enviada', { exact: true }).waitFor();
     // As cobradas (R-PEND e B01 a B08), a faturada e as já cobradas pelo Hunit ficam de fora.
-    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor({ state: 'detached' });
-    expect(await window.locator('tbody tr').count()).toBe(1);
+    await waitForReservationRows(window, 1);
+    await rowOf(window, 'R-ENV').getByText('Tratativa enviada', { exact: true }).waitFor();
 
-    await window.getByRole('button', { name: 'Falta cobrar' }).click();
-    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
+    await quickFilter(window, 'Falta cobrar').click();
+    await rowOf(window, 'R-PEND').waitFor();
   });
 
   it('filtra por "Comprovante enviado", vê documentos e histórico e baixa, sem ações de registro (cenários 2 a 4)', async () => {
     const { window } = reader;
-    await window.getByPlaceholder('Todas as situações').click();
+    // A situação fica no painel "Filtros avançados" e vale na hora (specs/006, tela 4.12).
+    const panel = await openReservationFilters(window);
+    await panel.getByPlaceholder('Todas as situações').click();
     await window.getByRole('option', { name: 'Comprovante enviado' }).click();
-    // A lista de situações é longa: fechada, ela não cobre o botão "Buscar".
-    await window.keyboard.press('Escape');
-    await window.getByRole('button', { name: 'Buscar', exact: true }).click();
+    await panel.getByRole('button', { name: 'Fechar os filtros' }).click();
 
-    await window.getByRole('cell', { name: 'R-PEND', exact: true }).waitFor();
-    await window.getByRole('cell', { name: 'R-ENV', exact: true }).waitFor({ state: 'detached' });
-    expect(await window.locator('tbody tr').count()).toBe(9);
+    await waitForReservationRows(window, 9);
+    await rowOf(window, 'R-PEND').waitFor();
     // Sem seleção de lote para o perfil consulta.
     expect(await window.getByRole('checkbox', { name: /Selecionar/ }).count()).toBe(0);
 
-    await window.getByRole('cell', { name: 'R-PEND', exact: true }).click();
+    await rowOf(window, 'R-PEND').click();
     const treatment = section(window);
     await treatment.getByText('Comprovante enviado', { exact: true }).waitFor();
     await treatment
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante-2.pdf' })
-      .getByText('Substituído')
+      .getByText('Substituído', { exact: true })
       .waitFor();
     await treatment
       .getByRole('list', { name: 'Histórico da tratativa' })
@@ -753,7 +774,7 @@ describe('US4 — consulta com a chave de perfil consulta', () => {
     const target = path.join(inputDir, 'baixado-consulta.pdf');
     await stubSaveDialog(reader.app, target);
     await treatment
-      .getByRole('row')
+      .getByRole('listitem')
       .filter({ hasText: 'comprovante.pdf' })
       .getByRole('button', { name: 'Baixar' })
       .click();
