@@ -74,10 +74,10 @@ pnpm --filter @hunit/desktop dev
 
 ## 4. Homologação
 
-No ambiente de homologação (`deploy/homolog/`, quickstart §2.1 da 003), com dados fictícios: subir o
-servidor com a API 1.8.0 (`pnpm build` e `docker compose --env-file .env.homolog up -d --build`),
-gerar o instalador (`pnpm build` e `pnpm --filter @hunit/desktop dist`) e percorrer os cenários da
-seção 3 com os dois perfis de acesso (operador e consulta). Registrar o resultado em `research.md`
+No ambiente de homologação, com dados fictícios: atualizar para a branch `006-redesign-app-desktop`
+como no `README.md` ("Homologação" → "Atualizar para uma feature"), o que sobe o servidor com a API
+1.8.0, e percorrer os cenários da seção 3 com as duas janelas do app (operador e consulta). O
+instalador (cenário 17) segue a mesma seção do `README.md`. Registrar o resultado em `research.md`
 ("Homologação").
 
 O app 0.2 já instalado continua funcionando contra a API 1.8.0 (só acréscimos): abrir uma vez antes
