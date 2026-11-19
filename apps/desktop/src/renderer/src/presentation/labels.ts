@@ -30,23 +30,17 @@ import type {
   TreatmentStatus,
 } from '../../../shared/ipc-types';
 
-/** sucesso (verde), atenção (amarelo), erro (vermelho), informação (azul) e neutro (cinza). */
-export const TONES = ['success', 'warning', 'error', 'info', 'neutral'] as const;
+/**
+ * Tons de significado fixo (specs/006, FR-005): `success` verde (concluído), `warning` âmbar
+ * (atenção), `error` vermelho (erro), `progress` lima (em andamento) e `info`/`neutral` cinza.
+ */
+export const TONES = ['success', 'warning', 'error', 'progress', 'info', 'neutral'] as const;
 export type Tone = (typeof TONES)[number];
 
 export interface Label {
   name: string;
   tone: Tone;
 }
-
-/** Cor do Mantine de cada tom. */
-export const TONE_COLORS: Record<Tone, string> = {
-  success: 'green',
-  warning: 'yellow',
-  error: 'red',
-  info: 'blue',
-  neutral: 'gray',
-};
 
 export const CLASSIFICATION_LABELS: Record<Classification, Label> = {
   virtual_card_already_charged: { name: 'Já cobrada', tone: 'success' },
@@ -205,7 +199,7 @@ export const OUTCOME_NAMES: Record<ReservationOutcome['outcome'], string> = {
 
 export const EXECUTION_STATUS_LABELS: Record<ExecutionStatus, Label> = {
   queued: { name: 'Na fila', tone: 'neutral' },
-  running: { name: 'Em andamento', tone: 'info' },
+  running: { name: 'Em andamento', tone: 'progress' },
   awaiting_2fa: { name: 'Aguardando token', tone: 'warning' },
   completed: { name: 'Concluída', tone: 'success' },
   failed: { name: 'Falhou', tone: 'error' },
@@ -214,7 +208,7 @@ export const EXECUTION_STATUS_LABELS: Record<ExecutionStatus, Label> = {
 
 export const HOTEL_STATUS_LABELS: Record<HotelRunStatus, Label> = {
   pending: { name: 'Pendente', tone: 'neutral' },
-  running: { name: 'Em andamento', tone: 'info' },
+  running: { name: 'Em andamento', tone: 'progress' },
   completed: { name: 'Concluído', tone: 'success' },
   failed: { name: 'Falhou', tone: 'error' },
   cancelled: { name: 'Cancelado', tone: 'neutral' },
@@ -264,7 +258,7 @@ export const DISPATCH_IGNORED_REASONS: Record<CommercialDispatchIgnored['reason'
 /** Estado do envio: os mesmos nomes das execuções, no masculino. */
 export const DISPATCH_STATUS_LABELS: Record<ExecutionStatus, Label> = {
   queued: { name: 'Na fila', tone: 'neutral' },
-  running: { name: 'Em andamento', tone: 'info' },
+  running: { name: 'Em andamento', tone: 'progress' },
   awaiting_2fa: { name: 'Aguardando token', tone: 'warning' },
   completed: { name: 'Concluído', tone: 'success' },
   failed: { name: 'Falhou', tone: 'error' },
@@ -273,7 +267,7 @@ export const DISPATCH_STATUS_LABELS: Record<ExecutionStatus, Label> = {
 
 /** Onde está a linha da reserva na planilha. */
 export const LINE_STATE_LABELS: Record<CommercialLineState, Label> = {
-  open: { name: 'A cobrar', tone: 'info' },
+  open: { name: 'A cobrar', tone: 'progress' },
   concluded: { name: 'Concluída', tone: 'success' },
   cancelled: { name: 'Pedido cancelado pelo Financeiro', tone: 'neutral' },
 };

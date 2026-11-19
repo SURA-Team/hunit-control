@@ -14,8 +14,8 @@ import type { Execution, ExecutionEndReason } from '../../../../shared/ipc-types
 import { ClassificationCountsGrid } from '../../components/ClassificationCountsGrid';
 import { EvidenceList } from '../../components/EvidenceList';
 import { formatDate } from '../../presentation/format';
-import { jobStatusBadge } from '../../presentation/jobs';
 import { END_REASON_MESSAGES, EXECUTION_STATUS_LABELS } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { Action, Card, Notice, SectionTitle, StatusBadge } from '../../ui';
 import {
   ACTIVE_EXECUTION,
@@ -39,7 +39,7 @@ export function ExecutionResult({ execution, onRestart, restarting = false }: Pr
   const { status, endReason } = execution;
   const active = ACTIVE_EXECUTION.has(status);
   const title = active ? 'Execução em andamento' : 'Resultado da execução';
-  const badge = jobStatusBadge(EXECUTION_STATUS_LABELS[status], status);
+  const badge = badgeOf(EXECUTION_STATUS_LABELS[status]);
 
   return (
     <Card block={title} data-testid="execution-result">

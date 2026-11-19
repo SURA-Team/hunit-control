@@ -72,17 +72,6 @@ const mantineOnlyInUi = [
   'Textarea',
 ];
 
-/**
- * Arquivos da interface ainda não migrados para os componentes de ui/ (specs/006). A tarefa que
- * migra um arquivo o tira daqui; a lista é esvaziada e removida na T059 (tasks.md da 006).
- */
-const NOT_YET_MIGRATED = [
-  'components/DocumentPreview.tsx',
-  'components/LegacyBadge.tsx',
-  'components/SituationBadge.tsx',
-  'components/StatusBadge.tsx',
-].map((file) => `apps/desktop/src/renderer/src/${file}`);
-
 export default defineConfig(
   globalIgnores([
     '**/node_modules/',
@@ -166,7 +155,6 @@ export default defineConfig(
       'apps/desktop/src/renderer/src/components/**/*.{ts,tsx}',
       'apps/desktop/src/renderer/src/screens/**/*.{ts,tsx}',
     ],
-    ignores: NOT_YET_MIGRATED,
     rules: {
       'no-restricted-imports': [
         'error',

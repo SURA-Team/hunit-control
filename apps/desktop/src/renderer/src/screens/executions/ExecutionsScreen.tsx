@@ -16,8 +16,9 @@ import type { ExecutionSummary } from '../../../../shared/ipc-types';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDate, formatDuration, formatTime } from '../../presentation/format';
-import { formatWhen, jobStatusBadge, requesterName } from '../../presentation/jobs';
+import { formatWhen, requesterName } from '../../presentation/jobs';
 import { END_REASON_MESSAGES, EXECUTION_STATUS_LABELS } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
 import { executionKey } from '../../state/executions';
 import {
@@ -117,7 +118,7 @@ export function ExecutionsScreen({
             header={<ListHeader columns={EXECUTION_COLUMNS} />}
           >
             {history.map((item) => {
-              const status = jobStatusBadge(EXECUTION_STATUS_LABELS[item.status], item.status);
+              const status = badgeOf(EXECUTION_STATUS_LABELS[item.status]);
               const when = formatWhen(item.createdAt);
               return (
                 <ExecutionRow

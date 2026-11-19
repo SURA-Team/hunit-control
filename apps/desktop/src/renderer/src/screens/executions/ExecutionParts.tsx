@@ -9,8 +9,8 @@
 import { Text } from '@mantine/core';
 import type { Execution, ExecutionEvent } from '../../../../shared/ipc-types';
 import { formatDuration, formatTime } from '../../presentation/format';
-import { jobStatusBadge } from '../../presentation/jobs';
 import { HOTEL_STATUS_LABELS } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { HotelRow, ProgressStrip, RowList, StatusBadge } from '../../ui';
 
 /** Situações em que a execução ainda está rodando (o card escuro, a faixa de progresso). */
@@ -78,7 +78,7 @@ export function ExecutionHotels({
   return (
     <RowList label="Hotéis da execução">
       {execution.hotels.map((hotel) => {
-        const badge = jobStatusBadge(HOTEL_STATUS_LABELS[hotel.status], hotel.status);
+        const badge = badgeOf(HOTEL_STATUS_LABELS[hotel.status]);
         const warning = hotel.status === 'running' ? latestWarning.get(hotel.hotelCode) : undefined;
         return (
           <HotelRow

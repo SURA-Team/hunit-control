@@ -14,8 +14,9 @@ import { useMemo, useState } from 'react';
 import type { CommercialDispatch } from '../../../../shared/ipc-types';
 import { useHunitAccess } from '../../components/HunitAccess';
 import { messageOf, unwrap, useHunit } from '../../hunit';
-import { dispatchTally, formatWhen, jobStatusBadge, requesterName } from '../../presentation/jobs';
+import { dispatchTally, formatWhen, requesterName } from '../../presentation/jobs';
 import { DISPATCH_STATUS_LABELS } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
 import { useDispatch } from '../../state/dispatches';
 import {
@@ -98,7 +99,7 @@ export function DispatchesTab() {
           <SectionTitle>Histórico</SectionTitle>
           <ListCard label="Envios ao Comercial" header={<ListHeader columns={DISPATCH_COLUMNS} />}>
             {history.map((item) => {
-              const status = jobStatusBadge(DISPATCH_STATUS_LABELS[item.status], item.status);
+              const status = badgeOf(DISPATCH_STATUS_LABELS[item.status]);
               const when = formatWhen(item.createdAt);
               return (
                 <ExecutionRow

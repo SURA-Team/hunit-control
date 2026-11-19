@@ -20,8 +20,9 @@ import { EvidenceList } from '../../components/EvidenceList';
 import { StaleDataNotice } from '../../components/StaleDataNotice';
 import { errorCode, messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDate, formatDateTime, formatDuration, formatTime } from '../../presentation/format';
-import { jobStatusBadge, requesterName } from '../../presentation/jobs';
+import { requesterName } from '../../presentation/jobs';
 import { END_REASON_MESSAGES, EXECUTION_STATUS_LABELS } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
 import { useExecution } from '../../state/executions';
 import {
@@ -85,7 +86,7 @@ function DetailContent({
   const { isOperator, isOnline, client } = useConnection();
   const { current, timing, warnings } = execution;
   const active = ACTIVE_EXECUTION.has(execution.status);
-  const status = jobStatusBadge(EXECUTION_STATUS_LABELS[execution.status], execution.status);
+  const status = badgeOf(EXECUTION_STATUS_LABELS[execution.status]);
 
   return (
     <>

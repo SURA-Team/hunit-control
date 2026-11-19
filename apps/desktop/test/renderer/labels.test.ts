@@ -6,8 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import contractSource from '../../../../packages/contracts/openapi.yaml?raw';
+import { BADGE_TONES } from '../../src/renderer/src/presentation/reservations.js';
 import {
   CLASSIFICATION_LABELS,
+  DISPATCH_STATUS_LABELS,
   CLASSIFICATION_ORDER,
   DOCUMENT_STATE_LABELS,
   END_REASON_MESSAGES,
@@ -163,5 +165,49 @@ describe('situações de cobrança (data-model §6.1)', () => {
     expect(CLASSIFICATION_LABELS.virtual_card_pending_charge.tone).toBe('warning');
     expect(CLASSIFICATION_LABELS.virtual_card_already_charged.tone).toBe('success');
     expect(CLASSIFICATION_LABELS.analysis_error.tone).toBe('error');
+  });
+});
+
+describe('tons de significado fixo (specs/006, T060, FR-005)', () => {
+  it('cada tom vira a cor do design: verde, âmbar, vermelho, lima e cinza', () => {
+    expect(BADGE_TONES).toEqual({
+      success: 'green',
+      warning: 'amber',
+      error: 'red',
+      progress: 'lime',
+      info: 'gray',
+      neutral: 'gray',
+    });
+  });
+
+  it('"Em andamento" e "A cobrar" em lima; concluído em verde; falha em vermelho', () => {
+    const tone = (label: { tone: string }) => BADGE_TONES[label.tone as keyof typeof BADGE_TONES];
+    for (const label of [
+      EXECUTION_STATUS_LABELS.running,
+      HOTEL_STATUS_LABELS.running,
+      DISPATCH_STATUS_LABELS.running,
+      LINE_STATE_LABELS.open,
+    ]) {
+      expect(tone(label), label.name).toBe('lime');
+    }
+    for (const label of [
+      EXECUTION_STATUS_LABELS.completed,
+      HOTEL_STATUS_LABELS.completed,
+      DISPATCH_STATUS_LABELS.completed,
+      DOCUMENT_STATE_LABELS.current,
+    ]) {
+      expect(tone(label), label.name).toBe('green');
+    }
+    for (const label of [EXECUTION_STATUS_LABELS.failed, HOTEL_STATUS_LABELS.failed]) {
+      expect(tone(label), label.name).toBe('red');
+    }
+    expect(tone(EXECUTION_STATUS_LABELS.awaiting_2fa)).toBe('amber');
+    expect(tone(REVIEW_LABEL)).toBe('amber');
+  });
+
+  it('os nomes ficam como escritos: a caixa alta é do estilo do selo, não do texto', () => {
+    for (const label of Object.values(DETAILED_SITUATION_LABELS)) {
+      expect(label.name, label.name).not.toBe(label.name.toUpperCase());
+    }
   });
 });

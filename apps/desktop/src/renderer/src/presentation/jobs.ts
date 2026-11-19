@@ -1,21 +1,9 @@
 /**
- * Selo da situação de uma execução ou de um envio ao Comercial (specs/006; telas 3.1, 3.2, 7.2 e
- * 7.4): "Em andamento" em lima, como no design (o lima é o destaque do que está acontecendo agora,
- * FR-013); as demais situações pelo tom do rótulo (verde concluído, vermelho falhou, âmbar aguardando
- * o token, cinza na fila ou cancelado).
+ * Textos das execuções e dos envios ao Comercial nas listas e nos cards (specs/006; telas 3.1, 7.2,
+ * 7.4 e 7.7): quando, quem pediu e o resultado de um envio. O selo da situação vem do tom do rótulo
+ * (`badgeOf`), com "Em andamento" em lima (tom `progress`, FR-005).
  */
-import type { ExecutionStatus, HotelRunStatus } from '../../../shared/ipc-types';
-import type { SituationBadgeItem } from '../ui';
 import { formatDateTime } from './format';
-import type { Label } from './labels';
-import { badgeOf } from './reservations';
-
-export function jobStatusBadge(
-  label: Label,
-  status: ExecutionStatus | HotelRunStatus,
-): SituationBadgeItem {
-  return status === 'running' ? { label: label.name, tone: 'lime' } : badgeOf(label);
-}
 
 /** "18/11/2026 · 10:42": data e hora de uma execução ou de um envio, como nas listas do design. */
 export function formatWhen(value: string | null | undefined): string {

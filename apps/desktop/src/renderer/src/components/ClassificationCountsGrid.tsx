@@ -11,6 +11,7 @@ const COUNT_TONES: Readonly<Record<Tone, CountCardProps['tone']>> = {
   success: 'green',
   warning: 'amber',
   error: 'red',
+  progress: 'gray',
   info: 'gray',
   neutral: 'gray',
 };

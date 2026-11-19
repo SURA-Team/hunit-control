@@ -348,6 +348,10 @@ muda lá, e um teste confere os rótulos do design nas telas principais. Os rót
 vêm do domínio (`commercial-sheet.ts`, usados na planilha e na cópia para e-mail) não mudam nesta
 feature.
 
+Na revisão final (T060), os nomes do design já estavam nos rótulos; entrou só o tom `progress`
+(lima) para "Em andamento" (execução, hotel e envio) e "A cobrar" (linha da planilha), as cores fixas
+da FR-005.
+
 ## R-16 — Testes
 
 **Decisão**: nos grupos que já existem (002, R-12):

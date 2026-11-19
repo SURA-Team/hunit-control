@@ -19,7 +19,7 @@ import type {
 } from '../../../../shared/ipc-types';
 import { useHunit } from '../../hunit';
 import { formatDateTime } from '../../presentation/format';
-import { dispatchTally, jobStatusBadge } from '../../presentation/jobs';
+import { dispatchTally } from '../../presentation/jobs';
 import {
   DISPATCH_IGNORED_REASONS,
   DISPATCH_OUTCOME_LABELS,
@@ -81,7 +81,7 @@ export function DispatchView({
     isDispatchFinished(dispatch) &&
     dispatch.resumedByDispatchId === null &&
     counts.notVerified > 0;
-  const status = jobStatusBadge(DISPATCH_STATUS_LABELS[dispatch.status], dispatch.status);
+  const status = badgeOf(DISPATCH_STATUS_LABELS[dispatch.status]);
 
   async function act(action: 'cancel' | 'resume') {
     setBusy(true);

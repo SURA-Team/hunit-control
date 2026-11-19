@@ -21,13 +21,15 @@ import {
 } from './labels';
 
 /**
- * Tom do selo de cada tom de rótulo (FR-005): verde concluído, âmbar atenção, vermelho erro e cinza
- * neutro. "Tratativa enviada" (`info`) fica cinza, como o "enviado" do design.
+ * Tom do selo de cada tom de rótulo (FR-005): verde concluído, âmbar atenção, vermelho erro, lima em
+ * andamento ("Em andamento", "A cobrar") e cinza neutro. "Tratativa enviada" (`info`) fica cinza,
+ * como o "enviado" do design.
  */
 export const BADGE_TONES: Readonly<Record<Tone, BadgeTone>> = {
   success: 'green',
   warning: 'amber',
   error: 'red',
+  progress: 'lime',
   info: 'gray',
   neutral: 'gray',
 };
