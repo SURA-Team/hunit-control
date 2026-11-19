@@ -619,7 +619,8 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         timeout: 30_000,
       });
       await shot('7.4', 'envio-concluido', true);
-      await dialog.getByRole('button', { name: 'Fechar', exact: true }).last().click();
+      // A tela 7.4 fecha pelo X (specs/006, T050).
+      await dialog.getByRole('button', { name: 'Fechar o diálogo' }).click();
     });
 
     await step('7.5 a 7.10 retornos e área Comercial', async () => {

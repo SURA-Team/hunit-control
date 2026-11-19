@@ -5,19 +5,22 @@
  * roteiro de larguras (`test/e2e/responsive.test.ts`); aqui, que todos passam pelo mesmo componente.
  *
  * Cada história acrescenta em `DIALOGS` os diálogos que migrar (recusar retorno, confirmações em
- * lote, cópia para e-mail, envio…). Hoje: o token, "Remover a configuração?" e, desde a US3, anexar
- * (uma reserva e lote), "Desfazer o comprovante?" e "Cancelar a execução?".
+ * lote, cópia para e-mail…). Hoje: o token, "Remover a configuração?", desde a US3 anexar (uma reserva
+ * e lote), "Desfazer o comprovante?" e "Cancelar a execução?" e, desde a US8, o envio ao Comercial
+ * (conferência e andamento).
  */
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TwoFactorDialog } from '../../src/renderer/src/components/TwoFactorDialog';
+import { DispatchDialog } from '../../src/renderer/src/screens/dispatch/DispatchDialog';
 import { ExecutionDetail } from '../../src/renderer/src/screens/executions/ExecutionDetail';
 import { AttachDialog } from '../../src/renderer/src/screens/reservations/AttachDialog';
 import { ReservationDetail } from '../../src/renderer/src/screens/reservations/ReservationDetail';
 import { SetupScreen } from '../../src/renderer/src/screens/setup/SetupScreen';
 import classes from '../../src/renderer/src/ui/structure.module.css';
 import type { Execution, PublicConfig } from '../../src/shared/ipc-types';
+import { dispatchFixture } from '../helpers/commercial-fixtures';
 import { fakeHunit, mocked, okResult, renderWithApp, type FakeHunit } from './render';
 import {
   check,
@@ -168,6 +171,32 @@ const DIALOGS: Record<string, DialogCase> = {
       await user.click(await screen.findByRole('button', { name: 'Desfazer' }));
     },
   },
+  'envio ao Comercial — conferência (tela 7.1)': {
+    title: 'Enviar ao Comercial',
+    size: 'sm',
+    open: async () => {
+      serveDispatch();
+      renderWithApp(
+        <DispatchDialog reservations={[RESERVATION]} hotelNames={new Map()} onClose={vi.fn()} />,
+        hunit,
+      );
+      await screen.findByTestId('dispatch-summary');
+    },
+  },
+  'envio ao Comercial — andamento (tela 7.2)': {
+    title: 'Enviar ao Comercial',
+    size: 'lg',
+    open: async () => {
+      serveDispatch();
+      renderWithApp(
+        <DispatchDialog reservations={[RESERVATION]} hotelNames={new Map()} onClose={vi.fn()} />,
+        hunit,
+      );
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Enviar 1 ao Comercial' }));
+      await screen.findByTestId('dispatch-view');
+    },
+  },
   'cancelar a execução (tela 3.3)': {
     title: 'Cancelar a execução?',
     size: 'sm',
@@ -204,6 +233,24 @@ function serveAttach() {
         '100.00',
       ),
     ),
+  );
+}
+
+/** Conferência com uma reserva aceita, acesso guardado e o envio em andamento. */
+function serveDispatch() {
+  mocked(hunit.api.credentials.status).mockImplementation(() =>
+    okResult({ username: 'operador@hotel.test', hasPassword: true }),
+  );
+  mocked(hunit.api.dispatches.check).mockImplementation(() =>
+    okResult({
+      eligible: [{ ...RESERVATION, totalAmount: '100.00', resend: false }],
+      ignored: [],
+      totalAmount: '100.00',
+    }),
+  );
+  mocked(hunit.api.dispatches.start).mockImplementation(() => okResult(dispatchFixture()));
+  mocked(hunit.api.dispatches.get).mockImplementation(() =>
+    okResult(dispatchFixture({ status: 'running' })),
   );
 }
 

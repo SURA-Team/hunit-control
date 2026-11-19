@@ -3,17 +3,23 @@
  * estado, quantas foram verificadas e quantas faltam, a reserva em verificação, o resultado de
  * cada reserva, cancelar e retomar. Tudo vem do servidor; o pedido de token aparece no diálogo
  * comum (`TwoFactorDialog`), como nas execuções.
+ *
+ * Desde a 006 (T050; telas 7.2 e 7.4): "Envio ao Comercial" com o selo da situação ("Em andamento"
+ * em lima) e a data e o cliente à direita; a caixa cinza com "N de M verificadas — faltam X", as
+ * contagens, a barra de progresso e a reserva em verificação; "Cancelar envio" em vermelho suave ou
+ * "Retomar as não verificadas (N)" como principal; e cada reserva numa linha com o hotel, o motivo
+ * e o selo do resultado.
  */
-import { Alert, Button, Group, Paper, Progress, Stack, Table, Text, Title } from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import type {
   CommercialDispatch,
   CommercialDispatchIgnored,
   CommercialDispatchItem,
 } from '../../../../shared/ipc-types';
-import { StatusBadge } from '../../components/StatusBadge';
 import { useHunit } from '../../hunit';
 import { formatDateTime } from '../../presentation/format';
+import { jobStatusBadge } from '../../presentation/jobs';
 import {
   DISPATCH_IGNORED_REASONS,
   DISPATCH_OUTCOME_LABELS,
@@ -21,7 +27,18 @@ import {
   END_REASON_MESSAGES,
   errorMessage,
 } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
+import {
+  Action,
+  Card,
+  CardHeader,
+  HotelRow,
+  Notice,
+  ProgressBar,
+  RowList,
+  StatusBadge,
+} from '../../ui';
 
 const FINAL = new Set<CommercialDispatch['status']>(['completed', 'failed', 'cancelled']);
 const ACTIVE = new Set<CommercialDispatch['status']>(['queued', 'running', 'awaiting_2fa']);
@@ -38,6 +55,8 @@ function reasonText(item: CommercialDispatchItem): string {
   }
   return item.reason;
 }
+
+const count = (value: number, one: string, many: string) => `${value} ${value === 1 ? one : many}`;
 
 export function DispatchView({
   dispatch,
@@ -64,6 +83,7 @@ export function DispatchView({
     isDispatchFinished(dispatch) &&
     dispatch.resumedByDispatchId === null &&
     counts.notVerified > 0;
+  const status = jobStatusBadge(DISPATCH_STATUS_LABELS[dispatch.status], dispatch.status);
 
   async function act(action: 'cancel' | 'resume') {
     setBusy(true);
@@ -86,116 +106,106 @@ export function DispatchView({
     if (action === 'resume') onResumed(result.data.id);
   }
 
-  return (
-    <Stack gap="sm" data-testid="dispatch-view">
-      <Group justify="space-between">
-        <Group gap="xs">
-          <Title order={4}>Envio ao Comercial</Title>
-          <StatusBadge label={DISPATCH_STATUS_LABELS[dispatch.status]} />
-        </Group>
-        <Text size="sm" c="dimmed">
-          {formatDateTime(dispatch.createdAt)} — {dispatch.requestedClient}
-        </Text>
-      </Group>
+  const tally = [
+    count(counts.sent, 'enviada', 'enviadas'),
+    count(counts.withdrawn, 'retirada', 'retiradas'),
+    count(counts.notVerified, 'não verificada', 'não verificadas'),
+    ...(counts.ignored > 0 ? [`${counts.ignored} fora do envio`] : []),
+  ].join(' · ');
 
-      <Paper withBorder p="sm" radius="sm">
-        <Stack gap={6}>
-          <Group justify="space-between">
-            <Text size="sm">
-              <b>{processed}</b> de <b>{counts.total}</b> verificadas
-              {counts.pending > 0 ? ` — faltam ${counts.pending}` : ''}
-            </Text>
-            <Text size="sm" c="dimmed">
-              {counts.sent} enviada(s) · {counts.withdrawn} retirada(s) · {counts.notVerified} não
-              verificada(s){counts.ignored > 0 ? ` · ${counts.ignored} fora do envio` : ''}
-            </Text>
-          </Group>
-          <Progress
-            value={counts.total > 0 ? (processed / counts.total) * 100 : 0}
-            aria-label="Andamento do envio"
-          />
-          {dispatch.current && (
-            <Text size="sm" c="dimmed">
-              Verificando a reserva {dispatch.current.reservationNumber} (
-              {hotel(dispatch.current.hotelCode)}) no Hunit…
-            </Text>
-          )}
-          {dispatch.status === 'awaiting_2fa' && (
-            <Text size="sm" c="orange.8">
-              Aguardando o token do Hunit.
-            </Text>
-          )}
-        </Stack>
-      </Paper>
+  return (
+    <Stack gap={16} data-testid="dispatch-view">
+      <CardHeader
+        title="Envio ao Comercial"
+        aside={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
+        actions={
+          <Text size="xs" c="dimmed">
+            {formatDateTime(dispatch.createdAt)} — {dispatch.requestedClient}
+          </Text>
+        }
+      />
+
+      <Card tone="subtle" padding={12} block="Andamento do envio">
+        <Group justify="space-between" gap={8}>
+          <Text size="sm" fw={700}>
+            {processed} de {counts.total} verificadas
+            {counts.pending > 0 ? ` — faltam ${counts.pending}` : ''}
+          </Text>
+          <Text size="xs" c="dimmed">
+            {tally}
+          </Text>
+        </Group>
+        <ProgressBar
+          value={counts.total > 0 ? (processed / counts.total) * 100 : 0}
+          label="Andamento do envio"
+        />
+        {dispatch.current && (
+          <Text size="xs" c="dimmed">
+            Verificando a reserva {dispatch.current.reservationNumber} (
+            {hotel(dispatch.current.hotelCode)}) no Hunit…
+          </Text>
+        )}
+        {dispatch.status === 'awaiting_2fa' && (
+          <Notice tone="amber" compact role="status">
+            Aguardando o token do Hunit.
+          </Notice>
+        )}
+      </Card>
 
       {isDispatchFinished(dispatch) && dispatch.endReason && dispatch.status !== 'completed' && (
-        <Alert color={dispatch.status === 'failed' ? 'red' : 'gray'} role="status">
+        <Notice tone={dispatch.status === 'failed' ? 'red' : 'amber'} role="status">
           {END_REASON_MESSAGES[dispatch.endReason]}
           {dispatch.endMessage ? ` ${dispatch.endMessage}` : ''}
-        </Alert>
+        </Notice>
       )}
       {dispatch.resumedByDispatchId && (
         <Text size="sm" c="dimmed">
           Este envio já foi retomado.
         </Text>
       )}
-      {error && (
-        <Alert color="red" role="alert">
-          {error}
-        </Alert>
-      )}
+      {error && <Notice tone="red">{error}</Notice>}
 
-      {isOperator && (
-        <Group gap="xs">
+      {isOperator && (ACTIVE.has(dispatch.status) || canResume) && (
+        <Group gap={8}>
           {ACTIVE.has(dispatch.status) && (
-            <Button
-              variant="default"
-              color="red"
+            <Action
+              variant="danger-light"
               size="xs"
               loading={busy}
               disabled={!isOnline}
               onClick={() => void act('cancel')}
             >
               Cancelar envio
-            </Button>
+            </Action>
           )}
           {canResume && (
-            <Button
+            <Action
+              variant="primary"
               size="xs"
               loading={busy}
               disabled={!isOnline}
               onClick={() => void act('resume')}
             >
               Retomar as não verificadas ({counts.notVerified})
-            </Button>
+            </Action>
           )}
         </Group>
       )}
 
-      <Table verticalSpacing={4} striped aria-label="Resultado de cada reserva">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Hotel</Table.Th>
-            <Table.Th>Reserva</Table.Th>
-            <Table.Th>Resultado</Table.Th>
-            <Table.Th>Motivo</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {dispatch.items.map((item) => (
-            <Table.Tr key={`${item.hotelCode}/${item.reservationNumber}`}>
-              <Table.Td>{hotel(item.hotelCode)}</Table.Td>
-              <Table.Td>{item.reservationNumber}</Table.Td>
-              <Table.Td>
-                <StatusBadge label={DISPATCH_OUTCOME_LABELS[item.outcome]} size="xs" />
-              </Table.Td>
-              <Table.Td>
-                <Text size="sm">{reasonText(item)}</Text>
-              </Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
+      <RowList label="Resultado de cada reserva">
+        {dispatch.items.map((item) => {
+          const outcome = badgeOf(DISPATCH_OUTCOME_LABELS[item.outcome]);
+          const reason = reasonText(item);
+          return (
+            <HotelRow
+              key={`${item.hotelCode}/${item.reservationNumber}`}
+              title={item.reservationNumber}
+              summary={`${hotel(item.hotelCode)}${reason ? ` · ${reason}` : ''}`}
+              status={<StatusBadge tone={outcome.tone}>{outcome.label}</StatusBadge>}
+            />
+          );
+        })}
+      </RowList>
     </Stack>
   );
 }

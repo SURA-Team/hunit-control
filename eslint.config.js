@@ -88,8 +88,6 @@ const NOT_YET_MIGRATED = [
   'screens/commercial/ProblemsTab.tsx',
   'screens/commercial/ReturnsTab.tsx',
   'screens/commercial/SheetTab.tsx',
-  'screens/dispatch/DispatchDialog.tsx',
-  'screens/dispatch/DispatchView.tsx',
   'screens/executions/ExecutionDetail.tsx',
   'screens/executions/ExecutionsScreen.tsx',
   'screens/reservations/CommercialSection.tsx',

@@ -110,7 +110,7 @@ describe('envio ao Comercial (US1)', () => {
     const view = dialog.getByTestId('dispatch-view');
     await view.getByText('Concluído', { exact: true }).waitFor({ timeout: 20_000 });
     await expect.poll(() => view.textContent()).toContain('3 de 3 verificadas');
-    expect(await view.textContent()).toContain('2 enviada(s) · 1 retirada(s) · 0 não');
+    expect(await view.textContent()).toContain('2 enviadas · 1 retirada · 0 não verificadas');
     expect(await view.getByText('Retirada', { exact: true }).count()).toBe(1);
 
     // A notificação de fim chega como nas execuções.
