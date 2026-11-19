@@ -197,6 +197,33 @@ nome do cliente, e é só para essa máquina que ele avisa o pedido de token. Pa
 Siga a seção 5 do [quickstart](specs/001-consulta-reservas-hunit/quickstart.md): conexão cifrada
 de outra máquina, cópia em atraso depois de o PC ficar desligado e uma restauração de teste.
 
+### 9. Atualizar para uma versão nova
+
+Depois que a feature foi homologada (seção "Homologação") e entrou na `master`. Na pasta da
+produção, no PowerShell:
+
+1. Confira que há uma cópia de segurança de hoje (`docker compose logs backup` ou a pasta
+   `BACKUP_DIR`).
+2. Atualize o código, compile e suba o servidor de novo. As migrations novas entram sozinhas quando
+   o servidor sobe:
+   ```powershell
+   git checkout master
+   git pull
+   pnpm install
+   pnpm build
+   docker compose up -d --build
+   docker compose ps                                   # server, db, proxy e backup "Up"
+   curl.exe http://127.0.0.1:3000/v1/health            # {"status":"ok"}
+   ```
+3. Se a feature mudou a planilha do Comercial, rode o `commercial-sheet setup` e o `check` de novo
+   ("Planilha do Comercial", passo 5).
+4. Gere o instalador nesta mesma pasta ("App desktop" → "Gerar o instalador") e instale-o nas
+   máquinas do Financeiro e da Controladoria. **Sempre o servidor antes do app**: o app novo pode
+   usar rotas novas da API; o app antigo continua funcionando com o servidor novo, porque a API só
+   ganha acréscimos.
+5. Numa máquina, abra o app e confira a versão no rodapé da **Configuração** e as telas que a
+   feature mudou.
+
 ## App desktop
 
 O app desktop (`apps/desktop`) é como o Financeiro e a Controladoria usam o sistema: executar a
@@ -277,14 +304,35 @@ Fechar a janela encerra o app. Se houver uma execução desta máquina em andame
 ela continua no servidor, mas o pedido de token não chega com o app fechado. Ao abrir de novo, um
 pedido de token ainda no prazo reaparece.
 
+### Telas do app
+
+Desde a versão 0.3 (feature 006), o app tem o visual do design da UX: menu lateral (só os ícones
+quando a janela é estreita), uma ação principal por bloco, em preto (ou lima nos cards escuros), e
+selos de situação com cores fixas (verde concluído, âmbar atenção, vermelho erro, lima em andamento,
+cinza neutro). As telas se ajustam à janela de 960 a 1 920 px e ao zoom (Ctrl + / Ctrl −): nas
+listas, as colunas que não cabem passam para a segunda linha.
+
+- **Executar**: o acesso ao Hunit, o período e os hotéis; a execução em andamento e o resultado
+  aparecem logo abaixo.
+- **Execuções**: as em andamento ficam em cards escuros no topo, com o progresso; as encerradas,
+  na lista. Clicar numa abre o detalhe, com os hotéis, as contagens e as evidências.
+- **Reservas**: uma busca só, por hóspede, número da reserva, transação, autorização ou valor
+  (`380,00`); **Origem** ao lado; **Filtros** abre os filtros avançados (hotel, período, situação…),
+  e a linha **Filtros aplicados** mostra o que está valendo. Os filtros rápidos **Todas**, **Falta
+  cobrar**, **A verificar**, **Com erro** e **Concluídas** mostram quantas reservas há em cada um. A
+  lista vem ordenada por hotel e check-in. Clicar na linha abre o detalhe da reserva; a caixa à
+  esquerda só marca.
+- **Comercial**: as abas **Envios** (os em andamento em cards escuros no topo), **Retornos a
+  validar**, **Retornos com problema** e **Planilha**.
+
 ### Tratativas manuais
 
 Para as reservas que exigem cobrança (pendente de cobrança, erro na cobrança, cartão validado,
 erro de análise e cobrar na maquininha), o Financeiro registra, no detalhe da reserva:
 
 - a **tratativa** — o pedido de cobrança ao Comercial (por exemplo, o e-mail): a reserva fica
-  **Enviada** e continua pendente;
-- o **comprovante** — a prova de que o Comercial cobrou: a reserva fica **Cobrada**.
+  **Tratativa enviada** e continua pendente;
+- o **comprovante** — a prova de que o Comercial cobrou: a reserva fica **Comprovante enviado**.
 
 Aceita e-mail (.eml ou .msg), PDF e imagem (.png, .jpg), de até 25 MB. Antes de confirmar, o app
 mostra o arquivo; o servidor confere o conteúdo contra a extensão. Um documento substituído ou
@@ -292,9 +340,10 @@ desfeito fica guardado por **30 dias** e pode ser revertido nesse prazo. O valor
 informado à mão quando o Hunit não traz o valor.
 
 Para aplicar o mesmo documento a várias reservas, marque-as na lista (a seleção se mantém entre
-pesquisas, até 2 000 reservas) e use **Anexar tratativa** ou **Anexar comprovante** na barra da
-seleção. O atalho **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm
-comprovante. Nada disso acessa o Hunit.
+pesquisas, até 2 000 reservas). A barra escura da seleção mostra quantas e o total; **Ver seleção**
+lista as marcadas, e **Anexar ▾** tem **Anexar tratativa** e **Anexar comprovante**. O filtro
+rápido **Falta cobrar** lista as reservas que exigem cobrança e ainda não têm comprovante. Nada
+disso acessa o Hunit.
 
 ### Envio ao Comercial
 
@@ -312,13 +361,16 @@ Financeiro envia os pedidos de cobrança direto para ela:
   **Validar comprovante**.
 - O Financeiro confere o retorno no detalhe da reserva ou na aba **Retornos a validar** e
   **confirma** (vale como comprovante, e o valor cobrado do Comercial passa a valer) ou **recusa**
-  com o motivo, que o Comercial vê na planilha. A confirmação pode ser em lote, com uma lista de
-  revisão antes; a recusa é sempre uma a uma.
+  com o motivo, que o Comercial vê na planilha. A confirmação pode ser em lote (**Confirmar
+  marcados** na aba, ou **Confirmar ▾** → **Confirmar retornos** na barra da seleção), com uma
+  lista de revisão antes; a recusa é sempre uma a uma.
 - A lista de reservas mostra o **valor cobrado** com a origem (Hunit, manual ou Comercial).
-- **Selecionar todas do filtro** marca até 2 000 reservas de todas as páginas; **Confirmar
-  "Verificar"** tira o alerta de várias de uma vez; **Copiar para e-mail** copia o resultado da
-  pesquisa (ou a seleção) numa tabela com as colunas da planilha, sem o nome do hóspede, para colar
-  no corpo do e-mail.
+- **Selecionar todas do filtro** marca até 2 000 reservas de todas as páginas; **Confirmar ▾** →
+  **Confirmar "Verificar"** tira o alerta de várias de uma vez; **Copiar para e-mail** copia o
+  resultado da pesquisa (ou a seleção) numa tabela com as colunas da planilha, sem o nome do
+  hóspede, para colar no corpo do e-mail.
+- Um envio em andamento aparece em card escuro no topo da aba **Envios**; fechar o diálogo do envio
+  não o interrompe.
 
 ## Planilha do Comercial
 

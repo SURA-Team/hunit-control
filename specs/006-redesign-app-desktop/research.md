@@ -493,7 +493,7 @@ Ambiente de homologação padronizado do `README.md` ("Homologação"), com os d
 |---|---|
 | 1, 2, 3.1 a 3.3, 3.5 a 3.11, 3.13 a 3.16 | Aprovados |
 | 3.4 (busca por valor e por número) | Aprovado. A busca pelo valor funcionou; o número com hífen (`101-1000`) não se aplica aos dados da homologação, que usam números como `100001`. A busca por um número no formato real funcionou |
-| 3.12 (janela de 960 a 1 920 px) | Na tela principal, diminuir a janela não deu problema. Num segundo monitor, a lista de reservas sobrepôs as informações das colunas (o hóspede sobre o período). Corrigido na T068 (R-07, "Revisão na homologação") e a conferir de novo nesse monitor |
+| 3.12 (janela de 960 a 1 920 px) | Na tela principal, diminuir a janela não deu problema. Num segundo monitor, a lista de reservas sobrepôs as informações das colunas (o hóspede sobre o período). Corrigido na T068 (R-07, "Revisão na homologação") e aprovado na nova conferência, no mesmo monitor, em 2026-11-19 |
 | 3.17 (instalador e ícone) | A conferir no app de produção, na máquina do usuário (T067) |
 | Seção 4 (o app 0.2 contra a API 1.8.0) | Aprovado |
 
