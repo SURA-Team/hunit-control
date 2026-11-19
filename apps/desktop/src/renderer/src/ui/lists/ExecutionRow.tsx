@@ -48,7 +48,7 @@ export function ExecutionRow({
         {detail && <div className={classes.secondary}>{detail}</div>}
       </td>
       <td data-col="result">
-        <div className={classes.secondary}>{result}</div>
+        <div className={classes.result}>{result}</div>
       </td>
       <td data-col="status">{status}</td>
       <td data-col="arrow">

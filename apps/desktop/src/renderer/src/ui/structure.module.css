@@ -106,10 +106,12 @@
   color: var(--hc-texto-inverso);
 }
 
+/* Linha abaixo do título, como "Envio ao Comercial" no pedido de token (tela 7.3): Descrição, 16 px abaixo. */
 .dialogSubtitle {
   display: block;
+  margin-top: 16px;
   color: var(--hc-texto-apagado);
-  font: var(--hc-font-corpo);
+  font: var(--hc-font-descricao);
   letter-spacing: 0;
 }
 

@@ -112,7 +112,8 @@ export function ExecutionsScreen({
 
       {history.length > 0 && (
         <Stack gap={12}>
-          <SectionTitle>Histórico</SectionTitle>
+          {/* O título só separa a lista do card escuro: sem nada em andamento, não aparece (5.1, 6.1). */}
+          {running.length > 0 && <SectionTitle>Histórico</SectionTitle>}
           <ListCard
             label="Histórico das execuções"
             header={<ListHeader columns={EXECUTION_COLUMNS} />}

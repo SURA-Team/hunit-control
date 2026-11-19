@@ -30,7 +30,7 @@
 }
 
 .root[data-size='lg'] {
-  height: 48px;
+  height: 42px; /* "Iniciar execução", tela 2.1 (botão de 42 px) */
   padding-inline: 26px;
   font: var(--hc-font-botao-grande);
   letter-spacing: var(--hc-font-botao-grande-tracking);

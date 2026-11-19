@@ -152,6 +152,7 @@ describe('lista de execuções (FR-015)', () => {
     expect(within(card).getByRole('button', { name: 'Ver detalhes' })).toBeInTheDocument();
 
     const history = screen.getByRole('table', { name: 'Histórico das execuções' });
+    expect(screen.getByRole('heading', { name: 'Histórico' })).toBeInTheDocument();
     const rows = within(history).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent('desktop-controladoria');
@@ -395,6 +396,8 @@ describe('visual novo de Execuções (specs/006, T055 e T056; telas 3.1 a 3.4)',
       await screen.findByRole('table', { name: 'Histórico das execuções' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: /^Em andamento:/ })).toBeNull();
+    // Sem card escuro acima, a lista vem sem o título "Histórico" (telas 5.1 e 6.1).
+    expect(screen.queryByRole('heading', { name: 'Histórico' })).toBeNull();
   });
 
   it('detalhe em andamento: faixa de progresso, contagens em caixas e hotéis em linhas (3.2)', async () => {

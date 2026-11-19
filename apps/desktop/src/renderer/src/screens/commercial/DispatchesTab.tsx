@@ -96,7 +96,8 @@ export function DispatchesTab() {
       )}
       {history.length > 0 && (
         <Stack gap={12}>
-          <SectionTitle>Histórico</SectionTitle>
+          {/* O título só separa a lista do card escuro: sem envio em andamento, não aparece (7.7). */}
+          {running.length > 0 && <SectionTitle>Histórico</SectionTitle>}
           <ListCard label="Envios ao Comercial" header={<ListHeader columns={DISPATCH_COLUMNS} />}>
             {history.map((item) => {
               const status = badgeOf(DISPATCH_STATUS_LABELS[item.status]);

@@ -201,6 +201,12 @@
   font: var(--hc-font-descricao);
 }
 
+/* "Resultado" das linhas de execução e de envio: Corpo em cinza (telas 3.1, 6.1 e 7.7). */
+.result {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+
 /* Nomes de hóspede e de hotel: até duas linhas, com o texto inteiro na dica (FR-045). */
 .clamp {
   display: -webkit-box;

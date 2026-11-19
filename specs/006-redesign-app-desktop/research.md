@@ -425,13 +425,15 @@ comparado lado a lado com os frames da página `006-redesign-app-desktop`, ao fi
 de novo em 2026-11-19. Para a revisão da UX (UX-5), as mesmas telas em 960 × 640 e 1 280 × 820,
 guardadas fora do Git.
 
-**Comparadas e iguais ao design** (com as diferenças da tabela abaixo): 2.6, 2.7, 2.10, 3.1 a 3.4,
-4.1 a 4.12, 7.1, 7.2, 7.4 a 7.14 e a 7.7a aprovada (UX-4).
+**Comparadas e iguais ao design** (com as diferenças da tabela abaixo): todas as 45 telas, a 4.12 e
+a 7.7a aprovada (UX-4). As 14 últimas (1.1 a 1.3, 2.1 a 2.5, 2.8, 2.9, 5.1, 6.1, 6.2 e 7.3) foram
+comparadas em 2026-11-19, depois que o conector do Figma voltou, e capturadas de novo com as
+correções.
 
-**Ainda por comparar**: 1.1 a 1.3, 2.1 a 2.5, 2.8, 2.9, 5.1, 6.1, 6.2 e 7.3. O conector do Figma
-caiu durante a comparação final, e essas telas (as da US1, o aviso de servidor indisponível e as
-telas do perfil consulta) ficam para quando ele voltar. Os prints delas já estão na captura de
-2026-11-19 e não têm falhas no roteiro.
+Não contam como diferença: o período e as datas dos prints (o roteiro usa a data do dia; o período
+padrão de Executar é "hoje a hoje + 6", da 002), a versão no rodapé da Configuração (o app sem
+empacotar mostra a do Electron) e o fundo atrás do diálogo da 2.9, que no roteiro ainda mostra a
+execução aguardando o token (a mesma execução encerrada é a tela 2.10).
 
 | Tela | Diferença | Decisão |
 |---|---|---|
@@ -444,6 +446,14 @@ telas do perfil consulta) ficam para quando ele voltar. Os prints delas já est�
 | 7.2, 7.4 | O aviso "Fechar não interrompe o envio…" não está no design | Mantido (evita fechar achando que cancelou); a confirmar com a UX |
 | 7.11 | A barra de seleção quebra o total para a segunda linha; no design o total aparece cortado | Mantido: nada é cortado (FR-045) |
 | 7.13 | As linhas da contagem por status do Hunit são mais altas que no design | Corrigida |
+| 2.1, 2.3, 2.8 | "Iniciar execução" com 48 px de altura; no design, 42 px | Corrigida (`Action` `lg`) |
+| 2.2 | O calendário não mostra os dias de fora do mês (no design, em cinza) e centraliza o nome de cada mês sobre ele | Mantido: com dois meses lado a lado, os dias de fora repetiriam os do outro mês (comportamento do calendário de dois meses do Mantine) |
+| 2.4, 2.5, 2.9, 7.3 | O fundo atrás dos diálogos fica desfocado; na imagem do design, não | Mantido: a sobreposição do design tem desfoque de 3 px e 60 % de opacidade (node `24:1179`), como o app; o Figma não mostra o desfoque na imagem porque a camada tem opacidade. A confirmar com a UX |
+| 5.1, 6.1 | A lista tem o título "Histórico" mesmo sem execução em andamento; no design, só com o card escuro acima (3.1). O mesmo na aba "Envios" (7.7) | Corrigida: o título só aparece com algo em andamento |
+| 3.1, 5.1, 6.1, 7.7 | O "Resultado" das linhas de execução e de envio em 12 px; no design, 14 px (Corpo, cinza) | Corrigida |
+| 5.1 | "dados de HH:MM — servidor indisponível" em âmbar escuro (`amarelo/9`); no design, `amarelo/8` | Mantido: `amarelo/8` sobre o fundo do app tem contraste de 2,66:1, e o `amarelo/9`, de 4,88:1 (SC-005). Vai para a UX com os pares de UX-1 |
+| 6.2 | No design, as duas reservas do sistema anterior (check-in em maio) aparecem no meio da lista | Mantido: a lista é ordenada por hotel e check-in (FR-014, R-18), e elas vêm primeiro no hotel delas; o design não seguiu a ordem |
+| 7.3 | O subtítulo "Envio ao Comercial" do pedido de token ficava colado ao título e em 14 px; no design, 16 px abaixo e em 12 px | Corrigida |
 
 "A confirmar com a UX" são diferenças que o app mantém de propósito; vão para a UX junto com os
 pontos acima, antes da marcação no Figma (T066).
