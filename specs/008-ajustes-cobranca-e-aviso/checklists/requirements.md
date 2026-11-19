@@ -31,5 +31,6 @@
 
 ## Notes
 
-- Cenário de borda "Cancelada sem cobrança…" cita FR-024 por referência; revisar na clarificação se as reservas com retorno em andamento devem mesmo recusar a ação (suposição registrada).
+- Removida a regra "só confirma cobrança de ontem ou antes" (informação errada): sem história de data da cobrança nem tela de bloqueio (7.16).
+- Cenário de borda "Cancelada sem cobrança…" cita FR-015; revisar na clarificação se as reservas com retorno em andamento devem mesmo recusar a ação (suposição registrada).
 - Pontos para `/speckit-clarify`, se desejado: regra exata de quais classificações aceitam "Cancelada sem cobrança" e se a 005 já entrega a marcação "Cobrada no Hunit".
