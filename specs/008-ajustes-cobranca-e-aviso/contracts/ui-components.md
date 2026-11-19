@@ -11,7 +11,8 @@ e este arquivo são atualizados juntos. Biblioteca no Figma: "Componentes — no
 |---|---|---|---|
 | `SwitchField` | `ui/fields/` | Estado desligado do design (variante "Desligado" do Switch): trilho na cor da borda, botão branco; ligado continua preto com o botão lima | Switch, variantes "Ligado" e "Desligado" |
 | `VolumeField` | `ui/fields/` (novo) | Rótulo "Volume", ícone de som baixo à esquerda e alto à direita, trilho preto com botão lima, valor "70 %" à direita; desabilitado em cinza. Props: `value`, `onChange`, `onChangeEnd` (amostra), `disabled`. Teclado: setas ±5, Page Up/Down ±10, Home/End; foco visível; `aria-label` e `aria-valuetext` em porcentagem | "Controle de volume", versões "Ativo" e "Desabilitado" |
-| `SelectField`, `MultiSelectField` | `ui/fields/` | Busca pelo teclado por padrão (`searchable`), sem acento e sem maiúsculas, com "Nenhuma opção encontrada"; uma tela pode desligar só com motivo escrito no código | — (comportamento) |
+| `SelectField`, `MultiSelectField` | `ui/fields/` | Busca pelo teclado por padrão (`searchable`), sem acento e sem maiúsculas, com "Nenhuma opção encontrada"; nenhuma tela desliga | — (comportamento) |
+| `ListCard` e listas internas | `ui/lists/lists.module.css` | O card (`.card`) e a caixa cinza (`.inset`) cortam o conteúdo no arredondado (`overflow: clip`): o destaque da linha (seleção, linha aberta, mouse) fica dentro, em qualquer posição (FR-030, research R-16) | Card de lista da 006 |
 | Ícones | `ui/icons/` | Som baixo e som alto (do controle de volume), Desfazer já existe | Ícones do design |
 
 Composições usadas pelas telas novas, só com componentes que já existem: `StatusBadge` nos tons da

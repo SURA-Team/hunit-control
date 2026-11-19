@@ -40,6 +40,9 @@ nome do hóspede.
 - Uma linha por reserva: o relato atual da linha da planilha. O Comercial mudar o responsável, a data
   ou o texto atualiza a linha e o `read_at` (a reserva volta a "Aguardando verificação"); trocar para
   outra situação, ou apagar, remove a linha (a reserva sai da fila, FR-012).
+- O relato `not_charged` entra em "Retornos com problema" só enquanto a linha está `open` e a
+  reserva não tem marcação "Cancelada sem cobrança" ativa (spec FR-007a, FR-020); a linha continua na
+  tabela, para o histórico.
 - Só existe para linha `open` (como os retornos): relato numa linha que foi para "Concluídas" fica como
   estava (a aba é protegida), e é assim que a fila mostra as confirmadas por 7 dias.
 
@@ -50,7 +53,7 @@ nome do hóspede.
 | `commercial_returns` | + `charge_situation_text` (text, nulo, até 100), + `charge_situation_kind` (enum `charge_situation_kind`: `charged_at_terminal`, `charged_in_hunit`, `not_charged`, `other`; nulo = situação vazia), + `charge_date` (date, nulo). Num retorno completo o tipo é `charged_at_terminal`, `other` ou nulo (os outros viram relato). `charge_situation_text` com tipo `other` é apagado na anonimização |
 | `commercial_lines` | `last_read_return` (jsonb) passa a guardar também a situação e a data normalizadas, para `returnChanged`; sem coluna nova |
 | `commercial_dispatches` | + `purpose` (enum `dispatch_purpose`: `send`, `hunit_check`; padrão `send`). A trava de uma automação por conta vale para os dois |
-| `commercial_dispatch_items` | `outcome` (`dispatch_item_outcome`) + `checked`; + `check_result` (enum `hunit_check_result`: `confirmed`, `still_pending`; nulo). `check`: `check_result` preenchido se e só se `outcome = 'checked'` |
+| `commercial_dispatch_items` | `outcome` (`dispatch_item_outcome`) + `checked`; + `check_result` (enum `hunit_check_result`: `confirmed`, `not_found`; nulo). `check`: `check_result` preenchido se e só se `outcome = 'checked'` |
 | `commercial_event_type` (enum) | + `report_received`, `report_changed`, `report_cleared` (o Comercial mudou ou apagou a situação), `hunit_checked` (verificação: `classification` lida e `reason` "cobrança encontrada" ou "cobrança não encontrada") |
 
 Nenhuma mudança em `reservations`, `treatment_documents` e `treatment_events`: a marcação não grava a
@@ -92,23 +95,30 @@ também não muda o banco: lê `commercial_returns.authorization_code` dos retor
 ### 3.3 `commercial-dispatch.ts` (alterado)
 
 - `dispatchEligibility` passa a receber `noChargeMarked` (marcada → `not_accepting`).
-- `hunitCheckResult(classificationAfter)` → `confirmed` se `requiresCharge` é falso; senão
-  `still_pending`.
+- `hunitCheckResult(classificationAfter)` → `confirmed` se o Hunit mostra a cobrança
+  (`hunitShowsCharge`); senão `not_found` (inclusive cancelada ou faturada no Hunit).
 
 ### 3.4 `commercial-report.ts` (novo; R-07)
 
-`hunitChargeStatus({ readAt, lastVerifiedAt, classification })` → `awaiting` (não lida depois do
-relato) | `confirmed` (lida depois e não exige mais cobrança) | `not_found` (lida depois e ainda exige).
-`HUNIT_QUEUE_CONFIRMED_DAYS = 7`: até quando uma confirmada fica na lista. O servidor monta o SQL da
+`hunitChargeStatus({ readAt, lastVerifiedAt, hunitClassification })` → `awaiting` (não lida depois do
+relato) | `confirmed` (lida depois e o Hunit mostra a cobrança: `hunitShowsCharge`) | `not_found`
+(lida depois e o Hunit não mostra a cobrança, qualquer que seja a classificação). Usa sempre a
+classificação do Hunit, nunca a efetiva da marcação (research R-07).
+`HUNIT_QUEUE_CONFIRMED_DAYS = 7`: até quando uma confirmada, ou uma não encontrada que não exige
+mais cobrança, fica na lista. `inHunitQueue({ status, requiresChargeNow, settledAt, now })`: aguardando
+sempre; não encontrada que ainda exige cobrança (classificação efetiva) sempre; as demais até 7 dias
+depois da leitura que as definiu. `hunitCheckTargets`: aguardando e não encontradas que ainda exigem
+cobrança (os itens do "Verificar agora"). O servidor monta o SQL da
 fila com a mesma regra (teste de paridade).
 
 ### 3.5 `commercial-sheet.ts` (alterado; R-05, R-06, R-08)
 
 - `COMMERCIAL_SHEET_HEADERS` + "Situação da cobrança" e "Data da cobrança" (16 colunas).
 - `FinanceValidation` + `hunit_awaiting` ("Aguardando verificação no Hunit", tom laranja),
-  `hunit_not_found` ("Cobrança não encontrada no Hunit", vermelho), `not_charged` ("Não cobrada:
+  `hunit_confirmed` ("Cobrança confirmada no Hunit", sem cor), `not_charged` ("Não cobrada:
   aguardando o Financeiro", vermelho) e `no_charge` ("Cancelada sem cobrança pelo Financeiro", sem
-  cor).
+  cor). O relato não encontrado usa o `rejected` que já existe, com o motivo "cobrança não encontrada
+  no Hunit" ("Recusado pelo Financeiro: cobrança não encontrada no Hunit", vermelho).
 - `sheetSystemRow` usa `amountToCharge` na coluna E ("Valor a cobrar").
 
 ### 3.6 Grupos dos filtros rápidos
@@ -133,15 +143,16 @@ efetiva. O teste de paridade da 006 ganha reservas marcadas e relatos.
  (planilha: "Cobrada no Hunit" + responsável) ──leitura──► relato charged_in_hunit
         │                                                      │
         │  situação derivada (§3.4), a cada leitura da reserva no Hunit depois de read_at:
-        │     awaiting ──(lida, não exige mais cobrança)──► confirmed  → linha vai para "Concluídas"
-        │     awaiting ──(lida, ainda exige)──────────────► not_found ──(lida de novo)──► confirmed | not_found
+        │     awaiting ──(lida, o Hunit mostra a cobrança)────► confirmed → linha vai para "Concluídas"
+        │     awaiting ──(lida, o Hunit não mostra a cobrança)► not_found → J "Recusado pelo Financeiro: …"
+        │                                       not_found ──(lida de novo)──► confirmed | not_found
         │
         └──(Comercial troca a situação ou apaga)──► relato removido: a reserva sai da fila
 ```
 
 ### Item de uma verificação (`purpose = hunit_check`)
 
-`pending` → `checked` (`confirmed` | `still_pending`) | `not_verified` (com o motivo; a situação na
+`pending` → `checked` (`confirmed` | `not_found`) | `not_verified` (com o motivo; a situação na
 fila não muda). Cancelamento ou falha: os `pending` viram `not_verified`, como no envio; a retomada
 copia os `not_verified`.
 

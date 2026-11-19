@@ -20,7 +20,8 @@ a 008 (spec, contexto). Diferenças entre o design e o código: [research R-13](
 Telas sem desenho na 008, montadas com os padrões da 006 (R-13): diálogo "Desfazer" da marcação;
 relato "Não cobrada" em `screens/commercial/ProblemsTab.tsx`; linha da lista de reservas marcada
 (`ui/lists/ReservationRow.tsx`, selo e "R$ 0,00 · antes R$ …"); seletores com busca em
-`screens/reservations/ReservationFilters.tsx` (US6).
+`screens/reservations/ReservationFilters.tsx` (US6); destaque da linha dentro do card em todas as
+listas (`ui/lists/lists.module.css`, US6, FR-030).
 
 Fora do renderer (US6): ícone na barra de tarefas — `apps/desktop/src/main/window.ts`,
 `src/main/index.ts` e `electron-builder.yml`.

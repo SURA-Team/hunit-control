@@ -146,8 +146,9 @@ retornos existentes).
   (situação, tipo reconhecido e data). Os relatos ("Cobrada no Hunit", "Não cobrada") ficam numa
   tabela própria, `commercial_reports`, uma linha por reserva ([data-model.md](./data-model.md)).
 - **Coluna J** (Validação do Financeiro) ganha textos para os relatos: "Aguardando verificação no
-  Hunit" (laranja), "Cobrança não encontrada no Hunit" (vermelho) e "Não cobrada: aguardando o
-  Financeiro" (vermelho).
+  Hunit" (laranja), "Recusado pelo Financeiro: cobrança não encontrada no Hunit" (vermelho, pela regra
+  de cor que já existe para as recusas), "Cobrança confirmada no Hunit" (sem cor, já em "Concluídas")
+  e "Não cobrada: aguardando o Financeiro" (vermelho).
 
 **Por quê**: o relato não tem valor nem código para o Financeiro validar; pô-lo em
 `commercial_returns` obrigaria a afrouxar as colunas obrigatórias e a criar estados que o app 0.3 não
@@ -163,26 +164,40 @@ na fila é calculada na leitura:
 
 - `awaiting` ("Aguardando verificação"): a reserva não foi lida no Hunit depois de `read_at` do relato
   (`reservations.last_verified_at <= read_at`);
-- `confirmed` ("Confirmada no Hunit"): lida depois, e a classificação não exige mais cobrança
-  (`requiresCharge` falso) — a reserva já está em "Concluídas" e a linha vai para "Concluídas" da
-  planilha pela regra da 005 (`lineState`);
-- `not_found` ("Não encontrada no Hunit"): lida depois, e ainda exige cobrança — continua pendente.
+- `confirmed` ("Confirmada no Hunit"): lida depois, e o Hunit **mostra a cobrança** (classificação
+  `virtual_card_already_charged`, `hunitShowsCharge`) — a reserva já está em "Concluídas" e a linha
+  vai para "Concluídas" da planilha pela regra da 005 (`lineState`), com a J "Cobrança confirmada no
+  Hunit";
+- `not_found` ("Não encontrada no Hunit"): lida depois, e o Hunit **não mostra a cobrança**, qualquer
+  que seja a classificação (ainda pendente, cancelada sem cobrança, faturada…). A reserva não foi
+  cobrada (spec, sessão "plano"): a J mostra "Recusado pelo Financeiro: cobrança não encontrada no
+  Hunit", e a reserva segue a própria situação (continua pendente se ainda exigir cobrança; se não
+  exigir mais, já está em "Concluídas", e a linha da fila mostra a situação do Hunit).
+
+A conferência usa a **classificação do Hunit**, nunca a efetiva: a marcação "Cancelada sem cobrança"
+do Financeiro (R-08) não muda a situação na fila nem o texto da J sobre o relato. Sempre que uma
+leitura (execução, envio ou verificação) grava uma reserva com relato, a linha dela é atualizada
+(`refreshCommercialLine`), para a coluna J acompanhar a situação derivada.
 
 Qualquer leitura conta: o "Verificar agora" e as execuções (spec, sessão "plano"). Nada roda sozinho
 em segundo plano. Um "Verificar agora" que não consegue ler uma reserva (Hunit indisponível, reserva
 não encontrada) não muda `last_verified_at`, então a situação fica como estava (FR-016).
 
-**Lista e contagem**: a aba mostra os relatos `awaiting` e `not_found` e os `confirmed` por **7
-dias** depois da leitura que confirmou (a linha diz que a reserva foi para "Concluídas"); a contagem
-da aba é o número de linhas mostradas, como na tela 7.15.
+**Lista e contagem**: a aba mostra os relatos `awaiting`; os `not_found` cuja reserva ainda exige
+cobrança (pela classificação efetiva: pendente e sem marcação); e, por **7 dias** depois da leitura
+que os definiu, os `confirmed` (a linha diz que a reserva foi para "Concluídas") e os `not_found` cuja
+reserva não exige mais cobrança (cancelada ou faturada no Hunit, marcada pelo Financeiro ou com
+comprovante; a linha mostra a situação). Assim nenhum relato fica para sempre na fila: a linha desses
+casos já está em "Concluídas", protegida, e o Comercial não consegue mais mudá-la. A contagem da aba
+é o número de linhas mostradas, como na tela 7.15.
 
 **"Verificar agora" = um envio com outro propósito**: o executor dos envios (`DispatchRunner`) ganha
 o propósito `hunit_check`. Mesmo ciclo (`queued` → `running` → `awaiting_2fa` → `running` →
 `completed`), mesmas credenciais do cofre, mesmo pedido de token e aviso, cancelamento, retomada,
 eventos SSE e a regra de uma automação por conta (constitution IV). Diferenças: os itens são os
-relatos `awaiting` e `not_found` no momento do pedido; cada reserva é lida com `findReservation` e
+relatos `awaiting` e os `not_found` cuja reserva ainda exige cobrança, no momento do pedido; cada reserva é lida com `findReservation` e
 gravada com `commitVerifiedReservation` (como no envio), mas **não abre linha nem escreve evento de
-envio**; o item termina `checked` com `checkResult` `confirmed` ou `still_pending`, ou
+envio**; o item termina `checked` com `checkResult` `confirmed` ou `not_found`, ou
 `not_verified` com o motivo. Sem relato para conferir → 409 `no_reports_to_check`.
 
 **Compatibilidade**: `GET /commercial-dispatches` continua devolvendo só os envios (`purpose=send`)
@@ -237,6 +252,11 @@ Sem prazo para desfazer (a spec não limita). Concorrência: desfazer uma marca�
 
 **Histórico**: marcar e desfazer aparecem no histórico do card "Tratativa" (tela 7.18), vindos de
 `Reservation.noCharge.history` (campo novo; `TreatmentEvent.type` é congelado).
+
+**Relatos de uma reserva marcada ou concluída**: o relato "Não cobrada" fica em "Retornos com
+problema" só enquanto a linha está em "A cobrar" e a reserva não tem marcação. Marcada (o Financeiro
+já decidiu) ou concluída por outro motivo (comprovante, Hunit sem exigir cobrança), ele sai da lista e
+continua no histórico; desfeita a marcação, volta se a linha ainda estiver em "A cobrar". O relato "Cobrada no Hunit" segue a regra do R-07, pela classificação do Hunit.
 
 **Hunit mostra cobrada** (FR-023): se a classificação do Hunit passar a `virtual_card_already_charged`
 numa reserva marcada, a marcação continua e o card "Cancelada sem cobrança" mostra o aviso "O Hunit
@@ -346,10 +366,10 @@ depois da confirmação, regra do usuário); copiar o código confirmado para `r
 | `contracts` | `openapi.yaml` 1.9.0 válido e tipos gerados em dia |
 | `server` | enums congelados (R-02); `compose-config` sem mudança |
 | `server-db` | migration; paridade SQL × domínio com reservas marcadas e relatos; rotas novas (marcar, desfazer, fila, verificação) com teste de contrato; confirmação com data de hoje (R-09); retenção apaga a observação; `setup` acrescenta O e P sem mexer nas linhas (planilha em memória); busca pelo código do Comercial confirmado na lista, nas contagens e na seleção, e não pelo de retorno aguardando, recusado, substituído ou com a confirmação desfeita (R-15) |
-| `server-browser` | verificação `hunit_check` com o Hunit simulado: confirmada, ainda pendente, Hunit indisponível (situação mantida), token e cancelamento |
+| `server-browser` | verificação `hunit_check` com o Hunit simulado: confirmada, ainda pendente, cancelada ou faturada no Hunit (não encontrada, J recusada), Hunit indisponível (situação mantida), token, cancelamento e uma verificação com 50 relatos, todos com resultado (SC-005) |
 | `desktop` | preferências com volume (arquivo antigo sem o campo), notificação sem som, AUMID e ícone por modo, `extraResources` |
 | `desktop-ui` | card do aviso (chave, volume, amostra, desabilitado), Preferências sem a chave, Retornos a validar/lote/gaveta com situação e data, fila e "Verificar agora" por perfil, marcar/desfazer com diálogo e 409, seletores pelo teclado |
-| `desktop-e2e` | jornada da fila (relato na planilha simulada → "Verificar agora" com token → confirmada) e da marcação (marcar → Concluídas e contagens → desfazer); `screens-capture` com as telas 1.1 a 1.3, 7.5, 7.7, 7.8, 7.12, 7.15, 7.17 e 7.18; roteiros de larguras com as telas novas |
+| `desktop-e2e` | destaque da linha dentro do card (seleção e mouse, uma reserva só, R-16); jornada da fila (relato na planilha simulada → "Verificar agora" com token → confirmada) e da marcação (marcar → Concluídas e contagens → desfazer); `screens-capture` com as telas 1.1 a 1.3, 7.5, 7.7, 7.8, 7.12, 7.15, 7.17 e 7.18; roteiros de larguras com as telas novas |
 
 ## R-13 — Diferenças do design levadas à UX
 
@@ -362,10 +382,33 @@ depois da confirmação, regra do usuário); copiar o código confirmado para `r
 | — | Relato "Não cobrada" em "Retornos com problema" não desenhado | Linha da lista de problemas com a situação, o responsável e "Abrir" |
 | — | Linha da lista de reservas marcada não desenhada | Selo "Cancelada sem cobrança" e valor R$ 0,00 com "antes R$ …" |
 | — | Item da fila "Aguardando verificação" mostra "confere na próxima execução" | Mantido (sessão "plano") |
+| 7.15 | "Não encontrada no Hunit" de uma reserva que o Hunit mostra cancelada ou faturada (o design só tem "continua pendente") | A segunda linha mostra a situação do Hunit (ex.: "Cancelada sem cobrança no Hunit") |
 
 ## R-14 — Figma ao concluir
 
 **Decisão**: ao concluir, a skill `figma-screens-sync` com `FEATURE = '008-ajustes-cobranca-e-aviso'`
 marca com ✅ as telas da página 008 (1.1, 1.2, 1.3, 7.5, 7.7, 7.8, 7.12, 7.15, 7.17, 7.18) e com ❌
-(ocultas) as mesmas telas na página 006. O FR-024 fala em "espelho"; desde 18/11/2026 o agente não
-desenha telas no Figma (AGENTS.md, "Telas no Figma"): atualizar o espelho é essa marcação.
+(ocultas) as mesmas telas na página 006 (FR-024, SC-008). O agente não desenha telas no Figma
+(AGENTS.md, "Telas no Figma").
+
+## R-16 — Destaque da linha dentro do card da lista (FR-030)
+
+**Causa conferida**: o card das listas (`.card` em `renderer/ui/lists/lists.module.css`) tem cantos
+arredondados (`--hc-radius-card`) e só 4 px de espaço em cima e embaixo, mas não corta o que tem
+dentro. O fundo da linha (lima de `[data-selected]`, cinza do `:hover`) é retangular: na primeira e
+na última linha ele passa por cima da curva dos cantos — com uma reserva só, aparece quadrado e para
+fora do card. A caixa cinza das listas internas (`.inset`) tem o mesmo problema.
+
+**Decisão**: `.card` e `.inset` passam a cortar o conteúdo no próprio arredondado
+(`overflow: clip`). `clip`, e não `hidden`, para não criar uma área de rolagem (o cabeçalho e as
+consultas `@container` continuam iguais). O contorno de foco da linha já é para dentro
+(`outline-offset: -2px`) e continua visível; menus e listas suspensas abrem em portal, fora do card.
+A faixa de ações do topo (`.toolbar`) já tem os cantos arredondados próprios e não muda.
+
+**Teste**: o roteiro de larguras (`desktop-e2e`) confere, numa lista com uma reserva só, selecionada e
+com o mouse em cima, que o card corta o conteúdo e que os cantos do card continuam com a cor do card
+(sem o lima nem o cinza da linha).
+
+**Alternativas**: arredondar as células dos cantos da primeira e da última linha (o fundo é da
+linha, `tr`, e o `border-radius` das células não o corta); aumentar o espaço interno do card (muda o
+design).

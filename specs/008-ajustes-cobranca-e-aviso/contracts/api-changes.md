@@ -15,7 +15,7 @@ ganham valores (R-02).
 | `POST /reservations/{hotelCode}/{reservationNumber}/no-charge` | operador | Marca como cancelada sem cobrança. Corpo: `{ expectedSituation: ReservationDetailedSituation, note?: string (1–500) }`. 200 → `Reservation` atualizada. 409 `no_charge_not_accepted` (com `reason`: `already_marked`, `not_accepting`, `has_proof`, `return_awaiting_validation`) ou `reservation_changed` (a situação não é mais a que a pessoa viu). 404 reserva inexistente |
 | `POST /reservations/{hotelCode}/{reservationNumber}/no-charge/undo` | operador | Desfaz. Corpo: `{ markId: uuid }`. 200 → `Reservation`. 409 `no_charge_not_active` (já desfeita ou outra marcação) |
 | `GET /commercial-hunit-charges` | todos | A fila "Cobradas no Hunit": `{ items: HunitChargeItem[], counts: { awaiting, notFound, confirmed } }`, ordenada por situação (aguardando, não encontrada, confirmada) e leitura mais antiga primeiro. Sem paginação (dezenas de itens) |
-| `POST /commercial-hunit-charges/check` | operador | "Verificar agora": cria uma verificação (`CommercialDispatch` com `purpose = hunit_check`) com os itens aguardando e não encontrados. Corpo: `{ credentials: HunitCredentials }` (como o envio). 202 → `CommercialDispatch`. 409 `no_reports_to_check` ou `account_busy` |
+| `POST /commercial-hunit-charges/check` | operador | "Verificar agora": cria uma verificação (`CommercialDispatch` com `purpose = hunit_check`) com os itens aguardando e os não encontrados que ainda exigem cobrança. Corpo: `{ credentials: HunitCredentials }` (como o envio). 202 → `CommercialDispatch`. 409 `no_reports_to_check` ou `account_busy` |
 
 O andamento, o token, o cancelamento, a retomada e os eventos da verificação usam as rotas de
 `/commercial-dispatches/{dispatchId}` que já existem.
@@ -58,7 +58,9 @@ CommercialReportBrief:      # relato atual do Comercial (R-06, R-07)
     chargeDate: { type: [string, 'null'], format: date }
     readAt: { type: string, format: date-time }
     hunitStatus:
-      description: Só em charged_in_hunit; null em not_charged
+      description: >-
+        Só em charged_in_hunit; null em not_charged. confirmed = o Hunit mostra a cobrança;
+        not_found = lida depois do relato e o Hunit não mostra a cobrança (research R-07)
       enum: [awaiting, confirmed, not_found, null]
 
 HunitChargeItem:            # linha da fila (tela 7.15)
@@ -90,9 +92,9 @@ CommercialHistoryEvent:     # CommercialEvent com os tipos novos (CommercialDeta
 | `CommercialSummary` (`Reservation.commercial`) | `report` | `CommercialReportBrief` ou nulo |
 | `CommercialReturnBrief`, `CommercialReturn` | `chargeSituation`, `chargeDate` | `ChargeSituation` ou nulo; data ou nula ("não informada", FR-011) |
 | `CommercialDetail` | `report`, `history` | o relato atual; o histórico com os tipos novos (o `events` de hoje continua igual, só com os 12 tipos) |
-| `CommercialSheetStatus` | `reports`, `hunitQueueCount` | relatos "Não cobrada" para "Retornos com problema"; tamanho da lista da fila (contagem da aba) |
+| `CommercialSheetStatus` | `reports`, `hunitQueueCount` | relatos "Não cobrada" para "Retornos com problema" (só com a linha em "A cobrar" e a reserva sem marcação "Cancelada sem cobrança"); tamanho da lista da fila (contagem da aba) |
 | `CommercialDispatch`, `CommercialDispatchSummary` | `purpose` | `send` ou `hunit_check` |
-| `CommercialDispatchItem` | `checkResult` | `confirmed`, `still_pending` ou nulo; `outcome` ganha `checked` (só em verificações, R-02) |
+| `CommercialDispatchItem` | `checkResult` | `confirmed`, `not_found` ou nulo; `outcome` ganha `checked` (só em verificações, R-02) |
 | `Problem.code` | — | + `no_charge_not_accepted`, `reservation_changed`, `no_charge_not_active`, `no_reports_to_check` |
 
 ## Parâmetro novo

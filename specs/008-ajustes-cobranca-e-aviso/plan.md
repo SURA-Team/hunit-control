@@ -38,6 +38,10 @@ Abordagem técnica (detalhes em [research.md](./research.md)):
 - **Busca pelo código do Comercial**: uma alternativa a mais na condição da busca livre (retorno
   confirmado com o mesmo código), que vale para lista, contagens e seleção de uma vez; sem campo novo
   na API (R-15).
+- **Destaque da linha**: o card das listas corta o conteúdo no arredondado (`overflow: clip`), e o
+  lima da seleção e o cinza do mouse deixam de sair dos cantos (R-16).
+- **Regra da fila** (decisão do usuário): só é "Confirmada no Hunit" quando o Hunit mostra a cobrança;
+  senão a planilha mostra "Recusado pelo Financeiro: cobrança não encontrada no Hunit" (R-07).
 
 ## Technical Context
 
@@ -164,6 +168,7 @@ apps/desktop/
         ├── ui/fields/               # SwitchField (desligado), VolumeField (NOVO), SelectField e MultiSelectField com busca
         ├── ui/icons/                # som baixo e alto
         ├── ui/lists/ReservationRow.tsx  # valor a cobrar e selo da marcação
+        ├── ui/lists/lists.module.css    # card e caixa interna cortam o destaque da linha (R-16)
         ├── presentation/labels.ts   # situações da cobrança, fila, marcação
         ├── screens/setup/           # card do aviso; Preferências sem a chave
         ├── screens/commercial/      # aba "Cobradas no Hunit" (HunitChargesTab NOVO), Retornos a validar, Retornos com problema
@@ -196,9 +201,9 @@ Planilha (K..P) ──rodada do sincronizador──► readReturn (domínio)
 ```text
 App (operador) ─► POST /commercial-hunit-charges/check (credenciais do cofre)
   └─► CommercialDispatch purpose=hunit_check (queued → running → awaiting_2fa → running → completed)
-        para cada relato awaiting/not_found:
+        para cada relato awaiting ou not_found que ainda exige cobrança:
           findReservation (só leitura) ─► commitVerifiedReservation (dados, classificação, last_verified_at)
-          └─► item checked: confirmed | still_pending  (ou not_verified: situação na fila não muda)
+          └─► item checked: confirmed | not_found  (ou not_verified: situação na fila não muda)
         refreshCommercialLine: confirmada ─► linha para "Concluídas"
   App: card de andamento e token como no envio; ao terminar, recarrega a fila
 ```

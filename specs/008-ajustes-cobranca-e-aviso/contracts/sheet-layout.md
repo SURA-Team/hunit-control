@@ -21,7 +21,8 @@ vazia ou outro texto exigem K a N; "Cobrada no Hunit" e "Não cobrada" exigem s�
 | Texto | Quando | Cor |
 |---|---|---|
 | Aguardando verificação no Hunit | relato "Cobrada no Hunit", ainda não lido no Hunit depois do relato | laranja (`#FFA94D`), como "Aguardando validação do Financeiro" |
-| Cobrança não encontrada no Hunit | relato "Cobrada no Hunit", lido e o Hunit ainda exige cobrança | vermelho (`#FF6B6B`) |
+| Recusado pelo Financeiro: cobrança não encontrada no Hunit | relato "Cobrada no Hunit", lido no Hunit depois do relato, e o Hunit não mostra a cobrança (pendente, cancelada, faturada…) | vermelho (`#FF6B6B`), a regra das recusas que já existe |
+| Cobrança confirmada no Hunit | relato "Cobrada no Hunit", e o Hunit mostra a cobrança (a linha está em "Concluídas") | sem cor |
 | Não cobrada: aguardando o Financeiro | relato "Não cobrada" | vermelho (`#FF6B6B`) |
 | Cancelada sem cobrança pelo Financeiro | reserva marcada (a linha está em "Concluídas") | sem cor |
 

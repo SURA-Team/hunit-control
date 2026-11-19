@@ -52,7 +52,8 @@ colunas O e P) e instalar o app 0.4 gerado pelo `dist`.
 | 3.8 | Situação digitada "Cancelada na Expedia" com os quatro campos vazios e o responsável | Em "Retornos com problema" como incompleto, mostrando o texto como veio (edge case) |
 | 3.9 | "Não cobrada" + responsável | Em "Retornos com problema" com a situação; reserva continua pendente; coluna J "Não cobrada: aguardando o Financeiro" (US2-1a) |
 | 3.10 | "Cobrada no Hunit" + responsável em três reservas | Aba "Cobradas no Hunit (3)", todas "Aguardando verificação"; coluna J "Aguardando verificação no Hunit" (US3-1, US3-2) |
-| 3.11 | "Verificar agora" (Hunit simulado: uma cobrada, uma não) | Pede o token como o envio; card de andamento; ao terminar, "Confirmada no Hunit — foi para Concluídas" e "Não encontrada no Hunit — continua pendente"; a confirmada vai para "Concluídas" na planilha (US3-4 a US3-6) |
+| 3.11 | "Verificar agora" (Hunit simulado: uma cobrada, uma não) | Pede o token como o envio; card de andamento; ao terminar, "Confirmada no Hunit — foi para Concluídas" e "Não encontrada no Hunit — continua pendente"; a confirmada vai para "Concluídas" na planilha; a não encontrada fica com a J "Recusado pelo Financeiro: cobrança não encontrada no Hunit" (US3-4 a US3-6) |
+| 3.11a | Relato "Cobrada no Hunit" de uma reserva que o Hunit passa a mostrar como cancelada sem cobrança (Hunit simulado) | Depois da leitura: "Não encontrada no Hunit" com a situação do Hunit na segunda linha; J com a mesma recusa; a reserva em "Concluídas" pela situação do Hunit; o próximo "Verificar agora" não a confere de novo, e ela sai da fila 7 dias depois (US3-6a, FR-013, FR-014) |
 | 3.12 | Execução que lê uma reserva da fila | A situação na fila é atualizada pela execução (US3-4a) |
 | 3.13 | "Verificar agora" com o Hunit fora do ar | Mensagem clara; situações como estavam (FR-016) |
 | 3.14 | Comercial troca "Cobrada no Hunit" por outra situação | Sai da fila na rodada seguinte (FR-012) |
@@ -65,6 +66,7 @@ colunas O e P) e instalar o app 0.4 gerado pelo `dist`.
 | 3.21 | Telas novas em 960, 1 280 e 1 920 px e zoom de 125 % | Mesma informação e ações, sem rolagem horizontal (FR-025) |
 | 3.22 | Confirmar um retorno com o código "AUT-TESTE-1" e buscar "aut-teste-1" em Reservas | A reserva aparece; a contagem dos filtros rápidos e "selecionar todas do filtro" também a trazem (US7-1, US7-2) |
 | 3.23 | Buscar o código de um retorno aguardando validação; depois desfazer a confirmação do 3.22 e buscar de novo | Nos dois casos a reserva não aparece por esse código (US7-3, US7-4) |
+| 3.24 | Buscar uma reserva só, selecioná-la e passar o mouse sobre ela; repetir em "Retornos a validar" com um retorno só | O lima e o cinza ficam dentro do card, acompanhando os cantos arredondados (US6-7, FR-030) |
 
 ## 4. Ícone na barra de tarefas (US6, research R-10)
 
