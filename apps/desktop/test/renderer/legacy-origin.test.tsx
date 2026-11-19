@@ -1,6 +1,8 @@
 /**
  * Origem "Sistema anterior" no app (specs/004, FR-011, FR-024; data-model §6) — tasks.md, T031:
  * selo na lista e no detalhe, filtro "Origem", seção "Sistema anterior" e autor no histórico.
+ * Desde a 006 (T047 e T048; telas 4.10 e 4.11): selos empilhados na lista, selos no topo da gaveta,
+ * tratativa importada com "Baixar" e "Desfazer" e o aviso de "ainda não verificada" em "Verificações".
  */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -20,7 +22,7 @@ import {
   renderWithApp,
   type FakeHunit,
 } from './render';
-import { NO_TREATMENT } from './treatment-fixtures';
+import { document as treatmentDocument, NO_TREATMENT, treatment } from './treatment-fixtures';
 
 const LEGACY = {
   importedAt: '2026-11-16T15:00:00.000Z',
@@ -96,6 +98,16 @@ describe('lista', () => {
     expect(within(imported!).getByText('Sistema anterior', { exact: true })).toBeInTheDocument();
     expect(imported).toHaveTextContent('A revisar (sistema anterior)');
     expect(within(other!).queryByText('Sistema anterior', { exact: true })).toBeNull();
+  });
+
+  it('selos da situação empilhados: "A revisar (sistema anterior)" e "Não identificada" (FR-033)', async () => {
+    renderWithApp(<ReservationsScreen />, hunit);
+    const rows = await screen.findAllByRole('row');
+    const imported = rows.find((row) => row.textContent?.includes('900001'));
+    const situation = imported!.querySelector('[data-col="situation"]');
+    expect(
+      [...(situation?.querySelectorAll('[data-tone]') ?? [])].map((badge) => badge.textContent),
+    ).toEqual(['A revisar (sistema anterior)', 'Não identificada']);
   });
 
   it('filtro "Origem": Todas, Sistema anterior e HUNIT Control viram fromLegacy', async () => {
@@ -180,7 +192,53 @@ describe('detalhe', () => {
       hunit,
     );
     expect(screen.queryByTestId('legacy-origin')).toBeNull();
-    expect(screen.queryByTestId('legacy-badge')).toBeNull();
+    const header = screen.getByRole('heading', { name: /Reserva 7001/ }).parentElement;
+    expect(header).not.toHaveTextContent('Sistema anterior');
+  });
+
+  it('selos no topo, na ordem da tela 4.11: origem, situação e "Não identificada"', () => {
+    renderWithApp(<ReservationDetail reservation={reservation('900001')} />, hunit);
+    const header = screen.getByRole('heading', { name: /Reserva 900001/ }).parentElement;
+    expect(
+      [...(header?.querySelectorAll('[data-tone]') ?? [])].map((badge) => badge.textContent),
+    ).toEqual(['Sistema anterior', 'A revisar (sistema anterior)', 'Não identificada']);
+  });
+
+  it('"Ainda não verificada…" fica no card "Verificações" (FR-035)', () => {
+    renderWithApp(<ReservationDetail reservation={reservation('900001')} />, hunit);
+    const card = screen.getByRole('heading', { name: 'Verificações' }).closest('[data-block]');
+    expect(card).toHaveTextContent('Ainda não verificada pelo HUNIT Control');
+  });
+
+  it('tratativa importada: "por Sistema anterior", com "Baixar" e "Desfazer" para o operador', async () => {
+    hunit = fakeHunit();
+    const imported = treatmentDocument({
+      kind: 'request',
+      fileName: 'Pedido de cobrança SA-2002.pdf',
+      attachedBy: 'sistema-anterior',
+      fromLegacy: true,
+    });
+    const current = treatment({
+      status: 'sent',
+      situation: 'not_virtual_card',
+      request: imported,
+    });
+    mocked(hunit.api.treatments.get).mockImplementation(() =>
+      okResult<TreatmentDetail>({ treatment: current, documents: [imported], events: [] }),
+    );
+    renderWithApp(
+      <ReservationDetail reservation={reservation('900001', { treatment: current })} />,
+      hunit,
+    );
+
+    const list = await screen.findByRole('list', { name: 'Documentos da tratativa' });
+    const row = within(list)
+      .getAllByRole('listitem')
+      .find((item) => item.textContent?.includes('SA-2002.pdf'));
+    expect(row).toHaveTextContent('por Sistema anterior');
+    expect(row).not.toHaveTextContent('sistema-anterior');
+    expect(within(row!).getByRole('button', { name: 'Baixar' })).toBeInTheDocument();
+    expect(await within(row!).findByRole('button', { name: 'Desfazer' })).toBeInTheDocument();
   });
 
   it('histórico: autor "Sistema anterior" nos registros importados', async () => {
