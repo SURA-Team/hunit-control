@@ -27,7 +27,8 @@ export type ListColumnKey =
   | 'actions'
   | 'problem'
   | 'message'
-  | 'when';
+  | 'when'
+  | 'count';
 
 export interface ListColumn {
   key: ListColumnKey;
@@ -95,6 +96,30 @@ export function ListCard({ label, header, children, toolbar }: ListCardProps) {
   return (
     <div className={classes.card}>
       {toolbar && <div className={classes.toolbar}>{toolbar}</div>}
+      <table className={classes.table} aria-label={label}>
+        {header}
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Lista em tabela dentro de uma caixa cinza, para diálogos (telas 7.12 e 7.13): as mesmas colunas e
+ * linhas (`ListHeader`, `ListRow`) das listas, sem o card. Mede o próprio espaço, como o card, para
+ * as colunas que somem em conteúdo estreito.
+ */
+export function InsetList({
+  label,
+  header,
+  children,
+}: {
+  label: string;
+  header?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.inset}>
       <table className={classes.table} aria-label={label}>
         {header}
         <tbody>{children}</tbody>

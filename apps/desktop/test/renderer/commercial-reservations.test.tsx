@@ -214,3 +214,98 @@ describe('"Copiar para e-mail" (FR-027, FR-028)', () => {
     expect(screen.getByRole('button', { name: 'Copiar para e-mail' })).toBeDisabled();
   });
 });
+
+describe('visual novo do lote e da cópia (specs/006, T053; telas 7.11 a 7.14)', () => {
+  it('"todas do filtro" (7.11): o texto no lugar do botão, a barra e o rodapé; desmarcar volta ao botão', async () => {
+    mocked(hunit.api.reservations.selectAll).mockImplementation(() =>
+      okResult({
+        total: 2,
+        truncated: false,
+        items: [selectionItem('7001'), selectionItem('7002')],
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithApp(<ReservationsScreen />, hunit);
+    await findRow('7001');
+    await user.click(screen.getByRole('button', { name: 'Selecionar todas do filtro' }));
+
+    expect(
+      await screen.findByText(
+        'As 2 reservas do filtro estão selecionadas (até 2.000, na ordem da lista)',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Selecionar todas do filtro' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('selection-bar')).toHaveTextContent(
+      '2 reservas selecionadas · todas do filtro',
+    );
+    expect(
+      screen.getByText(/^Mostrando 2 de \d+ reservas selecionadas do filtro$/),
+    ).toBeInTheDocument();
+    // Sem aviso: o texto já diz tudo.
+    expect(screen.queryByRole('status', { name: /selecionadas do filtro\./ })).toBeNull();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Selecionar a reserva 7001' }));
+    expect(
+      await screen.findByRole('button', { name: 'Selecionar todas do filtro' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('selection-bar')).not.toHaveTextContent('todas do filtro');
+  });
+
+  it('"Verificar" em lote (7.13): diálogo estreito, selo na contagem e "Confirmar N" principal', async () => {
+    serve([
+      pendingReservation('7001', {
+        classification: 'virtual_card_already_charged',
+        treatment: treatment({
+          status: 'sent',
+          situation: 'virtual_card_already_charged',
+          needsReview: true,
+        }),
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderWithApp(<ReservationsScreen />, hunit);
+    await user.click(await screen.findByRole('checkbox', { name: 'Selecionar a reserva 7001' }));
+    await chooseFromMenu(user, 'Confirmar', 'Confirmar "Verificar"');
+
+    const dialog = await screen.findByRole('dialog', { name: 'Confirmar "Verificar"' });
+    expect(dialog).toHaveAttribute('data-size', 'sm');
+    const counts = within(dialog).getByRole('table', { name: 'Contagem por status do Hunit' });
+    expect(within(counts).getByText('Já cobrada')).toHaveAttribute('data-tone', 'green');
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Confirmar 1' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+  });
+
+  it('copiar (7.14): diálogo estreito, "Cancelar" em texto, "Copiar" principal e depois "Fechar"', async () => {
+    mocked(hunit.api.clipboard.copyReservations).mockImplementation(() =>
+      okResult({ copied: 2, total: 2, truncated: false }),
+    );
+    const user = userEvent.setup();
+    renderWithApp(<ReservationsScreen />, hunit);
+    await findRow('7001');
+    await user.click(screen.getByRole('button', { name: 'Copiar para e-mail' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Copiar para e-mail' });
+    expect(dialog).toHaveAttribute('data-size', 'sm');
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveAttribute(
+      'data-variant',
+      'text',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Copiar' }));
+    expect(await within(dialog).findByTestId('copy-result')).toHaveTextContent(
+      '2 reservas copiadas.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Fechar' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(within(dialog).queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument();
+  });
+});

@@ -13,6 +13,18 @@
   box-shadow: var(--hc-shadow-card);
 }
 
+/* Lista dentro de uma caixa cinza (diálogos de lote, telas 7.12 e 7.13). */
+.inset {
+  container-type: inline-size;
+  padding: 2px 0;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-sutil);
+}
+
+.inset .row:hover {
+  background: transparent;
+}
+
 /* Faixa de ações da lista (tela 7.8), no topo do card. */
 .toolbar {
   display: flex;
@@ -120,6 +132,11 @@
 
 .table [data-col='when'] {
   width: 120px;
+}
+
+.table [data-col='count'] {
+  width: 100px;
+  text-align: end;
 }
 
 /*

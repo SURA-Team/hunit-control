@@ -17,9 +17,11 @@ export interface SelectionBarProps {
   /** Ver seleção, Anexar ▾, Confirmar ▾, Enviar ao Comercial. */
   actions: ReactNode;
   onClearAll: () => void;
+  /** Ao lado da contagem: "todas do filtro" (tela 7.11). */
+  scope?: string;
 }
 
-export function SelectionBar({ count, total, actions, onClearAll }: SelectionBarProps) {
+export function SelectionBar({ count, total, actions, onClearAll, scope }: SelectionBarProps) {
   return (
     <Surface dark>
       <section
@@ -34,6 +36,7 @@ export function SelectionBar({ count, total, actions, onClearAll }: SelectionBar
         <p className={classes.barSummary}>
           <span className={classes.barCount}>
             {count === 1 ? '1 reserva selecionada' : `${count} reservas selecionadas`}
+            {scope && ` · ${scope}`}
           </span>
           <span className={classes.barTotal} data-no-truncate="">
             total de {total}

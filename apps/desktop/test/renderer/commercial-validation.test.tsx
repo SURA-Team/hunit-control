@@ -296,9 +296,11 @@ describe('confirmação de retornos em lote (FR-016a)', () => {
     expect(within(review).getByText('AUT987')).toBeInTheDocument();
     expect(within(review).getByText('Maquininha Centro')).toBeInTheDocument();
     expect(within(review).getByText('Hotel da reserva: Hotel Praia')).toBeInTheDocument();
-    expect(within(review).getByText(/-R\$\s*10,00/)).toBeInTheDocument();
+    // A diferença fica na coluna e, no conteúdo estreito, na linha dos valores (o CSS mostra uma).
+    expect(within(review).getAllByText(/-R\$\s*10,00/).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole('button', { name: 'Confirmar 1' }));
+    // Tela 7.12: "Confirmar N retornos".
+    await user.click(screen.getByRole('button', { name: 'Confirmar 1 retorno' }));
     expect(hunit.api.commercial.confirmReturns).toHaveBeenCalledWith({
       reservations: [
         { hotelCode: '31', reservationNumber: '7001' },

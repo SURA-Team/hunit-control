@@ -119,6 +119,11 @@ export function ReservationsScreen({
     tone: NoticeTone;
     text: string;
   } | null>(null);
+  /**
+   * A seleção é exatamente o filtro inteiro (tela 7.11): vale enquanto os filtros e a contagem da
+   * seleção forem os mesmos de quando "Selecionar todas do filtro" foi usado.
+   */
+  const [allOfFilter, setAllOfFilter] = useState<{ filters: string; count: number } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -204,7 +209,13 @@ export function ReservationsScreen({
     setSelectAllNotice(null);
     try {
       const found = await unwrap(hunit.reservations.selectAll(listFilters));
+      const before = selection.items.length;
       const { added, skipped } = selection.add(found.items);
+      // O filtro inteiro coube e a seleção é só ele: o texto no lugar do botão (tela 7.11).
+      if (!found.truncated && skipped === 0 && before + added === found.total) {
+        setAllOfFilter({ filters: JSON.stringify(listFilters), count: found.total });
+        return;
+      }
       const parts = [
         `${added.toLocaleString('pt-BR')} ${added === 1 ? 'reserva selecionada' : 'reservas selecionadas'} do filtro`,
       ];
@@ -240,6 +251,10 @@ export function ReservationsScreen({
   const selectedOnPage = items.filter((reservation) => selection.has(reservation));
   const allOnPageSelected = items.length > 0 && selectedOnPage.length === items.length;
   const selectedCount = selection.items.length;
+  const filterSelected =
+    allOfFilter !== null &&
+    allOfFilter.filters === JSON.stringify(listFilters) &&
+    allOfFilter.count === selectedCount;
   const selectedKeys = selection.items.map(({ hotelCode, reservationNumber }) => ({
     hotelCode,
     reservationNumber,
@@ -311,7 +326,16 @@ export function ReservationsScreen({
             />
           ))}
         </Group>
-        {isOperator && items.length > 0 && (
+        {isOperator && items.length > 0 && filterSelected && (
+          <Text size="xs" c="dimmed" role="status">
+            As {selectedCount.toLocaleString('pt-BR')}{' '}
+            {selectedCount === 1
+              ? 'reserva do filtro está selecionada'
+              : 'reservas do filtro estão selecionadas'}{' '}
+            (até {SELECTION_LIMIT.toLocaleString('pt-BR')}, na ordem da lista)
+          </Text>
+        )}
+        {isOperator && items.length > 0 && !filterSelected && (
           <Action
             variant="text"
             loading={selectingAll}
@@ -354,6 +378,7 @@ export function ReservationsScreen({
       {isOperator && selectedCount > 0 && (
         <SelectionBar
           count={selectedCount}
+          {...(filterSelected && { scope: 'todas do filtro' })}
           total={formatMoney(sumMoney(selection.items.map((item) => item.totalAmount)))}
           onClearAll={() => {
             selection.clear();
@@ -477,6 +502,7 @@ export function ReservationsScreen({
               selected: isOperator ? selectedCount : 0,
               selectedHere: selectedOnPage.length,
               legacyOrigin: origin === 'legacy',
+              allOfFilter: filterSelected,
             })}
           </Text>
           {list.hasNextPage && (
@@ -566,18 +592,22 @@ export function footerText({
   selected,
   selectedHere,
   legacyOrigin,
+  allOfFilter = false,
 }: {
   shown: number;
   total: number | null;
   selected: number;
   selectedHere: number;
   legacyOrigin: boolean;
+  /** A seleção é o filtro inteiro (tela 7.11): "Mostrando 12 de 24 reservas selecionadas do filtro". */
+  allOfFilter?: boolean;
 }): string {
   const noun = (count: number | null) => (count === 1 ? 'reserva' : 'reservas');
   const showing =
     total === null
       ? `Mostrando ${shown.toLocaleString('pt-BR')} ${noun(shown)}`
       : `Mostrando ${shown.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')} ${noun(total)}`;
+  if (allOfFilter) return `${showing} selecionadas do filtro`;
   if (selected > 0) {
     const outside = selected - selectedHere;
     const word = selected === 1 ? 'selecionada' : 'selecionadas';
@@ -588,7 +618,6 @@ export function footerText({
   return `${showing} · ordenadas por hotel e check-in`;
 }
 
-/** O detalhe busca a reserva atualizada no servidor; enquanto isso, mostra a linha da lista. */
 /**
  * O detalhe atualizado no servidor. Com `initial` (a reserva da lista), mostra-a enquanto busca; só
  * com a chave (a seta de "Retornos com problema", specs/006, T052), "Carregando a reserva…".

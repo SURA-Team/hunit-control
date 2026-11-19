@@ -85,8 +85,6 @@ const NOT_YET_MIGRATED = [
   'components/StatusBadge.tsx',
   'screens/executions/ExecutionDetail.tsx',
   'screens/executions/ExecutionsScreen.tsx',
-  'screens/reservations/ConfirmBatchDialog.tsx',
-  'screens/reservations/CopyDialog.tsx',
   'screens/run/ExecutionResult.tsx',
 ].map((file) => `apps/desktop/src/renderer/src/${file}`);
 

@@ -3,6 +3,7 @@ export { ExecutionRow, type ExecutionRowProps } from './ExecutionRow';
 export {
   DISPATCH_COLUMNS,
   EXECUTION_COLUMNS,
+  InsetList,
   ListCard,
   ListHeader,
   RESERVATION_COLUMNS,

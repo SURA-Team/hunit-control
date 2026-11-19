@@ -10,8 +10,14 @@
  *
  * O que a tela mostra antes é o que a seleção sabia ao marcar; quem decide é o servidor, que
  * devolve o desfecho de cada reserva. Depois do lote, só as que falharam continuam selecionadas.
+ *
+ * Desde a 006 (T053; telas 7.12 e 7.13): diálogo padrão (largo para os retornos, estreito para o
+ * "Verificar"), o resumo com as quantidades em negrito, a revisão dos retornos e a contagem por
+ * status do Hunit em listas dentro de uma caixa cinza (com os selos), "Cancelar" em texto e
+ * "Confirmar N retornos" ou "Confirmar N" como principal; o desfecho com o mesmo resumo do anexo em
+ * lote.
  */
-import { Alert, Button, Group, Modal, ScrollArea, Stack, Table, Text, Title } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type {
@@ -26,8 +32,23 @@ import {
   CLASSIFICATION_LABELS,
   CLASSIFICATION_ORDER,
 } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import type { SelectedReservation } from '../../state/selection';
-import { ChargeHotel } from './CommercialSection';
+import {
+  Action,
+  AppDialog,
+  BatchSummary,
+  InsetList,
+  ListCell,
+  ListHeader,
+  ListRow,
+  Notice,
+  ReasonList,
+  StatusBadge,
+  SummaryLine,
+  type ListColumn,
+} from '../../ui';
+import { AmountDifference, ChargeHotel } from './CommercialSection';
 
 export type BatchKind = 'reviews' | 'returns';
 
@@ -35,6 +56,20 @@ const TITLES: Record<BatchKind, string> = {
   reviews: 'Confirmar "Verificar"',
   returns: 'Confirmar retornos do Comercial',
 };
+
+/** Colunas da revisão dos retornos (tela 7.12). */
+const RETURN_COLUMNS: readonly ListColumn[] = [
+  { key: 'reservation', label: 'Reserva' },
+  { key: 'chargeHotel', label: 'Hotel da cobrança' },
+  { key: 'amounts', label: 'Cobrado / a cobrar' },
+  { key: 'difference', label: 'Diferença' },
+];
+
+/** Colunas da contagem por status do Hunit (tela 7.13). */
+const COUNT_COLUMNS: readonly ListColumn[] = [
+  { key: 'situation', label: 'Status do Hunit' },
+  { key: 'count', label: 'Reservas' },
+];
 
 const keyOf = ({ hotelCode, reservationNumber }: ReservationKey): ReservationKey => ({
   hotelCode,
@@ -109,155 +144,162 @@ export function ConfirmBatchDialog({
   const confirmed = result?.items.filter((item) => item.outcome === 'confirmed').length ?? 0;
   const ignored = result?.items.filter((item) => item.outcome === 'ignored') ?? [];
   const failed = result?.items.filter((item) => item.outcome === 'failed') ?? [];
+  const confirmLabel =
+    kind === 'returns'
+      ? `Confirmar ${included.length} ${included.length === 1 ? 'retorno' : 'retornos'}`
+      : `Confirmar ${included.length}`;
 
   return (
-    <Modal
+    <AppDialog
       opened
+      size={kind === 'returns' ? 'lg' : 'sm'}
       onClose={close}
-      size={kind === 'returns' ? 'xl' : 'lg'}
-      title={<Title order={3}>{TITLES[kind]}</Title>}
+      title={TITLES[kind]}
       closeOnClickOutside={false}
-      transitionProps={{ duration: 0 }}
+      instant
+      {...(result
+        ? {
+            actions: (
+              <Action variant="primary" size="sm" onClick={close}>
+                Fechar
+              </Action>
+            ),
+          }
+        : {
+            onCancel: close,
+            actions: (
+              <Action
+                variant="primary"
+                size="sm"
+                onClick={() => void confirm()}
+                loading={busy}
+                disabled={included.length === 0}
+              >
+                {confirmLabel}
+              </Action>
+            ),
+          })}
     >
       {result ? (
-        <Stack gap="md" data-testid="batch-result">
-          <Alert color={failed.length > 0 ? 'yellow' : 'green'} role="status">
-            {confirmed} {confirmed === 1 ? 'reserva confirmada' : 'reservas confirmadas'}
+        <BatchSummary data-testid="batch-result">
+          <SummaryLine tone={failed.length > 0 ? 'amber' : 'green'}>
+            <b>{confirmed}</b> {confirmed === 1 ? 'reserva confirmada' : 'reservas confirmadas'}
             {ignored.length > 0 ? `; ${ignored.length} ficaram de fora` : ''}
             {failed.length > 0 ? `; ${failed.length} com erro (continuam selecionadas)` : ''}.
-          </Alert>
-          {ignored.length > 0 && (
-            <ScrollArea.Autosize mah={240}>
-              <Table verticalSpacing={2} aria-label="Reservas que ficaram de fora">
-                <Table.Tbody>
-                  {ignored.map((item) => (
-                    <Table.Tr key={`${item.hotelCode}/${item.reservationNumber}`}>
-                      <Table.Td>{hotel(item.hotelCode)}</Table.Td>
-                      <Table.Td>{item.reservationNumber}</Table.Td>
-                      <Table.Td>{item.reason ? BATCH_REASON_MESSAGES[item.reason] : ''}</Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea.Autosize>
-          )}
-          <Group justify="flex-end">
-            <Button onClick={close}>Fechar</Button>
-          </Group>
-        </Stack>
+          </SummaryLine>
+          <ReasonList
+            label="Reservas que ficaram de fora"
+            items={ignored.map((item) => ({
+              key: `${item.hotelCode}/${item.reservationNumber}`,
+              title: `${item.reservationNumber} (${hotel(item.hotelCode)})`,
+              reason: item.reason ? BATCH_REASON_MESSAGES[item.reason] : '—',
+            }))}
+          />
+        </BatchSummary>
       ) : (
-        <Stack gap="md">
+        <Stack gap={16}>
           <Text size="sm" data-testid="batch-summary">
-            <b>{included.length}</b>{' '}
-            {kind === 'reviews'
-              ? included.length === 1
-                ? 'reserva com o alerta "Verificar"'
-                : 'reservas com o alerta "Verificar"'
-              : included.length === 1
-                ? 'retorno aguardando validação'
-                : 'retornos aguardando validação'}
-            {outside > 0 &&
-              ` — ${outside} ${outside === 1 ? 'fica' : 'ficam'} de fora (${
-                kind === 'reviews' ? 'sem o alerta' : 'sem retorno aguardando validação'
-              })`}
+            <b>
+              {included.length}{' '}
+              {kind === 'reviews'
+                ? included.length === 1
+                  ? 'reserva'
+                  : 'reservas'
+                : included.length === 1
+                  ? 'retorno'
+                  : 'retornos'}
+            </b>{' '}
+            {kind === 'reviews' ? 'com o alerta "Verificar"' : 'aguardando validação'}
+            {outside > 0 && (
+              <>
+                {' '}
+                — <b>{outside}</b> {outside === 1 ? 'fica' : 'ficam'} de fora (
+                {kind === 'reviews' ? 'sem o alerta' : 'sem retorno aguardando validação'})
+              </>
+            )}
             .
           </Text>
 
           {kind === 'reviews' && included.length > 0 && (
-            <Table verticalSpacing={2} aria-label="Contagem por status do Hunit">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Status do Hunit</Table.Th>
-                  <Table.Th>Reservas</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {countByClassification(included).map(({ code, count }) => (
-                  <Table.Tr key={code}>
-                    <Table.Td>{CLASSIFICATION_LABELS[code].name}</Table.Td>
-                    <Table.Td>{count}</Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+            <InsetList
+              label="Contagem por status do Hunit"
+              header={<ListHeader columns={COUNT_COLUMNS} withArrow={false} />}
+            >
+              {countByClassification(included).map(({ code, count }) => {
+                const badge = badgeOf(CLASSIFICATION_LABELS[code]);
+                return (
+                  <ListRow
+                    key={code}
+                    columns={COUNT_COLUMNS}
+                    withArrow={false}
+                    cells={{
+                      situation: <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>,
+                      count: <ListCell strong primary={count} />,
+                    }}
+                  />
+                );
+              })}
+            </InsetList>
           )}
           {kind === 'reviews' && (
-            <Text size="sm" c="dimmed">
+            <Text size="xs" c="dimmed">
               Confirmar só tira o alerta: a tratativa continua registrada, e cada reserva ganha o
               registro no histórico.
             </Text>
           )}
 
           {kind === 'returns' && included.length > 0 && (
-            <ScrollArea.Autosize mah={360}>
-              <Table verticalSpacing={4} striped aria-label="Revisão dos retornos">
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Reserva</Table.Th>
-                    <Table.Th>Código de autorização</Table.Th>
-                    <Table.Th>Hotel da cobrança</Table.Th>
-                    <Table.Th>Valor cobrado</Table.Th>
-                    <Table.Th>Valor a cobrar</Table.Th>
-                    <Table.Th>Diferença</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {included.map((item) => {
-                    const brief = item.currentReturn;
-                    if (!brief) return null;
-                    const differs = brief.difference !== null && Number(brief.difference) !== 0;
-                    return (
-                      <Table.Tr key={`${item.hotelCode}/${item.reservationNumber}`}>
-                        <Table.Td>{item.reservationNumber}</Table.Td>
-                        <Table.Td>{brief.authorizationCode}</Table.Td>
-                        <Table.Td>
-                          <ChargeHotel
-                            chargeHotel={brief.chargeHotel}
-                            hotelName={hotel(item.hotelCode)}
-                          />
-                        </Table.Td>
-                        <Table.Td>{formatMoney(brief.chargedAmount)}</Table.Td>
-                        <Table.Td>{formatMoney(item.totalAmount)}</Table.Td>
-                        <Table.Td>
-                          <Text
-                            size="sm"
-                            c={differs ? 'orange.8' : undefined}
-                            fw={differs ? 700 : undefined}
-                          >
-                            <span style={{ whiteSpace: 'nowrap' }}>
-                              {formatMoney(brief.difference)}
-                            </span>
-                          </Text>
-                        </Table.Td>
-                      </Table.Tr>
-                    );
-                  })}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea.Autosize>
+            <InsetList label="Revisão dos retornos">
+              {included.map((item) => {
+                const brief = item.currentReturn;
+                if (!brief) return null;
+                return (
+                  <ListRow
+                    key={`${item.hotelCode}/${item.reservationNumber}`}
+                    columns={RETURN_COLUMNS}
+                    withArrow={false}
+                    cells={{
+                      reservation: (
+                        <ListCell
+                          strong
+                          primary={item.reservationNumber}
+                          secondary={brief.authorizationCode}
+                        />
+                      ),
+                      chargeHotel: (
+                        <ChargeHotel
+                          chargeHotel={brief.chargeHotel}
+                          hotelName={hotel(item.hotelCode)}
+                        />
+                      ),
+                      amounts: (
+                        <ListCell
+                          primary={`${formatMoney(brief.chargedAmount)} cobrado`}
+                          secondary={`${formatMoney(item.totalAmount)} a cobrar`}
+                          compact={
+                            <>
+                              diferença <AmountDifference value={brief.difference} />
+                            </>
+                          }
+                        />
+                      ),
+                      difference: <AmountDifference value={brief.difference} />,
+                    }}
+                  />
+                );
+              })}
+            </InsetList>
           )}
           {kind === 'returns' && (
-            <Text size="sm" c="dimmed">
+            <Text size="xs" c="dimmed">
               Cada retorno confirmado vale como comprovante, e o valor cobrado informado pelo
               Comercial passa a ser o valor cobrado da reserva. Para recusar, abra a reserva.
             </Text>
           )}
 
-          {error && (
-            <Alert color="red" role="alert">
-              {error}
-            </Alert>
-          )}
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={close}>
-              Cancelar
-            </Button>
-            <Button onClick={() => void confirm()} loading={busy} disabled={included.length === 0}>
-              Confirmar {included.length}
-            </Button>
-          </Group>
+          {error && <Notice tone="red">{error}</Notice>}
         </Stack>
       )}
-    </Modal>
+    </AppDialog>
   );
 }
