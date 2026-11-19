@@ -25,6 +25,11 @@
   background: transparent;
 }
 
+/* Na lista interna, a linha de uma informação só fica com 48 px (tela 7.13); as de duas crescem. */
+.inset .row td {
+  height: 28px;
+}
+
 /* Faixa de ações da lista (tela 7.8), no topo do card. */
 .toolbar {
   display: flex;

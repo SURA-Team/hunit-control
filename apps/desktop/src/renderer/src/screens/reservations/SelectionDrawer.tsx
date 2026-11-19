@@ -40,9 +40,9 @@ export function SelectionDrawer({
       closeLabel="Fechar seleção"
     >
       <Group justify="space-between" wrap="nowrap" mb="xs">
-        <Text size="sm">
+        <Text size="sm" fw={700}>
           {items.length} {items.length === 1 ? 'reserva' : 'reservas'} — total de{' '}
-          <b>{formatMoney(sumMoney(items.map((item) => item.totalAmount)))}</b>
+          {formatMoney(sumMoney(items.map((item) => item.totalAmount)))}
         </Text>
         <Action
           variant="text"

@@ -675,6 +675,39 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await goTo('Comercial');
       await window.getByRole('table', { name: 'Envios ao Comercial' }).waitFor();
       await shot('7.7', 'comercial-envios');
+
+      // 7.7a (aprovada pela UX, T049): um envio em andamento, criado direto no banco só para o
+      // print, com 8 de 16 reservas verificadas; depois do print ele é encerrado.
+      const created = await server.test.database.pool.query<{ id: string }>(
+        `insert into commercial_dispatches (account_key, client_id, status, started_at)
+         values ('captura-7-7a', $1, 'running', now()) returning id`,
+        [server.operator.id],
+      );
+      const runningDispatch = created.rows[0]?.id;
+      for (const [outcome, first, last] of [
+        ['sent', 1, 8],
+        ['pending', 9, 16],
+      ] as const) {
+        await server.test.database.pool.query(
+          `insert into commercial_dispatch_items
+             (dispatch_id, hotel_code, reservation_number, position, outcome, processed_at)
+           select $1, hotel_code, reservation_number, n, $2, $5::timestamptz
+           from (select hotel_code, reservation_number,
+                        row_number() over (order by hotel_code, reservation_number) as n
+                 from reservations) numbered
+           where n between $3 and $4`,
+          [runningDispatch, outcome, first, last, outcome === 'pending' ? null : new Date()],
+        );
+      }
+      await goTo('Reservas');
+      await goTo('Comercial');
+      await window.getByRole('region', { name: /^Em andamento:/ }).waitFor({ timeout: 15_000 });
+      await shot('7.7a', 'comercial-envios-em-andamento');
+      await server.test.database.pool.query(
+        `update commercial_dispatches set status = 'completed', finished_at = now() where id = $1`,
+        [runningDispatch],
+      );
+
       await window.getByRole('tab', { name: 'Retornos a validar' }).click();
       await window.getByRole('table', { name: 'Retornos a validar' }).waitFor({ timeout: 15_000 });
       await shot('7.8', 'comercial-retornos-a-validar');

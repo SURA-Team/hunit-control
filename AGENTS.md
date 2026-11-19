@@ -26,7 +26,7 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
 | `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios) |
-| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md` |
+| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
@@ -158,6 +158,7 @@ processo do app sozinhos; para `pnpm --filter @hunit/desktop dev`, rode antes
 | `pnpm --filter @hunit/desktop dev` | Abre o app em desenvolvimento (electron-vite, recarga da tela na hora). Sem `ELECTRON_RUN_AS_NODE` no terminal |
 | `pnpm --filter @hunit/desktop build` | Compila o app para `apps/desktop/out/` (o `pnpm build` da raiz também compila) |
 | `$env:HUNIT_SCREENS_DIR = "<pasta>"; pnpm test --project desktop-e2e screens-capture` | Captura as telas do app para comparar com o design no Figma (PowerShell; ~3 min; exige o Docker): um PNG por tela, com o número da tela no Figma, e `falhas.txt`. Sem a variável, o roteiro fica desligado nas rodadas normais. Use uma pasta fora do repositório. A janela é a do design (1 440 × 900); com `$env:HUNIT_SCREENS_WIDTH = "960"` (ou `"1280"`), as mesmas telas saem em 960 × 640 (ou 1 280 × 820), com os mesmos nomes: use uma pasta por largura |
+| `node apps/desktop/scripts/generate-icon.mjs` | Gera de novo o ícone do app (`resources/icon.ico` e `icon.png`) a partir da marca `resources/brand.svg` (specs/006); os arquivos gerados são versionados. Só é preciso quando a marca mudar |
 | `pnpm --filter @hunit/desktop dist` | Gera o instalador NSIS em `apps/desktop/release/` (sem assinatura de código; research R-11 da 002). Rode antes o `pnpm build`: o app empacota o `dist` do `@hunit/domain` e do `@hunit/contracts` |
 | `pnpm build` | Compila os pacotes para `dist/`, na ordem das dependências. Use sempre este antes dos comandos `hunit:*`: `pnpm --filter @hunit/server build` compila só o servidor e usa o `dist` antigo do `@hunit/contracts` e do `@hunit/domain` (os testes leem o código-fonte e não acusam) |
 | `pnpm --filter @hunit/contracts generate` | Regenera `packages/contracts/src/generated.ts` depois de mudar o `openapi.yaml` |
@@ -192,7 +193,7 @@ Regras ao mexer em dependências e no contrato:
   `specs/006-redesign-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
   A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua
   na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0 e a da 005 na 1.7.0, e não
-  devem ser alteradas
+  devem ser alteradas (a da 006 entrega a 1.8.0)
   (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
   research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
   `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).
@@ -275,3 +276,20 @@ montada no processo principal do app com `@hunit/domain`, sem o hóspede). O con
 no app. Sem `COMMERCIAL_SHEET_ID` e `COMMERCIAL_SHEET_KEY_FILE`, o envio fica desligado e o resto
 funciona. O ID e a chave da planilha são segredos: entram no `SecretRegistry` e nunca aparecem em
 logs, respostas ou mensagens (teste `commercial-markers.test.ts`).
+
+Desde a feature 006 (`specs/006-redesign-app-desktop/`), o app desktop tem o visual do design
+oficial da UX (arquivo Hunit Control no Figma): fundo cinza claro com cards brancos, menu lateral
+flutuante (só os ícones abaixo de 1 180 px), a fonte Manrope, a marca e o ícone novos, uma ação
+principal por bloco (preta, ou lima na superfície escura) e cores de significado fixo nos selos
+(verde concluído, âmbar atenção, vermelho erro, lima em andamento, cinza neutro). A lista de
+reservas tem cinco colunas, a busca única (texto ou valor), o painel "Filtros avançados", a linha
+"Filtros aplicados", os filtros rápidos com contagem (Todas, Falta cobrar, A verificar, Com erro,
+Concluídas) e a ordem por hotel e check-in; a seleção em lote usa a barra escura com "Anexar ▾" e
+"Confirmar ▾"; as gavetas e os diálogos seguem dois tamanhos padrão; as execuções e os envios em
+andamento aparecem em cards escuros no topo, e as encerradas no "Histórico". O contrato passou para
+a 1.8.0 (só acréscimos: `quickFilter` e `order` em `/reservations` e `/reservations/selection` e
+`GET /reservations/quick-filter-counts`; o app 0.2 continua funcionando). Toda a interface usa os
+componentes de `src/renderer/src/ui/`, sem exceções no lint. Dois roteiros de ponta a ponta conferem
+as telas em 960, 1 280 e 1 920 px e com zoom de 125 % (`responsive.test.ts`) e o redimensionamento
+sem perder o que foi feito (`resize.test.ts`); a comparação com o design fica em
+`specs/006-redesign-app-desktop/research.md` ("Comparação com o design").

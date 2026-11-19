@@ -418,6 +418,36 @@ consulta; o parâmetro mantém a API só com acréscimos.
 **Alternativas**: *trocar a ordem padrão*: mais simples, mas muda o comportamento de uma rota em
 uso. *Ordenar no app*: só ordenaria a página carregada, não a lista inteira.
 
+## Comparação com o design (T062)
+
+**Como** (R-17): roteiro `screens-capture` em 1 440 × 900 (47 prints: as 45 telas, a 4.12 e a 7.7a)
+comparado lado a lado com os frames da página `006-redesign-app-desktop`, ao fim de cada história e
+de novo em 2026-11-19. Para a revisão da UX (UX-5), as mesmas telas em 960 × 640 e 1 280 × 820,
+guardadas fora do Git.
+
+**Comparadas e iguais ao design** (com as diferenças da tabela abaixo): 2.6, 2.7, 2.10, 3.1 a 3.4,
+4.1 a 4.12, 7.1, 7.2, 7.4 a 7.14 e a 7.7a aprovada (UX-4).
+
+**Ainda por comparar**: 1.1 a 1.3, 2.1 a 2.5, 2.8, 2.9, 5.1, 6.1, 6.2 e 7.3. O conector do Figma
+caiu durante a comparação final, e essas telas (as da US1, o aviso de servidor indisponível e as
+telas do perfil consulta) ficam para quando ele voltar. Os prints delas já estão na captura de
+2026-11-19 e não têm falhas no roteiro.
+
+| Tela | Diferença | Decisão |
+|---|---|---|
+| 4.3 | "Copiar para e-mail" aparece ativo no design sem resultado; no app fica desabilitado, como desde a 005 (não há o que copiar) | Mantido; a confirmar com a UX |
+| 4.5 | O título da gaveta "Reservas selecionadas" é maior que o das outras gavetas | Mantido o título padrão das gavetas (FR-042); a confirmar com a UX |
+| 4.5 | A linha "N reservas — total de …" é toda em negrito no design | Corrigida |
+| 4.10, 7.11 | Com a barra de rolagem da página, o nome com o selo "Sistema anterior" quebra linha | Mantido: o nome quebra em vez de cortar (FR-045); a confirmar com a UX |
+| 4.12 | Quarta opção "Só não identificadas" em "Ativa ou cancelada" | Decisão do usuário (UX-3); vai para a UX |
+| 2.6, 3.1, 3.4 | O design mostra durações redondas ("7 min"); o app mostra minutos e segundos ("7 min 12 s"), como desde a 002 | Mantido; a confirmar com a UX |
+| 7.2, 7.4 | O aviso "Fechar não interrompe o envio…" não está no design | Mantido (evita fechar achando que cancelou); a confirmar com a UX |
+| 7.11 | A barra de seleção quebra o total para a segunda linha; no design o total aparece cortado | Mantido: nada é cortado (FR-045) |
+| 7.13 | As linhas da contagem por status do Hunit são mais altas que no design | Corrigida |
+
+"A confirmar com a UX" são diferenças que o app mantém de propósito; vão para a UX junto com os
+pontos acima, antes da marcação no Figma (T066).
+
 ## Pontos levados à UX
 
 Achados do levantamento que divergiam da spec ou entre si, com a decisão de 2026-11-18.

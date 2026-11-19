@@ -239,6 +239,11 @@ sempre `0`. Gere o instalador a partir de um clone completo do repositório: com
    Clique em **Mais informações** → **Executar assim mesmo**.
 3. Abra o **HUNIT Control** pelo Menu Iniciar.
 
+Desde a versão 0.3 (feature 006), o app tem o ícone novo. Ao atualizar uma máquina que já tinha o
+app, o atalho do Menu Iniciar ou da barra de tarefas pode continuar com o ícone antigo por um tempo:
+é o cache de ícones do Windows. Ele se atualiza sozinho; para forçar, desafixe e fixe o atalho de
+novo na barra de tarefas ou reinicie o Windows.
+
 ### Configurar a conexão (primeira vez)
 
 Tenha em mãos o endereço do servidor (`https://<SERVER_HOSTNAME>`), o `hunit-raiz.crt` (passo 6) e a
