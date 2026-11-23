@@ -3,13 +3,16 @@
 // Montagem do `code` do use_figma:
 //   const FEATURE = '<NNN-nome da feature concluída>';  // ex.: '006-redesign-app-desktop'
 //   const DRY_RUN = true;                               // true = só relata; false = aplica
+//   const SKIP = ['007-relatorios-app-desktop'];        // opcional: features ainda em
+//                                                       // desenvolvimento com número menor
 //   <este arquivo>
 //
 // Percorre as páginas de feature (`NNN-…`) até a feature informada, inclusive. Em cada uma, os
 // frames de tela ficam no nível da página ou dentro de uma seção, com o nome começando pelo número
 // da tela (`4.1 Reservas — lista`, com ou sem ✅/❌ na frente). Para cada número, a versão da página
 // mais recente é a ativa (✅, visível); as outras ficam obsoletas (❌, ocultas). Páginas de features
-// posteriores (ainda em desenvolvimento) não são tocadas.
+// posteriores (ainda em desenvolvimento) não são tocadas, nem as listadas em `SKIP` (uma feature
+// concluída antes de outra de número menor: a de número menor continua em desenvolvimento).
 //
 // Só muda o nome (o prefixo) e a visibilidade dos frames de tela. Nunca apaga, move nem altera o
 // conteúdo de um frame, nem mexe em páginas que não sejam de feature.
@@ -24,9 +27,11 @@ if (!figma.root.children.some((page) => page.name === FEATURE)) {
   throw new Error(`Página "${FEATURE}" não encontrada no arquivo`);
 }
 
+const skipped = typeof SKIP === 'undefined' ? [] : SKIP;
 const pages = figma.root.children
   .map((page) => ({ page, match: PAGE_RE.exec(page.name) }))
   .filter(({ match }) => match && Number(match[1]) <= featureNumber)
+  .filter(({ page }) => !skipped.includes(page.name))
   .map(({ page, match }) => ({ page, number: Number(match[1]) }));
 
 /** número da tela → versões encontradas */
@@ -54,7 +59,16 @@ const compare = (a, b) => {
   return a1 - b1 || a2 - b2;
 };
 
-const report = { feature: FEATURE, dryRun: DRY_RUN, active: [], obsolete: [], changed: 0, conflicts: [] };
+const report = {
+  feature: FEATURE,
+  dryRun: DRY_RUN,
+  pages: pages.map(({ page }) => page.name),
+  skipped,
+  active: [],
+  obsolete: [],
+  changed: 0,
+  conflicts: [],
+};
 for (const screen of [...byScreen.keys()].sort(compare)) {
   const versions = byScreen.get(screen);
   const latest = Math.max(...versions.map((version) => version.pageNumber));
