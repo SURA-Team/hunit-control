@@ -987,3 +987,39 @@ milhares de leituras perderia hotéis inteiros por soluços assim.
   tentativas** (2, 5, 10, 20 e 30 s, cobrindo indisponibilidades de até ~67 s) e
   **`HOTEL_CONCURRENCY=5`** em produção (R-08). Com 5 hotéis em paralelo, a rotina caiu para
   5 min 17 s, mas 4 hotéis falharam num episódio que passou dos 17 s.
+
+## R-24 — Cartão do hóspede sem a ação de cobrar (FR-013 regra 6a)
+
+Contexto: clarificação de 2026-11-19. Em produção, muitas reservas ficaram em "erro de análise"
+mostrando, no Hunit, o cartão do hóspede com o botão "Ver dados do cartão" e sem o botão de cobrar
+(coleta "Canal Collect", pré-pagamento "não executado até o momento a cobrança"). Para o
+Financeiro, são reservas para "cobrar na maquininha".
+
+- **Captura** (19/11/2026, `hunit:reservations-check` num hotel com o problema, 10 reservas
+  abertas, anonimizadas com `hunit:anonymize-fixtures`; 8 ativas e 2 canceladas), em todas:
+  `hasCreditCardInfo = true` (o cartão e o botão), `prePaymentStatus = Unprocessed`,
+  `canCharge = false`, `lastPaymentEvent` nulo; `paymentTypeId = 1` com o rótulo "cartão de
+  crédito" em 9 e forma vazia em 1. Pelo mapeamento do R-13a, o retrato fica: pré-pagamento sim,
+  sem falha, sem cobrança, sem validação e ação de cobrar `false` — a regra 7 ("estado
+  indeterminado") as mandava para erro de análise. Não era a falta da forma de pagamento: a regra
+  2 só vale sem pré-pagamento. Nenhuma das 103 respostas capturadas antes tinha essa combinação
+  (as com `hasCreditCardInfo` e `Unprocessed` vinham com `canCharge = true`: pendentes).
+- **Decision**:
+  1. **Domínio** (`classifyReservation`): regra 6a, logo depois da 6: pré-pagamento sem falha, sem
+     cobrança, sem validação e com a ação de cobrar `false` → `charge_at_terminal`, com o motivo
+     "Cartão do hóspede disponível no Hunit, sem registro de cobrança e sem a ação de cobrar:
+     cobrar na maquininha". Com a 6a, a regra 7 fica só com os casos indeterminados (sinal `null`)
+     ou contraditórios, decididos antes (FR-015 não muda). A forma de pagamento não muda nada
+     aqui, e a cancelada recebe a mesma classificação da ativa (FR-014a).
+  2. **Camada do Hunit**: nenhuma mudança. `hasCreditCardInfo` já é o "pré-pagamento" do retrato e
+     `Unprocessed` sem `canCharge` já é a ação de cobrar `false`. `access.showCreditCard` e
+     `access.canSeeCard` vêm `true` em todas as respostas, até nas faturadas: são permissão do
+     usuário, não da reserva, e não entram na regra.
+  3. **Sem migração**: a próxima execução reclassifica as reservas, e a mudança de "erro de
+     análise" para "cobrar na maquininha" fica no histórico (FR-018b).
+- **Rationale**: a combinação é estável nas 10 reservas reais e tem um significado claro para o
+  Financeiro (o cartão está no Hunit, mas só pode ser cobrado na maquininha); os casos realmente
+  indeterminados continuam em erro de análise.
+- **Alternatives considered**: tratar "sem forma de pagamento" na regra 2 (não alcança essas
+  reservas, que têm pré-pagamento); manter o erro de análise e pedir tratativa manual a cada uma
+  (é o volume que o Financeiro relatou).

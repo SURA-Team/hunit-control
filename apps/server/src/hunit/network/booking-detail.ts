@@ -135,7 +135,10 @@ function paymentOf(detail: BookingDetail): ReservationPayment {
  * | ação de cobrar        | `prePaymentStatus ∈ {Unprocessed, Fail}` e `canCharge`       |
  * | forma de pagamento    | `paymentTypeId` e `totals.paymentTypeLabel` (`paymentFormOf`) |
  *
- * Sem pré-pagamento, a forma de pagamento decide a situação no domínio (FR-013, regra 2).
+ * Sem pré-pagamento, a forma de pagamento decide a situação no domínio (FR-013, regra 2). Com os
+ * dados do cartão (`hasCreditCardInfo`, o botão "Ver dados do cartão"), `Unprocessed` e sem
+ * `canCharge`, a ação de cobrar fica `false` e o domínio classifica "cobrar na maquininha" (regra
+ * 6a; research R-24).
  * Situação indeterminada (estado desconhecido, `Success` sem evento) fica `null` → erro de
  * análise no domínio (FR-015). A situação da reserva vem de `statusId` (FR-014a).
  */

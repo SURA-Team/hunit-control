@@ -249,7 +249,21 @@ describe('readBookingDetail (BookingDetail → ReservationSnapshot)', () => {
     ['pending', {}, 'virtual_card_pending_charge', 'active'],
     ['cancelled-charged', {}, 'virtual_card_already_charged', 'cancelled'],
     ['charged', { lastPaymentEvent: null }, 'analysis_error', 'active'],
-    ['pending', { canCharge: false }, 'analysis_error', 'active'],
+    // Cartão no Hunit sem a ação de cobrar (captura de 19/11/2026): cobrar na maquininha (6a).
+    ['pending', { canCharge: false }, 'charge_at_terminal', 'active'],
+    ['pending', { canCharge: false, statusId: 3 }, 'charge_at_terminal', 'cancelled'],
+    [
+      'pending',
+      { canCharge: false, paymentTypeId: 1, totals: { paymentTypeLabel: 'cartão de crédito' } },
+      'charge_at_terminal',
+      'active',
+    ],
+    [
+      'pending',
+      { canCharge: false, prePaymentStatus: 'Fail' },
+      'virtual_card_charge_error',
+      'active',
+    ],
     ['pending', { prePaymentStatus: 'Desconhecido' }, 'analysis_error', 'active'],
     ['pending', { prePaymentStatus: null }, 'analysis_error', 'active'],
     ['charge-at-terminal', { prePaymentStatus: 'Desconhecido' }, 'charge_at_terminal', 'active'],
