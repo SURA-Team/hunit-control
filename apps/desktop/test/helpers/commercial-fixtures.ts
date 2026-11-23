@@ -18,10 +18,11 @@ export function dispatchFixture(overrides: Partial<CommercialDispatch> = {}): Co
     startedAt: null,
     finishedAt: null,
     twoFactorDeadline: null,
-    counts: { total: 2, pending: 2, sent: 0, withdrawn: 0, notVerified: 0, ignored: 0 },
+    counts: { total: 2, pending: 2, sent: 0, withdrawn: 0, notVerified: 0, ignored: 0, checked: 0 },
     current: null,
     items: [],
     lastEventId: null,
+    purpose: 'send',
     ...overrides,
   };
 }

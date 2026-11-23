@@ -27,3 +27,11 @@ fica em `../brand.svg` e gera o ícone do app (`scripts/generate-icon.mjs`, T018
 | `attention.svg` | `88:3572` |
 | `document.svg` | `77:3970` |
 | `search-empty.svg` | `77:2490` |
+
+Da feature 008 (specs/008, T002), para o controle de volume ("Controle de volume" da biblioteca):
+
+| Arquivo | Origem |
+|---|---|
+| `sound-low.svg` | "volume baixo" do "Controle de volume" (instância `242:1984`), exportado na comparação com o design (T039, 23/11/2026): só o alto-falante, traço 1,5 px |
+| `sound-high.svg` | "volume alto" da mesma instância: o alto-falante e duas ondas |
+| `info.svg` | "info" da nota do som do aviso (`242:1996`), tela 1.1 |

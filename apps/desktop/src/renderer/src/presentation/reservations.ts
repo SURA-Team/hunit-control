@@ -130,8 +130,18 @@ export function reservationRowText(reservation: Reservation, hotelName: string) 
     hotelName,
     period: formatStay(reservation.checkIn, reservation.checkOut),
     nights: formatNights(reservation.checkIn, reservation.checkOut),
-    amount: formatMoney(reservation.totalAmount),
-    chargedAmount: formatChargedLine(reservation.treatment),
+    // Marcada como cancelada sem cobrança (specs/008, FR-020): "R$ 0,00" e "antes R$ …".
+    amount: formatMoney(
+      reservation.noCharge ? reservation.amountToCharge : reservation.totalAmount,
+    ),
+    chargedAmount: reservation.noCharge
+      ? [
+          `antes ${formatMoney(reservation.noCharge.previousAmount)}`,
+          formatChargedLine(reservation.treatment),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : formatChargedLine(reservation.treatment),
   };
 }
 

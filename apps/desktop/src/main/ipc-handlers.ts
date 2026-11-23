@@ -26,6 +26,7 @@ import type {
 import { CertificateError, describeCertificate, readCertificate } from './certificate.js';
 import {
   ConfigStoreError,
+  DEFAULT_PREFERENCES,
   type LoadResult,
   type SaveConfigInput,
   type StoredConfig,
@@ -42,7 +43,11 @@ export interface IpcServices {
   config: {
     load(): Promise<LoadResult>;
     save(input: SaveConfigInput): Promise<StoredConfig>;
-    setPreferences(input: { soundEnabled?: boolean; idleHours?: number }): Promise<Preferences>;
+    setPreferences(input: {
+      soundEnabled?: boolean;
+      soundVolume?: number;
+      idleHours?: number;
+    }): Promise<Preferences>;
     decryptApiKey(config: StoredConfig): string;
     remove(): Promise<void>;
   };
@@ -145,6 +150,8 @@ function toPublicConfig(config: StoredConfig): PublicConfig {
 export function createInvokeHandlers(services: IpcServices): InvokeHandlers {
   /** Dados do último teste de conexão que deu certo; o "Salvar" exige os mesmos (FR-001). */
   let lastTested: string | null = null;
+  /** Som do aviso escolhido antes da primeira conexão salva (specs/008); gravado ao salvar. */
+  let draftPreferences: Preferences | null = null;
 
   async function storedConfig(): Promise<StoredConfig | null> {
     const loaded = await services.config.load();
@@ -216,8 +223,11 @@ export function createInvokeHandlers(services: IpcServices): InvokeHandlers {
         certificatePem: input.certificatePem,
         caFingerprint256: certificate.info.fingerprint256,
         apiKey: input.apiKey,
+        preferences: draftPreferences ?? undefined,
       });
       lastTested = null;
+      draftPreferences = null;
+      services.onPreferences?.(saved.preferences);
       await services.connection.reconnect();
       return ok(toPublicConfig(saved));
     }),
@@ -231,7 +241,18 @@ export function createInvokeHandlers(services: IpcServices): InvokeHandlers {
 
     [INVOKE.preferencesSet]: handle(preferencesInputSchema, async (input) => {
       if (!(await storedConfig())) {
-        return fail({ code: 'not_configured', detail: 'Configure a conexão com o servidor.' });
+        // Primeiro uso (specs/008, tela 1.2): o som do aviso pode ser escolhido antes de salvar a
+        // conexão. Fica em memória e é gravado junto com a conexão; o prazo de inatividade não.
+        if (input.idleHours !== undefined) {
+          return fail({ code: 'not_configured', detail: 'Configure a conexão com o servidor.' });
+        }
+        draftPreferences = {
+          ...(draftPreferences ?? DEFAULT_PREFERENCES),
+          ...(input.soundEnabled !== undefined && { soundEnabled: input.soundEnabled }),
+          ...(input.soundVolume !== undefined && { soundVolume: input.soundVolume }),
+        };
+        services.onPreferences?.(draftPreferences);
+        return ok(draftPreferences);
       }
       const preferences = await services.config.setPreferences(input);
       if (input.idleHours !== undefined) services.vault.setIdleHours(preferences.idleHours);

@@ -33,7 +33,7 @@ const B = { hotelCode: '31', reservationNumber: '7002' };
 function finished(overrides: Partial<CommercialDispatch> = {}): CommercialDispatch {
   return dispatchFixture({
     status: 'completed',
-    counts: { total: 2, pending: 0, sent: 1, withdrawn: 0, notVerified: 1, ignored: 0 },
+    counts: { total: 2, pending: 0, sent: 1, withdrawn: 0, notVerified: 1, ignored: 0, checked: 0 },
     items: [
       {
         ...A,
@@ -43,6 +43,7 @@ function finished(overrides: Partial<CommercialDispatch> = {}): CommercialDispat
         classificationAfter: 'virtual_card_pending_charge',
         reason: null,
         processedAt: '2026-11-17T12:01:00.000Z',
+        checkResult: null,
       },
       {
         ...B,
@@ -52,6 +53,7 @@ function finished(overrides: Partial<CommercialDispatch> = {}): CommercialDispat
         classificationAfter: null,
         reason: 'não encontrada no Hunit no check-in registrado (03/11/2026)',
         processedAt: '2026-11-17T12:01:05.000Z',
+        checkResult: null,
       },
     ],
     ...overrides,
@@ -173,7 +175,15 @@ describe('acompanhamento (FR-005 a FR-008)', () => {
       <DispatchView
         dispatch={dispatchFixture({
           status: 'running',
-          counts: { total: 3, pending: 2, sent: 1, withdrawn: 0, notVerified: 0, ignored: 0 },
+          counts: {
+            total: 3,
+            pending: 2,
+            sent: 1,
+            withdrawn: 0,
+            notVerified: 0,
+            ignored: 0,
+            checked: 0,
+          },
           current: B,
         })}
         hotelNames={HOTELS}
@@ -263,7 +273,15 @@ describe('visual novo do envio (specs/006, T050; telas 7.1 a 7.4)', () => {
       okResult(
         dispatchFixture({
           status: 'running',
-          counts: { total: 3, pending: 2, sent: 1, withdrawn: 0, notVerified: 0, ignored: 0 },
+          counts: {
+            total: 3,
+            pending: 2,
+            sent: 1,
+            withdrawn: 0,
+            notVerified: 0,
+            ignored: 0,
+            checked: 0,
+          },
           current: B,
         }),
       ),

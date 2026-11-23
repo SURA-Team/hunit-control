@@ -39,7 +39,16 @@ const BRIDGE = {
   twoFactor: ['onClosed', 'onRequested'],
   evidence: ['list', 'save'],
   // As contagens dos filtros rápidos (specs/006, T032).
-  reservations: ['channels', 'get', 'list', 'quickFilterCounts', 'selectAll'],
+  // specs/008: marcar e desfazer "Cancelada sem cobrança".
+  reservations: [
+    'channels',
+    'get',
+    'list',
+    'markNoCharge',
+    'quickFilterCounts',
+    'selectAll',
+    'undoNoCharge',
+  ],
   // Tratativas manuais (specs/003, contracts/ipc.md).
   treatments: [
     'apply',
@@ -70,10 +79,16 @@ const BRIDGE = {
   ],
   commercial: [
     'cancelLine',
+    // specs/008: fila "Cobradas no Hunit" e o "Verificar agora".
+    'checkHunitCharges',
+    // Homologação da 008 (R-19): a "Cancelada" do Comercial.
+    'confirmCancellation',
     'confirmReturn',
     'confirmReturns',
     'get',
+    'hunitCharges',
     'readNow',
+    'rejectCancellation',
     'rejectReturn',
     'restoreLine',
     'sheetStatus',

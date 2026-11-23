@@ -105,6 +105,7 @@ const SCREENS: Record<string, ScreenCase> = {
                 currentReturn: returnBrief(),
                 returnProblem: null,
                 syncPending: false,
+                report: null,
               },
             }),
           ),

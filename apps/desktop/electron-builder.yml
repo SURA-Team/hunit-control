@@ -17,6 +17,11 @@ win:
       arch:
         - x64
   icon: resources/icon.ico
+# O ícone também vai solto, para a janela empacotada usar (specs/008, R-10): fica em
+# process.resourcesPath/icon.ico.
+extraResources:
+  - from: resources/icon.ico
+    to: icon.ico
 nsis:
   oneClick: true
   perMachine: false

@@ -28,7 +28,11 @@ export type ListColumnKey =
   | 'problem'
   | 'message'
   | 'when'
-  | 'count';
+  | 'count'
+  // Fila "Cobradas no Hunit" (tela 7.15, specs/008).
+  | 'toCharge'
+  | 'reportedBy'
+  | 'hunitCheck';
 
 export interface ListColumn {
   key: ListColumnKey;

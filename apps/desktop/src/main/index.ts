@@ -32,6 +32,7 @@ import { buildDocumentPreview } from './document-preview.js';
 import { saveEvidence } from './evidence-download.js';
 import { ExecutionWatcher } from './execution-watcher.js';
 import { createInvokeHandlers, type InvokeHandlers } from './ipc-handlers.js';
+import { appUserModelId } from './app-identity.js';
 import { PickedFiles } from './picked-files.js';
 import { createStoryHandlers } from './story-handlers.js';
 import { createTreatmentHandlers } from './treatments.js';
@@ -42,7 +43,6 @@ import {
   rendererLocation,
 } from './window.js';
 
-const APP_USER_MODEL_ID = 'io.github.sura-team.hunit-control';
 /** Certificado raiz não passa de alguns KB; arquivo maior não é o que o operador quis escolher. */
 const MAX_CERTIFICATE_FILE_BYTES = 64 * 1024;
 
@@ -61,7 +61,8 @@ const testHooks =
       }) as { notifications: Array<{ title: string; body: string }> })
     : null;
 
-app.setAppUserModelId(APP_USER_MODEL_ID);
+// AUMID por modo (specs/008, R-10): o do instalador só no app empacotado.
+app.setAppUserModelId(appUserModelId(app.isPackaged));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -125,8 +126,9 @@ async function start(): Promise<void> {
       testHooks?.notifications.push({ title: options.title, body: options.body });
       if (Notification.isSupported()) new Notification(options).show();
     },
-    playSound: () => send(EVENTS.attentionPlaySound),
+    playSound: (volume) => send(EVENTS.attentionPlaySound, { volume }),
     isSoundEnabled: () => preferences.soundEnabled,
+    soundVolume: () => preferences.soundVolume,
   });
 
   const watcher = new ExecutionWatcher({

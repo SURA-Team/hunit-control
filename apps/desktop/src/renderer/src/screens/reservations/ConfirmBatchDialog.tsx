@@ -16,6 +16,11 @@
  * status do Hunit em listas dentro de uma caixa cinza (com os selos), "Cancelar" em texto e
  * "Confirmar N retornos" ou "Confirmar N" como principal; o desfecho com o mesmo resumo do anexo em
  * lote.
+ *
+ * Desde a homologação da 008 (R-19; spec US2-7): as reservas com a "Cancelada" do Comercial
+ * aguardando validação (a lista vem do estado da planilha) entram na revisão com o selo "Cancelada";
+ * confirmadas, viram "Cancelada sem cobrança" (`includeCancellations`). "Retornos a validar" passa
+ * as "Cancelada" marcadas em `cancellationKeys`.
  */
 import { Stack, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,11 +34,13 @@ import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatMoney } from '../../presentation/format';
 import {
   BATCH_REASON_MESSAGES,
+  CANCELLATION_BADGE,
   CLASSIFICATION_LABELS,
   CLASSIFICATION_ORDER,
+  describeCharge,
 } from '../../presentation/labels';
 import { badgeOf } from '../../presentation/reservations';
-import type { SelectedReservation } from '../../state/selection';
+import { selectionKey, type SelectedReservation } from '../../state/selection';
 import {
   Action,
   AppDialog,
@@ -48,6 +55,7 @@ import {
   SummaryLine,
   type ListColumn,
 } from '../../ui';
+import { useSheetStatus } from '../commercial/SheetTab';
 import { AmountDifference, ChargeHotel } from './CommercialSection';
 
 export type BatchKind = 'reviews' | 'returns';
@@ -89,11 +97,14 @@ function countByClassification(items: readonly SelectedReservation[]) {
 export function ConfirmBatchDialog({
   kind,
   items,
+  cancellationKeys = [],
   hotelNames,
   onClose,
 }: {
   kind: BatchKind;
   items: SelectedReservation[];
+  /** "Cancelada" marcadas em "Retornos a validar" (não são itens da seleção de reservas). */
+  cancellationKeys?: readonly ReservationKey[];
   hotelNames: ReadonlyMap<string, string>;
   /** `failed` = as que não mudaram por erro (continuam selecionadas); `null` = cancelado. */
   onClose: (result: { failed: ReservationKey[] } | null) => void;
@@ -108,19 +119,33 @@ export function ConfirmBatchDialog({
     kind === 'reviews'
       ? items.filter((item) => item.needsReview)
       : items.filter((item) => item.currentReturn?.state === 'awaiting_validation');
-  const outside = items.length - included.length;
+  // "Cancelada" aguardando validação entre as escolhidas (homologação, R-19).
+  const reports = useSheetStatus().data?.reports ?? [];
+  const chosen = new Set([...items, ...cancellationKeys].map((item) => selectionKey(item)));
+  const cancellations =
+    kind === 'returns' ? reports.filter((report) => chosen.has(selectionKey(report))) : [];
+  const total = included.length + cancellations.length;
+  const outside = chosen.size - total;
   const hotel = (code: string) => hotelNames.get(code) ?? code;
 
   async function confirm() {
     setBusy(true);
     setError(null);
     try {
-      // Vão todas as selecionadas: o servidor confere cada uma e diz quais ficaram de fora.
-      const reservations = items.map(keyOf);
+      // Vão todas as escolhidas: o servidor confere cada uma e diz quais ficaram de fora.
+      const reservations = [
+        ...items.map(keyOf),
+        ...cancellationKeys.filter(
+          (key) => !items.some((item) => selectionKey(item) === selectionKey(key)),
+        ),
+      ].map(keyOf);
       const done = await unwrap(
         kind === 'reviews'
           ? hunit.treatments.confirmReviews({ reservations })
-          : hunit.commercial.confirmReturns({ reservations }),
+          : hunit.commercial.confirmReturns({
+              reservations,
+              ...(cancellations.length > 0 && { includeCancellations: true }),
+            }),
       );
       setResult(done);
       for (const queryKey of [['reservations'], ['reservation'], ['treatment'], ['commercial']]) {
@@ -145,9 +170,9 @@ export function ConfirmBatchDialog({
   const ignored = result?.items.filter((item) => item.outcome === 'ignored') ?? [];
   const failed = result?.items.filter((item) => item.outcome === 'failed') ?? [];
   const confirmLabel =
-    kind === 'returns'
+    kind === 'returns' && cancellations.length === 0
       ? `Confirmar ${included.length} ${included.length === 1 ? 'retorno' : 'retornos'}`
-      : `Confirmar ${included.length}`;
+      : `Confirmar ${total}`;
 
   return (
     <AppDialog
@@ -173,7 +198,7 @@ export function ConfirmBatchDialog({
                 size="sm"
                 onClick={() => void confirm()}
                 loading={busy}
-                disabled={included.length === 0}
+                disabled={total === 0}
               >
                 {confirmLabel}
               </Action>
@@ -199,17 +224,30 @@ export function ConfirmBatchDialog({
       ) : (
         <Stack gap={16}>
           <Text size="sm" data-testid="batch-summary">
-            <b>
-              {included.length}{' '}
-              {kind === 'reviews'
-                ? included.length === 1
-                  ? 'reserva'
-                  : 'reservas'
-                : included.length === 1
-                  ? 'retorno'
-                  : 'retornos'}
-            </b>{' '}
-            {kind === 'reviews' ? 'com o alerta "Verificar"' : 'aguardando validação'}
+            {/* Só "Cancelada" escolhidas: o resumo não começa por "0 retornos". */}
+            {(included.length > 0 || cancellations.length === 0) && (
+              <>
+                <b>
+                  {included.length}{' '}
+                  {kind === 'reviews'
+                    ? included.length === 1
+                      ? 'reserva'
+                      : 'reservas'
+                    : included.length === 1
+                      ? 'retorno'
+                      : 'retornos'}
+                </b>{' '}
+                {kind === 'reviews' ? 'com o alerta "Verificar"' : 'aguardando validação'}
+              </>
+            )}
+            {cancellations.length > 0 && (
+              <>
+                {included.length > 0 && ' e '}
+                <b>{cancellations.length}</b>{' '}
+                {cancellations.length === 1 ? 'reserva "Cancelada"' : 'reservas "Cancelada"'} pelo
+                Comercial
+              </>
+            )}
             {outside > 0 && (
               <>
                 {' '}
@@ -248,8 +286,36 @@ export function ConfirmBatchDialog({
             </Text>
           )}
 
-          {kind === 'returns' && included.length > 0 && (
+          {kind === 'returns' && total > 0 && (
             <InsetList label="Revisão dos retornos">
+              {cancellations.map((report) => (
+                <ListRow
+                  key={`cancelada/${report.hotelCode}/${report.reservationNumber}`}
+                  columns={RETURN_COLUMNS}
+                  withArrow={false}
+                  cells={{
+                    reservation: <ListCell strong primary={report.reservationNumber} />,
+                    chargeHotel: (
+                      <Stack gap={2} align="flex-start">
+                        <StatusBadge tone={badgeOf(CANCELLATION_BADGE).tone}>
+                          {CANCELLATION_BADGE.name}
+                        </StatusBadge>
+                        <Text size="sm">{`"${report.situationText}"`}</Text>
+                        <Text size="xs" c="dimmed">
+                          Hotel da reserva: {hotel(report.hotelCode)}
+                        </Text>
+                      </Stack>
+                    ),
+                    amounts: (
+                      <ListCell
+                        primary={`${formatMoney(report.totalAmount)} a cobrar`}
+                        secondary="vira R$ 0,00"
+                      />
+                    ),
+                    difference: '—',
+                  }}
+                />
+              ))}
               {included.map((item) => {
                 const brief = item.currentReturn;
                 if (!brief) return null;
@@ -270,6 +336,8 @@ export function ConfirmBatchDialog({
                         <ChargeHotel
                           chargeHotel={brief.chargeHotel}
                           hotelName={hotel(item.hotelCode)}
+                          // Situação e data da cobrança (specs/008, tela 7.12), embaixo do hotel.
+                          extra={describeCharge(brief.chargeSituation, brief.chargeDate)}
                         />
                       ),
                       amounts: (
@@ -293,7 +361,8 @@ export function ConfirmBatchDialog({
           {kind === 'returns' && (
             <Text size="xs" c="dimmed">
               Cada retorno confirmado vale como comprovante, e o valor cobrado informado pelo
-              Comercial passa a ser o valor cobrado da reserva. Para recusar, abra a reserva.
+              Comercial passa a ser o valor cobrado da reserva. Cada "Cancelada" confirmada vira
+              "Cancelada sem cobrança". Para recusar, abra a reserva.
             </Text>
           )}
 

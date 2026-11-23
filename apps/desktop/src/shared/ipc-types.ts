@@ -49,6 +49,17 @@ export type CommercialSheetStatus = Schemas['CommercialSheetStatus'];
 export type CommercialSheetProblem = Schemas['CommercialSheetProblem'];
 export type CommercialSheetRead = Schemas['CommercialSheetRead'];
 export type ConfirmationBatchResult = Schemas['ConfirmationBatchResult'];
+// Ajustes de cobrança (specs/008, contracts/api-changes.md).
+export type ChargeSituation = Schemas['ChargeSituation'];
+export type CommercialReportBrief = Schemas['CommercialReportBrief'];
+export type CommercialReportProblem = Schemas['CommercialReportProblem'];
+export type CommercialHistoryEvent = Schemas['CommercialHistoryEvent'];
+export type CommercialDispatchPurpose = Schemas['CommercialDispatchPurpose'];
+export type HunitChargeStatus = Schemas['HunitChargeStatus'];
+export type HunitChargeItem = Schemas['HunitChargeItem'];
+export type HunitChargeQueue = Schemas['HunitChargeQueue'];
+export type NoChargeMark = Schemas['NoChargeMark'];
+export type ReservationNoCharge = Schemas['ReservationNoCharge'];
 export type ReservationSelection = Schemas['ReservationSelection'];
 /** Filtros rápidos e ordem da lista (specs/006, contrato 1.8.0). */
 export type ReservationQuickFilter = Schemas['ReservationQuickFilter'];
@@ -110,6 +121,8 @@ export interface CertificateInfo {
 
 export interface Preferences {
   soundEnabled: boolean;
+  /** Volume do som do aviso, de 0 a 100 (specs/008, FR-002); 100 = o som de antes. */
+  soundVolume: number;
   /** Horas sem ação do operador para esvaziar o cofre (1 a 24). */
   idleHours: number;
 }
@@ -133,7 +146,26 @@ export interface ConnectionInput {
 
 export interface PreferencesInput {
   soundEnabled?: boolean | undefined;
+  soundVolume?: number | undefined;
   idleHours?: number | undefined;
+}
+
+/** Marcar como cancelada sem cobrança: a situação que a pessoa viu e a observação (specs/008). */
+export interface MarkNoChargeInput {
+  key: ReservationKey;
+  expectedSituation: ReservationDetailedSituation;
+  note?: string | undefined;
+}
+
+export interface UndoNoChargeInput {
+  key: ReservationKey;
+  markId: string;
+}
+
+/** Pedido de som do aviso (specs/008, contracts/ipc.md). */
+export interface PlaySoundEvent {
+  /** De 0 a 100. */
+  volume: number;
 }
 
 export interface PickedCertificate {
@@ -194,6 +226,8 @@ export interface JobRef {
 
 export interface TwoFactorRequest {
   job: JobRef;
+  /** Só em envios: envio ao Comercial ou verificação da fila "Cobradas no Hunit" (specs/008). */
+  purpose?: CommercialDispatchPurpose | undefined;
   /** `twoFactorDeadline` do servidor (ISO 8601). */
   deadline: string;
   /** Relógio do servidor menos o relógio local, em milissegundos. */
@@ -381,10 +415,23 @@ export interface ReservationsInput {
   reservations: ReservationKey[];
 }
 
+/** Confirmação em lote: com `includeCancellations`, também as "Cancelada" (homologação, R-19). */
+export interface ConfirmReturnsInput extends ReservationsInput {
+  includeCancellations?: boolean | undefined;
+}
+
+/** Recusa da "Cancelada" do Comercial, com o motivo que ele vê na planilha (R-19). */
+export interface RejectCancellationInput {
+  key: ReservationKey;
+  reason: string;
+}
+
 export interface CommercialDispatchListInput {
   active?: boolean | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
+  /** Sem o campo, só os envios; `all` traz também as verificações da fila (specs/008). */
+  purpose?: 'send' | 'hunit_check' | 'all' | undefined;
 }
 
 export interface DispatchTokenInput {
@@ -466,7 +513,8 @@ export interface HunitApi {
   };
   attention: {
     test: () => Promise<Result<void>>;
-    onPlaySound(callback: () => void): Unsubscribe;
+    /** O principal pede o som do aviso, no volume escolhido (0 a 100; specs/008). */
+    onPlaySound(callback: (event: PlaySoundEvent) => void): Unsubscribe;
   };
   credentials: {
     status: () => Promise<Result<CredentialsStatus>>;
@@ -509,6 +557,10 @@ export interface HunitApi {
     quickFilterCounts: (
       filters: ReservationCountFilters,
     ) => Promise<Result<ReservationQuickFilterCounts>>;
+    /** Marca como cancelada sem cobrança (specs/008, FR-018); devolve a reserva atualizada. */
+    markNoCharge: (input: MarkNoChargeInput) => Promise<Result<Reservation>>;
+    /** Desfaz a marcação ativa (specs/008, FR-021). */
+    undoNoCharge: (input: UndoNoChargeInput) => Promise<Result<Reservation>>;
   };
   treatments: {
     /** Abre "Abrir arquivo"; `null` = cancelado. O arquivo fica na memória do principal. */
@@ -551,9 +603,16 @@ export interface HunitApi {
     confirmReturn: (returnId: string) => Promise<Result<ReservationTreatment>>;
     rejectReturn: (input: RejectReturnInput) => Promise<Result<ReservationTreatment>>;
     undoConfirmation: (returnId: string) => Promise<Result<ReservationTreatment>>;
-    confirmReturns: (input: ReservationsInput) => Promise<Result<ConfirmationBatchResult>>;
+    confirmReturns: (input: ConfirmReturnsInput) => Promise<Result<ConfirmationBatchResult>>;
+    /** Confirma a "Cancelada" do Comercial: a reserva vira "Cancelada sem cobrança" (R-19). */
+    confirmCancellation: (key: ReservationKey) => Promise<Result<Reservation>>;
+    rejectCancellation: (input: RejectCancellationInput) => Promise<Result<Reservation>>;
     sheetStatus: () => Promise<Result<CommercialSheetStatus>>;
     readNow: () => Promise<Result<SheetReadResult>>;
+    /** Fila "Cobradas no Hunit" (specs/008, `GET /commercial-hunit-charges`). */
+    hunitCharges: () => Promise<Result<HunitChargeQueue>>;
+    /** "Verificar agora": usa as credenciais do cofre, como `dispatches.start` (specs/008). */
+    checkHunitCharges: () => Promise<Result<CommercialDispatch>>;
   };
   clipboard: {
     /** Monta a tabela (HTML e texto com tabulação) no principal e grava na área de transferência. */

@@ -84,6 +84,8 @@ const FINAL_STATUSES: ReadonlySet<ExecutionStatus> = new Set(['completed', 'fail
 /** O que o acompanhamento usa do estado de uma execução ou de um envio. */
 interface JobSnapshot {
   status: ExecutionStatus;
+  /** Só em envios (specs/008). */
+  purpose?: CommercialDispatch['purpose'];
   endReason: ExecutionEndReason | null;
   twoFactorDeadline: string | null;
   /** Evento mais recente: o fluxo é aberto depois dele (o histórico não é reprocessado). */
@@ -178,7 +180,8 @@ export class ExecutionWatcher {
     if (!api) return;
     const [executions, dispatches] = await Promise.all([
       api.listExecutions({ active: true, limit: 50 }),
-      api.listCommercialDispatches({ active: true, limit: 50 }),
+      // Envios e verificações da fila "Cobradas no Hunit": as duas pedem o token (specs/008).
+      api.listCommercialDispatches({ active: true, limit: 50, purpose: 'all' }),
     ]);
     if (!executions.ok) {
       this.options.reportFailure(executions.error);
@@ -379,6 +382,7 @@ export class ExecutionWatcher {
         entry.tokenSent = false;
         this.options.onTwoFactorRequested({
           job: entry.job,
+          ...(execution.purpose && { purpose: execution.purpose }),
           deadline: execution.twoFactorDeadline,
           clockOffsetMs: api.clockOffsetMs(),
         });
@@ -432,6 +436,7 @@ async function fetchJob(api: WatcherApi, job: JobRef): Promise<Result<JobSnapsho
     ok: true,
     data: {
       status: dispatch.status,
+      purpose: dispatch.purpose,
       endReason: dispatch.endReason ?? null,
       twoFactorDeadline: dispatch.twoFactorDeadline,
       lastEventId: dispatch.lastEventId ?? undefined,
@@ -510,6 +515,7 @@ export function summarize(execution: Execution): FinishedSummary {
 /** Resultado resumido de um envio ao Comercial, para a notificação de fim (specs/005). */
 export function summarizeDispatch(dispatch: CommercialDispatch): FinishedSummary {
   const job: JobRef = { kind: 'dispatch', id: dispatch.id };
+  if (dispatch.purpose === 'hunit_check') return summarizeHunitCheck(dispatch, job);
   const { sent, withdrawn, notVerified, ignored } = dispatch.counts;
   const parts = [`${sent} enviada(s)`];
   if (withdrawn > 0) parts.push(`${withdrawn} retirada(s)`);
@@ -526,6 +532,28 @@ export function summarizeDispatch(dispatch: CommercialDispatch): FinishedSummary
       return {
         job,
         title: 'Envio ao Comercial falhou',
+        body: dispatch.endReason ? END_REASONS[dispatch.endReason] : body,
+      };
+  }
+}
+
+/** Fim de uma verificação da fila "Cobradas no Hunit" (specs/008). */
+function summarizeHunitCheck(dispatch: CommercialDispatch, job: JobRef): FinishedSummary {
+  const confirmed = dispatch.items.filter((item) => item.checkResult === 'confirmed').length;
+  const notFound = dispatch.items.filter((item) => item.checkResult === 'not_found').length;
+  const parts = [`${confirmed} com a cobrança no Hunit`, `${notFound} sem a cobrança`];
+  if (dispatch.counts.notVerified > 0)
+    parts.push(`${dispatch.counts.notVerified} não verificada(s)`);
+  const body = `${parts.join('; ')}.`;
+  switch (dispatch.status) {
+    case 'completed':
+      return { job, title: 'Verificação no Hunit concluída', body };
+    case 'cancelled':
+      return { job, title: 'Verificação no Hunit cancelada', body };
+    default:
+      return {
+        job,
+        title: 'Verificação no Hunit falhou',
         body: dispatch.endReason ? END_REASONS[dispatch.endReason] : body,
       };
   }

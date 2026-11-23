@@ -10,14 +10,25 @@
  * com o selo quando difere do hotel da reserva), "cobrado / a cobrar", a diferença em âmbar, o
  * responsável e quando foi lido, e "Confirmar" (principal da linha) e "Recusar" em vermelho suave. Em
  * conteúdo estreito, o responsável vai para a linha da reserva e a diferença para a dos valores.
+ *
+ * Desde a homologação da 008 (R-19; spec FR-007c): as "Cancelada" do Comercial ficam no topo, com o
+ * selo "Cancelada" em vermelho, a situação como ele escreveu, o valor a cobrar (vira R$ 0,00 ao
+ * confirmar), "Confirmar" (o nome acessível é "Confirmar cancelamento"; o texto curto cabe na coluna
+ * de ações, como nos retornos) e "Recusar" (com o motivo). Entram em "Confirmar marcados".
  */
 import { Group, Stack, Text } from '@mantine/core';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import type { Reservation, ReservationTreatment, Result } from '../../../../shared/ipc-types';
+import type {
+  CommercialSheetStatus,
+  Reservation,
+  ReservationKey,
+  Result,
+} from '../../../../shared/ipc-types';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDateTime, formatMoney } from '../../presentation/format';
-import { errorMessage } from '../../presentation/labels';
+import { CANCELLATION_BADGE, describeCharge, errorMessage } from '../../presentation/labels';
+import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
 import { selectionKey, toSelected } from '../../state/selection';
 import {
@@ -30,11 +41,16 @@ import {
   ListRow,
   Notice,
   SelectionBox,
+  StatusBadge,
   type ListColumn,
 } from '../../ui';
 import { AmountDifference, ChargeHotel, RejectDialog } from '../reservations/CommercialSection';
 import { ConfirmBatchDialog } from '../reservations/ConfirmBatchDialog';
 import { ReservationDetailLoader } from '../reservations/ReservationsScreen';
+import { useSheetStatus } from './SheetTab';
+
+/** "Cancelada" do Comercial aguardando validação (homologação da 008, R-19). */
+type Cancellation = CommercialSheetStatus['reports'][number];
 
 const PAGE_SIZE = 50;
 
@@ -44,7 +60,7 @@ const COLUMNS: readonly ListColumn[] = [
   { key: 'chargeHotel', label: 'Hotel da cobrança' },
   { key: 'amounts', label: 'Cobrado / a cobrar' },
   { key: 'difference', label: 'Diferença' },
-  { key: 'responsible', label: 'Responsável' },
+  { key: 'responsible', label: 'Responsável e cobrança' },
 ];
 const ACTIONS_COLUMN: ListColumn = { key: 'actions', label: '' };
 
@@ -56,7 +72,10 @@ export function ReturnsTab() {
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [batchOpen, setBatchOpen] = useState(false);
   const [rejecting, setRejecting] = useState<Reservation | null>(null);
-  const [opened, setOpened] = useState<Reservation | null>(null);
+  const [rejectingCancellation, setRejectingCancellation] = useState<Cancellation | null>(null);
+  const [opened, setOpened] = useState<
+    { initial: Reservation } | { reservationKey: ReservationKey } | null
+  >(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'red' | 'green'; text: string } | null>(null);
 
@@ -82,6 +101,10 @@ export function ReturnsTab() {
   });
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
   const marked = items.filter((item) => checked.has(selectionKey(item)));
+  const cancellations = useSheetStatus().data?.reports ?? [];
+  const markedCancellations = cancellations.filter((item) => checked.has(selectionKey(item)));
+  const markedCount = marked.length + markedCancellations.length;
+  const rowCount = items.length + cancellations.length;
 
   function refresh() {
     for (const queryKey of [['reservations'], ['reservation'], ['treatment'], ['commercial']]) {
@@ -90,7 +113,7 @@ export function ReturnsTab() {
     void queryClient.invalidateQueries({ queryKey: ['commercial-sheet'] });
   }
 
-  async function decide(action: () => Promise<Result<ReservationTreatment>>, success: string) {
+  async function decide(action: () => Promise<Result<unknown>>, success: string) {
     setBusy(true);
     setMessage(null);
     const result = await action();
@@ -103,7 +126,7 @@ export function ReturnsTab() {
     refresh();
   }
 
-  const toggle = (reservation: Reservation, value: boolean) =>
+  const toggle = (reservation: ReservationKey, value: boolean) =>
     setChecked((current) => {
       const next = new Set(current);
       if (value) next.add(selectionKey(reservation));
@@ -112,7 +135,7 @@ export function ReturnsTab() {
     });
 
   const columns = canWrite ? [...COLUMNS, ACTIONS_COLUMN] : COLUMNS;
-  const allMarked = items.length > 0 && marked.length === items.length;
+  const allMarked = rowCount > 0 && markedCount === rowCount;
 
   return (
     <Stack gap={16}>
@@ -122,12 +145,12 @@ export function ReturnsTab() {
         </Notice>
       )}
       {list.isError && <Notice tone="red">{messageOf(list.error)}</Notice>}
-      {list.isSuccess && items.length === 0 && (
+      {list.isSuccess && rowCount === 0 && (
         <Text size="sm" c="dimmed">
           Nenhum retorno do Comercial aguardando validação.
         </Text>
       )}
-      {items.length > 0 && (
+      {rowCount > 0 && (
         <ListCard
           label="Retornos a validar"
           toolbar={
@@ -136,11 +159,11 @@ export function ReturnsTab() {
                 <SelectionBox
                   aria-label="Marcar todos os retornos listados"
                   checked={allMarked}
-                  indeterminate={marked.length > 0 && !allMarked}
+                  indeterminate={markedCount > 0 && !allMarked}
                   onChange={(event) =>
                     setChecked(
                       event.currentTarget.checked
-                        ? new Set(items.map((item) => selectionKey(item)))
+                        ? new Set([...cancellations, ...items].map((item) => selectionKey(item)))
                         : new Set(),
                     )
                   }
@@ -148,10 +171,10 @@ export function ReturnsTab() {
                 <Action
                   variant="secondary"
                   size="xs"
-                  disabled={marked.length === 0}
+                  disabled={markedCount === 0}
                   onClick={() => setBatchOpen(true)}
                 >
-                  Confirmar marcados ({marked.length})
+                  Confirmar marcados ({markedCount})
                 </Action>
                 <span>A recusa é uma a uma, com o motivo.</span>
               </>
@@ -161,9 +184,94 @@ export function ReturnsTab() {
             <ListHeader columns={columns} withArrow={false} {...(canWrite && { select: '' })} />
           }
         >
+          {cancellations.map((cancellation) => {
+            const key = {
+              hotelCode: cancellation.hotelCode,
+              reservationNumber: cancellation.reservationNumber,
+            };
+            const number = cancellation.reservationNumber;
+            return (
+              <ListRow
+                key={`cancelada/${selectionKey(key)}`}
+                columns={columns}
+                block={`Cancelada ${number}`}
+                selected={checked.has(selectionKey(key))}
+                {...(canWrite && {
+                  select: (
+                    <SelectionBox
+                      aria-label={`Marcar a reserva ${number}`}
+                      checked={checked.has(selectionKey(key))}
+                      onChange={(event) => toggle(key, event.currentTarget.checked)}
+                    />
+                  ),
+                })}
+                cells={{
+                  reservation: (
+                    <ListCell
+                      strong
+                      primary={number}
+                      onOpen={() => setOpened({ reservationKey: key })}
+                      openLabel={`Abrir a reserva ${number}`}
+                      secondary={`lido em ${formatDateTime(cancellation.readAt)}`}
+                      narrow={cancellation.chargedBy ?? 'responsável não informado'}
+                    />
+                  ),
+                  chargeHotel: (
+                    <Stack gap={2} align="flex-start">
+                      <StatusBadge tone={badgeOf(CANCELLATION_BADGE).tone}>
+                        {CANCELLATION_BADGE.name}
+                      </StatusBadge>
+                      <Text size="sm">{`"${cancellation.situationText}"`}</Text>
+                      <Text size="xs" c="dimmed">
+                        Hotel da reserva: {hotel(cancellation.hotelCode)}
+                      </Text>
+                    </Stack>
+                  ),
+                  amounts: (
+                    <ListCell
+                      primary={`${formatMoney(cancellation.totalAmount)} a cobrar`}
+                      secondary="vira R$ 0,00 ao confirmar"
+                    />
+                  ),
+                  difference: '—',
+                  responsible: (
+                    <ListCell
+                      primary={cancellation.chargedBy ?? '—'}
+                      secondary="Cancelada, sem cobrança"
+                    />
+                  ),
+                  actions: (
+                    <ListActions>
+                      <Action
+                        size="xs"
+                        variant="primary"
+                        disabled={busy}
+                        aria-label="Confirmar cancelamento"
+                        onClick={() =>
+                          void decide(
+                            () => hunit.commercial.confirmCancellation(key),
+                            `Reserva ${number} marcada como cancelada sem cobrança.`,
+                          )
+                        }
+                      >
+                        Confirmar
+                      </Action>
+                      <Action
+                        size="xs"
+                        variant="danger-light"
+                        disabled={busy}
+                        onClick={() => setRejectingCancellation(cancellation)}
+                      >
+                        Recusar
+                      </Action>
+                    </ListActions>
+                  ),
+                }}
+              />
+            );
+          })}
           {items.map((reservation) => {
             const brief = reservation.commercial?.currentReturn ?? null;
-            const read = brief ? `lido em ${formatDateTime(brief.readAt)}` : null;
             return (
               <ListRow
                 key={selectionKey(reservation)}
@@ -184,10 +292,16 @@ export function ReturnsTab() {
                     <ListCell
                       strong
                       primary={reservation.reservationNumber}
-                      onOpen={() => setOpened(reservation)}
+                      onOpen={() => setOpened({ initial: reservation })}
                       openLabel={`Abrir a reserva ${reservation.reservationNumber}`}
                       secondary={brief?.authorizationCode ?? '—'}
-                      narrow={brief ? `${brief.chargedBy} · ${read}` : null}
+                      // Conteúdo estreito: a coluna "Responsável e cobrança" vem para esta linha,
+                      // com a situação e a data (homologação da 008, cenário 3.15).
+                      narrow={
+                        brief
+                          ? `${brief.chargedBy} · ${describeCharge(brief.chargeSituation, brief.chargeDate)}`
+                          : null
+                      }
                     />
                   ),
                   chargeHotel: brief ? (
@@ -213,7 +327,10 @@ export function ReturnsTab() {
                   ),
                   difference: <AmountDifference value={brief?.difference ?? null} />,
                   responsible: brief ? (
-                    <ListCell primary={brief.chargedBy} secondary={read} />
+                    <ListCell
+                      primary={brief.chargedBy}
+                      secondary={describeCharge(brief.chargeSituation, brief.chargeDate)}
+                    />
                   ) : (
                     '—'
                   ),
@@ -264,10 +381,33 @@ export function ReturnsTab() {
         <ConfirmBatchDialog
           kind="returns"
           items={marked.map(toSelected)}
+          cancellationKeys={markedCancellations.map((item) => ({
+            hotelCode: item.hotelCode,
+            reservationNumber: item.reservationNumber,
+          }))}
           hotelNames={hotelNames}
           onClose={() => {
             setBatchOpen(false);
             setChecked(new Set());
+          }}
+        />
+      )}
+      {rejectingCancellation && (
+        <RejectDialog
+          title='Recusar a "Cancelada" do Comercial'
+          confirmLabel="Recusar"
+          suggestions={[]}
+          onCancel={() => setRejectingCancellation(null)}
+          onReject={(reason) => {
+            const key = {
+              hotelCode: rejectingCancellation.hotelCode,
+              reservationNumber: rejectingCancellation.reservationNumber,
+            };
+            setRejectingCancellation(null);
+            void decide(
+              () => hunit.commercial.rejectCancellation({ key, reason }),
+              `"Cancelada" da reserva ${key.reservationNumber} recusada: o motivo aparece para o Comercial na planilha.`,
+            );
           }}
         />
       )}
@@ -291,7 +431,7 @@ export function ReturnsTab() {
         title="Detalhe da reserva"
         closeLabel="Fechar detalhe"
       >
-        {opened && <ReservationDetailLoader initial={opened} />}
+        {opened && <ReservationDetailLoader {...opened} />}
       </AppDrawer>
     </Stack>
   );

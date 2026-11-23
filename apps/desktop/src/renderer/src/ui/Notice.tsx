@@ -8,7 +8,8 @@
 import type { ReactNode } from 'react';
 import classes from './status.module.css';
 
-export type NoticeTone = 'lime' | 'green' | 'red' | 'amber';
+/** `gray`: nota neutra, em caixa cinza com borda, texto de descrição e o ícone sem círculo (008). */
+export type NoticeTone = 'lime' | 'green' | 'red' | 'amber' | 'gray';
 
 export interface NoticeProps {
   tone: NoticeTone;

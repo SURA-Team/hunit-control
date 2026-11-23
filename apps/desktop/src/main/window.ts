@@ -8,6 +8,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, session, type WebContents } from 'electron';
+import { applyAppDetails, windowIconPath } from './app-identity.js';
 
 export interface RendererLocation {
   /** Endereço que o app carrega e do qual aceita pedidos pela ponte. */
@@ -61,11 +62,13 @@ export function createMainWindow(location: RendererLocation): BrowserWindow {
     minHeight: 640,
     show: false,
     title: 'HUNIT Control',
-    // Empacotado, a janela usa o ícone do executável (electron-builder.yml). Em desenvolvimento não
-    // há executável próprio: a janela recebe o mesmo ícone, gerado da marca (specs/006, R-04).
-    ...(app.isPackaged
-      ? {}
-      : { icon: path.join(import.meta.dirname, '..', '..', 'resources', 'icon.png') }),
+    // O ícone da marca nos dois modos (specs/006, R-04; specs/008, R-10): empacotada, o icon.ico
+    // que vai junto do app (extraResources); em desenvolvimento, o icon.png.
+    icon: windowIconPath({
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      moduleDir: import.meta.dirname,
+    }),
     webPreferences: {
       preload: path.join(import.meta.dirname, '..', 'preload', 'index.cjs'),
       contextIsolation: true,
@@ -79,6 +82,13 @@ export function createMainWindow(location: RendererLocation): BrowserWindow {
       spellcheck: false,
       devTools: !app.isPackaged,
     },
+  });
+
+  // No Windows, o botão da barra de tarefas fica ligado ao AUMID e ao ícone do executável (R-10).
+  applyAppDetails(window, {
+    platform: process.platform,
+    packaged: app.isPackaged,
+    execPath: process.execPath,
   });
 
   window.once('ready-to-show', () => window.show());

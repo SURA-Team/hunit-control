@@ -1,4 +1,5 @@
 /** Classes comuns aos campos de texto e seletores de ui/fields (specs/006, research R-05). */
+import type { ComboboxItem, ComboboxParsedItem, OptionsFilter } from '@mantine/core';
 import classes from './fields.module.css';
 
 export const inputClassNames = {
@@ -30,6 +31,31 @@ export const comboboxClassNames = {
   dropdown: classes.dropdown,
   option: classes.option,
   pill: classes.pill,
+};
+
+/** Mensagem da lista quando a busca não acha nenhuma opção (specs/008, R-11). */
+export const NOTHING_FOUND = 'Nenhuma opção encontrada';
+
+/** Texto para comparar na busca: sem acentos, sem maiúsculas e sem espaços nas pontas. */
+export function searchKey(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+}
+
+/**
+ * Busca dos seletores (specs/008, R-11): a opção fica se o rótulo contém o texto digitado, sem
+ * diferenciar acentos e maiúsculas ("sao" acha "São Paulo"). Grupos sem opção que combine somem.
+ */
+export const searchFilter: OptionsFilter = ({ options, search }) => {
+  const wanted = searchKey(search);
+  if (wanted === '') return options;
+  const matches = (item: ComboboxItem) => searchKey(item.label).includes(wanted);
+  return options.flatMap((option: ComboboxParsedItem): ComboboxParsedItem[] => {
+    if ('group' in option) {
+      const items = option.items.filter(matches);
+      return items.length > 0 ? [{ ...option, items }] : [];
+    }
+    return matches(option) ? [option] : [];
+  });
 };
 
 export const choiceClassNames = {

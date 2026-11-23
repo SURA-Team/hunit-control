@@ -6,10 +6,12 @@
 import type {
   AppError,
   ChargedAmountOrigin,
+  ChargeSituation,
   Classification,
   CommercialDispatchIgnored,
   CommercialDispatchItem,
   CommercialEvent,
+  CommercialHistoryEvent,
   CommercialLine,
   CommercialLineState,
   CommercialReturnState,
@@ -20,6 +22,7 @@ import type {
   ExecutionEndReason,
   ExecutionStatus,
   HotelRunStatus,
+  HunitChargeStatus,
   ReservationDetailedSituation,
   ReservationOutcome,
   ReservationSituation,
@@ -29,6 +32,7 @@ import type {
   TreatmentEvent,
   TreatmentStatus,
 } from '../../../shared/ipc-types';
+import { formatDate, relativeDay } from './format';
 
 /**
  * Tons de significado fixo (specs/006, FR-005): `success` verde (concluído), `warning` âmbar
@@ -245,6 +249,8 @@ export const DISPATCH_OUTCOME_LABELS: Record<CommercialDispatchItem['outcome'], 
   withdrawn: { name: 'Retirada', tone: 'info' },
   not_verified: { name: 'Não verificada', tone: 'error' },
   ignored: { name: 'Fora do envio', tone: 'neutral' },
+  // Só em verificações da fila "Cobradas no Hunit" (specs/008); o resultado vem em `checkResult`.
+  checked: { name: 'Conferida no Hunit', tone: 'success' },
 };
 
 /** Por que uma reserva ficou fora do envio (FR-001). */
@@ -300,6 +306,76 @@ export const COMMERCIAL_EVENT_NAMES: Record<CommercialEvent['type'], string> = {
   return_closed: 'Retorno encerrado sem validação',
 };
 
+/** Histórico completo do Comercial, com os eventos novos da 008 (`CommercialDetail.history`). */
+export const COMMERCIAL_HISTORY_EVENT_NAMES: Record<CommercialHistoryEvent['type'], string> = {
+  ...COMMERCIAL_EVENT_NAMES,
+  report_received: 'Comercial informou a situação da cobrança',
+  report_changed: 'Comercial alterou a situação da cobrança',
+  report_cleared: 'Comercial tirou a situação da cobrança',
+  hunit_checked: 'Conferiu a cobrança no Hunit',
+  // A "Cancelada" do Comercial (homologação da 008, R-19).
+  cancellation_confirmed: 'Confirmou a "Cancelada" do Comercial',
+  cancellation_rejected: 'Recusou a "Cancelada" do Comercial',
+};
+
+/** Situação na fila "Cobradas no Hunit" (specs/008, tela 7.15). */
+export const HUNIT_CHARGE_STATUS_LABELS: Record<HunitChargeStatus, Label> = {
+  awaiting: { name: 'Aguardando verificação', tone: 'warning' },
+  confirmed: { name: 'Confirmada no Hunit', tone: 'success' },
+  not_found: { name: 'Não encontrada no Hunit', tone: 'error' },
+};
+
+/**
+ * A "Cancelada" do Comercial na validação do Financeiro (homologação da 008, R-19). O selo
+ * "Cancelada" é vermelho, para se destacar dos retornos de cobrança em "Retornos a validar".
+ */
+export const CANCELLATION_BADGE: Label = { name: 'Cancelada', tone: 'error' };
+
+export const CANCELLATION_VALIDATION_LABELS: Record<
+  'awaiting_validation' | 'confirmed' | 'rejected',
+  Label
+> = {
+  awaiting_validation: { name: 'Aguardando validação', tone: 'warning' },
+  confirmed: { name: 'Confirmada', tone: 'success' },
+  rejected: { name: 'Recusada', tone: 'error' },
+};
+
+/** Situação da cobrança reconhecida (specs/008, FR-008); "outra" mostra o texto do Comercial. */
+export const CHARGE_SITUATION_NAMES: Record<ChargeSituation['kind'], string> = {
+  charged_at_terminal: 'Cobrada na maquininha',
+  charged_in_hunit: 'Cobrada no Hunit',
+  cancelled: 'Cancelada',
+  other: 'Outra situação',
+};
+
+/** Situação ou data da cobrança vazia na planilha (FR-011). */
+export const NOT_INFORMED = 'não informada';
+
+/** A situação como o Comercial escreveu, ou "não informada". */
+export function chargeSituationText(situation: ChargeSituation | null | undefined): string {
+  return situation?.text ?? NOT_INFORMED;
+}
+
+/** A data da cobrança em DD/MM/AAAA, ou "não informada". */
+export function chargeDateText(date: string | null | undefined): string {
+  return date ? formatDate(date) : NOT_INFORMED;
+}
+
+/**
+ * Linha "situação e data" de um retorno (telas 7.8 e 7.12): "Cobrada na maquininha em 19/11/2026
+ * (hoje)"; o que faltar sai como "não informada" (FR-011).
+ */
+export function describeCharge(
+  situation: ChargeSituation | null | undefined,
+  date: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  const text = situation?.text ?? 'Situação não informada';
+  if (!date) return `${text} · data não informada`;
+  const relative = relativeDay(date, now);
+  return `${text} em ${formatDate(date)}${relative ? ` (${relative})` : ''}`;
+}
+
 /** Sugestões do motivo da recusa (FR-017); o texto continua livre. */
 export const REJECTION_SUGGESTIONS = [
   'Código de autorização errado',
@@ -315,6 +391,8 @@ export const BATCH_REASON_MESSAGES: Record<
   not_found: 'Reserva não encontrada.',
   no_return_awaiting_validation: 'Sem retorno do Comercial aguardando validação.',
   no_review_alert: 'Sem o alerta "Verificar".',
+  // "Cancelada" do Comercial no lote (homologação da 008, R-19).
+  cancellation_not_accepted: 'A reserva não aceita a marcação "Cancelada sem cobrança".',
 };
 
 export const SHEET_STATUS_LABELS: Record<CommercialSheetStatus['status'], Label> = {
@@ -366,6 +444,13 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   return_not_confirmed: 'Este retorno não está confirmado.',
   not_in_commercial_sheet: 'Esta reserva não está na planilha do Comercial.',
   restore_expired: 'O prazo de 30 dias para reverter terminou.',
+  no_charge_not_accepted: 'Esta reserva não aceita a marcação "Cancelada sem cobrança".',
+  reservation_changed:
+    'A situação da reserva mudou enquanto o diálogo estava aberto. Nada foi marcado: confira e tente de novo.',
+  no_charge_not_active: 'Esta marcação já foi desfeita.',
+  no_reports_to_check: 'Nenhuma reserva da fila precisa ser conferida agora.',
+  no_cancellation_awaiting_validation:
+    'Esta "Cancelada" não está mais aguardando validação (outra pessoa decidiu ou o Comercial mudou a linha).',
   internal_error: 'Erro interno do servidor.',
   offline: 'Servidor indisponível.',
   untrusted_server: 'Não foi possível confirmar a identidade do servidor.',

@@ -49,6 +49,8 @@ export function commercialReturn(overrides: Partial<CommercialReturn> = {}): Com
     rejectionReason: null,
     expectedAmount: '100.00',
     difference: '-10.00',
+    chargeSituation: null,
+    chargeDate: null,
     ...overrides,
   };
 }
@@ -63,6 +65,8 @@ export function returnBrief(overrides: Partial<CommercialReturnBrief> = {}): Com
     chargedBy: 'Comercial Fictício',
     readAt: '2026-11-15T12:00:00.000Z',
     difference: '-10.00',
+    chargeSituation: null,
+    chargeDate: null,
     ...overrides,
   };
 }
@@ -83,7 +87,14 @@ export function commercialEvent(overrides: Partial<CommercialEvent> = {}): Comme
 }
 
 export function detail(overrides: Partial<CommercialDetail> = {}): CommercialDetail {
-  return { line: line(), returns: [commercialReturn()], events: [commercialEvent()], ...overrides };
+  return {
+    line: line(),
+    returns: [commercialReturn()],
+    events: [commercialEvent()],
+    report: null,
+    history: [commercialEvent()],
+    ...overrides,
+  };
 }
 
 export function selectionItem(
@@ -122,6 +133,8 @@ export function sheetStatus(overrides: Partial<CommercialSheetStatus> = {}): Com
     pending: { count: 0, oldestChangeAt: null },
     awaitingValidation: 2,
     problems: [],
+    reports: [],
+    hunitQueueCount: 0,
     ...overrides,
   };
 }

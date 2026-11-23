@@ -50,7 +50,6 @@ export function HotelSelect({ hotels, mode, selected, onMode, onSelected, error 
           data={data}
           value={selected}
           onChange={onSelected}
-          searchable
           clearable
           hidePickedOptions
           nothingFoundMessage="Nenhum hotel encontrado"

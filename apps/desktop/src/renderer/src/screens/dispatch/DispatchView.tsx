@@ -109,7 +109,7 @@ export function DispatchView({
   return (
     <Stack gap={16} data-testid="dispatch-view">
       <CardHeader
-        title="Envio ao Comercial"
+        title={dispatch.purpose === 'hunit_check' ? 'Verificação no Hunit' : 'Envio ao Comercial'}
         aside={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
         actions={
           <Text size="xs" c="dimmed">

@@ -9,9 +9,15 @@
  * que fica com o que sobra. Os pontos de quebra das listas em card (`hc-list`) saem da largura mínima
  * dela (homologação da 006, T068): abaixo de cada um, uma coluna passa para a segunda linha antes de a
  * coluna livre ficar apertada e o texto dela passar por cima da vizinha.
+ *
+ * O card e a caixa cinza cortam o conteúdo no próprio arredondado (specs/008, FR-030, research R-16):
+ * o fundo da linha (seleção, linha aberta, mouse) é retangular e passaria por cima dos cantos.
+ * `clip`, e não `hidden`, para não criar uma área de rolagem; o contorno de foco da linha é para
+ * dentro e continua visível, e menus e listas suspensas abrem fora do card.
  */
 .card {
   container: hc-list / inline-size;
+  overflow: clip;
   padding: 4px 0;
   border-radius: var(--hc-radius-card);
   background: var(--hc-fundo-padrao);
@@ -21,6 +27,7 @@
 /* Lista dentro de uma caixa cinza (diálogos de lote, telas 7.12 e 7.13). */
 .inset {
   container-type: inline-size;
+  overflow: clip;
   padding: 2px 0;
   border-radius: var(--hc-radius-box);
   background: var(--hc-fundo-sutil);
@@ -147,6 +154,25 @@
 .table [data-col='count'] {
   width: 100px;
   text-align: end;
+}
+
+/*
+ * Fila "Cobradas no Hunit" (tela 7.15, specs/008): colunas próprias, para não herdar as quebras das
+ * outras listas. A situação cabe o selo mais largo ("Não encontrada no Hunit"). Nas mesmas quebras do
+ * "Retornos a validar", quem marcou vai para a linha do hóspede (abaixo de 1 105 px) e o valor, para
+ * a linha da reserva (abaixo de 850 px).
+ */
+.table [data-col='toCharge'] {
+  width: 110px;
+  text-align: end;
+}
+
+.table [data-col='reportedBy'] {
+  width: 170px;
+}
+
+.table [data-col='hunitCheck'] {
+  width: 200px;
 }
 
 /*
@@ -510,8 +536,17 @@
  * (tokens.breakpoints.returnsNarrow), o responsável vai para a linha da reserva.
  */
 @container hc-list (max-width: 1104.98px) {
-  .table [data-col='responsible'] {
+  .table [data-col='responsible'],
+  .table [data-col='reportedBy'] {
     display: none;
+  }
+
+  /*
+   * Sem a coluna de ações (perfil consulta), "Responsável e cobrança" é a última: escondida, a
+   * diferença passa a ser a última visível e ganha o espaço do fim da linha (homologação da 008).
+   */
+  .table [data-col='difference']:nth-last-child(2) {
+    padding-inline-end: 16px;
   }
 
   .narrowOnly {
@@ -538,8 +573,14 @@
  */
 @container hc-list (max-width: 849.98px) {
   .table [data-col='difference'],
-  .table [data-col='when'] {
+  .table [data-col='when'],
+  .table [data-col='toCharge'] {
     display: none;
+  }
+
+  /* No perfil consulta, "Cobrado / a cobrar" passa a ser a última visível. */
+  .table [data-col='amounts']:nth-last-child(3) {
+    padding-inline-end: 16px;
   }
 
   .compactOnly {
@@ -551,6 +592,11 @@
   .table [data-col='difference'],
   .table [data-col='when'] {
     display: none;
+  }
+
+  /* Na lista interna (tela 7.12), a diferença é a última: escondida, os valores ficam no fim. */
+  .table [data-col='amounts']:nth-last-child(2) {
+    padding-inline-end: 16px;
   }
 
   .compactOnly {

@@ -189,6 +189,104 @@
   background: var(--hc-destaque-lima);
 }
 
+.switchInput:focus-visible + .track {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+.switchInput:disabled + .track {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/*
+ * Controle de volume (specs/008, "Controle de volume" da biblioteca, instância 242:1984): "Volume" na
+ * mesma linha, ícone de som baixo, trilho de 244 px (cinza, com o nível preto) e botão lima, ícone de
+ * som alto e o valor. Em conteúdo estreito, o trilho encolhe.
+ */
+.volume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 28px;
+}
+
+.volume > .label {
+  margin: 0;
+}
+
+/* Rótulo e descrição da chave na mesma linha (telas 1.1 a 1.3); quebra se não couber. */
+.inlineDescription {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+}
+
+.volumeRow {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--hc-texto-icone);
+}
+
+.volumeRow > svg {
+  flex-shrink: 0;
+}
+
+.volumeRow[data-disabled] {
+  color: var(--hc-texto-placeholder);
+}
+
+.volumeSlider {
+  flex: 0 1 244px;
+  width: 244px;
+  min-width: 80px;
+}
+
+.volumeTrack::before {
+  background: var(--hc-cinza-1);
+}
+
+.volumeBar {
+  background: var(--hc-superficie-escura);
+}
+
+.volumeThumb {
+  border: 2px solid var(--hc-superficie-escura);
+  background: var(--hc-destaque-lima);
+}
+
+.volumeThumb:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+/* O Slider marca `data-disabled` na barra e no botão (não na raiz). */
+.volumeBar[data-disabled] {
+  background: var(--hc-texto-placeholder);
+}
+
+.volumeThumb[data-disabled] {
+  border-color: var(--hc-texto-placeholder);
+  background: var(--hc-fundo-desabilitado);
+}
+
+.volumeValue {
+  min-width: 44px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.volumeRow[data-disabled] .volumeValue {
+  color: var(--hc-texto-placeholder);
+}
+
 .group {
   display: flex;
   flex-direction: column;

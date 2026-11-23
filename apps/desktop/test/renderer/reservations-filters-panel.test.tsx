@@ -2,12 +2,16 @@
  * Painel "Filtros avançados", "Origem" e "Filtros aplicados" (specs/006, T036; telas 4.1 e 4.12,
  * research R-11, FR-034): os campos valem na hora, cada filtro do painel vira um chip removível, a
  * Origem fica só na barra e "Limpar busca e filtros" volta tudo ao início.
+ *
+ * Desde a 008 (T035, R-11, FR-028, SC-010): cada seletor — Hotéis, Situação da reserva, Ativa ou
+ * cancelada, Canal e Origem — é escolhido só pelo teclado (digitar, setas, Enter, Esc); texto sem
+ * opção mostra "Nenhuma opção encontrada" e não muda o filtro.
  */
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReservationsScreen } from '../../src/renderer/src/screens/reservations/ReservationsScreen';
-import { fakeHunit, renderWithApp, type FakeHunit } from './render';
+import { fakeHunit, mocked, renderWithApp, type FakeHunit } from './render';
 import {
   findRow,
   lastListQuery,
@@ -140,6 +144,85 @@ describe('painel "Filtros avançados" (tela 4.12)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('seletores só pelo teclado (specs/008, T035, SC-010)', () => {
+  type User = ReturnType<typeof userEvent.setup>;
+
+  /**
+   * Foca o campo sem o mouse, digita, desce até a primeira opção e escolhe. A lista de várias
+   * opções continua aberta depois do Enter e fecha com Esc; na de uma opção, o Enter já fecha (e um
+   * Esc a mais fecharia o painel).
+   */
+  async function chooseByKeyboard(user: User, input: HTMLElement, text: string, multi = false) {
+    act(() => input.focus());
+    await user.keyboard(text);
+    await user.keyboard(multi ? '{ArrowDown}{Enter}{Escape}' : '{ArrowDown}{Enter}');
+  }
+
+  it('Hotéis, Situação da reserva, Ativa ou cancelada, Canal e Origem', async () => {
+    renderWithApp(<ReservationsScreen />, hunit);
+    const user = userEvent.setup();
+    await findRow('7001');
+    const panel = await openFiltersPanel(user);
+
+    const expectQuery = (expected: Record<string, unknown>) =>
+      waitFor(() => expect(lastListQuery(hunit)).toMatchObject(expected));
+
+    await chooseByKeyboard(
+      user,
+      within(panel).getByPlaceholderText('Todos os hotéis'),
+      'pousada',
+      true,
+    );
+    await expectQuery({ hotelCode: ['32'] });
+    // Sem acento e sem maiúsculas.
+    await chooseByKeyboard(
+      user,
+      within(panel).getByPlaceholderText('Todas as situações'),
+      'PENDENTE DE COBRANCA',
+      true,
+    );
+    await expectQuery({ detailedSituation: ['virtual_card_pending_charge'] });
+    await chooseByKeyboard(
+      user,
+      within(panel).getByRole('combobox', { name: 'Ativa ou cancelada' }),
+      // "canceladas" também combina com "Ativas e canceladas", que vem antes.
+      'so canceladas',
+    );
+    await expectQuery({ reservationStatus: ['cancelled'] });
+    await chooseByKeyboard(user, within(panel).getByPlaceholderText('Todos os canais'), 'expe');
+    await expectQuery({ channel: 'Expedia' });
+    await chooseByKeyboard(user, screen.getByRole('combobox', { name: 'Origem' }), 'sistema');
+    await expectQuery({
+      hotelCode: ['32'],
+      detailedSituation: ['virtual_card_pending_charge'],
+      reservationStatus: ['cancelled'],
+      channel: 'Expedia',
+      fromLegacy: true,
+    });
+  });
+
+  it('texto sem opção: "Nenhuma opção encontrada" e o filtro não muda', async () => {
+    renderWithApp(<ReservationsScreen />, hunit);
+    const user = userEvent.setup();
+    await findRow('7001');
+    const panel = await openFiltersPanel(user);
+    const calls = () => mocked(hunit.api.reservations.list).mock.calls.length;
+
+    const status = within(panel).getByRole('combobox', { name: 'Ativa ou cancelada' });
+    const before = (status as HTMLInputElement).value;
+    const listed = calls();
+    act(() => status.focus());
+    await user.keyboard('zzz');
+    expect(await screen.findByText('Nenhuma opção encontrada')).toBeInTheDocument();
+    await user.keyboard('{Enter}{Escape}');
+    act(() => status.blur());
+
+    await waitFor(() => expect(status).toHaveValue(before));
+    expect(calls()).toBe(listed);
+    expect(lastListQuery(hunit).reservationStatus).toBeUndefined();
   });
 });
 

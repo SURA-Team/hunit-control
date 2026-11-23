@@ -9,7 +9,8 @@
  * e lote), "Desfazer o comprovante?" e "Cancelar a execução?" e, desde a US8, o envio ao Comercial
  * (conferência e andamento), a recusa do retorno, "Desfazer o envio ao Comercial?", as confirmações
  * em lote (retornos e "Verificar") e a cópia para e-mail e, desde a US6, o acesso ao Hunit para
- * retomar uma execução.
+ * retomar uma execução. Desde a 008 (T031), "Marcar como cancelada sem cobrança?" e "Desfazer a
+ * marcação?".
  */
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -60,7 +61,7 @@ const CONFIG: PublicConfig = {
     isCertificateAuthority: true,
   },
   hasApiKey: true,
-  preferences: { soundEnabled: true, idleHours: 8 },
+  preferences: { soundEnabled: true, soundVolume: 100, idleHours: 8 },
 };
 
 let hunit: FakeHunit;
@@ -321,6 +322,46 @@ const DIALOGS: Record<string, DialogCase> = {
       // Habilita quando o perfil da conexão chega.
       await waitFor(() => expect(cancel).toBeEnabled());
       await user.click(cancel);
+    },
+  },
+  'marcar como cancelada sem cobrança (tela 7.17)': {
+    title: 'Marcar como cancelada sem cobrança?',
+    size: 'sm',
+    open: async () => {
+      renderWithApp(<ReservationDetail reservation={pendingReservation('7001')} />, hunit);
+      const user = userEvent.setup();
+      const mark = await screen.findByRole('button', {
+        name: 'Marcar como cancelada sem cobrança',
+      });
+      await waitFor(() => expect(mark).toBeEnabled());
+      await user.click(mark);
+    },
+  },
+  'desfazer a marcação "Cancelada sem cobrança" (specs/008)': {
+    title: 'Desfazer a marcação?',
+    size: 'sm',
+    open: async () => {
+      const marked = pendingReservation('7001', {
+        amountToCharge: '0.00',
+        treatment: treatment({
+          situation: 'cancelled_no_charge',
+          detailedSituation: 'cancelled_no_charge',
+          acceptsDocuments: false,
+        }),
+        noCharge: {
+          id: '66666666-6666-4666-8666-666666666666',
+          markedAt: NOW.toISOString(),
+          markedBy: 'desktop-financeiro',
+          note: null,
+          previousAmount: '100.00',
+          undoneAt: null,
+          undoneBy: null,
+          hunitShowsCharge: false,
+        },
+      });
+      renderWithApp(<ReservationDetail reservation={marked} />, hunit);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Desfazer' }));
     },
   },
 };

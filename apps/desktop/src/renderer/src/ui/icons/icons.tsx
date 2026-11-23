@@ -53,6 +53,16 @@ export const AttentionIcon = createIcon('AttentionIcon', 14, [
   { d: 'M7 9.9165H7.00583', width: 1.75, linejoin: 'round' },
 ]);
 
+/** `info.svg` (specs/008, nota do som do aviso, telas 1.1 a 1.3) */
+export const InfoIcon = createIcon('InfoIcon', 18, [
+  {
+    d: 'M15.75 9C15.75 12.7279 12.7279 15.75 9 15.75C5.27208 15.75 2.25 12.7279 2.25 9C2.25 5.27208 5.27208 2.25 9 2.25C12.7279 2.25 15.75 5.27208 15.75 9Z',
+    width: 1.35,
+  },
+  { d: 'M9 8.25V12', width: 1.35 },
+  { d: 'M9 6H9.0075', width: 1.35 },
+]);
+
 /** `check.svg` */
 export const CheckIcon = createIcon('CheckIcon', 14, [
   { d: 'M2.91663 7.29167L5.54163 9.91667L11.0833 4.375', width: 1.75, linejoin: 'round' },
@@ -193,6 +203,34 @@ export const SelectorIcon = createIcon('SelectorIcon', 20, [
 export const SettingsIcon = createIcon('SettingsIcon', 20, [
   {
     d: 'M3.33335 16.6667V11.6667M3.33335 11.6667H1.66669M3.33335 11.6667H5.00002M3.33335 8.33337V3.33337M10 16.6667V10M10 6.66671V3.33337M10 6.66671H8.33335M10 6.66671H11.6667M16.6667 16.6667V13.3334M16.6667 13.3334H15M16.6667 13.3334H18.3334M16.6667 10V3.33337',
+    width: 1.5,
+    linejoin: 'round',
+  },
+]);
+
+/** `sound-high.svg` (specs/008, controle de volume; exportado do Figma, T039) */
+export const SoundHighIcon = createIcon('SoundHighIcon', 20, [
+  {
+    d: 'M9.16667 4.16667L5 7.5H2.5V12.5H5L9.16667 15.8333V4.16667Z',
+    width: 1.5,
+    linejoin: 'round',
+  },
+  {
+    d: 'M12.9167 7.08333C13.6801 7.8622 14.1077 8.90936 14.1077 10C14.1077 11.0906 13.6801 12.1378 12.9167 12.9167',
+    width: 1.5,
+    linejoin: 'round',
+  },
+  {
+    d: 'M15.4167 4.58333C16.1477 5.28343 16.7295 6.12426 17.1269 7.05517C17.5243 7.98608 17.7292 8.9878 17.7292 10C17.7292 11.0122 17.5243 12.0139 17.1269 12.9448C16.7295 13.8757 16.1477 14.7166 15.4167 15.4167',
+    width: 1.5,
+    linejoin: 'round',
+  },
+]);
+
+/** `sound-low.svg` (specs/008, controle de volume; exportado do Figma, T039): só o alto-falante */
+export const SoundLowIcon = createIcon('SoundLowIcon', 20, [
+  {
+    d: 'M9.16667 4.16667L5 7.5H2.5V12.5H5L9.16667 15.8333V4.16667Z',
     width: 1.5,
     linejoin: 'round',
   },

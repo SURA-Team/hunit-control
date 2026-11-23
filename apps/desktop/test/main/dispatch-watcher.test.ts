@@ -40,6 +40,7 @@ let changed: JobRef[];
 let requests: TwoFactorRequest[];
 let closed: TwoFactorClosed[];
 let finished: FinishedSummary[];
+let listQueries: string[] = [];
 let nextEventId: number;
 let deadline: string;
 
@@ -85,6 +86,7 @@ beforeEach(() => {
   closed = [];
   finished = [];
   nextEventId = 10;
+  listQueries = [];
   server.on('GET', `/v1/commercial-dispatches/${ID}`, (_request, response) =>
     sendJson(response, 200, dispatch),
   );
@@ -99,7 +101,8 @@ beforeEach(() => {
   server.on('GET', '/v1/executions', (_request, response) =>
     sendJson(response, 200, { items: [], nextCursor: null }),
   );
-  server.on('GET', '/v1/commercial-dispatches', (_request, response) =>
+  server.on('GET', '/v1/commercial-dispatches', (request, response) => {
+    listQueries.push(request.query.toString());
     sendJson(response, 200, {
       items: [
         { ...dispatch, requestedClient: ME },
@@ -110,8 +113,8 @@ beforeEach(() => {
         },
       ],
       nextCursor: null,
-    }),
-  );
+    });
+  });
   api = new ApiClient({
     serverUrl: server.url,
     caCertificatePem: certificates.authority.certificatePem,
@@ -169,7 +172,15 @@ describe('envio desta máquina (specs/005, research R-14)', () => {
     await vi.waitFor(() => expect(streams).toHaveLength(1));
 
     emitStatus('completed', {
-      counts: { total: 3, pending: 0, sent: 2, withdrawn: 1, notVerified: 0, ignored: 0 },
+      counts: {
+        total: 3,
+        pending: 0,
+        sent: 2,
+        withdrawn: 1,
+        notVerified: 0,
+        ignored: 0,
+        checked: 0,
+      },
     });
 
     await vi.waitFor(() => expect(finished).toHaveLength(1));
@@ -184,5 +195,7 @@ describe('envio desta máquina (specs/005, research R-14)', () => {
     await watcher.resumeOwn(ME);
     await vi.waitFor(() => expect(requests).toHaveLength(1));
     expect(requests.map((request) => request.job)).toEqual([JOB]);
+    // Envios e verificações da fila "Cobradas no Hunit": as duas pedem o token (specs/008).
+    expect(listQueries.at(-1)).toContain('purpose=all');
   });
 });

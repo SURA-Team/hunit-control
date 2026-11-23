@@ -45,6 +45,7 @@ import {
 } from './app-fixture.js';
 import {
   cellOverflows,
+  expectCardCornersClipped,
   expectCellsFit,
   expectDialogFits,
   expectDialogSpacing,
@@ -253,6 +254,11 @@ async function flexColumnWidth(
       ];
 }
 
+/** A linha de uma reserva numa lista (pelo número, que só aparece na linha dela). */
+function returnRow(table: Locator, reservationNumber: string): Locator {
+  return table.locator('tbody tr').filter({ hasText: reservationNumber });
+}
+
 function button(name: string): Locator {
   return launched.window.getByRole('button', { name, exact: true });
 }
@@ -298,6 +304,12 @@ describe('larguras: Configuração e Executar (US9, SC-007)', () => {
         window.getByLabel('Chave de acesso'),
         button('Testar conexão'),
         button('Salvar conexão'),
+        // Card do aviso com o som e o volume (specs/008, US1).
+        // A chave em si é um input invisível do Mantine: confere o rótulo clicável.
+        window.getByText('Tocar som do aviso', { exact: true }),
+        window.getByRole('slider', { name: 'Volume do aviso' }),
+        window.getByText('100 %'),
+        button('Testar aviso'),
       ],
     });
   });
@@ -372,6 +384,9 @@ describe('larguras: Configuração e Executar (US9, SC-007)', () => {
         window.getByText('Impressão digital (SHA-256):', { exact: false }),
         button('Testar conexão'),
         button('Salvar preferências'),
+        // A chave em si é um input invisível do Mantine: confere o rótulo clicável.
+        window.getByText('Tocar som do aviso', { exact: true }),
+        window.getByRole('slider', { name: 'Volume do aviso' }),
         button('Testar aviso'),
         button('Remover a configuração desta máquina'),
       ],
@@ -487,6 +502,28 @@ describe('larguras: Reservas (US2 e US4, SC-007)', () => {
     );
   }, 240_000);
 
+  it('destaque da linha dentro do card: uma reserva só, selecionada e com o mouse em cima (specs/008, T036)', async () => {
+    const { app, window } = launched;
+    await goTo('Reservas');
+    await searchReservations(window, 'R-1');
+    await waitForReservationRows(window, 1);
+    const table = window.locator('table[aria-label="Reservas"]');
+    const checkbox = window.getByRole('checkbox', { name: 'Selecionar a reserva R-1' });
+    await checkbox.check();
+    try {
+      for (const size of SIZES) {
+        await resizeWindow(app, window, size.window, size.zoom);
+        await table.locator('tbody tr').first().hover();
+        await expectCardCornersClipped(app, table, `— Reservas, ${size.label}`);
+      }
+    } finally {
+      await resizeWindow(app, window, DEFAULT_SIZE, 1);
+      await checkbox.uncheck();
+      await searchReservations(window, '');
+      await waitForReservationRows(window, 8);
+    }
+  }, 180_000);
+
   it('gaveta da seleção e anexar em lote (telas 4.5 e 4.6)', async () => {
     const { app, window } = launched;
     for (const number of ['R-1', 'R-2', 'R-3']) {
@@ -578,6 +615,63 @@ describe('larguras: Reservas (US2 e US4, SC-007)', () => {
     }
   });
 
+  it('"Cancelada sem cobrança": o diálogo e o detalhe marcado (telas 7.17 e 7.18, specs/008)', async () => {
+    const { window } = launched;
+    // R-4 ("Cartão validado (não cobrado)") aceita a marcação.
+    await button('Abrir a reserva R-4').click();
+    const drawer = window.getByRole('dialog', { name: 'Detalhe da reserva' });
+    const section = drawer.getByTestId('no-charge-section');
+    const dialog = window.getByRole('dialog', { name: 'Marcar como cancelada sem cobrança?' });
+    try {
+      await section
+        .getByRole('button', { name: 'Marcar como cancelada sem cobrança' })
+        .click({ timeout: 15_000 });
+      await dialog.getByLabel('Observação (opcional)').fill('Hóspede cancelou antes do check-in');
+      await checkAllSizes({
+        name: 'marcar como cancelada sem cobrança',
+        area: 'Reservas',
+        dialog: () => dialog,
+        reachable: () => [
+          dialog.getByRole('button', { name: 'Fechar o diálogo' }),
+          dialog.getByText(/Use só quando a reserva foi cancelada/),
+          dialog.getByText(/→ R\$\s0,00/),
+          dialog.getByLabel('Observação (opcional)'),
+          dialog.getByText('34/500'),
+          dialog.getByRole('button', { name: 'Voltar' }),
+          dialog.getByRole('button', { name: 'Marcar como cancelada' }),
+        ],
+      });
+      await dialog.getByRole('button', { name: 'Marcar como cancelada' }).click();
+      await dialog.waitFor({ state: 'detached' });
+      await section.getByRole('button', { name: 'Desfazer' }).waitFor({ timeout: 15_000 });
+      await checkAllSizes({
+        name: 'detalhe cancelada sem cobrança',
+        area: 'Reservas',
+        reachable: () => [
+          drawer.getByRole('heading', { name: /Reserva R-4/ }),
+          section.getByRole('heading', { name: 'Cancelada sem cobrança' }),
+          section.getByRole('button', { name: 'Desfazer' }),
+          section.getByText(/^antes R\$/),
+          section.getByText(/^por /),
+          section.getByText('não vai mais ao Comercial'),
+          section.getByTestId('no-charge-note'),
+        ],
+      });
+    } finally {
+      if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Voltar' }).click();
+      // Desfaz pela interface, para as outras telas continuarem com a lista de antes.
+      const undo = section.getByRole('button', { name: 'Desfazer' });
+      if (await undo.isVisible()) {
+        await undo.click();
+        const confirm = window.getByRole('dialog', { name: 'Desfazer a marcação?' });
+        await confirm.getByRole('button', { name: 'Desfazer' }).click();
+        await confirm.waitFor({ state: 'detached' });
+      }
+      await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
+      await drawer.waitFor({ state: 'hidden' });
+    }
+  });
+
   it('painel "Filtros avançados" aberto (tela 4.12)', async () => {
     const { window } = launched;
     const panel = await openReservationFilters(window);
@@ -634,6 +728,8 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
     for (const [hotelCode, reservationNumber] of [
       ['102', 'C-1'],
       ['104', 'C-2'],
+      ['104', 'C-3'],
+      ['102', 'C-4'],
     ] as const) {
       await server.insertReservation({
         hotelCode,
@@ -653,12 +749,33 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
       'Maquininha do Centro de Convenções e Eventos',
       '123000,00',
       'Responsável Fictícia do Comercial',
+      // Situação e data (specs/008): texto livre longo e a data como o Google devolve.
+      'Cobrada na maquininha do estabelecimento ao lado da recepção',
+      46345,
     ]);
     server.sheet?.fillReturn(HOTELS[3]?.name ?? '', 'C-2', ['AUT-55211', '', '', '']);
+    // "Cancelada" do Comercial (homologação da 008, R-19): vai para "Retornos a validar", no topo,
+    // com o selo próprio; texto longo para conferir a quebra.
+    server.sheet?.fillReturn(HOTELS[3]?.name ?? '', 'C-3', [
+      '',
+      '',
+      '',
+      'Responsável Fictícia do Comercial',
+      'Cancelada pelo hóspede direto no canal de vendas, sem multa',
+    ]);
+    // Relato "Cobrada no Hunit" (specs/008, US3): vai para a fila "Cobradas no Hunit".
+    server.sheet?.fillReturn(HOTELS[1]?.name ?? '', 'C-4', [
+      '',
+      '',
+      '',
+      'Responsável Fictícia do Comercial',
+      'Cobrada no Hunit',
+      46345,
+    ]);
     await server.test.sync?.runRound();
   });
 
-  it('as quatro abas da área Comercial (telas 7.7 a 7.10)', async () => {
+  it('as abas da área Comercial (telas 7.7 a 7.10 e 7.15)', async () => {
     const { window } = launched;
     await goTo('Comercial');
     await window.getByRole('table', { name: 'Envios ao Comercial' }).waitFor({ timeout: 15_000 });
@@ -683,7 +800,11 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
         window.getByRole('button', { name: /^Confirmar marcados/ }),
         returns.getByRole('button', { name: 'Abrir a reserva C-1' }),
         returns.getByRole('button', { name: 'Confirmar', exact: true }),
-        returns.getByRole('button', { name: 'Recusar', exact: true }),
+        returnRow(returns, 'C-1').getByRole('button', { name: 'Recusar', exact: true }),
+        // A "Cancelada" do Comercial, no topo (homologação, R-19).
+        returns.getByRole('button', { name: 'Abrir a reserva C-3' }),
+        returns.getByRole('button', { name: 'Confirmar cancelamento' }),
+        returnRow(returns, 'C-3').getByRole('button', { name: 'Recusar', exact: true }),
       ],
     });
 
@@ -694,6 +815,22 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
       name: 'Comercial — Retornos com problema',
       area: 'Comercial',
       reachable: () => [problems.getByRole('button', { name: 'Abrir a reserva C-2' })],
+    });
+
+    // Fila "Cobradas no Hunit" (specs/008, T026, tela 7.15).
+    await tab('Cobradas no Hunit').click();
+    const hunitCharges = window.getByRole('table', { name: 'Cobradas no Hunit' });
+    await hunitCharges.waitFor({ timeout: 15_000 });
+    await checkAllSizes({
+      name: 'Comercial — Cobradas no Hunit',
+      area: 'Comercial',
+      reachable: () => [
+        window.getByText(/^O Comercial marcou estas reservas como/),
+        button('Verificar agora'),
+        hunitCharges.getByRole('button', { name: 'Abrir a reserva C-4' }),
+        hunitCharges.getByText('Aguardando verificação'),
+        hunitCharges.getByText('confere na próxima execução'),
+      ],
     });
 
     await tab('Planilha').click();
@@ -707,6 +844,28 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
       ],
     });
   });
+
+  it('destaque da linha dentro do card: "Retornos a validar" com todas as linhas marcadas (specs/008, T036)', async () => {
+    const { app, window } = launched;
+    await goTo('Comercial');
+    await tab('Retornos a validar').click();
+    const returns = window.getByRole('table', { name: 'Retornos a validar' });
+    await returns.waitFor({ timeout: 15_000 });
+    // A "Cancelada" C-3 no topo e o retorno C-1: marcadas, as duas pintam os cantos do card.
+    expect(await returns.locator('tbody tr').count()).toBe(2);
+    const checkbox = window.getByRole('checkbox', { name: 'Marcar todos os retornos listados' });
+    await checkbox.check();
+    try {
+      for (const size of SIZES) {
+        await resizeWindow(app, window, size.window, size.zoom);
+        await returns.locator('tbody tr').first().hover();
+        await expectCardCornersClipped(app, returns, `— Retornos a validar, ${size.label}`);
+      }
+    } finally {
+      await resizeWindow(app, window, DEFAULT_SIZE, 1);
+      await checkbox.uncheck();
+    }
+  }, 180_000);
 
   it('colunas das abas sem sobrepor em qualquer largura da janela (homologação, T068)', async () => {
     const { window } = launched;
@@ -725,13 +884,21 @@ describe('larguras: Comercial e o envio (US8, SC-007)', () => {
     await tab('Retornos com problema').click();
     await window.getByRole('table', { name: 'Retornos com problema' }).waitFor({ timeout: 15_000 });
     await sweepWidths();
-  }, 480_000);
+
+    // Fila "Cobradas no Hunit" (specs/008, tela 7.15): o hóspede fica com o que sobra.
+    await tab('Cobradas no Hunit').click();
+    const queue = window.getByRole('table', { name: 'Cobradas no Hunit' });
+    await queue.waitFor({ timeout: 15_000 });
+    await sweepWidths(() =>
+      flexColumnWidth(queue, 'guest', { from: 730, min: 160, narrowMin: 120 }),
+    );
+  }, 600_000);
 
   it('recusar o retorno (tela 7.6)', async () => {
     const { window } = launched;
     await tab('Retornos a validar').click();
     const returns = window.getByRole('table', { name: 'Retornos a validar' });
-    await returns.getByRole('button', { name: 'Recusar', exact: true }).click();
+    await returnRow(returns, 'C-1').getByRole('button', { name: 'Recusar', exact: true }).click();
     const dialog = window.getByRole('dialog', { name: 'Recusar o retorno do Comercial' });
     await dialog.waitFor();
     try {

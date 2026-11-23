@@ -98,6 +98,23 @@
   background: var(--hc-amarelo-1);
 }
 
+/* Nota neutra (specs/008, nota do som do aviso, telas 1.1 a 1.3): caixa cinza com borda. */
+.notice[data-tone='gray'] {
+  --notice-title: var(--hc-texto-padrao);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--hc-borda-padrao);
+  background: var(--hc-fundo-sutil);
+  font: var(--hc-font-descricao);
+}
+
+.notice[data-tone='gray'] .noticeIcon {
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--hc-texto-padrao);
+}
+
 /*
  * Compacto: só o texto, em negrito, na cor do título do tom (tela 5.1, "dados de HH:MM — …" na linha
  * do título). O design usa amarelo/8, abaixo de 4,5:1 no fundo da página; o tom 9 é legível.

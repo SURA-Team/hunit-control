@@ -20,6 +20,7 @@ import type {
   DispatchChanged,
   ExecutionChanged,
   HunitApi,
+  PlaySoundEvent,
   PreferencesInput,
   Result,
   TwoFactorClosed,
@@ -38,7 +39,7 @@ export interface FakeHunit {
     dispatchChanged(event: DispatchChanged): void;
     twoFactorRequested(request: TwoFactorRequest): void;
     twoFactorClosed(event: TwoFactorClosed): void;
-    playSound(): void;
+    playSound(event: PlaySoundEvent): void;
   };
 }
 
@@ -74,7 +75,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
     dispatchChanged: new Set<Listener<DispatchChanged>>(),
     twoFactorRequested: new Set<Listener<TwoFactorRequest>>(),
     twoFactorClosed: new Set<Listener<TwoFactorClosed>>(),
-    playSound: new Set<Listener<void>>(),
+    playSound: new Set<Listener<PlaySoundEvent>>(),
   };
   const on =
     <T,>(set: Set<Listener<T>>) =>
@@ -98,7 +99,11 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
     },
     preferences: {
       set: vi.fn((input: PreferencesInput) =>
-        okResult({ soundEnabled: input.soundEnabled ?? true, idleHours: input.idleHours ?? 8 }),
+        okResult({
+          soundEnabled: input.soundEnabled ?? true,
+          soundVolume: input.soundVolume ?? 100,
+          idleHours: input.idleHours ?? 8,
+        }),
       ),
     },
     attention: {
@@ -142,6 +147,8 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       quickFilterCounts: vi.fn(() =>
         okResult({ all: 0, pendingCharge: 0, toReview: 0, withError: 0, done: 0 }),
       ),
+      markNoCharge: vi.fn(() => errorResult('internal_error')),
+      undoNoCharge: vi.fn(() => errorResult('internal_error')),
     },
     treatments: {
       pickFile: vi.fn(() => okResult(null)),
@@ -162,6 +169,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
             effectiveChargedAmount: null,
             chargedAmountOrigin: null,
             acceptsDocuments: true,
+            noChargeHistory: [],
           },
           documents: [],
           events: [],
@@ -188,7 +196,9 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       onChanged: on(listeners.dispatchChanged),
     },
     commercial: {
-      get: vi.fn(() => okResult({ line: null, returns: [], events: [] })),
+      get: vi.fn(() =>
+        okResult({ line: null, returns: [], events: [], report: null, history: [] }),
+      ),
       cancelLine: vi.fn(() => errorResult('internal_error')),
       restoreLine: vi.fn(() => errorResult('internal_error')),
       confirmReturn: vi.fn(() => errorResult('internal_error')),
@@ -197,6 +207,12 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       confirmReturns: vi.fn(() => errorResult('internal_error')),
       sheetStatus: vi.fn(() => errorResult('internal_error')),
       readNow: vi.fn(() => errorResult('internal_error')),
+      hunitCharges: vi.fn(() =>
+        okResult({ items: [], counts: { awaiting: 0, notFound: 0, confirmed: 0 } }),
+      ),
+      checkHunitCharges: vi.fn(() => errorResult('internal_error')),
+      confirmCancellation: vi.fn(() => errorResult('internal_error')),
+      rejectCancellation: vi.fn(() => errorResult('internal_error')),
     },
     clipboard: {
       copyReservations: vi.fn(() => errorResult('internal_error')),
@@ -216,7 +232,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       dispatchChanged: (event) => emitTo(listeners.dispatchChanged, event),
       twoFactorRequested: (request) => emitTo(listeners.twoFactorRequested, request),
       twoFactorClosed: (event) => emitTo(listeners.twoFactorClosed, event),
-      playSound: () => emitTo(listeners.playSound, undefined),
+      playSound: (event) => emitTo(listeners.playSound, event),
     },
   };
 }

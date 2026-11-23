@@ -21,9 +21,17 @@ export function dispatchTally(counts: {
   withdrawn: number;
   notVerified: number;
   ignored: number;
+  checked?: number;
 }): string {
   const count = (value: number, one: string, many: string) =>
     `${value} ${value === 1 ? one : many}`;
+  // Verificação da fila "Cobradas no Hunit" (specs/008): conferidas em vez de enviadas.
+  if ((counts.checked ?? 0) > 0) {
+    return [
+      count(counts.checked ?? 0, 'conferida', 'conferidas'),
+      count(counts.notVerified, 'não verificada', 'não verificadas'),
+    ].join(' · ');
+  }
   return [
     count(counts.sent, 'enviada', 'enviadas'),
     count(counts.withdrawn, 'retirada', 'retiradas'),

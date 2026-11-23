@@ -121,6 +121,36 @@ describe('seção "Comercial" do detalhe (FR-023)', () => {
     expect(within(found).getByText(/-R\$\s*10,00/)).toBeInTheDocument();
   });
 
+  it('situação e data da cobrança no retorno, com "hoje" embaixo (specs/008, tela 7.5)', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(
+      new Date(),
+    );
+    mocked(hunit.api.commercial.get).mockImplementation(() =>
+      okResult(
+        detail({
+          returns: [
+            commercialReturn({
+              chargeSituation: { kind: 'charged_at_terminal', text: 'Cobrada na maquininha' },
+              chargeDate: today,
+            }),
+          ],
+        }),
+      ),
+    );
+    renderWithApp(<CommercialSection reservation={reservation} />, hunit);
+    const found = await screen.findByTestId('commercial-return');
+    expect(within(found).getByText('Situação da cobrança')).toBeInTheDocument();
+    expect(within(found).getByText('Cobrada na maquininha')).toBeInTheDocument();
+    expect(within(found).getByText('Data da cobrança')).toBeInTheDocument();
+    expect(within(found).getByText('hoje')).toBeInTheDocument();
+  });
+
+  it('sem situação nem data: "não informada" (FR-011)', async () => {
+    renderWithApp(<CommercialSection reservation={reservation} />, hunit);
+    const found = await screen.findByTestId('commercial-return');
+    expect(within(found).getAllByText('não informada')).toHaveLength(2);
+  });
+
   it('mesmo nome, com maiúsculas e acentos diferentes, não é destacado', async () => {
     mocked(hunit.api.commercial.get).mockImplementation(() =>
       okResult(detail({ returns: [commercialReturn({ chargeHotel: 'HOTEL  praia' })] })),
@@ -211,7 +241,7 @@ describe('seção "Comercial" do detalhe (FR-023)', () => {
 
   it('reserva nunca enviada pela planilha: a seção não aparece', async () => {
     mocked(hunit.api.commercial.get).mockImplementation(() =>
-      okResult({ line: null, returns: [], events: [] }),
+      okResult({ line: null, returns: [], events: [], report: null, history: [] }),
     );
     renderWithApp(<CommercialSection reservation={reservation} />, hunit);
     await waitFor(() => expect(hunit.api.commercial.get).toHaveBeenCalled());
@@ -224,7 +254,15 @@ describe('histórico mesclado com o da tratativa (FR-020)', () => {
     mocked(hunit.api.commercial.get).mockImplementation(() =>
       okResult(
         detail({
-          events: [
+          // Desde a 008, o histórico vem em `history` (com os tipos novos).
+          history: [
+            commercialEvent({
+              id: 3,
+              type: 'report_received' as never,
+              actor: { kind: 'commercial_sheet', name: 'Comercial' },
+              at: '2026-11-16T12:00:00.000Z',
+              reason: 'Cobrada no Hunit',
+            }),
             commercialEvent({
               id: 2,
               type: 'return_received',
@@ -239,8 +277,11 @@ describe('histórico mesclado com o da tratativa (FR-020)', () => {
     renderWithApp(<TreatmentSection reservation={reservation} />, hunit);
     const history = await screen.findByRole('list', { name: 'Histórico da tratativa' });
     const items = within(history).getAllByRole('listitem');
-    expect(items[0]).toHaveTextContent('Retorno do Comercial recebido — Comercial (planilha)');
-    expect(items[1]).toHaveTextContent('Enviou ao Comercial — desktop-financeiro');
+    expect(items[0]).toHaveTextContent(
+      'Comercial informou a situação da cobrança: Cobrada no Hunit — Comercial (planilha)',
+    );
+    expect(items[1]).toHaveTextContent('Retorno do Comercial recebido — Comercial (planilha)');
+    expect(items[2]).toHaveTextContent('Enviou ao Comercial — desktop-financeiro');
   });
 });
 
@@ -270,9 +311,13 @@ describe('confirmação de retornos em lote (FR-016a)', () => {
             lastSentAt: '2026-11-14T12:00:00.000Z',
             lastDispatchId: '44444444-4444-4444-8444-444444444444',
             returnState: 'awaiting_validation',
-            currentReturn: returnBrief(),
+            currentReturn: returnBrief({
+              chargeSituation: { kind: 'charged_at_terminal', text: 'Cobrada na maquininha' },
+              chargeDate: '2026-11-03',
+            }),
             returnProblem: null,
             syncPending: false,
+            report: null,
           },
         }),
       ),
@@ -296,6 +341,11 @@ describe('confirmação de retornos em lote (FR-016a)', () => {
     expect(within(review).getByText('AUT987')).toBeInTheDocument();
     expect(within(review).getByText('Maquininha Centro')).toBeInTheDocument();
     expect(within(review).getByText('Hotel da reserva: Hotel Praia')).toBeInTheDocument();
+    // Situação e data da cobrança embaixo do hotel (tela 7.12 da 008).
+    const hotelCell = within(review)
+      .getByText('Hotel da reserva: Hotel Praia')
+      .closest('td') as HTMLElement;
+    expect(within(hotelCell).getByText('Cobrada na maquininha em 03/11/2026')).toBeInTheDocument();
     // A diferença fica na coluna e, no conteúdo estreito, na linha dos valores (o CSS mostra uma).
     expect(within(review).getAllByText(/-R\$\s*10,00/).length).toBeGreaterThan(0);
 

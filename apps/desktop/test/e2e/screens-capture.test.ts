@@ -65,6 +65,11 @@ const WINDOWS: Record<string, { width: number; height: number }> = {
 };
 
 /** Área da janela pedida em `HUNIT_SCREENS_WIDTH` (padrão: 1 440 × 900). */
+/** A data de hoje como o Google devolve uma data da planilha (número de série). */
+function todaySerial(): number {
+  return Math.floor((Date.now() - Date.UTC(1899, 11, 30)) / 86_400_000);
+}
+
 function captureWindow(): { width: number; height: number } {
   const width = process.env['HUNIT_SCREENS_WIDTH']?.trim() || '1440';
   const size = WINDOWS[width];
@@ -221,14 +226,23 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
     await writeFile(certificateFile, certificates.authority.certificatePem);
     await stubOpenDialog(app, certificateFile);
     await window.getByLabel('Endereço do servidor').waitFor();
-    if (capture) await shot('1.1', 'configuracao-primeiro-uso');
+    if (capture) await shot('1.1', 'configuracao-primeiro-uso', true);
     await window.getByLabel('Endereço do servidor').fill(tls.url);
     await window.getByRole('button', { name: /escolher certificado/i }).click();
     await window.getByText('Impressão digital (SHA-256):', { exact: false }).waitFor();
     await window.getByLabel('Chave de acesso').fill(apiKey);
     await window.getByRole('button', { name: 'Testar conexão' }).click();
     await window.getByText('Conexão confirmada').waitFor();
-    if (capture) await shot('1.2', 'configuracao-conexao-confirmada', true);
+    if (capture) {
+      // Tela 1.2 da 008: conexão confirmada com o som do aviso desligado (volume desabilitado).
+      // O input da chave fica por cima do rótulo (transparente): o clique vai nele.
+      const sound = window.getByRole('switch', { name: /^Tocar som do aviso/ });
+      await sound.click();
+      // O clique rola a página até a chave; o print da página inteira começa do topo.
+      await window.evaluate(() => document.scrollingElement?.scrollTo(0, 0));
+      await shot('1.2', 'configuracao-conexao-confirmada', true);
+      await sound.click();
+    }
     await window.getByRole('button', { name: 'Salvar conexão' }).click();
     await window
       .getByRole('banner')
@@ -636,11 +650,15 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       );
       const [first, second, third] = lines.rows;
       if (first) {
+        // Situação e data da cobrança (specs/008, telas 7.5, 7.8 e 7.12): a data de hoje, como o
+        // Google devolve (número de série).
         server.sheet?.fillReturn(first.hotel, first.number, [
           'AUT-55210',
           'Maquininha Centro de Convenções',
           '1280,00',
           'Paula (Comercial)',
+          'Cobrada na maquininha',
+          todaySerial(),
         ]);
       }
       if (second) {
@@ -649,6 +667,8 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
           second.hotel,
           '515,00',
           'Paula (Comercial)',
+          'Cobrada na maquininha',
+          todaySerial(),
         ]);
       }
       if (third) server.sheet?.fillReturn(third.hotel, third.number, ['AUT-55212', '', '', '']);
@@ -662,6 +682,8 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       }
       await window.locator('tbody tr').first().click();
       await window.getByTestId('commercial-return').waitFor({ timeout: 15_000 });
+      // A gaveta rola por dentro: o print mostra o retorno, com a situação e a data (008).
+      await window.getByTestId('commercial-return').scrollIntoViewIfNeeded();
       await shot('7.5', 'reservas-detalhe-validar-comprovante', true);
       await window
         .getByTestId('commercial-return')
@@ -748,6 +770,131 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('7.14', 'reservas-copiar-para-email');
       await closeOverlays();
       await window.getByRole('button', { name: 'Desmarcar todas' }).click();
+    });
+
+    await step('7.17 e 7.18 cancelada sem cobrança', async () => {
+      // Como no design: uma reserva enviada ao Comercial, sem retorno nem problema de retorno
+      // (specs/008).
+      const sent = await server.test.database.pool.query<{ number: string }>(
+        `select l.reservation_number as number from commercial_lines l
+         where l.state = 'open' and l.return_problem is null and not exists (
+           select 1 from commercial_returns r
+           where r.hotel_code = l.hotel_code and r.reservation_number = l.reservation_number)
+         order by l.reservation_number limit 1`,
+      );
+      const number = sent.rows[0]?.number;
+      await goTo('Reservas');
+      await resetReservations();
+      if (number) {
+        await searchReservations(window, number);
+        await waitForReservationRows(window, 1);
+      } else {
+        await quickFilter('Falta cobrar').click();
+      }
+      await window.locator('tbody tr').first().click();
+      const section = window.getByTestId('no-charge-section');
+      await section
+        .getByRole('button', { name: 'Marcar como cancelada sem cobrança' })
+        .click({ timeout: 15_000 });
+      const dialog = window.getByRole('dialog', { name: 'Marcar como cancelada sem cobrança?' });
+      await dialog.waitFor();
+      await shot('7.17', 'reservas-marcar-cancelada-sem-cobranca');
+      await dialog.getByLabel('Observação (opcional)').fill('hóspede cancelou antes do check-in.');
+      await dialog.getByRole('button', { name: 'Marcar como cancelada' }).click();
+      await section.getByRole('button', { name: 'Desfazer' }).waitFor({ timeout: 15_000 });
+      await shot('7.18', 'reservas-cancelada-sem-cobranca', true);
+      // Desfaz, para as telas seguintes continuarem com a lista de antes.
+      await section.getByRole('button', { name: 'Desfazer' }).click();
+      const undo = window.getByRole('dialog', { name: 'Desfazer a marcação?' });
+      await undo.getByRole('button', { name: 'Desfazer' }).click();
+      await undo.waitFor({ state: 'detached' });
+      await closeOverlays();
+    });
+
+    await step('7.15 cobradas no Hunit', async () => {
+      // A 7.17 marcou e desmarcou uma reserva: a planilha volta a ter a linha em "A cobrar".
+      await server.test.sync?.runRound();
+      // Três reservas enviadas, sem retorno: o Comercial informa "Cobrada no Hunit" (specs/008).
+      const sent = await server.test.database.pool.query<{ number: string; hotel: string }>(
+        `select l.reservation_number as number, h.name as hotel from commercial_lines l
+         join hotels h on h.code = l.hotel_code
+         where l.state = 'open' and l.return_problem is null and not exists (
+           select 1 from commercial_returns r
+           where r.hotel_code = l.hotel_code and r.reservation_number = l.reservation_number)
+         order by l.reservation_number limit 3`,
+      );
+      for (const line of sent.rows) {
+        server.sheet?.fillReturn(line.hotel, line.number, [
+          '',
+          '',
+          '',
+          'Paula (Comercial)',
+          'Cobrada no Hunit',
+          todaySerial(),
+        ]);
+      }
+      await server.test.sync?.runRound();
+      // Como no design: uma aguardando, uma confirmada e uma não encontrada. A leitura do Hunit
+      // depois do relato vem direto no banco (a verificação de verdade está em hunit-charges.test.ts).
+      const [, confirmed, notFound] = sent.rows;
+      for (const [line, classification] of [
+        [confirmed, 'virtual_card_already_charged'],
+        [notFound, null],
+      ] as const) {
+        if (!line) continue;
+        await server.test.database.pool.query(
+          `update commercial_reports set read_at = now() - interval '1 hour'
+           where reservation_number = $1`,
+          [line.number],
+        );
+        await server.test.database.pool.query(
+          `update reservations set last_verified_at = now(),
+             classification = coalesce($2::classification, classification)
+           where reservation_number = $1`,
+          [line.number, classification],
+        );
+      }
+      await goTo('Comercial');
+      await window.getByRole('tab', { name: /^Cobradas no Hunit/ }).click();
+      await window
+        .getByRole('table', { name: 'Cobradas no Hunit' })
+        .locator('tbody tr')
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await shot('7.15', 'comercial-cobradas-no-hunit');
+    });
+
+    await step('7.8a e 7.5a "Cancelada" do Comercial', async () => {
+      // Sem desenho (homologação da 008, R-19), como a 7.7a: o Comercial informa só "Cancelada" numa
+      // linha aberta sem retorno; ela aparece no topo de "Retornos a validar" e na gaveta.
+      const [line] = (
+        await server.test.database.pool.query<{ number: string; hotel: string }>(
+          `select l.reservation_number as number, h.name as hotel from commercial_lines l
+           join hotels h on h.code = l.hotel_code
+           where l.state = 'open' and l.return_problem is null
+             and not exists (select 1 from commercial_returns r
+               where r.hotel_code = l.hotel_code and r.reservation_number = l.reservation_number)
+             and not exists (select 1 from commercial_reports p
+               where p.hotel_code = l.hotel_code and p.reservation_number = l.reservation_number)
+           order by l.reservation_number limit 1`,
+        )
+      ).rows;
+      if (!line) throw new Error('nenhuma linha aberta sem retorno para a "Cancelada"');
+      server.sheet?.fillReturn(line.hotel, line.number, ['', '', '', '', 'Cancelada']);
+      await server.test.sync?.runRound();
+
+      await goTo('Comercial');
+      await window.getByRole('tab', { name: /^Retornos a validar/ }).click();
+      const returns = window.getByRole('table', { name: 'Retornos a validar' });
+      await returns.getByText(line.number, { exact: true }).waitFor({ timeout: 15_000 });
+      await shot('7.8a', 'comercial-retornos-a-validar-cancelada');
+
+      await returns.getByRole('button', { name: `Abrir a reserva ${line.number}` }).click();
+      const block = window.getByTestId('commercial-cancellation');
+      await block.waitFor({ timeout: 15_000 });
+      await block.scrollIntoViewIfNeeded();
+      await shot('7.5a', 'reservas-detalhe-cancelada-pelo-comercial', true);
+      await closeOverlays();
     });
 
     await step('1.3 configuração conectada', async () => {

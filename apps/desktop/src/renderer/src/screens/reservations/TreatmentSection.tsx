@@ -22,7 +22,8 @@ import { Group, Stack, Text } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type {
-  CommercialEvent,
+  CommercialHistoryEvent,
+  NoChargeMark,
   Reservation,
   ReservationKey,
   Result,
@@ -40,7 +41,7 @@ import {
 } from '../../presentation/format';
 import {
   CLASSIFICATION_LABELS,
-  COMMERCIAL_EVENT_NAMES,
+  COMMERCIAL_HISTORY_EVENT_NAMES,
   DOCUMENT_STATE_LABELS,
   errorMessage,
   LEGACY_ORIGIN_NAME,
@@ -83,8 +84,8 @@ function eventDescription(event: TreatmentEvent): string {
 /** Quem fez um item do histórico do Comercial (FR-020): cliente da API, a planilha ou o sistema. */
 const COMMERCIAL_SHEET_ACTOR = 'Comercial (planilha)';
 
-function commercialDescription(event: CommercialEvent): string {
-  const action = COMMERCIAL_EVENT_NAMES[event.type];
+function commercialDescription(event: CommercialHistoryEvent): string {
+  const action = COMMERCIAL_HISTORY_EVENT_NAMES[event.type];
   if (event.reason) return `${action}: ${event.reason}`;
   if (event.classification) return `${action}: ${CLASSIFICATION_LABELS[event.classification].name}`;
   return action;
@@ -97,13 +98,34 @@ interface HistoryItem {
   who: string;
 }
 
+/** Itens do histórico das marcações "Cancelada sem cobrança" (specs/008, FR-021). */
+export const NO_CHARGE_MARKED_TEXT = 'Marcou como cancelada sem cobrança';
+export const NO_CHARGE_UNDONE_TEXT = 'Desfez a marcação “Cancelada sem cobrança”';
+
+function noChargeItems(marks: readonly NoChargeMark[]): HistoryItem[] {
+  return marks.flatMap((mark) => [
+    { key: `n${mark.id}`, at: mark.markedAt, text: NO_CHARGE_MARKED_TEXT, who: mark.markedBy },
+    ...(mark.undoneAt
+      ? [
+          {
+            key: `u${mark.id}`,
+            at: mark.undoneAt,
+            text: NO_CHARGE_UNDONE_TEXT,
+            who: mark.undoneBy ?? '—',
+          },
+        ]
+      : []),
+  ]);
+}
+
 /**
- * Histórico da tratativa e do Comercial juntos, do mais recente para o mais antigo (specs/005,
- * FR-020; 003 FR-017a).
+ * Histórico da tratativa, do Comercial e das marcações "Cancelada sem cobrança" juntos, do mais
+ * recente para o mais antigo (specs/005, FR-020; 003 FR-017a; 008 FR-021).
  */
 export function mergedHistory(
   treatment: readonly TreatmentEvent[],
-  commercial: readonly CommercialEvent[],
+  commercial: readonly CommercialHistoryEvent[],
+  noCharge: readonly NoChargeMark[] = [],
 ): HistoryItem[] {
   const items: HistoryItem[] = [
     ...treatment.map((event) => ({
@@ -118,6 +140,7 @@ export function mergedHistory(
       text: commercialDescription(event),
       who: event.actor.kind === 'commercial_sheet' ? COMMERCIAL_SHEET_ACTOR : event.actor.name,
     })),
+    ...noChargeItems(noCharge),
   ];
   return items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }
@@ -147,9 +170,15 @@ export function TreatmentSection({ reservation }: { reservation: Reservation }) 
     queryKey: commercialKey(key),
     queryFn: () => unwrap(hunit.commercial.get(key)),
   });
-  const history = mergedHistory(detail.data?.events ?? [], commercial.data?.events ?? []);
   // Enquanto o detalhe não chega, vale o resumo que veio com a reserva.
   const treatment = detail.data?.treatment ?? reservation.treatment;
+  // Desde a 008, o histórico completo (com os relatos e a verificação no Hunit) vem em `history`, e
+  // as marcações "Cancelada sem cobrança" entram junto.
+  const history = mergedHistory(
+    detail.data?.events ?? [],
+    commercial.data?.history ?? [],
+    treatment.noChargeHistory,
+  );
   const documents = detail.data?.documents ?? [];
   const previous = documents.filter(
     (document) => document.id !== treatment.request?.id && document.id !== treatment.proof?.id,

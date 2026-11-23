@@ -1,11 +1,12 @@
 /**
  * Aviso do pedido de token (specs/002, FR-011, FR-014, research R-07).
  *
- * No mesmo instante: notificação do Windows com som; janela restaurada, mostrada e "sempre por
+ * No mesmo instante: notificação do Windows **sem som**; janela restaurada, mostrada e "sempre por
  * cima" por um instante; botão piscando na barra de tarefas até o operador clicar na janela; e o
- * som do app, tocado pela interface, só com a preferência ligada. O Windows pode não deixar um
- * programa em segundo plano tomar o foco do teclado; o efeito garantido é a janela à frente e
- * piscando (R-07, "A verificar").
+ * som do app, tocado pela interface no volume escolhido, só com a preferência ligada. Desde a 008
+ * (FR-003, research R-03), o único som é o do app: o Windows não deixa controlar o volume do som da
+ * notificação, e os dois tocavam juntos. O Windows pode não deixar um programa em segundo plano
+ * tomar o foco do teclado; o efeito garantido é a janela à frente e piscando (R-07, "A verificar").
  */
 
 /** O que o aviso usa da janela do Electron (simulada nos testes). */
@@ -30,9 +31,11 @@ export interface NotificationOptions {
 export interface AttentionOptions {
   getWindow(): AttentionWindow | null;
   showNotification(options: NotificationOptions): void;
-  /** Pede à interface que toque o som do aviso. */
-  playSound(): void;
+  /** Pede à interface que toque o som do aviso, no volume de 0 a 100. */
+  playSound(volume: number): void;
   isSoundEnabled(): boolean;
+  /** Volume escolhido (0 a 100). */
+  soundVolume(): number;
   /** Quanto tempo a janela fica "sempre por cima". Padrão: 1,5 s. */
   alwaysOnTopMs?: number;
 }
@@ -49,7 +52,7 @@ export class Attention {
     this.alert({
       title: 'O Hunit pediu o token',
       body: 'Abra o HUNIT Control e informe o token do autenticador antes que o prazo termine.',
-      silent: false,
+      silent: true,
     });
   }
 
@@ -58,11 +61,11 @@ export class Attention {
     this.alert({
       title: 'Teste do aviso do HUNIT Control',
       body: 'É assim que o app avisa quando o Hunit pedir o token.',
-      silent: false,
+      silent: true,
     });
   }
 
-  /** Fim de uma execução desta máquina, com o resultado resumido (FR-014). */
+  /** Fim de uma execução desta máquina, com o resultado resumido (FR-014). Sem som do app. */
   notifyFinished(summary: { title: string; body: string }): void {
     this.options.showNotification({ ...summary, silent: false });
   }
@@ -70,7 +73,7 @@ export class Attention {
   private alert(notification: NotificationOptions): void {
     this.options.showNotification(notification);
     this.bringWindowForward();
-    if (this.options.isSoundEnabled()) this.options.playSound();
+    if (this.options.isSoundEnabled()) this.options.playSound(this.options.soundVolume());
   }
 
   private bringWindowForward(): void {

@@ -12,6 +12,7 @@ export {
   DownloadIcon,
   ExecutionsIcon,
   EyeIcon,
+  InfoIcon,
   MinusIcon,
   RemoveIcon,
   ReservationsIcon,
@@ -20,6 +21,8 @@ export {
   SearchEmptyIcon,
   SelectorIcon,
   SettingsIcon,
+  SoundHighIcon,
+  SoundLowIcon,
   UndoIcon,
   type IconProps,
 } from './icons';

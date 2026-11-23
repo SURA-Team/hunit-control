@@ -11,6 +11,9 @@
  * o motivo e a "Classificação anterior" quando mudou (FR-025); os cards "Tratativa", "Comercial",
  * "Cobrança" ("Valor cobrado no Hunit") e "Verificações" (FR-028) e, para as importadas, "Sistema
  * anterior". Cada card é um bloco: no máximo uma ação principal em cada (FR-007).
+ *
+ * Desde a 008 (T031; telas 7.17 e 7.18): o card "Cancelada sem cobrança" depois do "Comercial"; o
+ * selo do cabeçalho vem da situação detalhada (`cancelled_no_charge`).
  */
 import { Group, Stack, Text } from '@mantine/core';
 import type { Reservation } from '../../../../shared/ipc-types';
@@ -32,6 +35,7 @@ import {
   type SituationBadgeItem,
 } from '../../ui';
 import { CommercialSection } from './CommercialSection';
+import { NoChargeSection } from './NoChargeSection';
 import { TreatmentSection } from './TreatmentSection';
 
 const dash = (value: string | null | undefined) => (value ? value : '—');
@@ -150,6 +154,12 @@ export function ReservationDetail({ reservation }: { reservation: Reservation })
       <TreatmentSection reservation={reservation} />
 
       <CommercialSection reservation={reservation} />
+
+      {/* Outra reserva na mesma gaveta: o aviso e a observação digitada não passam para ela. */}
+      <NoChargeSection
+        key={`${reservation.hotelCode}/${reservation.reservationNumber}`}
+        reservation={reservation}
+      />
 
       <Card block="Cobrança">
         <CardHeader title="Cobrança" />

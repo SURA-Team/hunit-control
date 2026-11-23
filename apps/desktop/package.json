@@ -1,6 +1,6 @@
 {
   "name": "@hunit/desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "App desktop do HUNIT Control (Electron): opera o servidor pela API, sem regra de negócio",
   "productName": "HUNIT Control",
