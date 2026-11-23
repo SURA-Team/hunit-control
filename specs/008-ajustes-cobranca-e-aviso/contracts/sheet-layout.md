@@ -10,11 +10,12 @@ que continua valendo no resto. Nenhum dado real neste arquivo.
 
 | Col. | Nome | Preenchida por | Conteúdo | Formato e validação |
 |---|---|---|---|---|
-| O | Situação da cobrança | Comercial | "Cobrada na maquininha", "Cobrada no Hunit", "Não cobrada" ou outro texto, até 100 | lista suspensa com as três opções, **não estrita** (aceita outro texto, com o aviso da planilha) |
-| P | Data da cobrança | Comercial | dia em que a cobrança foi feita | `dd/mm/aaaa`; validação "data válida", **estrita** (recusa o que não é data) |
+| O | Situação da cobrança | Comercial | "Cobrada na maquininha", "Cobrada no Hunit", "Cancelada" ou outro texto, até 100 (homologação, R-19: era "Não cobrada"); **obrigatória** | lista suspensa com as três opções, **não estrita** (aceita outro texto, com o aviso da planilha) |
+| P | Data da cobrança | Comercial | dia em que a cobrança foi feita; **obrigatória** na maquininha, em outro texto e em "Cobrada no Hunit" | `dd/mm/aaaa`; validação "data válida", **estrita** (recusa o que não é data) |
 
-O que cada situação exige e faz está na spec (FR-007a) e no research (R-06): "Cobrada na maquininha",
-vazia ou outro texto exigem K a N; "Cobrada no Hunit" e "Não cobrada" exigem só N (responsável).
+O que cada situação exige e faz está na spec (FR-007a a FR-007c) e no research (R-19): "Cobrada na
+maquininha" ou outro texto exigem K a N e P; "Cobrada no Hunit" exige N e P; "Cancelada" exige só O;
+situação vazia é sempre um problema ("falta a situação da cobrança").
 
 ## Coluna J (Validação do Financeiro): textos novos
 
@@ -23,7 +24,8 @@ vazia ou outro texto exigem K a N; "Cobrada no Hunit" e "Não cobrada" exigem s�
 | Aguardando verificação no Hunit | relato "Cobrada no Hunit", ainda não lido no Hunit depois do relato | laranja (`#FFA94D`), como "Aguardando validação do Financeiro" |
 | Recusado pelo Financeiro: cobrança não encontrada no Hunit | relato "Cobrada no Hunit", lido no Hunit depois do relato, e o Hunit não mostra a cobrança (pendente, cancelada, faturada…) | vermelho (`#FF6B6B`), a regra das recusas que já existe |
 | Cobrança confirmada no Hunit | relato "Cobrada no Hunit", e o Hunit mostra a cobrança (a linha está em "Concluídas") | sem cor |
-| Não cobrada: aguardando o Financeiro | relato "Não cobrada" | vermelho (`#FF6B6B`) |
+| Cancelada: aguardando validação do Financeiro | "Cancelada" aguardando a validação (R-19) | laranja (`#FFA94D`), como os retornos a validar |
+| Recusado pelo Financeiro: <motivo> | "Cancelada" recusada pelo Financeiro | vermelho (`#FF6B6B`), a regra das recusas |
 | Cancelada sem cobrança pelo Financeiro | reserva marcada (a linha está em "Concluídas") | sem cor |
 
 ## Outras mudanças

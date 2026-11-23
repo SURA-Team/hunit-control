@@ -18,7 +18,7 @@ a 008 (spec, contexto). Diferenças entre o design e o código: [research R-13](
 | 7.18 | Reservas — cancelada sem cobrança (em Concluídas) | `244:1673` | US4 | idem + `ReservationDetail.tsx` (selo do cabeçalho), `TreatmentSection.tsx` (histórico), `CommercialSection.tsx` |
 
 Telas sem desenho na 008, montadas com os padrões da 006 (R-13): diálogo "Desfazer" da marcação;
-relato "Não cobrada" em `screens/commercial/ProblemsTab.tsx`; linha da lista de reservas marcada
+"Cancelada" em `screens/commercial/ReturnsTab.tsx`, `CommercialSection.tsx` e `ConfirmBatchDialog.tsx` (homologação, R-19; era o relato "Não cobrada" em `ProblemsTab.tsx`); linha da lista de reservas marcada
 (`ui/lists/ReservationRow.tsx`, selo e "R$ 0,00 · antes R$ …"); seletores com busca em
 `screens/reservations/ReservationFilters.tsx` (US6); destaque da linha dentro do card em todas as
 listas (`ui/lists/lists.module.css`, US6, FR-030).
@@ -28,4 +28,7 @@ Fora do renderer (US6): ícone na barra de tarefas — `apps/desktop/src/main/wi
 
 O roteiro `screens-capture` ganha as telas 1.2, 7.15, 7.17 e 7.18 (as outras já são capturadas pela
 006) e captura a 1.1, 1.3, 7.5, 7.7, 7.8 e 7.12 no visual novo; a conferência com o design fica em
-`research.md`, seção "Comparação com o design" (criada na implementação).
+`research.md`, seção "Comparação com o design" (criada na implementação). Desde a homologação
+(R-19), também a "Cancelada" do Comercial, sem desenho: 7.8a (no topo de "Retornos a validar") e 7.5a
+(bloco "Cancelada pelo Comercial" na gaveta); como a 7.7a, ficam fora da marcação no Figma enquanto
+a UX não as desenhar.

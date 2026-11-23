@@ -31,26 +31,39 @@ nome do hóspede.
 | Coluna | Tipo | Regra |
 |---|---|---|
 | `hotel_code`, `reservation_number` | text | PK; FK → `reservations` |
-| `kind` | enum `commercial_report_kind` | `charged_in_hunit` ("Cobrada no Hunit") ou `not_charged` ("Não cobrada") |
+| `kind` | enum `commercial_report_kind` | `charged_in_hunit` ("Cobrada no Hunit") ou `cancelled` ("Cancelada"; era `not_charged`, renomeado na migration 0014, R-19) |
 | `situation_text` | text | a situação como o Comercial escreveu, 1 a 100 |
-| `charged_by` | text | responsável pela cobrança, 1 a 100 |
+| `charged_by` | text, nulo | responsável pela cobrança, 1 a 100; nulo só na `cancelled` (homologação, R-19) |
 | `charge_date` | date, nulo | data da cobrança, se informada |
 | `read_at` | timestamptz | quando o servidor leu **esta versão** do relato (base da fila, §3.4) |
+| `settled_result` | enum `hunit_check_result`, nulo | resultado da leitura no Hunit que definiu a situação do relato "Cobrada no Hunit" (`confirmed` ou `not_found`); nulo enquanto aguarda |
+| `validation_state` | enum `commercial_report_validation`, nulo | só na `cancelled` (R-19): `awaiting_validation`, `confirmed` ou `rejected`; cada versão nova do relato volta a `awaiting_validation` |
+| `decided_at`, `decided_by_client_id` | timestamptz, uuid (FK → `api_clients`), nulos | quem confirmou ou recusou a "Cancelada" e quando |
+| `rejection_reason` | text, nulo | motivo da recusa, 1 a 500 (como o dos retornos); apagado na anonimização |
+| `no_charge_mark_id` | uuid (FK → `no_charge_marks`), nulo | a marcação criada pela confirmação; desfeita, o relato volta a `awaiting_validation` |
+| `settled_at` | timestamptz, nulo | quando essa leitura aconteceu: a fila mostra as confirmadas e as não encontradas que não exigem mais cobrança por 7 dias a partir daqui (FR-013). `check`: os dois nulos ou os dois preenchidos |
 
 - Uma linha por reserva: o relato atual da linha da planilha. O Comercial mudar o responsável, a data
   ou o texto atualiza a linha e o `read_at` (a reserva volta a "Aguardando verificação"); trocar para
   outra situação, ou apagar, remove a linha (a reserva sai da fila, FR-012).
-- O relato `not_charged` entra em "Retornos com problema" só enquanto a linha está `open` e a
+- **Homologação (R-19)**: o relato `cancelled` ("Cancelada") entra em "Retornos a validar" (aguardando a
+  validação do Financeiro) só enquanto a linha está `open` e a reserva sem marcação ativa. Texto
+  original, de antes da homologação: o relato `not_charged` entra em "Retornos com problema" só enquanto a linha está `open` e a
   reserva não tem marcação "Cancelada sem cobrança" ativa (spec FR-007a, FR-020); a linha continua na
   tabela, para o histórico.
 - Só existe para linha `open` (como os retornos): relato numa linha que foi para "Concluídas" fica como
   estava (a aba é protegida), e é assim que a fila mostra as confirmadas por 7 dias.
+- A situação na fila continua derivada (§3.4: `last_verified_at` da reserva × `read_at`); `settled_*`
+  só marca o início dos 7 dias. É gravado por `settleCommercialReport` a cada leitura da reserva
+  (execução, envio ou verificação, dentro de `refreshCommercialLine`) e volta a nulo quando o relato
+  muda (novo `read_at`). Decidido na implementação (T021): sem ele, uma confirmada sairia da fila 7
+  dias depois do relato, e não da leitura que a confirmou.
 
 ## 2. Tabelas alteradas
 
 | Tabela | Mudança |
 |---|---|
-| `commercial_returns` | + `charge_situation_text` (text, nulo, até 100), + `charge_situation_kind` (enum `charge_situation_kind`: `charged_at_terminal`, `charged_in_hunit`, `not_charged`, `other`; nulo = situação vazia), + `charge_date` (date, nulo). Num retorno completo o tipo é `charged_at_terminal`, `other` ou nulo (os outros viram relato). `charge_situation_text` com tipo `other` é apagado na anonimização |
+| `commercial_returns` | + `charge_situation_text` (text, nulo, até 100), + `charge_situation_kind` (enum `charge_situation_kind`: `charged_at_terminal`, `charged_in_hunit`, `cancelled` (era `not_charged`, R-19), `other`; nulo só em retornos lidos antes da 008), + `charge_date` (date, nulo). Num retorno completo o tipo é `charged_at_terminal`, `other` ou nulo (os outros viram relato). `charge_situation_text` com tipo `other` é apagado na anonimização |
 | `commercial_lines` | `last_read_return` (jsonb) passa a guardar também a situação e a data normalizadas, para `returnChanged`; sem coluna nova |
 | `commercial_dispatches` | + `purpose` (enum `dispatch_purpose`: `send`, `hunit_check`; padrão `send`). A trava de uma automação por conta vale para os dois |
 | `commercial_dispatch_items` | `outcome` (`dispatch_item_outcome`) + `checked`; + `check_result` (enum `hunit_check_result`: `confirmed`, `not_found`; nulo). `check`: `check_result` preenchido se e só se `outcome = 'checked'` |
@@ -69,7 +82,7 @@ também não muda o banco: lê `commercial_returns.authorization_code` dos retor
 - Colunas de retorno passam a seis: `COMMERCIAL_RETURN_COLUMNS` = os quatro de hoje + `chargeSituation`
   e `chargeDate`. `COMMERCIAL_RETURN_FIELDS` (os quatro obrigatórios do retorno completo) não muda.
 - `CHARGE_SITUATIONS`: as três sugeridas, com o tipo e o texto da lista da planilha.
-- `recognizeChargeSituation(text)` → `charged_at_terminal` | `charged_in_hunit` | `not_charged` |
+- `recognizeChargeSituation(text)` → `charged_at_terminal` | `charged_in_hunit` | `cancelled` (começa com "cancelad", R-19; antes `not_charged`, "não cobrad…") |
   `other` (sem acento, sem maiúsculas, espaços normalizados; ordem: "não cobrad…", "hunit",
   "maquininha").
 - `parseChargeDate(cell)` → data ISO ou problema (número de série do Google ou `dd/mm/aaaa`).
@@ -115,10 +128,11 @@ fila com a mesma regra (teste de paridade).
 
 - `COMMERCIAL_SHEET_HEADERS` + "Situação da cobrança" e "Data da cobrança" (16 colunas).
 - `FinanceValidation` + `hunit_awaiting` ("Aguardando verificação no Hunit", tom laranja),
-  `hunit_confirmed` ("Cobrança confirmada no Hunit", sem cor), `not_charged` ("Não cobrada:
-  aguardando o Financeiro", vermelho) e `no_charge` ("Cancelada sem cobrança pelo Financeiro", sem
-  cor). O relato não encontrado usa o `rejected` que já existe, com o motivo "cobrança não encontrada
-  no Hunit" ("Recusado pelo Financeiro: cobrança não encontrada no Hunit", vermelho).
+  `hunit_confirmed` ("Cobrança confirmada no Hunit", sem cor), `cancellation_awaiting` ("Cancelada:
+  aguardando validação do Financeiro", laranja; era `not_charged`, "Não cobrada: aguardando o
+  Financeiro", vermelho, até a homologação, R-19) e `no_charge` ("Cancelada sem cobrança pelo
+  Financeiro", sem cor). O relato não encontrado e a "Cancelada" recusada usam o `rejected` que já
+  existe, com o motivo ("Recusado pelo Financeiro: cobrança não encontrada no Hunit", vermelho).
 - `sheetSystemRow` usa `amountToCharge` na coluna E ("Valor a cobrar").
 
 ### 3.6 Grupos dos filtros rápidos

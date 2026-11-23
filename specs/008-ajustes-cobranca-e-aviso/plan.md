@@ -192,7 +192,7 @@ Planilha (K..P) ──rodada do sincronizador──► readReturn (domínio)
    empty ─────────────► nada
    complete ──────────► commercial_returns (awaiting_validation, + situação e data) ─► "Retornos a validar"
    report hunit ──────► commercial_reports ─► fila "Cobradas no Hunit" (situação derivada) ─► J "Aguardando verificação no Hunit"
-   report não cobrada ► commercial_reports ─► "Retornos com problema" (CommercialSheetStatus.reports) ─► J "Não cobrada: …"
+   report cancelada ► commercial_reports (aguardando validação) ─► "Retornos a validar" (CommercialSheetStatus.reports) ─► J "Cancelada: aguardando validação do Financeiro" (homologação, R-19; era "Não cobrada" em "Retornos com problema")
    incomplete/illegible ► return_problem (como hoje) ─► "Retornos com problema"
 ```
 
@@ -231,6 +231,7 @@ Detalhe (operador) ─► diálogo (valor → R$ 0,00, "Concluídas", observaç�
 | Busca em seletores de 3 opções muda o visual (campo digitável) | Diferença pequena do design | O campo continua com a aparência do design; só aceita digitar; prints na comparação |
 | 007 (relatórios) em paralelo mexer no contrato | Conflito de versão | 008 primeiro (1.9.0); a 007 parte dela (spec, premissas) |
 | Diferenças do design (7.18 "Fora da planilha", telas não desenhadas) | Retrabalho com a UX | Levadas à UX no research (R-13) antes da implementação das telas |
+| Subconsulta do SQL compara a coluna errada (visto na implementação, T028) | Num `select` de uma tabela só, o Drizzle escreve as colunas dos campos sem a tabela: dentro de uma subconsulta em `commercial_reports` ou `commercial_returns`, `hotel_code` vira o da subconsulta e a condição fica sempre verdadeira | As colunas da reserva vão por `qualified()` (`commercial-repo.ts`) em `noChargeMarkedCondition` e na busca pelo código do Comercial; testes com reservas que não deveriam combinar |
 
 ## Complexity Tracking
 

@@ -48,20 +48,22 @@ colunas O e P) e instalar o app 0.4 gerado pelo `dist`.
 | 3.4 | Máquina que tinha o som desligado na 0.3, atualizada para 0.4 | Continua desligado; volume em 100 % (US1-5) |
 | 3.5 | Card "Preferências" | Sem chave de som (US1-4, tela 1.3) |
 | 3.6 | Na planilha: retorno completo com "Cobrada na maquininha" e data de hoje; "Ler agora" | Em "Retornos a validar", com "Cobrada na maquininha em <hoje> (hoje)"; gaveta e lote mostram situação e data; **Confirmar aceita** (US2, FR-011) |
-| 3.7 | Retorno completo sem situação e sem data | "não informada" nos dois campos; confirma normalmente (US2-6) |
-| 3.8 | Situação digitada "Cancelada na Expedia" com os quatro campos vazios e o responsável | Em "Retornos com problema" como incompleto, mostrando o texto como veio (edge case) |
-| 3.9 | "Não cobrada" + responsável | Em "Retornos com problema" com a situação; reserva continua pendente; coluna J "Não cobrada: aguardando o Financeiro" (US2-1a) |
+| 3.7 | Retorno completo sem situação e sem data; depois, "Cobrada na maquininha" sem data | Os dois em "Retornos com problema" ("faltam a situação da cobrança e a data da cobrança"; depois "falta a data da cobrança"), sem aparecer para validar (US2-6, FR-007b) |
+| 3.8 | Situação digitada "Cancelada na Expedia", com o resto vazio | Em "Retornos a validar", no topo, com o selo "Cancelada" e o texto como veio; coluna J "Cancelada: aguardando validação do Financeiro" (US2-1a, FR-007c) |
+| 3.9 | "Cancelada" (só a situação) → "Confirmar" na linha (ou "Confirmar cancelamento" na gaveta) | A reserva fica "Cancelada sem cobrança" (R$ 0,00, "Concluídas"), sai de "Retornos a validar" e a linha da planilha vai para "Concluídas"; "Desfazer" no detalhe devolve a "Cancelada" para validar (FR-007c, FR-020) |
+| 3.9a | Outra "Cancelada" → "Recusar" com motivo | Sai de "Retornos a validar"; coluna J "Recusado pelo Financeiro: <motivo>"; o Comercial muda a linha → volta para validar |
+| 3.9b | "Cancelada" e um retorno marcados juntos → "Confirmar ▾" → "Confirmar retornos" | O diálogo mostra a "Cancelada" com o selo; confirmar marca a reserva e confirma o retorno (US2-7) |
 | 3.10 | "Cobrada no Hunit" + responsável em três reservas | Aba "Cobradas no Hunit (3)", todas "Aguardando verificação"; coluna J "Aguardando verificação no Hunit" (US3-1, US3-2) |
-| 3.11 | "Verificar agora" (Hunit simulado: uma cobrada, uma não) | Pede o token como o envio; card de andamento; ao terminar, "Confirmada no Hunit — foi para Concluídas" e "Não encontrada no Hunit — continua pendente"; a confirmada vai para "Concluídas" na planilha; a não encontrada fica com a J "Recusado pelo Financeiro: cobrança não encontrada no Hunit" (US3-4 a US3-6) |
-| 3.11a | Relato "Cobrada no Hunit" de uma reserva que o Hunit passa a mostrar como cancelada sem cobrança (Hunit simulado) | Depois da leitura: "Não encontrada no Hunit" com a situação do Hunit na segunda linha; J com a mesma recusa; a reserva em "Concluídas" pela situação do Hunit; o próximo "Verificar agora" não a confere de novo, e ela sai da fila 7 dias depois (US3-6a, FR-013, FR-014) |
-| 3.12 | Execução que lê uma reserva da fila | A situação na fila é atualizada pela execução (US3-4a) |
+| 3.11 | **Só nos testes automáticos** (na homologação o acesso ao Hunit é bloqueado; jornada `hunit-charges.test.ts`). "Verificar agora" (Hunit simulado: uma cobrada, uma não) | Pede o token como o envio; card de andamento; ao terminar, "Confirmada no Hunit — foi para Concluídas" e "Não encontrada no Hunit — continua pendente"; a confirmada vai para "Concluídas" na planilha; a não encontrada fica com a J "Recusado pelo Financeiro: cobrança não encontrada no Hunit" (US3-4 a US3-6) |
+| 3.11a | **Só nos testes automáticos** (`dispatch-runner.test.ts`). Relato "Cobrada no Hunit" de uma reserva que o Hunit passa a mostrar como cancelada sem cobrança (Hunit simulado) | Depois da leitura: "Não encontrada no Hunit" com a situação do Hunit na segunda linha; J com a mesma recusa; a reserva em "Concluídas" pela situação do Hunit; o próximo "Verificar agora" não a confere de novo, e ela sai da fila 7 dias depois (US3-6a, FR-013, FR-014) |
+| 3.12 | **Só nos testes automáticos** (`commercial-reports.test.ts`). Execução que lê uma reserva da fila | A situação na fila é atualizada pela execução (US3-4a) |
 | 3.13 | "Verificar agora" com o Hunit fora do ar | Mensagem clara; situações como estavam (FR-016) |
 | 3.14 | Comercial troca "Cobrada no Hunit" por outra situação | Sai da fila na rodada seguinte (FR-012) |
 | 3.15 | Perfil consulta na fila e no detalhe marcado | Vê situações, selo e histórico; sem "Verificar agora", sem marcar e sem "Desfazer" (US3-7, US4-8) |
 | 3.16 | Reserva enviada, sem retorno: "Marcar como cancelada sem cobrança" com observação | Diálogo com R$ 655,00 → R$ 0,00 e "Concluídas"; "Voltar" não grava; confirmar: selo, R$ 0,00, quem e quando, observação, histórico; contagens de "Falta cobrar" e "Concluídas" mudam; linha da planilha vai para "Concluídas" com E = R$ 0,00 (US4, tela 7.18) |
 | 3.17 | "Desfazer" na reserva marcada | Valor, situação, contagens e a linha "A cobrar" voltam; histórico registra (US4-7) |
 | 3.18 | Duas janelas: marcar na primeira com a segunda aberta e depois marcar na segunda | A segunda avisa que a situação mudou e não aplica (edge case) |
-| 3.19 | Reserva com retorno aguardando validação | Sem o card de marcar (ou recusa com explicação) (FR-022) |
+| 3.19 | Abrir uma reserva que está em "Retornos a validar" com retorno de cobrança (como a do 3.6, antes de confirmar) | O card "Reserva cancelada sem nada a cobrar?" aparece com "Marcar como cancelada sem cobrança" **desabilitado** e o texto "Há retorno do Comercial aguardando validação: confirme ou recuse o retorno antes." (FR-022) |
 | 3.20 | Filtros de Reservas: escolher cada seletor só pelo teclado | Digitar filtra (sem acento), setas e Enter escolhem, Esc fecha; texto sem opção mostra "Nenhuma opção encontrada" (US6-5, US6-6, SC-010) |
 | 3.21 | Telas novas em 960, 1 280 e 1 920 px e zoom de 125 % | Mesma informação e ações, sem rolagem horizontal (FR-025) |
 | 3.22 | Confirmar um retorno com o código "AUT-TESTE-1" e buscar "aut-teste-1" em Reservas | A reserva aparece; a contagem dos filtros rápidos e "selecionar todas do filtro" também a trazem (US7-1, US7-2) |
@@ -97,6 +99,8 @@ Pelo passo 9 do `README.md` ("Atualizar para uma versão nova"), nesta ordem:
 2. `docker compose exec server node dist/cli.js commercial-sheet setup` — sem ele, a planilha fica
    "Formato alterado" e nada é escrito; o `check` confirma.
 3. Instalador 0.4 nas máquinas do Financeiro e da Controladoria.
-4. Avisar o Comercial das colunas "Situação da cobrança" e "Data da cobrança".
+4. Avisar o Comercial das colunas "Situação da cobrança" e "Data da cobrança", **obrigatórias**
+   (homologação, R-19): os retornos que já aguardavam validação passam a "Retornos com problema" até
+   ele preencher a situação e a data; "Cancelada" basta para reserva cancelada.
 
 Registrar o resultado em `research.md` ("Produção").

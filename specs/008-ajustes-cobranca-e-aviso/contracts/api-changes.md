@@ -15,6 +15,8 @@ ganham valores (R-02).
 | `POST /reservations/{hotelCode}/{reservationNumber}/no-charge` | operador | Marca como cancelada sem cobrança. Corpo: `{ expectedSituation: ReservationDetailedSituation, note?: string (1–500) }`. 200 → `Reservation` atualizada. 409 `no_charge_not_accepted` (com `reason`: `already_marked`, `not_accepting`, `has_proof`, `return_awaiting_validation`) ou `reservation_changed` (a situação não é mais a que a pessoa viu). 404 reserva inexistente |
 | `POST /reservations/{hotelCode}/{reservationNumber}/no-charge/undo` | operador | Desfaz. Corpo: `{ markId: uuid }`. 200 → `Reservation`. 409 `no_charge_not_active` (já desfeita ou outra marcação) |
 | `GET /commercial-hunit-charges` | todos | A fila "Cobradas no Hunit": `{ items: HunitChargeItem[], counts: { awaiting, notFound, confirmed } }`, ordenada por situação (aguardando, não encontrada, confirmada) e leitura mais antiga primeiro. Sem paginação (dezenas de itens) |
+| `POST /reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/confirm` | operador | Homologação (R-19): confirma a "Cancelada" aguardando validação: marca a reserva como "Cancelada sem cobrança" (as recusas do `no-charge`, 409 `no_charge_not_accepted` com `reason`) e a linha vai para "Concluídas". 200 → `Reservation`. 409 `no_cancellation_awaiting_validation` se não há "Cancelada" aguardando |
+| `POST /reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/reject` | operador | Recusa a "Cancelada" com `{ reason }` (1 a 500), que o Comercial vê na coluna J. 200 → `Reservation`. 409 `no_cancellation_awaiting_validation` |
 | `POST /commercial-hunit-charges/check` | operador | "Verificar agora": cria uma verificação (`CommercialDispatch` com `purpose = hunit_check`) com os itens aguardando e os não encontrados que ainda exigem cobrança. Corpo: `{ credentials: HunitCredentials }` (como o envio). 202 → `CommercialDispatch`. 409 `no_reports_to_check` ou `account_busy` |
 
 O andamento, o token, o cancelamento, a retomada e os eventos da verificação usam as rotas de
@@ -27,7 +29,7 @@ ChargeSituation:            # situação da cobrança informada pelo Comercial (
   type: object
   required: [kind, text]
   properties:
-    kind: { enum: [charged_at_terminal, charged_in_hunit, not_charged, other] }
+    kind: { enum: [charged_at_terminal, charged_in_hunit, cancelled, other] }   # cancelled era not_charged (R-19)
     text: { type: string, description: Como o Comercial escreveu (até 100) }
 
 NoChargeMark:               # marcação "Cancelada sem cobrança" (R-08)
@@ -52,14 +54,14 @@ CommercialReportBrief:      # relato atual do Comercial (R-06, R-07)
   type: object
   required: [kind, situationText, chargedBy, chargeDate, readAt, hunitStatus]
   properties:
-    kind: { enum: [charged_in_hunit, not_charged] }
+    kind: { enum: [charged_in_hunit, cancelled] }   # cancelled era not_charged (R-19)
     situationText: { type: string }
     chargedBy: { type: string }
     chargeDate: { type: [string, 'null'], format: date }
     readAt: { type: string, format: date-time }
     hunitStatus:
       description: >-
-        Só em charged_in_hunit; null em not_charged. confirmed = o Hunit mostra a cobrança;
+        Só em charged_in_hunit; null em cancelled. confirmed = o Hunit mostra a cobrança;
         not_found = lida depois do relato e o Hunit não mostra a cobrança (research R-07)
       enum: [awaiting, confirmed, not_found, null]
 
@@ -73,7 +75,7 @@ HunitChargeItem:            # linha da fila (tela 7.15)
     classification: { $ref: Classification }   # a do Hunit, para "foi para Concluídas (Já cobrada)"
     # demais campos: os da reserva e do relato, com os tipos de Reservation e CommercialReportBrief
 
-CommercialReportProblem:    # relato "Não cobrada", na aba "Retornos com problema"
+CommercialReportProblem:    # relato "Cancelada" aguardando validação, na aba "Retornos a validar" (R-19; era "Não cobrada" em "Retornos com problema")
   type: object
   required: [hotelCode, reservationNumber, situationText, chargedBy, chargeDate, readAt]
 
@@ -92,7 +94,7 @@ CommercialHistoryEvent:     # CommercialEvent com os tipos novos (CommercialDeta
 | `CommercialSummary` (`Reservation.commercial`) | `report` | `CommercialReportBrief` ou nulo |
 | `CommercialReturnBrief`, `CommercialReturn` | `chargeSituation`, `chargeDate` | `ChargeSituation` ou nulo; data ou nula ("não informada", FR-011) |
 | `CommercialDetail` | `report`, `history` | o relato atual; o histórico com os tipos novos (o `events` de hoje continua igual, só com os 12 tipos) |
-| `CommercialSheetStatus` | `reports`, `hunitQueueCount` | relatos "Não cobrada" para "Retornos com problema" (só com a linha em "A cobrar" e a reserva sem marcação "Cancelada sem cobrança"); tamanho da lista da fila (contagem da aba) |
+| `CommercialSheetStatus` | `reports`, `hunitQueueCount` | relatos "Cancelada" aguardando a validação do Financeiro, para "Retornos a validar" (só com a linha em "A cobrar" e a reserva sem marcação "Cancelada sem cobrança"; `awaitingValidation` passa a contá-los, R-19); tamanho da lista da fila (contagem da aba) |
 | `CommercialDispatch`, `CommercialDispatchSummary` | `purpose` | `send` ou `hunit_check` |
 | `CommercialDispatchItem` | `checkResult` | `confirmed`, `not_found` ou nulo; `outcome` ganha `checked` (só em verificações, R-02) |
 | `Problem.code` | — | + `no_charge_not_accepted`, `reservation_changed`, `no_charge_not_active`, `no_reports_to_check` |

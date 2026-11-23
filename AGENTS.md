@@ -25,8 +25,8 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/memory/constitution.md` | Princípios não negociáveis do projeto |
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
-| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios) |
-| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca |
+| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios). Da 008: `src/persistence/no-charge-repo.ts` (marcação "Cancelada sem cobrança") e `src/persistence/commercial-reports-repo.ts` (relatos do Comercial e a fila "Cobradas no Hunit", verificada pelo executor dos envios) |
+| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca. Da 008, `src/main/app-identity.ts` (AUMID e ícone da janela por modo, para a marca na barra de tarefas do Windows) |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
@@ -190,13 +190,17 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/006-redesign-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar idênticas.
-  A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001 continua
-  na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0 e a da 005 na 1.7.0, e não
-  devem ser alteradas (a da 006 entrega a 1.8.0)
+  `specs/008-ajustes-cobranca-e-aviso/contracts/openapi.yaml`) — as duas cópias devem ficar
+  idênticas. A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001
+  continua na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0, a da 005 na 1.7.0 e a
+  da 006 na 1.8.0, e não devem ser alteradas (a da 008 entrega a 1.9.0)
   (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
   research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
   `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).
+  Desde a 1.9.0, o mesmo vale para `ReservationDetailedSituation`, `CommercialEvent.type`,
+  `CommercialReturnState` e `CommercialSheetProblem.kind`: valor novo vai num campo novo; a única
+  exceção é `CommercialDispatchItem.outcome = checked`, que só aparece nas verificações da fila
+  (`purpose = hunit_check`), fora da lista padrão de envios (specs/008, R-02).
 - Mudou o schema do banco? Gere a migration com `db:generate` e versione os arquivos criados em
   `apps/server/src/persistence/migrations/`. Nunca edite uma migration já aplicada: crie outra.
 - Mudou o `docker-compose.yml`? O teste `apps/server/test/unit/compose-config.test.ts` confere que
@@ -293,3 +297,30 @@ componentes de `src/renderer/src/ui/`, sem exceções no lint. Dois roteiros de 
 as telas em 960, 1 280 e 1 920 px e com zoom de 125 % (`responsive.test.ts`) e o redimensionamento
 sem perder o que foi feito (`resize.test.ts`); a comparação com o design fica em
 `specs/006-redesign-app-desktop/research.md` ("Comparação com o design").
+
+Desde a feature 008 (`specs/008-ajustes-cobranca-e-aviso/`), o app tem um som de aviso só (o do
+app; as notificações do Windows vão sem som), com a chave "Tocar som do aviso" e o volume no card do
+aviso da Configuração, gravados na hora e valendo antes da conexão. A planilha do Comercial ganhou as
+colunas "Situação da cobrança" (sugestões "Cobrada na maquininha", "Cobrada no Hunit" e
+"Cancelada", ou texto livre) e "Data da cobrança", as duas obrigatórias (a data não é pedida na
+"Cancelada"; o que faltar vai para "Retornos com problema", e a data não bloqueia a confirmação):
+"Cobrada na maquininha" é o retorno completo de antes; "Cobrada no Hunit" (responsável e data) entra
+na fila "Cobradas no Hunit" da área Comercial, conferida no Hunit a cada execução ou por "Verificar
+agora" (envio de verificação, `purpose = hunit_check`, com o token como os envios): "Confirmada no
+Hunit" quando a leitura mostra a cobrança, senão "Não encontrada no Hunit", com a recusa do
+Financeiro na planilha. O Financeiro marca uma reserva como "Cancelada sem cobrança"
+(`POST /reservations/{h}/{n}/no-charge` e `…/no-charge/undo`, tabela `no_charge_marks`): a
+classificação efetiva passa a `cancelled_no_charge` (valor a cobrar R$ 0,00, "Concluídas", fora do
+envio, linha da planilha em "Concluídas") e a do Hunit fica guardada; desfazer volta tudo. A
+"Cancelada" do Comercial (basta a situação; um texto que comece por "Cancelada" vale) aparece no topo
+de "Retornos a validar" com o selo próprio: confirmar faz essa marcação
+(`POST /reservations/{h}/{n}/commercial/cancellation/confirm`; desfazer a marcação a devolve para
+validar), recusar (`…/cancellation/reject`) leva o motivo à coluna J, e o lote a aceita com
+`includeCancellations` (homologação, research R-19; era "Não cobrada", em "Retornos com problema"). A busca
+acha também pelo código de autorização do retorno do Comercial confirmado, os seletores dos filtros
+aceitam busca pelo teclado (sem acento), o destaque da linha fica dentro do card das listas e o app
+usa um AUMID próprio em desenvolvimento e o ícone da marca na janela empacotada (marca na barra de
+tarefas). O contrato passou para a 1.9.0 (só acréscimos: `noCharge`, `amountToCharge`,
+`commercial.report`, `chargeSituation`, `history`, `/commercial-hunit-charges` e o `check`,
+`purpose` nos envios, `reports` na situação da planilha, as rotas da "Cancelada" e
+`includeCancellations`), e o app para a 0.4.0; o app 0.3 continua funcionando.

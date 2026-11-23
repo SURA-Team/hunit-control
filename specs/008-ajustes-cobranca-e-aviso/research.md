@@ -72,6 +72,11 @@ mostra texto vazio (mesma razão da 005, R-09).
   (FR-006). Volume 0 é aceito: a chave continua ligada (edge case).
 - A chave "Som do aviso dentro do app" sai do card "Preferências" (FR-004), que fica só com o prazo de
   inatividade e "Salvar preferências".
+- **Primeiro uso** (tela 1.2, decidido na implementação, T008): o card do aviso aparece antes de a
+  conexão existir, mas a configuração só é gravada com ela. A chave e o volume escolhidos antes
+  ficam em memória no processo principal (valem para o "Testar aviso" e para o aviso) e são gravados
+  junto com a conexão, em "Salvar conexão"; o prazo de inatividade continua exigindo a conexão
+  (`not_configured`).
 
 **Por quê**: o Windows não deixa um app controlar o volume do som da própria notificação; tocar o som
 só no app é a única forma de ter um som só e com volume. Gravar na hora segue a tela 1.1 (o card não
@@ -345,8 +350,12 @@ Hunit (texto inteiro, sem maiúsculas). Como a lista, as contagens dos filtros r
 de uma vez (FR-029). Retornos não confirmados ficam de fora por regra (spec, sessão "plano"); desfazer
 a confirmação volta o retorno para `awaiting_validation`, e ele sai da busca sozinho.
 
-**Desempenho**: a subconsulta usa a chave da reserva, coberta pelo índice único parcial dos retornos
-(um `awaiting_validation` ou `confirmed` por reserva); nenhum índice novo. O teste de desempenho da 006
+**Desempenho**: a subconsulta não depende da reserva (`(hotel, número) in (select … where state =
+'confirmed' and lower(authorization_code) = lower(texto))`): o banco monta uma vez o conjunto das
+reservas com o código, em vez de procurar o retorno de cada reserva; nenhum índice novo. Medido na
+implementação (T041): a primeira versão, com `exists` por reserva, levava o dobro da contagem sem
+busca e passou de 1 s com a bateria inteira rodando junto; a versão sem correlação fica no tempo da
+contagem sem busca. O teste de desempenho da 006
 (contagens com 20 000 reservas em até 1 s) roda com a busca por código.
 
 **Contrato**: sem campo novo; só a descrição do parâmetro `q` em `/reservations`,
@@ -382,7 +391,9 @@ depois da confirmação, regra do usuário); copiar o código confirmado para `r
 | — | Relato "Não cobrada" em "Retornos com problema" não desenhado | Linha da lista de problemas com a situação, o responsável e "Abrir" |
 | — | Linha da lista de reservas marcada não desenhada | Selo "Cancelada sem cobrança" e valor R$ 0,00 com "antes R$ …" |
 | — | Item da fila "Aguardando verificação" mostra "confere na próxima execução" | Mantido (sessão "plano") |
+| 7.5, 7.8, 7.12 | "Cancelada" em "Retornos a validar" não desenhada (homologação, R-19) | Selo "Cancelada" em vermelho, a situação como o Comercial escreveu, "Confirmar" (na lista; "Confirmar cancelamento" na gaveta, e como nome acessível na lista) e "Recusar"; levado à UX |
 | 7.15 | "Não encontrada no Hunit" de uma reserva que o Hunit mostra cancelada ou faturada (o design só tem "continua pendente") | A segunda linha mostra a situação do Hunit (ex.: "Cancelada sem cobrança no Hunit") |
+| 7.15 | A linha termina com o texto "Abrir" (comparação, T039) | Mantida a seta, o padrão das listas da 006 (a linha inteira abre o detalhe; o nome acessível é "Abrir a reserva N", como em "Retornos com problema"); levado à UX |
 
 ## R-14 — Figma ao concluir
 
@@ -412,3 +423,91 @@ com o mouse em cima, que o card corta o conteúdo e que os cantos do card contin
 **Alternativas**: arredondar as células dos cantos da primeira e da última linha (o fundo é da
 linha, `tr`, e o `border-radius` das células não o corta); aumentar o espaço interno do card (muda o
 design).
+
+## Comparação com o design (T039, 23/11/2026)
+
+Roteiro `screens-capture` em 1 440 × 900 (prints fora do Git), cada tela ao lado do frame da página
+`008-ajustes-cobranca-e-aviso` (node `242:42`). As diferenças já decididas estão no R-13.
+
+| Tela | Diferença encontrada | O que foi feito |
+|---|---|---|
+| 1.1 a 1.3 | A descrição da chave "Tocar som do aviso" ficava embaixo do rótulo | `SwitchField` com `inlineDescription`: na mesma linha, quebrando se não couber |
+| 1.2 | Com o som desligado, o design troca a descrição por "Som desligado: o aviso aparece só na tela, sem som." | A descrição muda com a chave |
+| 1.1 a 1.3 | "Volume" ficava em cima de um trilho da largura do card | "Volume" na linha do controle, trilho de 244 px e 6 px de altura em cinza claro (`cinza/1`), como a instância `242:1984` |
+| 1.2 | Com o som desligado, o nível do volume continuava preto (o `Slider` marca `data-disabled` na barra e no botão, não na raiz) | Nível e botão em cinza no desabilitado |
+| 1.1 a 1.3 | Ícones de som desenhados sem o Figma (som baixo com uma onda, traço 1,8 px) | Trocados pelos exportados do componente: som baixo só com o alto-falante, traço 1,5 px |
+| 1.1 a 1.3 | A nota do som único era um aviso lima com "!" | `Notice` ganhou o tom neutro (`gray`: caixa cinza com borda, texto de descrição) e o ícone `info` exportado (`242:1996`) |
+| 7.5 | "Valor cobrado" subia para a linha da situação e da data | Os valores (cobrado, a cobrar, diferença) numa linha própria, como no design; o print do roteiro rola a gaveta até o retorno |
+| 7.7, 7.8, 7.15 | Aba "Cobradas no Hunit" antes de "Retornos com problema" | Na ordem do design: Envios, Retornos a validar, Retornos com problema, Cobradas no Hunit, Planilha |
+| 7.15 | Explicação e "Verificar agora" (preto) acima do card | Na faixa do topo do card, com "Verificar agora" secundário (contorno) |
+| 7.15 | Colunas reaproveitadas de outras listas: o selo "Aguardando verificação" passava da coluna em 960 px e "Marcada pelo Comercial" sumia abaixo de 1 105 px | Colunas próprias (`toCharge`, `reportedBy`, `hunitCheck`); em conteúdo estreito, quem marcou e o valor vão para a segunda linha; conferido pela varredura de larguras |
+| 7.15 | "Abrir" em texto no fim da linha | Mantida a seta (R-13), levado à UX |
+| 7.8, 7.12 | O hotel da cobrança igual ao da reserva aparecia sem negrito | Sempre em negrito; em âmbar só quando difere |
+| 7.12 | "Cobrada na maquininha em …" na coluna da reserva, quebrando em quatro linhas | Embaixo do hotel da reserva, como no design |
+| 7.17 | — | Igual ao design |
+| 7.18 | Card "Comercial" com "Fora da planilha" | Decidido no R-13 ("Concluídas"); o card mostra também o aviso verde do resultado logo depois de marcar, como as outras ações do detalhe |
+
+## R-19 — Ajustes da homologação: situação obrigatória e "Cancelada" (23/11/2026)
+
+Decisões do usuário na homologação (spec, sessão de 23/11). O contrato 1.9.0 e o app 0.4 ainda não
+foram entregues (só a homologação os usa), então os esquemas **novos da 1.9.0** podem mudar; os
+congelados no R-02 continuam como estão.
+
+**Leitura do retorno** (`readReturn`):
+
+- situação vazia → `incomplete`, com `chargeSituation` entre os campos que faltam;
+- "Cobrada na maquininha" ou outro texto → os quatro campos de antes e a data (`chargeDate` entra na
+  lista do que falta);
+- "Cobrada no Hunit" → responsável e data;
+- "Cancelada" (texto que começa com "cancelad", sem acento e sem maiúsculas; mostrado como veio) →
+  relato só com a situação; o responsável, se houver, é guardado; os outros campos são ignorados.
+
+O tipo `not_charged` vira `cancelled` (enums `charge_situation_kind` e `commercial_report_kind`,
+renomeados na migration 0014: `ALTER TYPE … RENAME VALUE`, sem perder as linhas da homologação). O
+texto "Não cobrada" deixa de ser reconhecido: vira outro texto (regra da maquininha).
+
+**Validação da "Cancelada"** (spec FR-007c): o relato `cancelled` ganha a validação do Financeiro
+(`validation_state`: `awaiting_validation`, `confirmed`, `rejected`; quem, quando, o motivo e a
+marcação criada). Cada versão nova do relato (o Comercial mudou a linha) volta a
+`awaiting_validation`.
+
+- **Confirmar** (`POST /reservations/{h}/{n}/commercial/cancellation/confirm`): na mesma transação,
+  cria a marcação "Cancelada sem cobrança" (`no-charge-repo`, as mesmas regras e recusas do FR-022,
+  com a observação "Situação informada pelo Comercial: <texto>"), grava `confirmed` com o id da
+  marcação e atualiza a linha da planilha (vai para "Concluídas").
+- **Recusar** (`…/reject` com `reason`): `rejected` com o motivo; a coluna J mostra
+  "Recusado pelo Financeiro: <motivo>".
+- **Desfazer a marcação** criada pela confirmação: o relato volta a `awaiting_validation` (a "Cancelada"
+  volta para "Retornos a validar", spec FR-020).
+- **Lote**: `POST /commercial-returns/confirm` ganha `includeCancellations` (só o app 0.4 manda); com
+  ele, a reserva sem retorno aguardando, mas com "Cancelada" aguardando, é confirmada como acima; a
+  que não aceita a marcação fica de fora com o motivo `cancellation_not_accepted`. O app 0.3 não manda
+  o campo e não muda de comportamento.
+
+**Onde aparece**: "Retornos a validar" do app é a lista das reservas em `return_pending` (enum
+congelado, R-02), e a "Cancelada" não muda a situação da reserva (continua pendente até a
+confirmação). A lista das canceladas a validar vem em `CommercialSheetStatus.reports` (o campo que
+levava os relatos "Não cobrada" para "Retornos com problema"), e `awaitingValidation` passa a
+contá-las. A aba mostra as canceladas no topo, com o selo "Cancelada" em vermelho (cor de atenção da
+006; a tela não foi desenhada, R-13). No detalhe, `Reservation.commercial.report` traz a validação.
+
+**Planilha**: lista de opções "Cobrada na maquininha", "Cobrada no Hunit" e "Cancelada" (continua
+aceitando outro texto). Coluna J: "Cancelada: aguardando validação do Financeiro" (laranja, como os
+retornos a validar); recusada, a regra das recusas (vermelho); confirmada, a linha já está em
+"Concluídas" com "Cancelada sem cobrança pelo Financeiro".
+
+**Atualização**: os retornos que aguardavam validação sem as colunas O e P passam, na primeira leitura
+depois da atualização, a "Retornos com problema" (falta a situação e a data). Na homologação isso só
+afeta os dados de teste; na produção, a implantação avisa o Comercial para preencher as duas colunas
+dos retornos abertos (quickstart §6).
+
+**3.15 (perfil consulta)**: sem a coluna de ações, "Responsável e cobrança" é a última coluna de
+"Retornos a validar"; escondida em conteúdo estreito, a coluna anterior ficava sem o espaço do fim
+da linha e era cortada pela borda do card. A coluna que passa a ser a última visível ganha o espaço,
+e a linha estreita da reserva repete a situação e a data (antes só o responsável e a leitura).
+
+**Rótulo na lista**: "Confirmar cancelamento" e "Recusar" não cabiam na coluna de ações de "Retornos
+a validar" (277 px numa coluna de 216 px, `responsive.test.ts`). Na linha, o botão mostra "Confirmar",
+como nos retornos, com o nome acessível "Confirmar cancelamento"; a gaveta mantém o texto inteiro.
+
+**Nova rodada (23/11/2026)**: 3.7, 3.8, 3.9 e 3.15 aprovados pelo usuário, com o rótulo da lista.
