@@ -1,14 +1,17 @@
 /**
  * Campos de ui/ (specs/006, T010): rótulo, ajuda e erro ligados ao campo, os estados da caixa de
- * seleção (parcial = `aria-checked="mixed"`), escolhas e o calendário de período do design.
+ * seleção (parcial = `aria-checked="mixed"`), escolhas e o calendário de período do design. Da 008
+ * (US5): o Switch ligado e desligado pelo teclado e o controle de volume; e (T035, R-11) a busca
+ * pelo teclado nos seletores, sem acento e sem maiúsculas, com "Nenhuma opção encontrada".
  */
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CheckboxField,
   describePeriod,
   Field,
+  MultiSelectField,
   PasswordField,
   PeriodPicker,
   RadioField,
@@ -16,7 +19,10 @@ import {
   SelectionBox,
   SwitchField,
   TextAreaField,
+  VolumeField,
 } from '../../src/renderer/src/ui';
+import { searchKey } from '../../src/renderer/src/ui/fields/shared';
+import { formatVolume } from '../../src/renderer/src/ui/fields/VolumeField';
 import { renderUi } from './render';
 
 describe('Field e PasswordField', () => {
@@ -62,6 +68,66 @@ describe('SelectField', () => {
     await user.click(input as HTMLElement);
     await user.click(await screen.findByRole('option', { name: 'Sistema anterior' }));
     expect(onChange).toHaveBeenCalledWith('legacy', expect.anything());
+  });
+});
+
+describe('busca pelo teclado nos seletores (specs/008, T035, R-11)', () => {
+  const ORIGINS = [
+    { value: 'all', label: 'Todas' },
+    { value: 'legacy', label: 'Sistema anterior' },
+    { value: 'sp', label: 'São Paulo' },
+  ];
+  const inputOf = (label: string) =>
+    screen.getAllByLabelText(label).find((element) => element.tagName === 'INPUT') as HTMLElement;
+
+  it('a chave de busca ignora acentos, maiúsculas e espaços nas pontas', () => {
+    expect(searchKey('  São PAULO ')).toBe('sao paulo');
+    expect(searchKey('Pendente de cobrança')).toBe('pendente de cobranca');
+  });
+
+  it('SelectField: digitar filtra sem acento, setas e Enter escolhem', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderUi(<SelectField label="Origem" data={ORIGINS} value="all" onChange={onChange} />);
+    act(() => inputOf('Origem').focus());
+    await user.keyboard('sao');
+    expect(await screen.findByRole('option', { name: 'São Paulo' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Sistema anterior' })).not.toBeInTheDocument();
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(onChange).toHaveBeenCalledWith('sp', expect.anything());
+  });
+
+  it('SelectField: texto sem opção mostra a mensagem; Esc fecha sem mudar o valor', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderUi(<SelectField label="Origem" data={ORIGINS} value="all" onChange={onChange} />);
+    act(() => inputOf('Origem').focus());
+    await user.keyboard('xyz');
+    expect(await screen.findByText('Nenhuma opção encontrada')).toBeInTheDocument();
+    await user.keyboard('{Enter}{Escape}');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('MultiSelectField: digitar, setas e Enter escolhem; a mensagem quando nada combina', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderUi(
+      <MultiSelectField
+        label="Hotéis"
+        data={[
+          { value: '31', label: 'Hotel Praia (31)' },
+          { value: '32', label: 'Pousada São Jorge (32)' },
+        ]}
+        value={[]}
+        onChange={onChange}
+      />,
+    );
+    act(() => inputOf('Hotéis').focus());
+    await user.keyboard('SAO JORGE');
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(onChange).toHaveBeenCalledWith(['32']);
+    await user.keyboard('nenhum');
+    expect(await screen.findByText('Nenhuma opção encontrada')).toBeInTheDocument();
   });
 });
 
@@ -123,6 +189,110 @@ describe('CheckboxField, RadioField e SwitchField', () => {
     expect(screen.getByRole('radio', { name: 'Ativas e canceladas' })).toBeChecked();
     await user.click(screen.getByRole('radio', { name: 'Só canceladas' }));
     expect(onChange).toHaveBeenCalledWith('cancelled');
+  });
+});
+
+describe('SwitchField: ligado e desligado (specs/008, US5-1)', () => {
+  it('começa desligado ou ligado conforme o valor e alterna pelo teclado (Espaço)', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const { rerender } = renderUi(
+      <SwitchField label="Tocar som do aviso" checked={false} onChange={onChange} />,
+    );
+    const toggle = screen.getByRole('switch', { name: 'Tocar som do aviso' });
+    expect(toggle).not.toBeChecked();
+
+    await user.tab();
+    expect(toggle).toHaveFocus();
+    await user.keyboard(' ');
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    rerender(<SwitchField label="Tocar som do aviso" checked onChange={onChange} />);
+    expect(screen.getByRole('switch', { name: 'Tocar som do aviso' })).toBeChecked();
+  });
+
+  it('desabilitado não alterna', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderUi(<SwitchField label="Tocar som do aviso" disabled onChange={onChange} />);
+    await user.click(screen.getByRole('switch', { name: 'Tocar som do aviso' }));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('VolumeField (specs/008, US5-2 e US5-3)', () => {
+  function renderVolume(value: number, disabled = false) {
+    const onChange = vi.fn();
+    const onChangeEnd = vi.fn();
+    const view = renderUi(
+      <VolumeField
+        value={value}
+        onChange={onChange}
+        onChangeEnd={onChangeEnd}
+        disabled={disabled}
+      />,
+    );
+    return { ...view, onChange, onChangeEnd, slider: screen.getByRole('slider') };
+  }
+
+  it('mostra o rótulo, o valor em porcentagem e o nome para o leitor de tela', () => {
+    const { slider } = renderVolume(70);
+    expect(screen.getByText('Volume')).toBeInTheDocument();
+    expect(screen.getByText('70 %')).toBeInTheDocument();
+    expect(slider).toHaveAccessibleName('Volume do aviso');
+    expect(slider).toHaveAttribute('aria-valuenow', '70');
+    expect(slider).toHaveAttribute('aria-valuemin', '0');
+    expect(slider).toHaveAttribute('aria-valuemax', '100');
+    expect(slider).toHaveAttribute('aria-valuetext', '70 %');
+  });
+
+  it('setas mudam 5; Page Up e Page Down mudam 10; Home e End vão a 0 e 100', async () => {
+    const user = userEvent.setup();
+    const { slider, onChange, onChangeEnd } = renderVolume(50);
+    slider.focus();
+    expect(slider).toHaveFocus();
+
+    await user.keyboard('{ArrowRight}');
+    expect(onChange).toHaveBeenLastCalledWith(55);
+    expect(onChangeEnd).toHaveBeenLastCalledWith(55);
+    await user.keyboard('{ArrowLeft}');
+    expect(onChange).toHaveBeenLastCalledWith(45);
+    await user.keyboard('{PageUp}');
+    expect(onChange).toHaveBeenLastCalledWith(60);
+    expect(onChangeEnd).toHaveBeenLastCalledWith(60);
+    await user.keyboard('{PageDown}');
+    expect(onChange).toHaveBeenLastCalledWith(40);
+    await user.keyboard('{Home}');
+    expect(onChange).toHaveBeenLastCalledWith(0);
+    await user.keyboard('{End}');
+    expect(onChange).toHaveBeenLastCalledWith(100);
+  });
+
+  it('Page Up não passa de 100 nem Page Down de 0', async () => {
+    const user = userEvent.setup();
+    const { slider, onChange, rerender } = renderVolume(95);
+    slider.focus();
+    await user.keyboard('{PageUp}');
+    expect(onChange).toHaveBeenLastCalledWith(100);
+    rerender(<VolumeField value={5} onChange={onChange} />);
+    screen.getByRole('slider').focus();
+    await user.keyboard('{PageDown}');
+    expect(onChange).toHaveBeenLastCalledWith(0);
+  });
+
+  it('desabilitado não muda pelo teclado', async () => {
+    const user = userEvent.setup();
+    const { slider, onChange } = renderVolume(70, true);
+    expect(slider).toHaveAttribute('aria-disabled', 'true');
+    slider.focus();
+    await user.keyboard('{ArrowRight}{PageUp}{End}');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('formatVolume escreve a porcentagem inteira', () => {
+    expect(formatVolume(0)).toBe('0 %');
+    expect(formatVolume(100)).toBe('100 %');
+    expect(formatVolume(72.4)).toBe('72 %');
   });
 });
 

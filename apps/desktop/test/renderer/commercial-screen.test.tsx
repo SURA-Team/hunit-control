@@ -1,7 +1,8 @@
 /**
  * Área "Comercial" do app (specs/005, US3, T050; FR-013, FR-018, FR-020, FR-021): as abas
  * "Envios", "Retornos a validar", "Retornos com problema" e "Planilha", com as ações só para o
- * perfil operador. Dados fictícios. Desde a 006 (T052): o visual novo das quatro abas.
+ * perfil operador. Dados fictícios. Desde a 006 (T052): o visual novo das quatro abas. Desde a
+ * homologação da 008 (R-19): a "Cancelada" do Comercial em "Retornos a validar".
  */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -31,7 +32,15 @@ function program(target: FakeHunit) {
       items: [
         {
           ...dispatchFixture({ status: 'completed' }),
-          counts: { total: 10, pending: 0, sent: 7, withdrawn: 2, notVerified: 1, ignored: 0 },
+          counts: {
+            total: 10,
+            pending: 0,
+            sent: 7,
+            withdrawn: 2,
+            notVerified: 1,
+            ignored: 0,
+            checked: 0,
+          },
         },
       ],
       nextCursor: null,
@@ -80,9 +89,13 @@ function program(target: FakeHunit) {
             lastSentAt: '2026-11-14T12:00:00.000Z',
             lastDispatchId: '44444444-4444-4444-8444-444444444444',
             returnState: 'awaiting_validation',
-            currentReturn: returnBrief(),
+            currentReturn: returnBrief({
+              chargeSituation: { kind: 'other', text: 'Paga no balcão' },
+              chargeDate: '2026-11-03',
+            }),
             returnProblem: null,
             syncPending: false,
+            report: null,
           },
         }),
       ],
@@ -118,6 +131,9 @@ describe('aba "Retornos a validar" (FR-016, FR-016a, FR-017)', () => {
     const table = await screen.findByRole('table', { name: 'Retornos a validar' });
     expect(within(table).getByText('AUT987')).toBeInTheDocument();
     expect(within(table).getByText('Diferente do hotel da reserva')).toBeInTheDocument();
+    // Situação e data da cobrança na coluna "Responsável e cobrança" (specs/008, tela 7.8).
+    expect(within(table).getByText('Responsável e cobrança')).toBeInTheDocument();
+    expect(within(table).getByText('Paga no balcão em 03/11/2026')).toBeInTheDocument();
     expect(hunit.api.reservations.list).toHaveBeenCalledWith(
       expect.objectContaining({ detailedSituation: ['return_pending'] }),
     );
@@ -150,6 +166,132 @@ describe('aba "Retornos com problema" (FR-018)', () => {
     ).toBeInTheDocument();
     expect(within(table).getByText('7009')).toBeInTheDocument();
     expect(within(table).getByText('Hotel Praia')).toBeInTheDocument();
+  });
+
+  it('as "Cancelada" não aparecem aqui (homologação, R-19)', async () => {
+    programCancellation(hunit);
+    const user = userEvent.setup();
+    renderWithApp(<CommercialScreen />, hunit);
+    await user.click(screen.getByRole('tab', { name: /^Retornos com problema/ }));
+    expect(await screen.findByText('Nenhum retorno com problema.')).toBeInTheDocument();
+    expect(screen.queryByText('7020')).not.toBeInTheDocument();
+  });
+});
+
+/** Uma "Cancelada" do Comercial aguardando validação (homologação da 008, R-19). */
+function programCancellation(target: FakeHunit) {
+  mocked(target.api.commercial.sheetStatus).mockImplementation(() =>
+    okResult(
+      sheetStatus({
+        problems: [],
+        reports: [
+          {
+            hotelCode: '31',
+            reservationNumber: '7020',
+            situationText: 'Cancelada na Expedia',
+            chargedBy: null,
+            chargeDate: null,
+            readAt: '2026-11-18T12:00:00.000Z',
+            totalAmount: '655.00',
+          },
+        ],
+      }),
+    ),
+  );
+}
+
+describe('"Cancelada" em "Retornos a validar" (homologação da 008, R-19; FR-007c)', () => {
+  const KEY = { hotelCode: '31', reservationNumber: '7020' };
+
+  async function openTab() {
+    const user = userEvent.setup();
+    renderWithApp(<CommercialScreen />, hunit);
+    await user.click(screen.getByRole('tab', { name: /^Retornos a validar/ }));
+    const table = await screen.findByRole('table', { name: 'Retornos a validar' });
+    const row = (await within(table).findByText('7020')).closest('tr') as HTMLElement;
+    return { user, table, row };
+  }
+
+  it('no topo, com o selo "Cancelada", a situação como veio e o valor que vira R$ 0,00', async () => {
+    programCancellation(hunit);
+    const { table, row } = await openTab();
+    const rows = within(table).getAllByRole('row');
+    expect(rows[1]).toBe(row);
+    expect(within(row).getByText('Cancelada')).toBeInTheDocument();
+    expect(within(row).getByText('"Cancelada na Expedia"')).toBeInTheDocument();
+    expect(within(row).getByText(/R\$\s*655,00 a cobrar/)).toBeInTheDocument();
+    expect(within(row).getByText('vira R$ 0,00 ao confirmar')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Abrir a reserva 7020' })).toBeInTheDocument();
+    expectOnePrimaryPerBlock();
+  });
+
+  it('"Confirmar cancelamento" chama a ponte com a reserva', async () => {
+    programCancellation(hunit);
+    mocked(hunit.api.commercial.confirmCancellation).mockImplementation(() =>
+      okResult(pendingReservation('7020')),
+    );
+    const { user, row } = await openTab();
+    await user.click(within(row).getByRole('button', { name: 'Confirmar cancelamento' }));
+    expect(hunit.api.commercial.confirmCancellation).toHaveBeenCalledWith(KEY);
+    expect(
+      await screen.findByText('Reserva 7020 marcada como cancelada sem cobrança.'),
+    ).toBeInTheDocument();
+  });
+
+  it('"Recusar" pede o motivo, sem as sugestões dos retornos', async () => {
+    programCancellation(hunit);
+    mocked(hunit.api.commercial.rejectCancellation).mockImplementation(() =>
+      okResult(pendingReservation('7020')),
+    );
+    const { user, row } = await openTab();
+    await user.click(within(row).getByRole('button', { name: 'Recusar' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Recusar a "Cancelada" do Comercial',
+    });
+    expect(within(dialog).queryByText('Motivos mais comuns')).not.toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Motivo da recusa'), 'Hóspede fez check-in');
+    await user.click(within(dialog).getByRole('button', { name: 'Recusar' }));
+    expect(hunit.api.commercial.rejectCancellation).toHaveBeenCalledWith({
+      key: KEY,
+      reason: 'Hóspede fez check-in',
+    });
+  });
+
+  it('"Confirmar marcados" leva a "Cancelada" ao lote, com includeCancellations', async () => {
+    programCancellation(hunit);
+    mocked(hunit.api.commercial.confirmReturns).mockImplementation(() =>
+      okResult({
+        batchId: '55555555-5555-4555-8555-555555555555',
+        items: [],
+        countsByClassification: {},
+      }),
+    );
+    const { user, table } = await openTab();
+    await user.click(within(table).getByRole('checkbox', { name: 'Marcar a reserva 7020' }));
+    await user.click(within(table).getByRole('checkbox', { name: 'Marcar a reserva 7001' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar marcados (2)' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Confirmar retornos do Comercial' });
+    expect(within(dialog).getByTestId('batch-summary')).toHaveTextContent(
+      '1 retorno aguardando validação e 1 reserva "Cancelada" pelo Comercial.',
+    );
+    expect(within(dialog).getByText('"Cancelada na Expedia"')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar 2' }));
+    expect(hunit.api.commercial.confirmReturns).toHaveBeenCalledWith({
+      reservations: [{ hotelCode: '31', reservationNumber: '7001' }, KEY],
+      includeCancellations: true,
+    });
+  });
+
+  it('o perfil consulta vê a "Cancelada" sem ações', async () => {
+    hunit = fakeHunit(ONLINE_READER);
+    program(hunit);
+    programCancellation(hunit);
+    const { row } = await openTab();
+    expect(within(row).getByText('Cancelada')).toBeInTheDocument();
+    expect(
+      within(row).queryByRole('button', { name: 'Confirmar cancelamento' }),
+    ).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Recusar' })).not.toBeInTheDocument();
   });
 });
 
@@ -214,11 +356,27 @@ describe('visual novo da área Comercial (specs/006, T052; telas 7.7 a 7.10)', (
           {
             ...dispatchFixture({ status: 'running' }),
             id: '55555555-5555-4555-8555-555555555555',
-            counts: { total: 16, pending: 8, sent: 8, withdrawn: 0, notVerified: 0, ignored: 0 },
+            counts: {
+              total: 16,
+              pending: 8,
+              sent: 8,
+              withdrawn: 0,
+              notVerified: 0,
+              ignored: 0,
+              checked: 0,
+            },
           },
           {
             ...dispatchFixture({ status: 'completed' }),
-            counts: { total: 15, pending: 0, sent: 14, withdrawn: 0, notVerified: 1, ignored: 0 },
+            counts: {
+              total: 15,
+              pending: 0,
+              sent: 14,
+              withdrawn: 0,
+              notVerified: 1,
+              ignored: 0,
+              checked: 0,
+            },
           },
         ],
         nextCursor: null,

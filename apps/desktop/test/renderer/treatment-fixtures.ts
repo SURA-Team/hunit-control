@@ -24,6 +24,7 @@ export const NO_TREATMENT: ReservationTreatment = {
   effectiveChargedAmount: null,
   chargedAmountOrigin: null,
   acceptsDocuments: true,
+  noChargeHistory: [],
 };
 
 export function document(overrides: Partial<TreatmentDocument> = {}): TreatmentDocument {
@@ -80,6 +81,8 @@ export function pendingReservation(
     lastVerifiedAt: '2026-11-12T12:00:00.000Z',
     verificationCount: 1,
     treatment: NO_TREATMENT,
+    amountToCharge: '100.00',
+    noCharge: null,
     ...overrides,
   };
 }

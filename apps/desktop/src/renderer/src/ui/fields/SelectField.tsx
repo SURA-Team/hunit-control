@@ -5,11 +5,22 @@
  * - `inlineLabel`: o rótulo à esquerda, na mesma linha ("Origem" na barra de busca, tela 4.1);
  * - `optionDescriptions`: uma segunda linha em cada opção, pelo valor ("Só ativas" → "Esconde as
  *   canceladas", tela 4.12).
+ *
+ * Desde a 008 (R-11, FR-028): busca pelo teclado por padrão — digitar filtra (sem acento e sem
+ * maiúsculas), setas andam, Enter escolhe, Esc fecha —, com "Nenhuma opção encontrada" quando nada
+ * combina. Texto sem opção não muda o valor: ao sair do campo, volta o escolhido.
  */
 import { Select, type SelectProps } from '@mantine/core';
 import { useId } from 'react';
 import { CheckIcon, SelectorIcon } from '../icons';
-import { comboboxClassNames, fieldClasses, sizedClassNames, type FieldSize } from './shared';
+import {
+  comboboxClassNames,
+  fieldClasses,
+  NOTHING_FOUND,
+  searchFilter,
+  sizedClassNames,
+  type FieldSize,
+} from './shared';
 
 export type SelectFieldProps = Omit<
   SelectProps,
@@ -26,6 +37,7 @@ export function SelectField({
   optionDescriptions,
   label,
   id,
+  onFocus,
   ...props
 }: SelectFieldProps) {
   const generatedId = useId();
@@ -39,6 +51,14 @@ export function SelectField({
       checkIconPosition="right"
       allowDeselect={false}
       comboboxProps={{ offset: 6 }}
+      searchable
+      filter={searchFilter}
+      nothingFoundMessage={NOTHING_FOUND}
+      // O texto da opção escolhida fica selecionado: digitar substitui, não emenda ("Todassao").
+      onFocus={(event) => {
+        event.currentTarget.select();
+        onFocus?.(event);
+      }}
       {...(!inlineLabel && { label })}
       {...(optionDescriptions && {
         renderOption: ({ option, checked }) => (

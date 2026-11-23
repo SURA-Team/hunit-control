@@ -10,7 +10,8 @@
  * Hoje: Executar (US1), um diálogo aberto, Reservas (US2: busca, filtro do painel e filtro rápido)
  * e a seleção com a gaveta "Reservas selecionadas" aberta (US4), a gaveta da reserva com um valor
  * digitado em "Corrigir o valor" (US5), na área Comercial, a aba ativa com o motivo da recusa
- * digitado (US8), e a gaveta de uma execução aberta (US6).
+ * digitado (US8), e a gaveta de uma execução aberta (US6). Desde a 008 (T032), o diálogo
+ * "Marcar como cancelada sem cobrança?" aberto com a observação digitada.
  */
 import { insertDispatch, insertLine } from '../../../server/test/helpers/commercial-fixtures.js';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
@@ -286,6 +287,9 @@ describe('redimensionar sem perder nada (US9, SC-008)', () => {
       'Maquininha Centro',
       '90,00',
       'Responsável Fictícia',
+      // Situação e data obrigatórias (homologação da 008, R-19); a data como o Google devolve.
+      'Cobrada na maquininha',
+      46345,
     ]);
     await server.test.sync?.runRound();
 
@@ -338,5 +342,42 @@ describe('redimensionar sem perder nada (US9, SC-008)', () => {
 
     await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
     await drawer.waitFor({ state: 'hidden' });
+  });
+
+  it('Reservas: o diálogo "Cancelada sem cobrança" aberto e a observação digitada continuam (specs/008, T032)', async () => {
+    const { window } = launched;
+    await window.getByRole('navigation').getByRole('button', { name: 'Reservas' }).click();
+    await searchReservations(window, 'R-2');
+    await waitForReservationRows(window, 1);
+    await window.getByRole('button', { name: 'Abrir a reserva R-2' }).click();
+    const drawer = window.getByRole('dialog', { name: 'Detalhe da reserva' });
+    await drawer
+      .getByRole('button', { name: 'Marcar como cancelada sem cobrança' })
+      .click({ timeout: 15_000 });
+    const dialog = window.getByRole('dialog', { name: 'Marcar como cancelada sem cobrança?' });
+    const note = dialog.getByLabel('Observação (opcional)');
+    await note.fill('Hóspede cancelou antes do check-in');
+
+    const read = async () => ({
+      drawerOpen: await drawer.isVisible(),
+      dialogOpen: await dialog.isVisible(),
+      note: await note.inputValue(),
+      counter: await dialog.getByText('34/500').isVisible(),
+    });
+    expect(await read()).toEqual({
+      drawerOpen: true,
+      dialogOpen: true,
+      note: 'Hóspede cancelou antes do check-in',
+      counter: true,
+    });
+
+    await keepsAcrossSizes(read);
+
+    // "Voltar" não grava nada (FR-019).
+    await dialog.getByRole('button', { name: 'Voltar' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    await drawer.getByRole('button', { name: 'Fechar detalhe' }).click();
+    await drawer.waitFor({ state: 'hidden' });
+    await searchReservations(window, '');
   });
 });

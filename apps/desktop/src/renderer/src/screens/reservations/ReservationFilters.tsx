@@ -222,7 +222,6 @@ export function ReservationFilterBar({
             }))}
             value={panel.hotelCodes}
             onChange={(value) => set('hotelCodes', value)}
-            searchable
             clearable
             hidePickedOptions
             nothingFoundMessage="Nenhum hotel encontrado"
@@ -265,7 +264,6 @@ export function ReservationFilterBar({
             onChange={(value) => set('channel', value)}
             allowDeselect
             clearable
-            searchable
           />
           <FilterPanelWide>
             <CheckboxField

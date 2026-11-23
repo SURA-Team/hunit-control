@@ -9,7 +9,6 @@
  */
 import { Text } from '@mantine/core';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import alertSound from '../../../resources/sounds/token-alert.wav';
 import classes from './App.module.css';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { TwoFactorDialog } from './components/TwoFactorDialog';
@@ -19,6 +18,7 @@ import { ExecutionsScreen } from './screens/executions/ExecutionsScreen';
 import { ReservationsScreen } from './screens/reservations/ReservationsScreen';
 import { RunScreen } from './screens/run/RunScreen';
 import { SetupScreen } from './screens/setup/SetupScreen';
+import { playAlertSound } from './sound';
 import { useConnection } from './state/connection';
 import {
   AppHeader,
@@ -90,14 +90,9 @@ export function App() {
     };
   }, [hunit]);
 
-  // Som do aviso, pedido pelo processo principal (só com a preferência ligada, R-07).
-  useEffect(
-    () =>
-      hunit.attention.onPlaySound(() => {
-        void new Audio(alertSound).play().catch(() => undefined);
-      }),
-    [hunit],
-  );
+  // Som do aviso, pedido pelo processo principal (só com a preferência ligada, R-07), no volume
+  // escolhido (specs/008, FR-002).
+  useEffect(() => hunit.attention.onPlaySound(({ volume }) => playAlertSound(volume)), [hunit]);
 
   const openExecution = (executionId: string) => {
     setOpenExecutionId(executionId);

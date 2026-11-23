@@ -2,7 +2,7 @@
  * Verificações de layout dos roteiros de larguras e de redimensionamento (specs/006, SC-007,
  * FR-043 a FR-045, research R-16).
  */
-import type { Locator, Page } from 'playwright';
+import type { ElectronApplication, Locator, Page } from 'playwright';
 import { expect } from 'vitest';
 
 /** Retângulo de um elemento e a área visível da página, em px de CSS (valem com qualquer zoom). */
@@ -192,4 +192,119 @@ export async function expectNothingTruncated(page: Page, where = ''): Promise<vo
       }),
   );
   expect(problems, `elementos cortados ${where}`.trim()).toEqual([]);
+}
+
+/** Distância entre duas cores (o maior canal). */
+const colorDistance = (a: readonly number[], b: readonly number[]) =>
+  Math.max(...a.map((channel, index) => Math.abs(channel - (b[index] ?? 0))));
+
+/**
+ * O card da lista corta o conteúdo no arredondado (specs/008, FR-030, research R-16): o card da
+ * tabela `table` tem `overflow: clip` e, na imagem da janela, o ponto logo fora da curva de cada
+ * canto, na altura da primeira e da última linha, não tem a cor da linha (o lima da seleção ou o
+ * cinza do mouse). Use com uma linha só, selecionada e com o mouse em cima.
+ */
+export async function expectCardCornersClipped(
+  app: ElectronApplication,
+  table: Locator,
+  where = '',
+): Promise<void> {
+  await table.scrollIntoViewIfNeeded();
+  const geometry = await table.evaluate((element) => {
+    const card = element.parentElement;
+    if (!card) throw new Error('tabela sem card');
+    const rect = card.getBoundingClientRect();
+    const style = getComputedStyle(card);
+    const rows = [...element.querySelectorAll('tbody tr')].map((row) =>
+      row.getBoundingClientRect(),
+    );
+    const first = rows[0];
+    const last = rows.at(-1);
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      radius: parseFloat(style.borderTopLeftRadius),
+      overflow: `${style.overflowX} ${style.overflowY}`,
+      firstTop: first ? first.top - rect.top : null,
+      lastBottom: last ? last.bottom - rect.top : null,
+    };
+  });
+  expect(geometry.overflow, `o card não corta o conteúdo ${where}`.trim()).toBe('clip clip');
+  const { firstTop, lastBottom, radius, width, height } = geometry;
+  if (firstTop === null || lastBottom === null) throw new Error(`card sem linhas ${where}`);
+
+  /** O ponto (x, y) fica fora da curva do canto, com 1 px de folga para a suavização. */
+  const outsideCurve = (dx: number, dy: number) =>
+    dx > 0 && dy > 0 && dx * dx + dy * dy > (radius + 1) * (radius + 1);
+  const corners: Array<[string, number, number, number, number]> = [
+    ['superior esquerdo', 1, firstTop + 1, radius - 1.5, radius - (firstTop + 1.5)],
+    ['superior direito', width - 2, firstTop + 1, radius - 1.5, radius - (firstTop + 1.5)],
+    ['inferior esquerdo', 1, lastBottom - 2, radius - 1.5, lastBottom - 1.5 - (height - radius)],
+    [
+      'inferior direito',
+      width - 2,
+      lastBottom - 2,
+      radius - 1.5,
+      lastBottom - 1.5 - (height - radius),
+    ],
+  ];
+  const checked = corners.filter(([, , , dx, dy]) => outsideCurve(dx, dy));
+  expect(checked.length, `nenhum canto para conferir ${where}`.trim()).toBeGreaterThan(0);
+
+  // Os pontos, em px de CSS da página: a linha (dentro da curva), a página (fora do card) e os
+  // cantos. A imagem é lida no processo principal, que devolve só as cores (r, g, b).
+  const relative: Array<[number, number]> = [
+    [radius / 2 + 2, firstTop + 3],
+    [-3, firstTop + 1],
+    ...checked.map(([, x, y]): [number, number] => [x, y]),
+  ];
+  const points = relative.map(([x, y]): [number, number] => [geometry.left + x, geometry.top + y]);
+  const MARGIN = 6;
+  const colors = await app.evaluate(
+    async ({ BrowserWindow }, { area, points: wanted }) => {
+      const main = BrowserWindow.getAllWindows()[0];
+      if (!main) throw new Error('Janela do app não encontrada.');
+      const zoom = main.webContents.getZoomFactor();
+      const rect = {
+        x: Math.round(area.x * zoom),
+        y: Math.round(area.y * zoom),
+        width: Math.round(area.width * zoom),
+        height: Math.round(area.height * zoom),
+      };
+      const image = await main.webContents.capturePage(rect);
+      const size = image.getSize();
+      const bitmap = image.toBitmap();
+      // Escala do Windows: a imagem vem em px de tela, o retângulo em px independentes.
+      const scale = (size.width / rect.width) * zoom;
+      return wanted.map(([x, y]) => {
+        const px = Math.min(size.width - 1, Math.max(0, Math.floor((x - area.x) * scale)));
+        const py = Math.min(size.height - 1, Math.max(0, Math.floor((y - area.y) * scale)));
+        const index = (py * size.width + px) * 4;
+        // O bitmap vem em BGRA.
+        return [bitmap[index + 2] ?? 0, bitmap[index + 1] ?? 0, bitmap[index] ?? 0];
+      });
+    },
+    {
+      area: {
+        x: geometry.left - MARGIN,
+        y: geometry.top - MARGIN,
+        width: width + 2 * MARGIN,
+        height: height + 2 * MARGIN,
+      },
+      points,
+    },
+  );
+  const [rowColor = [], pageColor = [], ...cornerColors] = colors;
+  expect(
+    colorDistance(rowColor, pageColor),
+    `a linha não está destacada (o teste passaria à toa) ${where}`.trim(),
+  ).toBeGreaterThan(24);
+  for (const [index, [name]] of checked.entries()) {
+    expect(
+      colorDistance(cornerColors[index] ?? [], rowColor),
+      `o canto ${name} do card mostra a cor da linha ${where}`.trim(),
+    ).toBeGreaterThan(24);
+  }
 }

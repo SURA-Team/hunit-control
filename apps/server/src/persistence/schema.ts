@@ -171,6 +171,39 @@ export const dispatchItemOutcomeEnum = pgEnum('dispatch_item_outcome', [
   'withdrawn',
   'not_verified',
   'ignored',
+  // Só em verificações da fila "Cobradas no Hunit" (specs/008, research R-07): ver `check_result`.
+  'checked',
+]);
+
+/**
+ * Propósito de um envio (specs/008, research R-07): `send` = envio ao Comercial (005);
+ * `hunit_check` = "Verificar agora" da fila "Cobradas no Hunit" (lê sem abrir linha).
+ */
+export const dispatchPurposeEnum = pgEnum('dispatch_purpose', ['send', 'hunit_check']);
+
+/** Resultado de um item `checked` de uma verificação (specs/008, data-model §2). */
+export const hunitCheckResultEnum = pgEnum('hunit_check_result', ['confirmed', 'not_found']);
+
+/** Situação da cobrança reconhecida no retorno (specs/008, research R-06). Repete `ChargeSituationKind`. */
+export const chargeSituationKindEnum = pgEnum('charge_situation_kind', [
+  'charged_at_terminal',
+  'charged_in_hunit',
+  // Era `not_charged` ("Não cobrada"); renomeado na homologação (research R-19, migration 0014).
+  'cancelled',
+  'other',
+]);
+
+/** Relato do Comercial sem retorno de cobrança (specs/008, data-model §1.2; R-19). */
+export const commercialReportKindEnum = pgEnum('commercial_report_kind', [
+  'charged_in_hunit',
+  'cancelled',
+]);
+
+/** Validação da "Cancelada" pelo Financeiro (homologação da 008, research R-19). */
+export const commercialReportValidationEnum = pgEnum('commercial_report_validation', [
+  'awaiting_validation',
+  'confirmed',
+  'rejected',
 ]);
 
 /** Linha da reserva na planilha do Comercial (specs/005, FR-009). Repete `COMMERCIAL_LINE_STATES`. */
@@ -203,6 +236,14 @@ export const commercialEventTypeEnum = pgEnum('commercial_event_type', [
   'return_rejected',
   'return_confirmation_undone',
   'return_closed',
+  // Ajustes de cobrança (specs/008, data-model §2): relatos e a verificação no Hunit.
+  'report_received',
+  'report_changed',
+  'report_cleared',
+  'hunit_checked',
+  // A "Cancelada" confirmada ou recusada pelo Financeiro (homologação, R-19).
+  'cancellation_confirmed',
+  'cancellation_rejected',
 ]);
 
 export type ClientRole = (typeof clientRoleEnum.enumValues)[number];
@@ -851,6 +892,8 @@ export const commercialDispatches = pgTable(
     startedAt: timestamptz('started_at'),
     finishedAt: timestamptz('finished_at'),
     cancelledByClientId: uuid('cancelled_by_client_id').references(() => apiClients.id),
+    /** Envio ao Comercial ou verificação da fila "Cobradas no Hunit" (specs/008, R-07). */
+    purpose: dispatchPurposeEnum('purpose').notNull().default('send'),
   },
   (table) => [
     check(
@@ -887,9 +930,16 @@ export const commercialDispatchItems = pgTable(
     /** Motivo de `withdrawn`, `not_verified` ou `ignored`; nunca com dado pessoal. */
     reason: text('reason'),
     processedAt: timestamptz('processed_at'),
+    /** Só em `checked` (verificação, specs/008): o Hunit mostra ou não a cobrança. */
+    checkResult: hunitCheckResultEnum('check_result'),
   },
   (table) => [
     primaryKey({ columns: [table.dispatchId, table.hotelCode, table.reservationNumber] }),
+    // Comparado como texto: um valor novo de enum não pode ser usado na mesma transação que o cria.
+    check(
+      'commercial_dispatch_items_check_result_check',
+      sql`(${table.checkResult} is not null) = (${table.outcome}::text = 'checked')`,
+    ),
     check('commercial_dispatch_items_position_check', sql`${table.position} >= 1`),
     check(
       'commercial_dispatch_items_processed_check',
@@ -925,6 +975,10 @@ export interface StoredReturnValues {
   chargeHotel: string;
   chargedAmount: string;
   chargedBy: string;
+  /** Situação da cobrança normalizada (specs/008); ausente nas leituras da 005. */
+  chargeSituation?: string;
+  /** Data da cobrança ISO (specs/008); ausente nas leituras da 005. */
+  chargeDate?: string;
 }
 
 /**
@@ -1012,6 +1066,14 @@ export const commercialReturns = pgTable(
     rejectionReason: text('rejection_reason'),
     /** Mesmo valor para as confirmações gravadas no mesmo pedido em lote (FR-016a). */
     batchId: uuid('batch_id'),
+    /**
+     * Situação da cobrança como o Comercial escreveu (specs/008, R-06); nula = não informada. O
+     * texto de tipo `other` é apagado na anonimização da reserva.
+     */
+    chargeSituationText: text('charge_situation_text'),
+    chargeSituationKind: chargeSituationKindEnum('charge_situation_kind'),
+    /** Data da cobrança informada pelo Comercial (specs/008); nula = não informada. */
+    chargeDate: isoDate('charge_date'),
   },
   (table) => [
     foreignKey({
@@ -1030,11 +1092,121 @@ export const commercialReturns = pgTable(
       'commercial_returns_rejection_reason_check',
       sql`${table.rejectionReason} is null or char_length(${table.rejectionReason}) between 1 and 500`,
     ),
+    check(
+      'commercial_returns_charge_situation_check',
+      sql`${table.chargeSituationText} is null or char_length(${table.chargeSituationText}) between 1 and 100`,
+    ),
     // No máximo um retorno aguardando validação ou confirmado por reserva.
     uniqueIndex('commercial_returns_one_current')
       .on(table.hotelCode, table.reservationNumber)
       .where(sql`${table.state} in ('awaiting_validation', 'confirmed')`),
     index('commercial_returns_reservation_idx').on(table.hotelCode, table.reservationNumber),
+  ],
+);
+
+/**
+ * Relato do Comercial sem retorno de cobrança (specs/008, data-model §1.2): "Cobrada no Hunit" ou
+ * "Cancelada" (era "Não cobrada", R-19). Uma linha por reserva, o relato atual da linha da planilha;
+ * trocar a situação ou apagar remove a linha. `read_at` é quando o servidor leu esta versão (base da
+ * fila, R-07). A "Cancelada" tem a validação do Financeiro (`validation_state` e o resto, R-19).
+ */
+export const commercialReports = pgTable(
+  'commercial_reports',
+  {
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    kind: commercialReportKindEnum('kind').notNull(),
+    situationText: text('situation_text').notNull(),
+    /** Obrigatório em "Cobrada no Hunit"; na "Cancelada", só se o Comercial preencheu (R-19). */
+    chargedBy: text('charged_by'),
+    chargeDate: isoDate('charge_date'),
+    readAt: timestamptz('read_at').notNull(),
+    /**
+     * Validação da "Cancelada" pelo Financeiro (R-19); nula em "Cobrada no Hunit". Cada versão nova
+     * do relato volta a `awaiting_validation`.
+     */
+    validationState: commercialReportValidationEnum('validation_state'),
+    decidedAt: timestamptz('decided_at'),
+    decidedByClientId: uuid('decided_by_client_id').references(() => apiClients.id),
+    /** Motivo da recusa, que o Comercial vê na coluna J; apagado na anonimização. */
+    rejectionReason: text('rejection_reason'),
+    /** Marcação "Cancelada sem cobrança" criada pela confirmação. */
+    noChargeMarkId: uuid('no_charge_mark_id').references(() => noChargeMarks.id),
+    /**
+     * Resultado da leitura no Hunit que definiu a situação do relato "Cobrada no Hunit" e quando:
+     * a fila mostra confirmadas e não encontradas que não exigem mais cobrança por 7 dias a partir
+     * daqui (spec FR-013). Nulos enquanto aguarda a verificação; a situação continua derivada.
+     */
+    settledResult: hunitCheckResultEnum('settled_result'),
+    settledAt: timestamptz('settled_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.hotelCode, table.reservationNumber] }),
+    check(
+      'commercial_reports_settled_check',
+      sql`(${table.settledResult} is null) = (${table.settledAt} is null)`,
+    ),
+    foreignKey({
+      name: 'commercial_reports_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    check(
+      'commercial_reports_texts_check',
+      sql`char_length(${table.situationText}) between 1 and 100
+        and (${table.chargedBy} is null or char_length(${table.chargedBy}) between 1 and 100)
+        and (${table.rejectionReason} is null or char_length(${table.rejectionReason}) between 1 and 500)`,
+    ),
+    // Responsável obrigatório em "Cobrada no Hunit"; validação só na "Cancelada" (R-19).
+    check(
+      'commercial_reports_kind_check',
+      sql`(${table.kind}::text = 'charged_in_hunit' and ${table.chargedBy} is not null
+          and ${table.validationState} is null)
+        or (${table.kind}::text = 'cancelled' and ${table.validationState} is not null)`,
+    ),
+  ],
+);
+
+/**
+ * Marcação "Cancelada sem cobrança" do Financeiro (specs/008, data-model §1.1; research R-08).
+ * Só inclusão e o "desfazer" (preenche `undone_*`); marcar de novo cria outra linha. As linhas
+ * são o histórico. A observação é apagada na anonimização da reserva.
+ */
+export const noChargeMarks = pgTable(
+  'no_charge_marks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    hotelCode: text('hotel_code').notNull(),
+    reservationNumber: text('reservation_number').notNull(),
+    /** Valor a cobrar no momento da marcação (`total_amount`), para "antes R$ …". */
+    previousAmount: money('previous_amount'),
+    note: text('note'),
+    markedByClientId: uuid('marked_by_client_id')
+      .notNull()
+      .references(() => apiClients.id),
+    markedAt: timestamptz('marked_at').notNull().defaultNow(),
+    undoneByClientId: uuid('undone_by_client_id').references(() => apiClients.id),
+    undoneAt: timestamptz('undone_at'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'no_charge_marks_reservation_fk',
+      columns: [table.hotelCode, table.reservationNumber],
+      foreignColumns: [reservations.hotelCode, reservations.reservationNumber],
+    }),
+    check(
+      'no_charge_marks_note_check',
+      sql`${table.note} is null or char_length(${table.note}) between 1 and 500`,
+    ),
+    check(
+      'no_charge_marks_undone_check',
+      sql`(${table.undoneAt} is null) = (${table.undoneByClientId} is null)`,
+    ),
+    // No máximo uma marcação ativa por reserva.
+    uniqueIndex('no_charge_marks_one_active')
+      .on(table.hotelCode, table.reservationNumber)
+      .where(sql`${table.undoneAt} is null`),
+    index('no_charge_marks_reservation_idx').on(table.hotelCode, table.reservationNumber),
   ],
 );
 

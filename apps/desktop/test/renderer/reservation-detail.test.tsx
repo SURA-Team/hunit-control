@@ -62,6 +62,8 @@ function reservation(overrides: Partial<Reservation> = {}): Reservation {
       detailedSituation: 'virtual_card_already_charged',
       acceptsDocuments: false,
     },
+    amountToCharge: '1234.50',
+    noCharge: null,
     ...overrides,
   };
 }

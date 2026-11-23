@@ -66,7 +66,7 @@ describe('ConfigStore', () => {
       version: 1,
       server: { url: 'https://192.168.0.50', caCertificatePem: PEM, caFingerprint256: FINGERPRINT },
       apiKey: { ciphertext: expect.any(String) as string },
-      preferences: { soundEnabled: true, idleHours: 8 },
+      preferences: { soundEnabled: true, soundVolume: 100, idleHours: 8 },
     });
   });
 
@@ -91,6 +91,20 @@ describe('ConfigStore', () => {
     if (loaded.status !== 'ok') throw new Error('esperava configuração');
     expect(loaded.config.serverUrl).toBe('https://10.0.0.9');
     expect(store.decryptApiKey(loaded.config)).toBe(API_KEY);
+  });
+
+  it('o som escolhido antes da primeira conexão vale só para a primeira gravação (specs/008)', async () => {
+    const store = newStore();
+    const draft = { soundEnabled: false, soundVolume: 40, idleHours: 8 };
+    expect((await store.save({ ...connection, preferences: draft })).preferences).toEqual(draft);
+
+    await store.setPreferences({ soundVolume: 60 });
+    const again = await store.save({
+      ...connection,
+      apiKey: undefined,
+      preferences: { soundEnabled: true, soundVolume: 100, idleHours: 8 },
+    });
+    expect(again.preferences).toEqual({ soundEnabled: false, soundVolume: 60, idleHours: 8 });
   });
 
   it('salvar sem chave e sem chave anterior é recusado', async () => {
@@ -141,12 +155,58 @@ describe('ConfigStore', () => {
 
     expect(await store.setPreferences({ idleHours: 12 })).toEqual({
       soundEnabled: true,
+      soundVolume: 100,
       idleHours: 12,
     });
     const loaded = await store.load();
     if (loaded.status !== 'ok') throw new Error('esperava configuração');
-    expect(loaded.config.preferences).toEqual({ soundEnabled: true, idleHours: 12 });
+    expect(loaded.config.preferences).toEqual({
+      soundEnabled: true,
+      soundVolume: 100,
+      idleHours: 12,
+    });
     expect(store.decryptApiKey(loaded.config)).toBe(API_KEY);
+  });
+
+  it('arquivo da 0.3, sem o volume: o volume vale 100 e o som desligado continua desligado (specs/008, FR-005)', async () => {
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 1,
+        server: {
+          url: 'https://192.168.0.50',
+          caCertificatePem: PEM,
+          caFingerprint256: FINGERPRINT,
+        },
+        apiKey: { ciphertext: 'abc' },
+        preferences: { soundEnabled: false, idleHours: 8 },
+      }),
+    );
+
+    const loaded = await newStore().load();
+    if (loaded.status !== 'ok') throw new Error('esperava configuração');
+    expect(loaded.config.preferences).toEqual({
+      soundEnabled: false,
+      soundVolume: 100,
+      idleHours: 8,
+    });
+  });
+
+  it.each([0, 100, 35])('grava o volume de 0 a 100 (%s)', async (soundVolume) => {
+    const store = newStore();
+    await store.save(connection);
+
+    expect(await store.setPreferences({ soundVolume })).toMatchObject({ soundVolume });
+    const loaded = await newStore().load();
+    if (loaded.status !== 'ok') throw new Error('esperava configuração');
+    expect(loaded.config.preferences.soundVolume).toBe(soundVolume);
+  });
+
+  it.each([-1, 101, 50.5])('recusa volume fora de 0 a 100 (%s)', async (soundVolume) => {
+    const store = newStore();
+    await store.save(connection);
+
+    await expect(store.setPreferences({ soundVolume })).rejects.toThrow(ConfigStoreError);
   });
 
   it.each([0, 25, 1.5])(

@@ -6,6 +6,9 @@
  * Desde a 006 (T052; tela 7.9): a lista em card com a reserva e o hotel, o problema num selo âmbar, o
  * que falta ou não foi entendido e quando; a seta abre o detalhe da reserva (quando o problema tem
  * uma reserva). Em conteúdo estreito, o "quando" vai para a linha da mensagem.
+ *
+ * Na 008, os relatos "Não cobrada" ficavam aqui; desde a homologação, a situação é "Cancelada" e vai
+ * para "Retornos a validar" (research R-19).
  */
 import { Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';

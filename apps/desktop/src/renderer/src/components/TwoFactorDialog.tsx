@@ -9,7 +9,7 @@
  * Desde a 006 (T020; telas 2.4, 2.5, 2.9 e 7.3): diálogo escuro enquanto pede o token (contagem em
  * lima, "Enviar token" em lima, sem fechar) e claro com o desfecho e "Fechar".
  */
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type {
   JobKind,
   JobRef,
@@ -28,8 +28,16 @@ const SUBJECT: Record<JobKind, { name: string; article: 'A' | 'O' }> = {
   dispatch: { name: 'envio ao Comercial', article: 'O' },
 };
 
-function closedMessage(kind: JobKind, reason: TwoFactorCloseReason): string {
-  const { name, article } = SUBJECT[kind];
+/** A verificação da fila "Cobradas no Hunit" é um envio com outro propósito (specs/008). */
+const HUNIT_CHECK_SUBJECT = { name: 'verificação no Hunit', article: 'A' } as const;
+
+function closedMessage(
+  kind: JobKind,
+  reason: TwoFactorCloseReason,
+  purpose?: TwoFactorRequest['purpose'],
+): string {
+  const { name, article } =
+    kind === 'dispatch' && purpose === 'hunit_check' ? HUNIT_CHECK_SUBJECT : SUBJECT[kind];
   const lower = article.toLowerCase();
   const messages: Record<TwoFactorCloseReason, string> = {
     accepted: `Token aceito pelo Hunit. ${article} ${name} continua.`,
@@ -60,6 +68,11 @@ export function TwoFactorDialog() {
   const [token, setToken] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const current = queue[0] ?? null;
+  // A fila atual para o desfecho saber o propósito do envio (specs/008) sem refazer a inscrição.
+  const queueRef = useRef(queue);
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
   const closed = current !== null && outcome && sameJob(outcome.job, current.job) ? outcome : null;
 
   useEffect(() => {
@@ -69,9 +82,10 @@ export function TwoFactorDialog() {
       ),
     );
     const offClosed = hunit.twoFactor.onClosed(({ job, reason }) => {
+      const purpose = queueRef.current.find((item) => sameJob(item.job, job))?.purpose;
       setOutcome({
         job,
-        message: closedMessage(job.kind, reason),
+        message: closedMessage(job.kind, reason, purpose),
         success: reason === 'accepted' || reason === 'answered_elsewhere',
       });
       // O pedido mostrado fica na tela com o desfecho; os da fila que fecharam saem dela.
@@ -143,7 +157,13 @@ export function TwoFactorDialog() {
       opened={current !== null}
       onClose={() => (closed ? next() : undefined)}
       title="O Hunit pediu o token"
-      subtitle={current?.job.kind === 'dispatch' ? 'Envio ao Comercial' : undefined}
+      subtitle={
+        current?.job.kind === 'dispatch'
+          ? current.purpose === 'hunit_check'
+            ? 'Verificação no Hunit'
+            : 'Envio ao Comercial'
+          : undefined
+      }
       dark={closed === null}
       withCloseButton={closed !== null}
       closeOnClickOutside={false}

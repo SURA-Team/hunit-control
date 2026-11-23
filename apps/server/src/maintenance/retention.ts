@@ -23,7 +23,9 @@ import {
   reservations,
   commercialEvents,
   commercialLines,
+  commercialReports,
   commercialReturns,
+  noChargeMarks,
   treatmentDocuments,
   treatmentFiles,
 } from '../persistence/schema.js';
@@ -184,6 +186,10 @@ async function removeOrphanTreatmentFiles(db: Database, now: Date): Promise<numb
  * que podem ter dado pessoal — o motivo da recusa (no retorno e no histórico) e o último retorno
  * lido — e deixa a linha pendente, para a rodada a tirar da planilha. O código de autorização, o
  * valor e o responsável ficam, como os dados de cobrança do Hunit.
+ *
+ * Desde a 008 (research R-08, data-model §1): também a observação da marcação "Cancelada sem
+ * cobrança", a situação da cobrança escrita como texto livre (tipo `other`) e o texto dos relatos,
+ * que passa a ser o nome da situação reconhecida.
  */
 async function anonymizeCommercialData(db: Database, now: Date): Promise<number> {
   const anonymizedReservation = (table: { hotelCode: unknown; reservationNumber: unknown }) =>
@@ -199,11 +205,37 @@ async function anonymizeCommercialData(db: Database, now: Date): Promise<number>
     .set({ reason: null })
     .where(
       and(
-        eq(commercialEvents.type, 'return_rejected'),
+        inArray(commercialEvents.type, [
+          'return_rejected',
+          'report_received',
+          'report_changed',
+          'report_cleared',
+        ]),
         isNotNull(commercialEvents.reason),
         anonymizedReservation(commercialEvents),
       ),
     );
+  await db
+    .update(noChargeMarks)
+    .set({ note: null })
+    .where(and(isNotNull(noChargeMarks.note), anonymizedReservation(noChargeMarks)));
+  await db
+    .update(commercialReturns)
+    .set({ chargeSituationText: null, chargeSituationKind: null })
+    .where(
+      and(
+        eq(commercialReturns.chargeSituationKind, 'other'),
+        anonymizedReservation(commercialReturns),
+      ),
+    );
+  await db
+    .update(commercialReports)
+    .set({
+      situationText: sql`(case when ${commercialReports.kind} = 'charged_in_hunit' then 'Cobrada no Hunit' else 'Cancelada' end)`,
+      // O motivo da recusa da "Cancelada" pode citar o hóspede (homologação, R-19).
+      rejectionReason: null,
+    })
+    .where(anonymizedReservation(commercialReports));
   const lines = await db
     .update(commercialLines)
     .set({

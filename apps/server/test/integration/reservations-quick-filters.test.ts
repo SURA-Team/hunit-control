@@ -6,21 +6,30 @@
  * - `order=hotel_check_in` percorre todas as páginas sem repetir nem pular; cursor de uma ordem com
  *   a outra é recusado; o cursor da 1.7.0 continua valendo para `hotel_number`;
  * - com 20 000 reservas, a seleção corta nas 2 000 primeiras da ordem pedida e a contagem responde
- *   em até 1 s.
+ *   em até 1 s, também com a busca pelo código do retorno confirmado (specs/008, T037);
+ * - desde a 008 (T028, research R-08): reservas marcadas como canceladas sem cobrança entram pela
+ *   classificação efetiva (só em "Concluídas", sem o alerta "Verificar").
  * Todos os dados são fictícios.
  */
 import type { components } from '@hunit/contracts';
 import {
   CLASSIFICATIONS,
   QUICK_FILTERS,
+  effectiveClassification,
   isPendingCharge,
   quickFiltersOf,
   type QuickFilter,
 } from '@hunit/domain';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { commercialLines, commercialReturns, reservations } from '../../src/persistence/schema.js';
+import {
+  commercialLines,
+  commercialReturns,
+  noChargeMarks,
+  reservations,
+} from '../../src/persistence/schema.js';
 import { createTestApp, type TestApp, type TestClient } from '../helpers/app.js';
+import { insertClient } from '../helpers/factories.js';
 import {
   insertCommercialReservation,
   insertDispatch,
@@ -75,7 +84,11 @@ const keyOf = (item: { hotelCode: string; reservationNumber: string }) =>
 /** Grupos da reserva pelo domínio, a partir do que a própria API devolve dela. */
 function domainGroups(item: Reservation): QuickFilter[] {
   return quickFiltersOf({
-    pendingCharge: isPendingCharge(item.classification, item.treatment.status),
+    // Classificação efetiva: a marcação "Cancelada sem cobrança" vale (specs/008).
+    pendingCharge: isPendingCharge(
+      effectiveClassification(item.classification, item.noCharge !== null),
+      item.treatment.status,
+    ),
     needsReview: item.treatment.needsReview,
     detailedSituation: item.treatment.detailedSituation,
   });
@@ -144,6 +157,23 @@ describe('paridade entre contagens, lista e domínio; ordem por hotel e check-in
       await insertReturn(db, legacyProof, { state: 'confirmed' });
       // Envio desfeito: não conta como tratativa.
       await insertLine(db, await extra({}), { state: 'cancelled' });
+
+      // Canceladas sem cobrança pelo Financeiro (specs/008): pendente sem tratativa, com a
+      // tratativa enviada (sem alerta "Verificar") e uma marcação desfeita (volta a pendente).
+      const client = await insertClient(db);
+      const mark = async (target: { hotelCode: string; reservationNumber: string }) =>
+        db.insert(noChargeMarks).values({ ...target, markedByClientId: client.id });
+      await mark(await extra({}));
+      const sentMarked = await extra({});
+      await insertLine(db, sentMarked, { state: 'concluded' });
+      await mark(sentMarked);
+      const undone = await extra({});
+      await db.insert(noChargeMarks).values({
+        ...undone,
+        markedByClientId: client.id,
+        undoneAt: new Date(),
+        undoneByClientId: client.id,
+      });
     }
   });
 
@@ -169,6 +199,27 @@ describe('paridade entre contagens, lista e domínio; ordem por hotel e check-in
     }
     // Pelas regras atuais, toda reserva está em algum grupo (data-model §1).
     expect(all.every((item) => domainGroups(item).length > 0)).toBe(true);
+  });
+
+  it('marcadas como canceladas sem cobrança: situação "Cancelada sem cobrança", só em "Concluídas"', async () => {
+    const marked = (await listAll(test, reader, '')).filter((item) => item.noCharge !== null);
+    expect(marked).toHaveLength(4);
+    for (const item of marked) {
+      expect(item.classification).toBe('virtual_card_pending_charge');
+      expect(item.treatment.detailedSituation).toBe('cancelled_no_charge');
+      expect(item.treatment.needsReview).toBe(false);
+      expect(item.amountToCharge).toBe('0.00');
+      expect(domainGroups(item)).toEqual(['done']);
+    }
+    const done = await listAll(test, reader, 'quickFilter=done');
+    expect(marked.every((item) => done.some((row) => keyOf(row) === keyOf(item)))).toBe(true);
+    const pending = await listAll(test, reader, 'pendingCharge=true');
+    expect(marked.some((item) => pending.some((row) => keyOf(row) === keyOf(item)))).toBe(false);
+    // O filtro por situação também segue a classificação efetiva.
+    const bySituation = await listAll(test, reader, 'situation=cancelled_no_charge');
+    expect(marked.every((item) => bySituation.some((row) => keyOf(row) === keyOf(item)))).toBe(
+      true,
+    );
   });
 
   it('cada grupo tem reservas no cenário (o teste não passa à toa)', async () => {
@@ -274,7 +325,8 @@ describe('20 000 reservas: seleção na ordem pedida e contagem em até 1 s', ()
         returned.map((row, index) => ({
           hotelCode: row.hotelCode,
           reservationNumber: row.reservationNumber,
-          authorizationCode: 'AUT123',
+          // Um código por retorno, para a busca pelo código confirmado (specs/008, T037).
+          authorizationCode: `MAQ-${row.reservationNumber}`,
           chargeHotel: 'Estabelecimento Fictício',
           chargedAmount: row.totalAmount,
           chargedBy: 'Comercial Fictício',
@@ -316,5 +368,31 @@ describe('20 000 reservas: seleção na ordem pedida e contagem em até 1 s', ()
       0,
     );
     expect(elapsed).toBeLessThan(1_000);
+  });
+
+  it('com a busca pelo código do retorno confirmado: acha a reserva e conta em até 1 s (specs/008, T037)', async () => {
+    const { rows } = await test.database.pool.query<{ key: string; code: string }>(
+      `select hotel_code || '/' || reservation_number as key, authorization_code as code
+       from commercial_returns where state = 'confirmed' order by reservation_number desc limit 1`,
+    );
+    const target = rows[0];
+    if (!target) throw new Error('o cenário não tem retorno confirmado');
+    const q = encodeURIComponent(target.code.toLowerCase());
+
+    await get(test, reader, `/reservations/quick-filter-counts?q=${q}`);
+    const started = performance.now();
+    const response = await get(test, reader, `/reservations/quick-filter-counts?q=${q}`);
+    const elapsed = performance.now() - started;
+    expect(response.statusCode).toBe(200);
+    expect(response.json<Counts>().all).toBe(1);
+    expect(elapsed).toBeLessThan(1_000);
+
+    // SC-011: a reserva vem na primeira página da lista.
+    const list = await get(test, reader, `/reservations?q=${q}`);
+    expect(
+      list
+        .json<{ items: Array<{ hotelCode: string; reservationNumber: string }> }>()
+        .items.map(keyOf),
+    ).toEqual([target.key]);
   });
 });

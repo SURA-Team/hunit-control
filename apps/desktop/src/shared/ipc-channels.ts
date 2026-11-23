@@ -31,6 +31,9 @@ export const INVOKE = {
   reservationsList: 'reservations:list',
   reservationsGet: 'reservations:get',
   reservationsChannels: 'reservations:channels',
+  // "Cancelada sem cobrança" (specs/008, contracts/ipc.md).
+  reservationsMarkNoCharge: 'reservations:markNoCharge',
+  reservationsUndoNoCharge: 'reservations:undoNoCharge',
   // Tratativas manuais (specs/003, contracts/ipc.md).
   treatmentsPickFile: 'treatments:pickFile',
   treatmentsDiscardFile: 'treatments:discardFile',
@@ -64,8 +67,14 @@ export const INVOKE = {
   commercialRejectReturn: 'commercial:rejectReturn',
   commercialUndoConfirmation: 'commercial:undoConfirmation',
   commercialConfirmReturns: 'commercial:confirmReturns',
+  // A "Cancelada" do Comercial (homologação da 008, R-19).
+  commercialConfirmCancellation: 'commercial:confirmCancellation',
+  commercialRejectCancellation: 'commercial:rejectCancellation',
   commercialSheetStatus: 'commercial:sheetStatus',
   commercialReadNow: 'commercial:readNow',
+  // Ajustes de cobrança (specs/008, contracts/ipc.md).
+  commercialHunitCharges: 'commercial:hunitCharges',
+  commercialCheckHunitCharges: 'commercial:checkHunitCharges',
   clipboardCopyReservations: 'clipboard:copyReservations',
 } as const;
 

@@ -57,6 +57,33 @@ export function formatDate(value: string | null | undefined): string {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : DASH;
 }
 
+const BRASILIA_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** O dia de hoje em Brasília (YYYY-MM-DD). */
+function brasiliaDay(now: Date): string {
+  return BRASILIA_DAY.format(now);
+}
+
+/**
+ * "hoje" ou "ontem" para uma data (YYYY-MM-DD), pelo dia de Brasília (specs/008, R-09); `null` nos
+ * outros dias. Só para exibir: nenhuma regra usa a data da cobrança (FR-011).
+ */
+export function relativeDay(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!value) return null;
+  const today = brasiliaDay(now);
+  if (value === today) return 'hoje';
+  const yesterday = brasiliaDay(new Date(Date.parse(`${today}T12:00:00Z`) - 24 * 60 * 60 * 1000));
+  return value === yesterday ? 'ontem' : null;
+}
+
 /** Data e hora (ISO 8601) no horário da máquina: DD/MM/AAAA HH:MM. */
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return DASH;

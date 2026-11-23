@@ -16,7 +16,7 @@
  */
 import { Group, Stack, Text } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type {
   CommercialReturn,
   Reservation,
@@ -24,13 +24,17 @@ import type {
   Result,
 } from '../../../../shared/ipc-types';
 import { messageOf, unwrap, useHunit } from '../../hunit';
-import { formatDate, formatDateTime, formatMoney } from '../../presentation/format';
+import { formatDate, formatDateTime, formatMoney, relativeDay } from '../../presentation/format';
 import {
+  CANCELLATION_BADGE,
+  CANCELLATION_VALIDATION_LABELS,
   errorMessage,
   LINE_STATE_LABELS,
   REJECTION_SUGGESTIONS,
   RETURN_STATE_LABELS,
   SHEET_TAB_NAMES,
+  chargeDateText,
+  chargeSituationText,
 } from '../../presentation/labels';
 import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
@@ -73,14 +77,18 @@ export function sameHotelName(a: string, b: string): boolean {
 export function ChargeHotel({
   chargeHotel,
   hotelName,
+  extra,
 }: {
   chargeHotel: string;
   hotelName: string;
+  /** Linha a mais, embaixo ("Cobrada na maquininha em …", tela 7.12 da 008). */
+  extra?: ReactNode;
 }) {
   const differs = !sameHotelName(chargeHotel, hotelName);
   return (
     <Stack gap={2} align="flex-start">
-      <Text size="sm" fw={differs ? 700 : undefined} c={differs ? ATTENTION : undefined}>
+      {/* Sempre em negrito (telas 7.8 e 7.12 da 008); em âmbar quando difere do hotel da reserva. */}
+      <Text size="sm" fw={700} c={differs ? ATTENTION : undefined}>
         {chargeHotel}
       </Text>
       {differs && (
@@ -91,6 +99,11 @@ export function ChargeHotel({
       <Text size="xs" c="dimmed">
         Hotel da reserva: {hotelName}
       </Text>
+      {extra && (
+        <Text size="xs" c="dimmed">
+          {extra}
+        </Text>
+      )}
     </Stack>
   );
 }
@@ -125,6 +138,7 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
   const [message, setMessage] = useState<{ tone: 'red' | 'green'; text: string } | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [rejecting, setRejecting] = useState<CommercialReturn | null>(null);
+  const [rejectingCancellation, setRejectingCancellation] = useState(false);
 
   const hotels = useQuery({ queryKey: ['hotels'], queryFn: () => unwrap(hunit.hotels.list()) });
   const hotelName =
@@ -138,6 +152,9 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
   const returns = detail.data?.returns ?? [];
   const current = returns.find((item) => item.state !== 'superseded') ?? null;
   const earlier = returns.filter((item) => item !== current);
+  // A "Cancelada" do Comercial, com a validação do Financeiro (homologação da 008, R-19).
+  const report = detail.data?.report ?? null;
+  const cancellation = report?.kind === 'cancelled' && report.validation ? report : null;
   const canWrite = isOperator && state?.status !== 'offline';
 
   function refresh() {
@@ -292,6 +309,22 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
               <ChargeHotel chargeHotel={current.chargeHotel} hotelName={hotelName} />
             </DataField>
             <DataField label="Responsável pela cobrança">{current.chargedBy}</DataField>
+            {/* specs/008 (tela 7.5): situação e data informadas pelo Comercial; nada é bloqueado
+                pela data (FR-011). */}
+            <DataField label="Situação da cobrança">
+              {chargeSituationText(current.chargeSituation)}
+            </DataField>
+            <DataField label="Data da cobrança">
+              {chargeDateText(current.chargeDate)}
+              {relativeDay(current.chargeDate) && (
+                <Text size="xs" c="dimmed">
+                  {relativeDay(current.chargeDate)}
+                </Text>
+              )}
+            </DataField>
+          </DataGrid>
+          {/* Os valores juntos, numa linha própria (tela 7.5 da 008). */}
+          <DataGrid>
             <DataField label="Valor cobrado">{formatMoney(current.chargedAmount)}</DataField>
             <DataField label="Valor a cobrar">{formatMoney(current.expectedAmount)}</DataField>
             <DataField label="Diferença">
@@ -353,6 +386,86 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
         </Card>
       )}
 
+      {cancellation?.validation && (
+        <Card
+          tone="subtle"
+          padding={12}
+          block="Cancelada pelo Comercial"
+          data-testid="commercial-cancellation"
+        >
+          <CardHeader
+            title="Cancelada pelo Comercial"
+            aside={
+              <Group gap={8}>
+                <StatusBadge tone={badgeOf(CANCELLATION_BADGE).tone}>
+                  {CANCELLATION_BADGE.name}
+                </StatusBadge>
+                <StatusBadge
+                  tone={badgeOf(CANCELLATION_VALIDATION_LABELS[cancellation.validation.state]).tone}
+                >
+                  {CANCELLATION_VALIDATION_LABELS[cancellation.validation.state].name}
+                </StatusBadge>
+              </Group>
+            }
+            actions={
+              <Text size="xs" c="dimmed">
+                lido em {formatDateTime(cancellation.readAt)}
+              </Text>
+            }
+          />
+          <DataGrid>
+            <DataField label="Situação da cobrança">{cancellation.situationText}</DataField>
+            <DataField label="Responsável pela cobrança">{cancellation.chargedBy ?? '—'}</DataField>
+            <DataField label="Valor a cobrar">
+              {formatMoney(reservation.amountToCharge)}
+              {cancellation.validation.state === 'awaiting_validation' && (
+                <Text size="xs" c="dimmed">
+                  vira R$ 0,00 ao confirmar
+                </Text>
+              )}
+            </DataField>
+          </DataGrid>
+          {cancellation.validation.decidedAt && (
+            <Text size="xs" c="dimmed">
+              {CANCELLATION_VALIDATION_LABELS[cancellation.validation.state].name} em{' '}
+              {formatDateTime(cancellation.validation.decidedAt)}
+              {cancellation.validation.decidedBy ? ` por ${cancellation.validation.decidedBy}` : ''}
+              {cancellation.validation.rejectionReason
+                ? `: ${cancellation.validation.rejectionReason}`
+                : ''}
+            </Text>
+          )}
+          {canWrite && cancellation.validation.state === 'awaiting_validation' && (
+            <Group gap={8} mt={8}>
+              <Action
+                size="xs"
+                variant="primary"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => hunit.commercial.confirmCancellation(key),
+                    'Cancelamento confirmado: a reserva ficou "Cancelada sem cobrança".',
+                  )
+                }
+              >
+                Confirmar cancelamento
+              </Action>
+              <Action
+                size="xs"
+                variant="danger-light"
+                disabled={busy}
+                onClick={() => {
+                  setMessage(null);
+                  setRejectingCancellation(true);
+                }}
+              >
+                Recusar
+              </Action>
+            </Group>
+          )}
+        </Card>
+      )}
+
       {earlier.length > 0 && (
         <Stack gap={8}>
           <CardHeader title="Retornos anteriores" />
@@ -401,6 +514,21 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
         </Text>
       </AppDialog>
 
+      {rejectingCancellation && (
+        <RejectDialog
+          title='Recusar a "Cancelada" do Comercial'
+          confirmLabel="Recusar"
+          suggestions={[]}
+          onCancel={() => setRejectingCancellation(false)}
+          onReject={(reason) => {
+            setRejectingCancellation(false);
+            void run(
+              () => hunit.commercial.rejectCancellation({ key, reason }),
+              '"Cancelada" recusada: o motivo aparece para o Comercial na planilha.',
+            );
+          }}
+        />
+      )}
       {rejecting && (
         <RejectDialog
           onCancel={() => setRejecting(null)}
@@ -425,9 +553,16 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
 export function RejectDialog({
   onCancel,
   onReject,
+  title = 'Recusar o retorno do Comercial',
+  confirmLabel = 'Recusar retorno',
+  suggestions = REJECTION_SUGGESTIONS,
 }: {
   onCancel: () => void;
   onReject: (reason: string) => void;
+  /** A "Cancelada" do Comercial usa o mesmo diálogo, com outro título e sem sugestões (R-19). */
+  title?: string;
+  confirmLabel?: string;
+  suggestions?: readonly string[];
 }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -446,13 +581,13 @@ export function RejectDialog({
     <AppDialog
       opened
       onClose={onCancel}
-      title="Recusar o retorno do Comercial"
+      title={title}
       instant
       onCancel={onCancel}
       cancelLabel="Voltar"
       actions={
         <Action variant="danger" size="sm" onClick={submit}>
-          Recusar retorno
+          {confirmLabel}
         </Action>
       }
     >
@@ -461,24 +596,26 @@ export function RejectDialog({
           O motivo aparece para o Comercial na planilha, na coluna &quot;Validação do
           Financeiro&quot;. Não escreva dados do hóspede.
         </Notice>
-        <Stack gap={8}>
-          <Text size="sm" fw={600} id={suggestionsId}>
-            Motivos mais comuns
-          </Text>
-          <Group gap={8} role="group" aria-labelledby={suggestionsId}>
-            {REJECTION_SUGGESTIONS.map((suggestion) => (
-              <FilterChip
-                key={suggestion}
-                label={suggestion}
-                active={reason === suggestion}
-                onClick={() => {
-                  setReason(suggestion);
-                  setError(null);
-                }}
-              />
-            ))}
-          </Group>
-        </Stack>
+        {suggestions.length > 0 && (
+          <Stack gap={8}>
+            <Text size="sm" fw={600} id={suggestionsId}>
+              Motivos mais comuns
+            </Text>
+            <Group gap={8} role="group" aria-labelledby={suggestionsId}>
+              {suggestions.map((suggestion) => (
+                <FilterChip
+                  key={suggestion}
+                  label={suggestion}
+                  active={reason === suggestion}
+                  onClick={() => {
+                    setReason(suggestion);
+                    setError(null);
+                  }}
+                />
+              ))}
+            </Group>
+          </Stack>
+        )}
         <TextAreaField
           label="Motivo da recusa"
           value={reason}

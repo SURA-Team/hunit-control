@@ -9,8 +9,8 @@
 import {
   describeReturnReading,
   returnChanged,
+  returnSnapshot,
   type CommercialReturnReading,
-  type CommercialReturnValues,
 } from '@hunit/domain';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Transaction } from './account-lock.js';
@@ -21,6 +21,7 @@ import {
   touchLine,
   type ReservationKey,
 } from './commercial-repo.js';
+import { clearReport, confirmCancellationTx, recordReport } from './commercial-reports-repo.js';
 import type { Database } from './db.js';
 import { commercialLines, commercialReturns, reservations, treatmentDocuments } from './schema.js';
 
@@ -62,7 +63,10 @@ async function hasProofDocument(tx: Transaction, key: ReservationKey): Promise<b
  *   muda (FR-018);
  * - completo e diferente do último lido: retorno novo aguardando validação, substituindo o anterior
  *   aguardando ou recusado (FR-015, FR-017, FR-019). Se a reserva já tem comprovante, o retorno só
- *   vai para o histórico (`return_ignored`).
+ *   vai para o histórico (`return_ignored`);
+ * - relato ("Cobrada no Hunit" ou "Cancelada", specs/008): grava em `commercial_reports`, sem
+ *   retorno a validar; o retorno anterior aguardando ou recusado deixa de valer (`superseded`).
+ * O relato sai quando a leitura fica vazia ou vira um retorno completo (FR-012); com problema, fica.
  */
 export async function recordReturnReading(
   db: Database,
@@ -87,15 +91,49 @@ export async function recordReturnReading(
         .where(ofReservation(commercialLines, key));
     }
     if (problem !== null) return 'problem';
+
+    if (reading.kind === 'report') {
+      const outcome = await recordReport(tx, key, reading.report, now);
+      if (outcome === 'none') return 'none';
+      // O que estava na linha deixou de valer: o retorno a validar ou recusado e o último lido.
+      await tx
+        .update(commercialReturns)
+        .set({ state: 'superseded' })
+        .where(
+          and(
+            ofReservation(commercialReturns, key),
+            inArray(commercialReturns.state, ['awaiting_validation', 'rejected']),
+          ),
+        );
+      await tx
+        .update(commercialLines)
+        .set({
+          lastReadReturn: null,
+          version: sql`${commercialLines.version} + 1`,
+          changedAt: now,
+        })
+        .where(ofReservation(commercialLines, key));
+      return outcome;
+    }
+
+    const reportCleared =
+      (reading.kind === 'empty' || reading.kind === 'complete') &&
+      (await clearReport(tx, key, now));
+    if (reportCleared) {
+      await tx
+        .update(commercialLines)
+        .set({ version: sql`${commercialLines.version} + 1`, changedAt: now })
+        .where(ofReservation(commercialLines, key));
+    }
     if (reading.kind !== 'complete') return 'none';
 
-    const values: CommercialReturnValues = reading.values;
-    if (!returnChanged(line.lastReadReturn ?? null, values)) return 'none';
+    const snapshot = returnSnapshot(reading);
+    if (!reportCleared && !returnChanged(line.lastReadReturn ?? null, snapshot)) return 'none';
 
     await tx
       .update(commercialLines)
       .set({
-        lastReadReturn: values,
+        lastReadReturn: snapshot,
         version: sql`${commercialLines.version} + 1`,
         changedAt: now,
       })
@@ -129,7 +167,15 @@ export async function recordReturnReading(
       .returning({ id: commercialReturns.id });
     const [created] = await tx
       .insert(commercialReturns)
-      .values({ ...key, ...values, readAt: now, state: 'awaiting_validation' })
+      .values({
+        ...key,
+        ...reading.values,
+        chargeSituationText: reading.chargeSituation?.text ?? null,
+        chargeSituationKind: reading.chargeSituation?.kind ?? null,
+        chargeDate: reading.chargeDate,
+        readAt: now,
+        state: 'awaiting_validation',
+      })
       .returning({ id: commercialReturns.id });
     if (!created) throw new Error('O banco não devolveu o retorno criado.');
     const changed = previous.length > 0;
@@ -266,7 +312,12 @@ export async function undoReturnConfirmation(
 
 export interface BatchItemResult extends ReservationKey {
   outcome: 'confirmed' | 'ignored' | 'failed';
-  reason: 'not_found' | 'no_return_awaiting_validation' | 'no_review_alert' | null;
+  reason:
+    | 'not_found'
+    | 'no_return_awaiting_validation'
+    | 'no_review_alert'
+    | 'cancellation_not_accepted'
+    | null;
   classification: (typeof reservations.$inferSelect)['classification'] | null;
   /** Erro inesperado que causou o `failed`, para o log; nunca vai para o cliente. */
   error?: unknown;
@@ -274,11 +325,20 @@ export interface BatchItemResult extends ReservationKey {
 
 /**
  * Confirma o retorno aguardando validação de cada reserva (FR-016a): uma transação por reserva;
- * as que não têm retorno aguardando ficam de fora, com o motivo.
+ * as que não têm retorno aguardando ficam de fora, com o motivo. Com `includeCancellations`
+ * (homologação da 008, R-19), a reserva sem retorno, mas com a "Cancelada" do Comercial aguardando,
+ * é confirmada como cancelada sem cobrança; a que não aceita a marcação fica de fora com
+ * `cancellation_not_accepted`.
  */
 export async function confirmReturnsBatch(
   db: Database,
-  input: { keys: readonly ReservationKey[]; clientId: string; batchId: string; now: Date },
+  input: {
+    keys: readonly ReservationKey[];
+    clientId: string;
+    batchId: string;
+    now: Date;
+    includeCancellations?: boolean;
+  },
 ): Promise<BatchItemResult[]> {
   const results: BatchItemResult[] = [];
   for (const key of input.keys) {
@@ -307,6 +367,29 @@ export async function confirmReturnsBatch(
               ),
             )
             .for('update');
+          if (!awaiting && input.includeCancellations) {
+            const cancellation = await confirmCancellationTx(tx, {
+              key,
+              clientId: input.clientId,
+              now: input.now,
+            });
+            if (cancellation.ok) {
+              return {
+                ...key,
+                outcome: 'confirmed',
+                reason: null,
+                classification: reservation.classification,
+              };
+            }
+            if (cancellation.reason === 'not_accepted') {
+              return {
+                ...key,
+                outcome: 'ignored',
+                reason: 'cancellation_not_accepted',
+                classification: reservation.classification,
+              };
+            }
+          }
           if (!awaiting) {
             return {
               ...key,

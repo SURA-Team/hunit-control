@@ -49,6 +49,12 @@ function setup(vaultResult?: Result<{ username: string; password: string }>) {
     ),
     getCommercialSheetStatus: vi.fn(),
     readCommercialSheet: vi.fn(),
+    listHunitCharges: vi.fn(() =>
+      ok({ items: [], counts: { awaiting: 0, notFound: 0, confirmed: 0 } }),
+    ),
+    checkHunitCharges: vi.fn(() => ok(dispatchFixture({ purpose: 'hunit_check' }))),
+    confirmCommercialCancellation: vi.fn((key: ReservationKey) => ok(key)),
+    rejectCommercialCancellation: vi.fn((key: ReservationKey) => ok(key)),
   };
   const watcher = {
     track: vi.fn(),
@@ -180,5 +186,97 @@ describe('"selecionar todas do filtro" (FR-030)', () => {
       ok: false,
       error: { code: 'invalid_input' },
     });
+  });
+});
+
+describe('fila "Cobradas no Hunit" (specs/008, contracts/ipc.md)', () => {
+  it('lista a fila pela API', async () => {
+    const { api, call } = setup();
+    const result = await call(INVOKE.commercialHunitCharges);
+    expect(result).toEqual({
+      ok: true,
+      data: { items: [], counts: { awaiting: 0, notFound: 0, confirmed: 0 } },
+    });
+    expect(api.listHunitCharges).toHaveBeenCalled();
+  });
+
+  it('"Verificar agora" usa o cofre, acompanha a verificação e não devolve a senha', async () => {
+    const { api, watcher, call } = setup();
+    const result = await call(INVOKE.commercialCheckHunitCharges);
+    expect(result.ok).toBe(true);
+    expect(api.checkHunitCharges).toHaveBeenCalledWith({
+      credentials: { username: 'operador@hotel.test', password: SECRET_PASSWORD },
+    });
+    expect(watcher.track).toHaveBeenCalledWith({ kind: 'dispatch', id: DISPATCH }, { own: true });
+    expect(JSON.stringify(result)).not.toContain(SECRET_PASSWORD);
+  });
+
+  it('sem acesso no cofre, o mesmo erro do envio e a API não é chamada', async () => {
+    const { api, call } = setup({ ok: false, error: { code: 'credentials_missing' } });
+    expect(await call(INVOKE.commercialCheckHunitCharges)).toMatchObject({
+      ok: false,
+      error: { code: 'credentials_missing' },
+    });
+    expect(api.checkHunitCharges).not.toHaveBeenCalled();
+  });
+
+  it('a lista de envios repassa o propósito e recusa um valor desconhecido', async () => {
+    const { api, call } = setup();
+    await call(INVOKE.dispatchesList, { active: true, purpose: 'all' });
+    expect(api.listCommercialDispatches).toHaveBeenCalledWith({ active: true, purpose: 'all' });
+    expect(await call(INVOKE.dispatchesList, { purpose: 'tudo' })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_input' },
+    });
+  });
+});
+
+describe('"Cancelada" do Comercial (homologação da 008, R-19)', () => {
+  const KEY = { hotelCode: '31', reservationNumber: '7020' };
+
+  it('confirmar repassa a reserva; chave inválida não chega à API', async () => {
+    const { api, call } = setup();
+    expect(await call(INVOKE.commercialConfirmCancellation, KEY)).toEqual({ ok: true, data: KEY });
+    expect(api.confirmCommercialCancellation).toHaveBeenCalledWith(KEY);
+    expect(await call(INVOKE.commercialConfirmCancellation, { hotelCode: '31' })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_input' },
+    });
+    expect(api.confirmCommercialCancellation).toHaveBeenCalledTimes(1);
+  });
+
+  it('recusar: motivo obrigatório, até 500 caracteres, sem espaços nas pontas', async () => {
+    const { api, call } = setup();
+    const reject = api.rejectCommercialCancellation;
+    for (const reason of ['', '   ', 'x'.repeat(501)]) {
+      expect(await call(INVOKE.commercialRejectCancellation, { key: KEY, reason })).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_input' },
+      });
+    }
+    expect(reject).not.toHaveBeenCalled();
+
+    await call(INVOKE.commercialRejectCancellation, {
+      key: KEY,
+      reason: '  Hóspede fez check-in ',
+    });
+    expect(reject).toHaveBeenCalledWith(KEY, 'Hóspede fez check-in');
+  });
+
+  it('o lote repassa includeCancellations só quando pedido', async () => {
+    const { api, call } = setup();
+    await call(INVOKE.commercialConfirmReturns, { reservations: [KEY] });
+    await call(INVOKE.commercialConfirmReturns, {
+      reservations: [KEY],
+      includeCancellations: true,
+    });
+    expect(api.confirmCommercialReturns).toHaveBeenNthCalledWith(1, [KEY], false);
+    expect(api.confirmCommercialReturns).toHaveBeenNthCalledWith(2, [KEY], true);
+    expect(
+      await call(INVOKE.commercialConfirmReturns, {
+        reservations: [KEY],
+        includeCancellations: 'sim',
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
   });
 });

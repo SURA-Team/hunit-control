@@ -18,6 +18,11 @@ import {
   type BatchItemResult,
   type DecisionResult,
 } from '../../persistence/commercial-returns-repo.js';
+import {
+  countHunitQueue,
+  listHunitQueue,
+  listCancellationsAwaiting,
+} from '../../persistence/commercial-reports-repo.js';
 import type { ClassificationCounts } from '../../persistence/schema.js';
 import { loadTreatmentSummary } from '../../persistence/treatments-repo.js';
 import { toReservationTreatmentView } from '../views.js';
@@ -33,9 +38,14 @@ import {
 import type { Database } from '../../persistence/db.js';
 import { findReservation } from '../../persistence/reservations-repo.js';
 import {
+  isEventType1_8_0,
   toCommercialEventView,
+  toCommercialHistoryEventView,
   toCommercialLineView,
   toCommercialReturnView,
+  toCommercialReportView,
+  toHunitChargeQueueView,
+  toReportProblemView,
 } from '../commercial-views.js';
 import { ProblemError } from '../problem.js';
 
@@ -115,7 +125,15 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
 
   /** Estado da integração com a planilha (FR-013); nunca o identificador nem a chave (FR-022). */
   async function sheetStatus(): Promise<SheetStatusView> {
-    const awaitingValidation = await countAwaitingReturns(db);
+    const [awaitingReturns, reports, hunitQueueCount] = await Promise.all([
+      countAwaitingReturns(db),
+      listCancellationsAwaiting(db),
+      countHunitQueue(db, now()),
+    ]);
+    // "Retornos a validar" conta também as "Cancelada" aguardando validação (R-19).
+    const awaitingValidation = awaitingReturns + reports.length;
+    // "Cancelada" a validar e a contagem da fila "Cobradas no Hunit" (specs/008).
+    const reportFields = { reports: reports.map(toReportProblemView), hunitQueueCount };
     const sync = dependencies.commercialSheet;
     if (!sync) {
       return {
@@ -128,6 +146,7 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
         pending: { count: 0, oldestChangeAt: null },
         awaitingValidation,
         problems: [],
+        ...reportFields,
       };
     }
     const [state, pending, lineProblems] = await Promise.all([
@@ -185,6 +204,7 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
       },
       awaitingValidation,
       problems,
+      ...reportFields,
     };
   }
 
@@ -196,6 +216,11 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
   }
 
   return {
+    /** GET /v1/commercial-hunit-charges — fila "Cobradas no Hunit" (specs/008, FR-013). */
+    async listCommercialHunitCharges() {
+      return toHunitChargeQueueView(await listHunitQueue(db, now()));
+    },
+
     /** GET .../commercial — linha, retornos e histórico do Comercial da reserva (FR-020, FR-023). */
     async getReservationCommercial(request: FastifyRequest) {
       const key = request.params as ReservationParams;
@@ -205,7 +230,9 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
       return {
         line: detail.line ? toCommercialLineView(detail.line, at) : null,
         returns: detail.returns.map((row) => toCommercialReturnView(row, reservation.totalAmount)),
-        events: detail.events.map(toCommercialEventView),
+        events: detail.events.filter(isEventType1_8_0).map(toCommercialEventView),
+        history: detail.events.map(toCommercialHistoryEventView),
+        report: toCommercialReportView(detail.report),
       };
     },
 
@@ -307,13 +334,15 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
 
     /** POST /v1/commercial-returns/confirm — confirma vários retornos de uma vez (FR-016a). */
     async confirmCommercialReturns(request: FastifyRequest) {
-      const { reservations } = request.body as BatchBody;
+      const { reservations, includeCancellations } = request.body as BatchBody;
       const batchId = randomUUID();
       const results = await confirmReturnsBatch(db, {
         keys: uniqueReservationKeys(reservations),
         clientId: clientOf(request).id,
         batchId,
         now: now(),
+        // Só o app 0.4 manda (homologação da 008, R-19).
+        includeCancellations: includeCancellations === true,
       });
       for (const result of results) {
         if (result.outcome !== 'failed') continue;

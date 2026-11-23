@@ -30,6 +30,8 @@ export function reservation(number: string, overrides: Partial<Reservation> = {}
     lastVerifiedAt: '2026-11-12T12:00:00.000Z',
     verificationCount: 1,
     treatment: NO_TREATMENT,
+    amountToCharge: '1234.50',
+    noCharge: null,
     ...overrides,
   };
 }

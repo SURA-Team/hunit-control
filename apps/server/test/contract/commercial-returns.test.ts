@@ -25,8 +25,16 @@ let reader: TestClient;
 
 const number = (n: number) => String(900_000 + n);
 const key = (n: number) => ({ hotelCode: 'hml_um', reservationNumber: number(n) });
+/** Situação e data obrigatórias desde a homologação da 008 (R-19); 46345 = 19/11/2026. */
 const complete = (amount: number | string = 1234.56) =>
-  ['AUT123', 'Maquininha Fictícia', amount, 'Comercial Fictício 1'] as const;
+  [
+    'AUT123',
+    'Maquininha Fictícia',
+    amount,
+    'Comercial Fictício 1',
+    'Cobrada na maquininha',
+    46345,
+  ] as const;
 
 beforeAll(async () => {
   test = await createTestApp({ commercialSheet: true });
@@ -115,7 +123,14 @@ describe('leitura do retorno (T040)', () => {
 
   it('incompleto e não entendido: nada muda na reserva; o problema vai para a coluna J', async () => {
     await sent(2);
-    test.sheet?.fillReturn(HOTEL, number(2), ['AUT1', 'Maquininha Fictícia', '', 'Fulano']);
+    test.sheet?.fillReturn(HOTEL, number(2), [
+      'AUT1',
+      'Maquininha Fictícia',
+      '',
+      'Fulano',
+      'Cobrada na maquininha',
+      46345,
+    ]);
     expect((await round())?.problems).toBeGreaterThan(0);
     expect(columnJ('toCharge', 2)).toBe('Retorno incompleto: falta o valor cobrado');
     expect((await reservation(2)).treatment.detailedSituation).toBe('treatment_sent');
@@ -123,7 +138,14 @@ describe('leitura do retorno (T040)', () => {
       'Retorno incompleto: falta o valor cobrado',
     );
 
-    test.sheet?.fillReturn(HOTEL, number(2), ['AUT1', 'Maquininha Fictícia', 'abc', 'Fulano']);
+    test.sheet?.fillReturn(HOTEL, number(2), [
+      'AUT1',
+      'Maquininha Fictícia',
+      'abc',
+      'Fulano',
+      'Cobrada na maquininha',
+      46345,
+    ]);
     await round();
     expect(columnJ('toCharge', 2)).toBe(
       'Retorno não entendido: valor cobrado não é um valor em reais',
@@ -163,7 +185,14 @@ describe('validação do Financeiro (T042)', () => {
         ?.rows('done')
         .find((row) => row[1] === number(1))
         ?.slice(10),
-    ).toEqual(['AUT123', 'Maquininha Fictícia', 1300, 'Comercial Fictício 1']);
+    ).toEqual([
+      'AUT123',
+      'Maquininha Fictícia',
+      1300,
+      'Comercial Fictício 1',
+      'Cobrada na maquininha',
+      46345,
+    ]);
     expect((await decide(returnId, 'confirm')).json()).toMatchObject({
       code: 'return_not_awaiting_validation',
     });

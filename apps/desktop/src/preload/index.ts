@@ -47,7 +47,7 @@ const hunit: HunitApi = {
   },
   attention: {
     test: () => invoke(INVOKE.attentionTest),
-    onPlaySound: (callback) => subscribe<undefined>(EVENTS.attentionPlaySound)(() => callback()),
+    onPlaySound: subscribe(EVENTS.attentionPlaySound),
   },
   credentials: {
     status: () => invoke(INVOKE.credentialsStatus),
@@ -86,6 +86,8 @@ const hunit: HunitApi = {
     channels: () => invoke(INVOKE.reservationsChannels),
     selectAll: (filters) => invoke(INVOKE.reservationsSelectAll, filters),
     quickFilterCounts: (filters) => invoke(INVOKE.reservationsQuickFilterCounts, filters),
+    markNoCharge: (input) => invoke(INVOKE.reservationsMarkNoCharge, input),
+    undoNoCharge: (input) => invoke(INVOKE.reservationsUndoNoCharge, input),
   },
   treatments: {
     pickFile: (input) => invoke(INVOKE.treatmentsPickFile, input),
@@ -121,8 +123,12 @@ const hunit: HunitApi = {
     rejectReturn: (input) => invoke(INVOKE.commercialRejectReturn, input),
     undoConfirmation: (returnId) => invoke(INVOKE.commercialUndoConfirmation, returnId),
     confirmReturns: (input) => invoke(INVOKE.commercialConfirmReturns, input),
+    confirmCancellation: (key) => invoke(INVOKE.commercialConfirmCancellation, key),
+    rejectCancellation: (input) => invoke(INVOKE.commercialRejectCancellation, input),
     sheetStatus: () => invoke(INVOKE.commercialSheetStatus),
     readNow: () => invoke(INVOKE.commercialReadNow),
+    hunitCharges: () => invoke(INVOKE.commercialHunitCharges),
+    checkHunitCharges: () => invoke(INVOKE.commercialCheckHunitCharges),
   },
   clipboard: {
     copyReservations: (input) => invoke(INVOKE.clipboardCopyReservations, input),

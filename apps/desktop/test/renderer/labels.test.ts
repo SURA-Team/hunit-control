@@ -21,6 +21,7 @@ import {
   RESERVATION_STATUS_LABELS,
   REVIEW_LABEL,
   DETAILED_SITUATION_LABELS,
+  HUNIT_CHARGE_STATUS_LABELS,
   LINE_STATE_LABELS,
   RETURN_STATE_LABELS,
   SITUATION_LABELS,
@@ -29,6 +30,11 @@ import {
   TREATMENT_EVENT_NAMES,
   TREATMENT_KIND_NAMES,
   TREATMENT_STATUS_LABELS,
+  CHARGE_SITUATION_NAMES,
+  COMMERCIAL_HISTORY_EVENT_NAMES,
+  chargeDateText,
+  chargeSituationText,
+  describeCharge,
 } from '../../src/renderer/src/presentation/labels.js';
 
 interface Schema {
@@ -57,6 +63,8 @@ describe('todo valor dos enums da API tem nome e tom', () => {
     ['ReservationDetailedSituation', DETAILED_SITUATION_LABELS],
     ['CommercialLineState', LINE_STATE_LABELS],
     ['CommercialReturnState', RETURN_STATE_LABELS],
+    // Fila "Cobradas no Hunit" (specs/008).
+    ['HunitChargeStatus', HUNIT_CHARGE_STATUS_LABELS],
   ] as const)('%s', (name, labels) => {
     const table = labels as Record<string, { name: string; tone: string }>;
     for (const value of enumOf(name)) {
@@ -209,5 +217,58 @@ describe('tons de significado fixo (specs/006, T060, FR-005)', () => {
     for (const label of Object.values(DETAILED_SITUATION_LABELS)) {
       expect(label.name, label.name).not.toBe(label.name.toUpperCase());
     }
+  });
+});
+
+describe('tons dos selos novos (specs/008, T038)', () => {
+  const tone = (label: { tone: string }) => BADGE_TONES[label.tone as keyof typeof BADGE_TONES];
+
+  it('fila "Cobradas no Hunit": aguardando em laranja, confirmada em verde, não encontrada em vermelho', () => {
+    expect(tone(HUNIT_CHARGE_STATUS_LABELS.awaiting)).toBe('amber');
+    expect(tone(HUNIT_CHARGE_STATUS_LABELS.confirmed)).toBe('green');
+    expect(tone(HUNIT_CHARGE_STATUS_LABELS.not_found)).toBe('red');
+  });
+
+  it('"Cancelada sem cobrança" em neutro', () => {
+    expect(DETAILED_SITUATION_LABELS.cancelled_no_charge.name).toBe('Cancelada sem cobrança');
+    expect(tone(DETAILED_SITUATION_LABELS.cancelled_no_charge)).toBe('gray');
+  });
+});
+
+describe('situação e data da cobrança e o histórico novo (specs/008, R-09)', () => {
+  it('toda situação reconhecida e todo evento do histórico novo têm nome', () => {
+    const situationKinds = (
+      contract.components.schemas['ChargeSituation'] as unknown as {
+        properties: { kind: { enum: string[] } };
+      }
+    ).properties.kind.enum;
+    expect(Object.keys(CHARGE_SITUATION_NAMES).sort()).toEqual([...situationKinds].sort());
+    const historyTypes = (
+      contract.components.schemas['CommercialHistoryEvent'] as unknown as {
+        properties: { type: { enum: string[] } };
+      }
+    ).properties.type.enum;
+    expect(Object.keys(COMMERCIAL_HISTORY_EVENT_NAMES).sort()).toEqual([...historyTypes].sort());
+  });
+
+  it('vazio aparece como "não informada" (FR-011)', () => {
+    expect(chargeSituationText(null)).toBe('não informada');
+    expect(chargeDateText(null)).toBe('não informada');
+    expect(chargeDateText('2026-11-19')).toBe('19/11/2026');
+  });
+
+  it('a linha "situação em data (hoje)" das telas 7.8 e 7.12', () => {
+    const now = new Date('2026-11-19T15:00:00Z');
+    const situation = { kind: 'charged_at_terminal' as const, text: 'Cobrada na maquininha' };
+    expect(describeCharge(situation, '2026-11-19', now)).toBe(
+      'Cobrada na maquininha em 19/11/2026 (hoje)',
+    );
+    expect(describeCharge(situation, '2026-11-18', now)).toBe(
+      'Cobrada na maquininha em 18/11/2026 (ontem)',
+    );
+    expect(describeCharge(situation, '2026-11-01', now)).toBe(
+      'Cobrada na maquininha em 01/11/2026',
+    );
+    expect(describeCharge(null, null, now)).toBe('Situação não informada · data não informada');
   });
 });

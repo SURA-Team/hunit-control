@@ -9,12 +9,20 @@
 import { Divider, Group, Loader, Stack, Text } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ClientIdentity, PickedCertificate, PublicConfig } from '../../../../shared/ipc-types';
+import type {
+  ClientIdentity,
+  PickedCertificate,
+  Preferences,
+  PreferencesInput,
+  PublicConfig,
+} from '../../../../shared/ipc-types';
 import { messageOf, unwrap, useHunit } from '../../hunit';
 import { formatDate } from '../../presentation/format';
+import { playAlertSound } from '../../sound';
 import {
   Action,
   AppDialog,
+  InfoIcon,
   Card,
   CodeText,
   Field,
@@ -22,8 +30,10 @@ import {
   PageHeader,
   PasswordField,
   SectionTitle,
+  SwitchField,
+  VolumeField,
 } from '../../ui';
-import { PreferencesForm } from './PreferencesForm';
+import { PreferencesForm, updateSavedPreferences } from './PreferencesForm';
 
 const ROLE_NAMES: Record<ClientIdentity['role'], string> = {
   operator: 'Operador',
@@ -56,11 +66,17 @@ export function SetupScreen() {
       )}
       {config.data && (
         <PreferencesForm
-          key={JSON.stringify(config.data.preferences)}
+          key={`preferencias-${config.data.preferences.idleHours}`}
           initial={config.data.preferences}
         />
       )}
-      <AttentionTest />
+      {!config.isPending && (
+        <AttentionCard
+          // Chave própria: as dos irmãos (a da conexão é "novo" no primeiro uso) não podem repetir.
+          key={config.data ? 'aviso-configurado' : 'aviso-novo'}
+          saved={config.data?.preferences ?? null}
+        />
+      )}
       {config.data && <RemoveConfiguration />}
       {info.data && (
         <Text size="sm" c="dimmed">
@@ -212,16 +228,59 @@ function ConnectionForm({ saved }: { saved: PublicConfig | null }) {
   );
 }
 
-function AttentionTest() {
+/**
+ * Card "Aviso do pedido de token" (specs/008, US1; telas 1.1 a 1.3): a chave do som e o volume gravam
+ * na hora, sem botão (FR-006); ao soltar o volume com o som ligado, toca a amostra. Volume 0 mantém a
+ * chave ligada (edge case). No primeiro uso (tela 1.2), o processo principal guarda a escolha e a
+ * grava junto com a conexão.
+ */
+function AttentionCard({ saved }: { saved: Preferences | null }) {
   const hunit = useHunit();
+  const queryClient = useQueryClient();
+  const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
+  const [volume, setVolume] = useState(saved?.soundVolume ?? 100);
   const test = useMutation({ mutationFn: () => unwrap(hunit.attention.test()) });
+  const save = useMutation({
+    mutationFn: (input: PreferencesInput) => unwrap(hunit.preferences.set(input)),
+    onSuccess: (preferences) => updateSavedPreferences(queryClient, preferences),
+  });
+
   return (
     <Card block="Aviso do pedido de token">
       <SectionTitle>Aviso do pedido de token</SectionTitle>
       <Text size="sm">
         Quando o Hunit pedir o token, o app mostra uma notificação do Windows, vem para a frente e
-        toca um som. Teste para conferir se a notificação aparece nesta máquina.
+        toca um único som. Teste para conferir se a notificação aparece nesta máquina.
       </Text>
+      <SwitchField
+        label="Tocar som do aviso"
+        inlineDescription
+        description={
+          soundEnabled
+            ? 'Desligue para deixar o aviso sem som (mudo).'
+            : 'Som desligado: o aviso aparece só na tela, sem som.'
+        }
+        checked={soundEnabled}
+        onChange={(event) => {
+          const next = event.currentTarget.checked;
+          setSoundEnabled(next);
+          save.mutate({ soundEnabled: next });
+        }}
+      />
+      <VolumeField
+        value={volume}
+        disabled={!soundEnabled}
+        onChange={setVolume}
+        onChangeEnd={(next) => {
+          save.mutate({ soundVolume: next });
+          playAlertSound(next);
+        }}
+      />
+      <Notice tone="gray" role="none" icon={<InfoIcon size={16} />}>
+        Toca um som só: o do app. A notificação do Windows aparece sem som, para os dois não tocarem
+        ao mesmo tempo.
+      </Notice>
+      {save.isError && <Notice tone="red">{messageOf(save.error)}</Notice>}
       <Divider />
       <Group>
         <Action

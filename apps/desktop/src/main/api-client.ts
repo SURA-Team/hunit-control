@@ -30,6 +30,7 @@ import type {
   CommercialDispatchSummary,
   CommercialLine,
   CommercialSheetStatus,
+  HunitChargeQueue,
   ConfirmationBatchResult,
   EvidenceFile,
   EvidenceSummary,
@@ -41,6 +42,7 @@ import type {
   Reservation,
   ReservationCountFilters,
   ReservationFilters,
+  ReservationDetailedSituation,
   ReservationKey,
   ReservationListInput,
   ReservationOutcome,
@@ -124,39 +126,49 @@ export function networkError(error: unknown): AppError {
     : { code: 'offline', detail: OFFLINE_DETAIL };
 }
 
-const API_ERROR_CODES = new Set<string>([
-  'validation_error',
-  'unauthorized',
-  'forbidden_for_role',
-  'not_found',
-  'execution_already_active',
-  'not_awaiting_two_factor',
-  'execution_already_finished',
-  'nothing_to_resume',
-  'execution_already_resumed',
-  'evidence_expired',
-  'empty_file',
-  'file_too_large',
-  'unsupported_file_type',
-  'file_not_found',
-  'not_eligible_for_treatment',
-  'document_not_current',
-  'document_not_revertible',
-  'proof_required',
-  'document_purged',
-  'account_busy',
-  'commercial_sheet_not_configured',
-  'commercial_sheet_unavailable',
-  'no_eligible_reservations',
-  'dispatch_already_finished',
-  'dispatch_already_resumed',
-  'return_awaiting_validation',
-  'return_not_awaiting_validation',
-  'return_not_confirmed',
-  'not_in_commercial_sheet',
-  'restore_expired',
-  'internal_error',
-] satisfies Schemas['Problem']['code'][]);
+// Todos os códigos do contrato: o `satisfies` com `Record` faz o typecheck falhar quando o
+// contrato ganha um código que o app ainda não reconhece (specs/008).
+const API_ERROR_CODES: ReadonlySet<string> = new Set(
+  Object.keys({
+    validation_error: true,
+    unauthorized: true,
+    forbidden_for_role: true,
+    not_found: true,
+    execution_already_active: true,
+    not_awaiting_two_factor: true,
+    execution_already_finished: true,
+    nothing_to_resume: true,
+    execution_already_resumed: true,
+    evidence_expired: true,
+    empty_file: true,
+    file_too_large: true,
+    unsupported_file_type: true,
+    file_not_found: true,
+    not_eligible_for_treatment: true,
+    document_not_current: true,
+    document_not_revertible: true,
+    proof_required: true,
+    document_purged: true,
+    account_busy: true,
+    commercial_sheet_not_configured: true,
+    commercial_sheet_unavailable: true,
+    no_eligible_reservations: true,
+    dispatch_already_finished: true,
+    dispatch_already_resumed: true,
+    return_awaiting_validation: true,
+    return_not_awaiting_validation: true,
+    return_not_confirmed: true,
+    not_in_commercial_sheet: true,
+    restore_expired: true,
+    // specs/008: "Cancelada sem cobrança" (o motivo da recusa vem no `detail`) e "Verificar agora".
+    no_charge_not_accepted: true,
+    reservation_changed: true,
+    no_charge_not_active: true,
+    no_reports_to_check: true,
+    no_cancellation_awaiting_validation: true,
+    internal_error: true,
+  } satisfies Record<Schemas['Problem']['code'], true>),
+);
 
 /**
  * Nome do arquivo num `content-disposition`: prefere `filename*` (UTF-8, RFC 6266), depois
@@ -301,6 +313,29 @@ export class ApiClient {
   getReservation(key: ReservationKey): Promise<Result<Reservation>> {
     return this.call(() =>
       this.http.GET('/reservations/{hotelCode}/{reservationNumber}', { params: { path: key } }),
+    );
+  }
+
+  /** Marca como cancelada sem cobrança (specs/008, FR-018). */
+  markNoCharge(
+    key: ReservationKey,
+    body: { expectedSituation: ReservationDetailedSituation; note?: string },
+  ): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/no-charge', {
+        params: { path: key },
+        body,
+      }),
+    );
+  }
+
+  /** Desfaz a marcação "Cancelada sem cobrança" (specs/008, FR-021). */
+  undoNoCharge(key: ReservationKey, markId: string): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/no-charge/undo', {
+        params: { path: key },
+        body: { markId },
+      }),
     );
   }
 
@@ -587,14 +622,53 @@ export class ApiClient {
 
   confirmCommercialReturns(
     reservations: ReservationKey[],
+    includeCancellations = false,
   ): Promise<Result<ConfirmationBatchResult>> {
     return this.call(() =>
-      this.slowHttp.POST('/commercial-returns/confirm', { body: { reservations } }),
+      this.slowHttp.POST('/commercial-returns/confirm', {
+        // Só manda o campo quando pede as "Cancelada" (homologação, R-19).
+        body: { reservations, ...(includeCancellations && { includeCancellations: true }) },
+      }),
+    );
+  }
+
+  /** Confirma a "Cancelada" do Comercial (homologação da 008, R-19). */
+  confirmCommercialCancellation(key: ReservationKey): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST(
+        '/reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/confirm',
+        {
+          params: { path: key },
+        },
+      ),
+    );
+  }
+
+  /** Recusa a "Cancelada" do Comercial com o motivo (R-19). */
+  rejectCommercialCancellation(key: ReservationKey, reason: string): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST(
+        '/reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/reject',
+        {
+          params: { path: key },
+          body: { reason },
+        },
+      ),
     );
   }
 
   getCommercialSheetStatus(): Promise<Result<CommercialSheetStatus>> {
     return this.call(() => this.http.GET('/commercial-sheet'));
+  }
+
+  /** Fila "Cobradas no Hunit" (specs/008). */
+  listHunitCharges(): Promise<Result<HunitChargeQueue>> {
+    return this.call(() => this.http.GET('/commercial-hunit-charges'));
+  }
+
+  /** "Verificar agora" da fila (specs/008): uma verificação, acompanhada como um envio. */
+  checkHunitCharges(body: { credentials: CredentialsBody }): Promise<Result<CommercialDispatch>> {
+    return this.call(() => this.slowHttp.POST('/commercial-hunit-charges/check', { body }));
   }
 
   /**

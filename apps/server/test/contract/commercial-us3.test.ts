@@ -72,7 +72,8 @@ describe('estado da planilha e "Ler retornos agora" (T046)', () => {
     } finally {
       await without.close();
     }
-  });
+    // Cria um banco inteiro (todas as migrations) dentro do teste: o prazo é o dos ganchos.
+  }, 60_000);
 
   it('ler agora: rodada completa, pendências zeradas e problemas do retorno listados', async () => {
     await insertCommercialReservation(test.database.db, 1);
@@ -87,7 +88,7 @@ describe('estado da planilha e "Ler retornos agora" (T046)', () => {
       round: { linesWritten: 1 },
     });
 
-    test.sheet?.fillReturn(HOTEL, number(1), ['AUT1', '', '', '']);
+    test.sheet?.fillReturn(HOTEL, number(1), ['AUT1', '', '', '', 'Cobrada na maquininha', 46345]);
     await readNow();
     const current = await status();
     expect(current.problems).toEqual([

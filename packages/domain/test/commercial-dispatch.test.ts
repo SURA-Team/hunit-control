@@ -51,6 +51,13 @@ describe('dispatchEligibility (FR-003)', () => {
     });
   });
 
+  it('marcada como cancelada sem cobrança não vai ao Comercial (specs/008)', () => {
+    expect(dispatchEligibility({ ...base, noChargeMarked: true })).toEqual({
+      eligible: false,
+      reason: 'not_accepting',
+    });
+  });
+
   it('reserva já na planilha é um reenvio; nunca enviada, não', () => {
     expect(dispatchEligibility(base)).toEqual({ eligible: true, resend: false });
     expect(dispatchEligibility({ ...base, lineState: 'open' })).toEqual({

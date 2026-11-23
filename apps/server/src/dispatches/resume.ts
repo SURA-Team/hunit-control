@@ -55,13 +55,23 @@ export async function resumeDispatch(
   );
   if (pending.length === 0) throw new NothingToResumeDispatchError();
 
+  const reservations = pending.map((item) => ({
+    hotelCode: item.hotelCode,
+    reservationNumber: item.reservationNumber,
+  }));
+  // A retomada de uma verificação da fila "Cobradas no Hunit" continua sendo verificação (specs/008).
+  if (found.dispatch.purpose === 'hunit_check') {
+    return runner.startHunitCheck({
+      clientId: input.clientId,
+      credentials: input.credentials,
+      reservations,
+      parentDispatchId: input.dispatchId,
+    });
+  }
   return runner.start({
     clientId: input.clientId,
     credentials: input.credentials,
-    reservations: pending.map((item) => ({
-      hotelCode: item.hotelCode,
-      reservationNumber: item.reservationNumber,
-    })),
+    reservations,
     parentDispatchId: input.dispatchId,
   });
 }

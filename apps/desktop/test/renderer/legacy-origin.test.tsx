@@ -55,6 +55,8 @@ function reservation(number: string, overrides: Partial<Reservation> = {}): Rese
       detailedSituation: 'not_virtual_card',
     },
     legacy: LEGACY,
+    amountToCharge: '1234.56',
+    noCharge: null,
     ...overrides,
   };
 }

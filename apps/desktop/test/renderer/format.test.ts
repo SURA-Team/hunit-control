@@ -13,6 +13,7 @@ import {
   formatRemaining,
   formatTime,
   parseAmountInput,
+  relativeDay,
 } from '../../src/renderer/src/presentation/format.js';
 
 /** O Intl separa "R$" do número com um espaço que não quebra a linha. */
@@ -104,5 +105,24 @@ describe('formatCount e formatInteger (contagens dos filtros rápidos, specs/006
 
   it('contagem inteira com separador de milhar', () => {
     expect(formatInteger(12345)).toBe('12.345');
+  });
+});
+
+describe('relativeDay — "hoje" e "ontem" no dia de Brasília (specs/008, R-09)', () => {
+  // 19/11/2026 às 01:30 em Brasília (04:30 UTC) e às 23:30 (02:30 UTC do dia 20).
+  const early = new Date('2026-11-19T04:30:00Z');
+  const late = new Date('2026-11-20T02:30:00Z');
+
+  it('hoje e ontem pelo dia de Brasília, não pelo UTC', () => {
+    expect(relativeDay('2026-11-19', early)).toBe('hoje');
+    expect(relativeDay('2026-11-18', early)).toBe('ontem');
+    expect(relativeDay('2026-11-19', late)).toBe('hoje');
+    expect(relativeDay('2026-11-18', late)).toBe('ontem');
+  });
+
+  it('outros dias e vazio não têm rótulo', () => {
+    expect(relativeDay('2026-11-17', early)).toBeNull();
+    expect(relativeDay('2026-11-20', early)).toBeNull();
+    expect(relativeDay(null, early)).toBeNull();
   });
 });

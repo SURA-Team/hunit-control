@@ -7,7 +7,7 @@
  * alguém alterou uma célula do sistema (FR-011). Nenhuma função aqui recebe o nome do hóspede: os
  * tipos de entrada nem têm esse campo (FR-010, FR-027).
  */
-import { COMMERCIAL_RETURN_FIELDS, RETURN_PROBLEM_PREFIXES } from './commercial-return.js';
+import { COMMERCIAL_RETURN_COLUMNS, RETURN_PROBLEM_PREFIXES } from './commercial-return.js';
 import type { CommercialLineState, ReservationDetailedSituation } from './treatment.js';
 import type { Classification, IsoDate, Money, ReservationStatus } from './types.js';
 
@@ -31,13 +31,16 @@ export const COMMERCIAL_SHEET_HEADERS = [
   'Hotel da cobrança',
   'Valor cobrado',
   'Responsável pela cobrança',
+  // Desde a 008 (research R-05): no fim, para não deslocar os retornos já preenchidos.
+  'Situação da cobrança',
+  'Data da cobrança',
 ] as const;
 
 /** Colunas preenchidas pelo sistema (A a J), protegidas contra edição (FR-011). */
 export const SYSTEM_COLUMN_COUNT = 10;
 
-/** Colunas de retorno (K a N), na mesma ordem de `COMMERCIAL_RETURN_FIELDS`. */
-export const RETURN_COLUMN_FIELDS = COMMERCIAL_RETURN_FIELDS;
+/** Colunas de retorno (K a P), na mesma ordem de `COMMERCIAL_RETURN_COLUMNS` (specs/008). */
+export const RETURN_COLUMN_FIELDS = COMMERCIAL_RETURN_COLUMNS;
 
 /** Nomes das classificações, iguais aos do app (specs/002, data-model §6). */
 export const CLASSIFICATION_NAMES: Readonly<Record<Classification, string>> = {
@@ -73,7 +76,12 @@ export const CANCELLED_LINE_SITUATION_NAME = 'Pedido cancelado pelo Financeiro';
 /**
  * O que a coluna "Validação do Financeiro" mostra (FR-010, FR-015, FR-017, FR-018):
  * `awaiting_return` = linha em "A cobrar" sem retorno (spec, sessão 2026-11-17 "homologação");
- * `none` = linha concluída sem retorno confirmado.
+ * `none` = linha concluída sem retorno confirmado. Da 008 (contracts/sheet-layout.md):
+ * `hunit_awaiting` e `hunit_confirmed` = relato "Cobrada no Hunit" aguardando a verificação ou
+ * confirmado (o não encontrado é um `rejected` com o motivo `HUNIT_NOT_FOUND_REASON`);
+ * `cancellation_awaiting` = "Cancelada" do Comercial aguardando a validação do Financeiro (a recusa é
+ * um `rejected` com o motivo; homologação, R-19); `no_charge` = reserva marcada como cancelada sem
+ * cobrança.
  */
 export type FinanceValidation =
   | { kind: 'none' }
@@ -81,11 +89,20 @@ export type FinanceValidation =
   | { kind: 'awaiting' }
   | { kind: 'confirmed' }
   | { kind: 'rejected'; reason: string }
-  | { kind: 'problem'; text: string };
+  | { kind: 'problem'; text: string }
+  | { kind: 'hunit_awaiting' }
+  | { kind: 'hunit_confirmed' }
+  | { kind: 'cancellation_awaiting' }
+  | { kind: 'no_charge' };
 
 const AWAITING_RETURN_TEXT = 'Aguardando retorno do Comercial';
 const AWAITING_VALIDATION_TEXT = 'Aguardando validação do Financeiro';
 const REJECTED_PREFIX = 'Recusado pelo Financeiro';
+const HUNIT_AWAITING_TEXT = 'Aguardando verificação no Hunit';
+const CANCELLATION_AWAITING_TEXT = 'Cancelada: aguardando validação do Financeiro';
+
+/** Motivo da recusa de um relato "Cobrada no Hunit" sem a cobrança no Hunit (specs/008, R-07). */
+export const HUNIT_NOT_FOUND_REASON = 'cobrança não encontrada no Hunit';
 
 export function financeValidationText(validation: FinanceValidation): string {
   switch (validation.kind) {
@@ -101,6 +118,14 @@ export function financeValidationText(validation: FinanceValidation): string {
       return `${REJECTED_PREFIX}: ${validation.reason}`;
     case 'problem':
       return validation.text;
+    case 'hunit_awaiting':
+      return HUNIT_AWAITING_TEXT;
+    case 'hunit_confirmed':
+      return 'Cobrança confirmada no Hunit';
+    case 'cancellation_awaiting':
+      return CANCELLATION_AWAITING_TEXT;
+    case 'no_charge':
+      return 'Cancelada sem cobrança pelo Financeiro';
   }
 }
 
@@ -122,6 +147,9 @@ export const FINANCE_VALIDATION_TONES: readonly {
 }[] = [
   { tone: 'awaiting_return', match: 'equals', text: AWAITING_RETURN_TEXT },
   { tone: 'awaiting_validation', match: 'equals', text: AWAITING_VALIDATION_TEXT },
+  // Laranja como "Aguardando validação do Financeiro" (specs/008).
+  { tone: 'awaiting_validation', match: 'equals', text: HUNIT_AWAITING_TEXT },
+  { tone: 'awaiting_validation', match: 'equals', text: CANCELLATION_AWAITING_TEXT },
   { tone: 'attention', match: 'starts_with', text: REJECTED_PREFIX },
   { tone: 'attention', match: 'starts_with', text: RETURN_PROBLEM_PREFIXES.incomplete },
   { tone: 'attention', match: 'starts_with', text: RETURN_PROBLEM_PREFIXES.illegible },

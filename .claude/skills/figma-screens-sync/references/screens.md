@@ -13,7 +13,12 @@ Situação em 19/11/2026: as 46 telas em uso (1.1 a 7.14, com a 4.12) são as da
 `006-redesign-app-desktop`, com ✅ e visíveis desde a marcação da T066; as versões das páginas 002 a
 005 ficaram com ❌ e ocultas. A 007 (relatórios, 8.1 a 8.7) e a 008 estão em desenvolvimento e não
 foram tocadas. A 7.7a (envio em andamento na aba "Envios", aprovada pela UX) tem print próprio no
-roteiro de captura, mas não entra na marcação enquanto o número não for definitivo.
+roteiro de captura, mas não entra na marcação enquanto o número não for definitivo. O mesmo vale
+para a 7.5a e a 7.8a (a "Cancelada" do Comercial, da homologação da 008, sem desenho).
+
+Na conclusão da 008 (T038, 23/11/2026): 1.1, 1.2, 1.3, 7.5, 7.7, 7.8 e 7.12 passam a ser as da página
+`008-ajustes-cobranca-e-aviso`, e as telas novas 7.15, 7.17 e 7.18 entram no catálogo; a marcação no
+Figma é a T043.
 
 ## Catálogo
 
@@ -22,9 +27,9 @@ Código: caminhos relativos a `apps/desktop/src/renderer/src/`. Altura: altura d
 
 | Nº | Tela | Estado mostrado | Código | Altura | Ativa em |
 |---|---|---|---|---|---|
-| 1.1 | Configuração — primeiro uso | Sem conexão configurada: só a área Configuração, aviso azul, campos vazios, botões desabilitados | `screens/setup/` | 900 | `006` |
-| 1.2 | Configuração — conexão confirmada | Certificado escolhido (impressão digital), chave preenchida, teste aprovado | `screens/setup/` | 1068 | `006` |
-| 1.3 | Configuração — conectado (operador) | Conexão salva, preferências, aviso do token, remover configuração | `screens/setup/` | 1374 | `006` |
+| 1.1 | Configuração — primeiro uso · som do aviso | Sem conexão configurada: só a área Configuração, aviso azul, campos vazios, botões desabilitados; card do aviso com "Tocar som do aviso", o volume e a nota do som único | `screens/setup/`, `ui/fields/VolumeField.tsx` | 964 | `008` |
+| 1.2 | Configuração — conexão confirmada · som desligado | Certificado escolhido (impressão digital), chave preenchida, teste aprovado; som do aviso desligado e volume desabilitado | `screens/setup/` | 1178 | `008` |
+| 1.3 | Configuração — conectado (operador) · som do aviso | Conexão salva, preferências (sem a chave de som), aviso do token com o som e o volume, remover configuração | `screens/setup/` | 1446 | `008` |
 | 2.1 | Executar — vazio | Primeiro acesso à área, sem usuário e senha | `screens/run/` | 900 | `006` |
 | 2.2 | Executar — escolhendo o período | Calendário de dois meses aberto, intervalo marcado | `ui/PeriodPicker` | 900 | `006` |
 | 2.3 | Executar — escolher hotéis | Opção "Escolher hotéis" com o seletor de hotéis | `screens/run/HotelSelect.tsx` | 900 | `006` |
@@ -58,16 +63,19 @@ Código: caminhos relativos a `apps/desktop/src/renderer/src/`. Altura: altura d
 | 7.2 | Envio — em andamento | Acompanhamento: verificadas e restantes, reserva em verificação, resultado de cada reserva, "Cancelar envio" | `screens/dispatch/DispatchView.tsx` | 1225 | `006` |
 | 7.3 | Envio — pedido de token | O mesmo diálogo do token, com "Envio ao Comercial" | `components/TwoFactorDialog.tsx` | 1225 | `006` |
 | 7.4 | Envio — concluído | Resultado: enviadas, retiradas (Hunit mostrou cobrada) e não verificadas | `screens/dispatch/DispatchView.tsx` | 1225 | `006` |
-| 7.5 | Reservas — detalhe "Validar comprovante" | Gaveta inteira: "Valor cobrado", seção "Comercial" com a aba, os envios e o retorno (hotel da cobrança em laranja com "Diferente do hotel da reserva", valores e diferença, "Confirmar" e "Recusar"), histórico mesclado | `screens/reservations/CommercialSection.tsx` | 1560 | `006` |
+| 7.5 | Reservas — detalhe "Validar comprovante" | Gaveta inteira: "Valor cobrado", seção "Comercial" com a aba, os envios e o retorno (hotel da cobrança em laranja com "Diferente do hotel da reserva", valores e diferença, situação e data da cobrança, "Confirmar" e "Recusar"), histórico mesclado | `screens/reservations/CommercialSection.tsx` | 1634 | `008` |
 | 7.6 | Reservas — recusar retorno | Diálogo: aviso de que o Comercial vê o motivo, sugestões e motivo obrigatório | idem (`RejectDialog`) | 1560 | `006` |
-| 7.7 | Comercial — Envios | Lista dos envios com quem, quando, estado e contagens | `screens/commercial/DispatchesTab.tsx` | 900 | `006` |
-| 7.8 | Comercial — Retornos a validar | Retornos aguardando validação, com confirmação individual, em lote e recusa | `screens/commercial/ReturnsTab.tsx` | 900 | `006` |
+| 7.7 | Comercial — Envios | Lista dos envios com quem, quando, estado e contagens; abas com "Cobradas no Hunit" e a contagem da fila | `screens/commercial/DispatchesTab.tsx`, `CommercialScreen.tsx` | 900 | `008` |
+| 7.8 | Comercial — Retornos a validar | Retornos aguardando validação, com confirmação individual, em lote e recusa; situação e data da cobrança em "Responsável e cobrança" | `screens/commercial/ReturnsTab.tsx` | 900 | `008` |
 | 7.9 | Comercial — Retornos com problema | Retorno incompleto com o que falta | `screens/commercial/ProblemsTab.tsx` | 900 | `006` |
 | 7.10 | Comercial — Planilha | Situação, pendências e desde quando, última leitura, "Ler retornos agora" | `screens/commercial/SheetTab.tsx` | 900 | `006` |
 | 7.11 | Reservas — selecionar todas do filtro | Aviso das selecionadas, barra da seleção com "Enviar ao Comercial", "Confirmar retornos" e "Confirmar 'Verificar'" | `screens/reservations/ReservationsScreen.tsx` | 1221 | `006` |
-| 7.12 | Reservas — confirmar retornos em lote | Diálogo com a lista de revisão (código, hotel da cobrança ao lado do hotel da reserva, valores, diferença) | `screens/reservations/ConfirmBatchDialog.tsx` | 1221 | `006` |
+| 7.12 | Reservas — confirmar retornos em lote | Diálogo com a lista de revisão (código, hotel da cobrança ao lado do hotel da reserva, valores, diferença, situação e data da cobrança) | `screens/reservations/ConfirmBatchDialog.tsx` | 1221 | `008` |
 | 7.13 | Reservas — confirmar "Verificar" em lote | Diálogo: quantas têm o alerta, quantas ficam de fora, contagem por status do Hunit | idem | 1221 | `006` |
 | 7.14 | Reservas — copiar para e-mail | Diálogo: copiar as selecionadas ou o resultado da pesquisa | `screens/reservations/CopyDialog.tsx` | 1221 | `006` |
+| 7.15 | Comercial — Cobradas no Hunit (fila de verificação) | Fila com uma reserva em cada situação (aguardando verificação, confirmada no Hunit, não encontrada no Hunit) e "Verificar agora" | `screens/commercial/HunitChargesTab.tsx` | 900 | `008` |
+| 7.17 | Reservas — marcar como cancelada sem cobrança | Diálogo "Marcar como cancelada sem cobrança?" sobre a gaveta: aviso, valor → R$ 0,00, observação opcional | `screens/reservations/NoChargeSection.tsx` | 1560 | `008` |
+| 7.18 | Reservas — cancelada sem cobrança (em Concluídas) | Gaveta com o selo, o card "Cancelada sem cobrança" (valor e o anterior, quem marcou, onde está, observação, "Desfazer") e o histórico | idem, `ReservationDetail.tsx`, `TreatmentSection.tsx` | 1560 | `008` |
 
 Rótulos e cores das situações (todas as telas): `presentation/labels.ts`. Tema e ícone até a 005:
 `main.tsx` e `apps/desktop/resources/icon.png`; com a 006, `renderer/src/ui/` e a marca

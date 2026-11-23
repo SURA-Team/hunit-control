@@ -13,6 +13,8 @@ import {
   dispatchIdSchema,
   dispatchListInputSchema,
   dispatchTokenInputSchema,
+  confirmReturnsInputSchema,
+  rejectCancellationInputSchema,
   rejectReturnInputSchema,
   reservationFiltersSchema,
   reservationKeySchema,
@@ -52,6 +54,10 @@ type CommercialApi = Pick<
   | 'confirmCommercialReturns'
   | 'getCommercialSheetStatus'
   | 'readCommercialSheet'
+  | 'listHunitCharges'
+  | 'checkHunitCharges'
+  | 'confirmCommercialCancellation'
+  | 'rejectCommercialCancellation'
 >;
 
 export interface CommercialServices {
@@ -180,8 +186,19 @@ export function createCommercialHandlers(services: CommercialServices): InvokeHa
       withApi((api) => api.undoCommercialReturnConfirmation(returnId)),
     ),
 
-    [INVOKE.commercialConfirmReturns]: handle(reservationsInputSchema, (input) =>
-      withApi((api) => api.confirmCommercialReturns(input.reservations)),
+    [INVOKE.commercialConfirmReturns]: handle(confirmReturnsInputSchema, (input) =>
+      withApi((api) =>
+        api.confirmCommercialReturns(input.reservations, input.includeCancellations === true),
+      ),
+    ),
+
+    // A "Cancelada" do Comercial (homologação da 008, R-19).
+    [INVOKE.commercialConfirmCancellation]: handle(reservationKeySchema, (key) =>
+      withApi((api) => api.confirmCommercialCancellation(key)),
+    ),
+
+    [INVOKE.commercialRejectCancellation]: handle(rejectCancellationInputSchema, (input) =>
+      withApi((api) => api.rejectCommercialCancellation(input.key, input.reason)),
     ),
 
     [INVOKE.commercialSheetStatus]: handleNoInput(() =>
@@ -189,6 +206,20 @@ export function createCommercialHandlers(services: CommercialServices): InvokeHa
     ),
 
     [INVOKE.commercialReadNow]: handleNoInput(() => withApi((api) => api.readCommercialSheet())),
+
+    // ------------------------------------------------- fila "Cobradas no Hunit" (specs/008)
+    [INVOKE.commercialHunitCharges]: handleNoInput(() => withApi((api) => api.listHunitCharges())),
+
+    [INVOKE.commercialCheckHunitCharges]: handleNoInput(async () => {
+      // Credenciais do cofre, como o envio; sem elas, o mesmo erro (a tela pede as credenciais).
+      const credentials = services.vault.take();
+      if (!credentials.ok) return credentials;
+      const started = await withApi((api) =>
+        api.checkHunitCharges({ credentials: credentials.data }),
+      );
+      if (started.ok) services.watcher.track(dispatchJob(started.data.id), { own: true });
+      return started;
+    }),
 
     // ------------------------------------------------------------------ "Copiar para e-mail"
     [INVOKE.clipboardCopyReservations]: handle(

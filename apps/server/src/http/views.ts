@@ -5,8 +5,11 @@
 import type { components } from '@hunit/contracts';
 import {
   acceptsTreatment,
+  amountToCharge,
   chargedAmountWithOrigin,
   detailedSituation,
+  effectiveClassification,
+  hunitShowsCharge,
   isRevertible,
   revertDeadline,
   needsReview,
@@ -15,7 +18,7 @@ import {
   type Classification,
 } from '@hunit/domain';
 import type { CommercialSummaryRecord } from '../persistence/commercial-repo.js';
-import { difference } from './commercial-views.js';
+import { difference, toChargeSituationView, toCommercialReportView } from './commercial-views.js';
 import type { ExecutionEvent } from '../executions/events.js';
 import type { ExecutionTiming } from '../executions/timing.js';
 import type {
@@ -30,6 +33,7 @@ import type { ClassificationCounts } from '../persistence/schema.js';
 import {
   EMPTY_TREATMENT,
   treatmentFlags,
+  type NoChargeMarkRecord,
   type ReservationOutcome,
   type TreatmentDocumentRecord,
   type TreatmentEventRecord,
@@ -218,6 +222,8 @@ export function toReservationTreatmentView(
   // (specs/005, research R-09).
   const flags = treatmentFlags(summary);
   const status = treatmentStatus(flags);
+  // Marcada como cancelada sem cobrança, vale a classificação efetiva (specs/008, research R-08).
+  const classification = effectiveClassification(reservation.classification, flags.noChargeMarked);
   const charged = chargedAmountWithOrigin({
     hunitAmount: reservation.chargedAmount,
     manualAmount: summary.manualAmount,
@@ -227,18 +233,15 @@ export function toReservationTreatmentView(
   return {
     status,
     // Situação da reserva e alerta "Verificar" (FR-002, FR-002a, research R-14).
-    situation: reservationSituation(reservation.classification, status),
+    situation: reservationSituation(classification, status),
     // Com "Validar comprovante" (specs/005); `situation` continua sem esse valor (R-09).
-    detailedSituation: detailedSituation(
-      reservation.classification,
-      status,
-      flags.hasReturnAwaiting,
-    ),
+    detailedSituation: detailedSituation(classification, status, flags.hasReturnAwaiting),
     needsReview: needsReview({
       classification: reservation.classification,
       status,
       statusChangedAt: reservation.statusChangedAt,
       lastReviewAt: summary.lastReviewAt,
+      noChargeMarked: flags.noChargeMarked,
     }),
     request: summary.request ? toTreatmentDocumentView(summary.request, now) : null,
     proof: summary.proof ? toTreatmentDocumentView(summary.proof, now) : null,
@@ -246,7 +249,21 @@ export function toReservationTreatmentView(
     commercialChargedAmount: flags.commercialAmount,
     effectiveChargedAmount: charged.amount,
     chargedAmountOrigin: charged.origin,
-    acceptsDocuments: acceptsTreatment(reservation.classification),
+    acceptsDocuments: acceptsTreatment(classification),
+    noChargeHistory: summary.noCharge.history.map(toNoChargeMarkView),
+  };
+}
+
+/** Marcação "Cancelada sem cobrança" no formato da API (specs/008). */
+export function toNoChargeMarkView(mark: NoChargeMarkRecord): Schemas['NoChargeMark'] {
+  return {
+    id: mark.id,
+    markedAt: iso(mark.markedAt),
+    markedBy: mark.markedBy,
+    note: mark.note,
+    previousAmount: mark.previousAmount,
+    undoneAt: iso(mark.undoneAt),
+    undoneBy: mark.undoneBy,
   };
 }
 
@@ -272,9 +289,15 @@ export function toCommercialSummaryView(
       chargedBy: current.chargedBy,
       readAt: iso(current.readAt),
       difference: difference(current.chargedAmount, totalAmount),
+      chargeSituation: toChargeSituationView(
+        current.chargeSituationText,
+        current.chargeSituationKind,
+      ),
+      chargeDate: current.chargeDate,
     },
     returnProblem: commercial.returnProblem,
     syncPending: commercial.syncPending,
+    report: toCommercialReportView(commercial.report),
   };
 }
 
@@ -373,6 +396,12 @@ export function toReservationView(
     },
     // Envio ao Comercial pela planilha (specs/005).
     commercial: toCommercialSummaryView(treatment.commercial, row.totalAmount),
+    // Marcação "Cancelada sem cobrança" (specs/008, research R-08).
+    amountToCharge: amountToCharge(row.totalAmount, treatment.noCharge.active !== null),
+    noCharge: treatment.noCharge.active && {
+      ...toNoChargeMarkView(treatment.noCharge.active),
+      hunitShowsCharge: hunitShowsCharge(row.classification),
+    },
   };
 }
 

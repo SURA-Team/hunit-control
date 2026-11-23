@@ -215,8 +215,13 @@ produção, no PowerShell:
    docker compose ps                                   # server, db, proxy e backup "Up"
    curl.exe http://127.0.0.1:3000/v1/health            # {"status":"ok"}
    ```
-3. Se a feature mudou a planilha do Comercial, rode o `commercial-sheet setup` e o `check` de novo
-   ("Planilha do Comercial", passo 5).
+3. Se a feature mudou a planilha do Comercial, rode o `commercial-sheet setup` **logo depois de
+   subir o servidor** e o `check` em seguida ("Planilha do Comercial", passo 5). Até o `setup`, o
+   servidor não escreve nem lê a planilha (a área **Comercial → Planilha** mostra "Formato
+   alterado"); nada se perde, as atualizações esperam. A 008 mudou: colunas O ("Situação da
+   cobrança") e P ("Data da cobrança"), obrigatórias. **Avise o Comercial antes**: na primeira
+   leitura, os retornos abertos sem elas (inclusive os que já aguardavam validação) vão para
+   **Retornos com problema**, e a coluna J diz o que falta, até ele preencher as duas colunas.
 4. Gere o instalador nesta mesma pasta ("App desktop" → "Gerar o instalador") e instale-o nas
    máquinas do Financeiro e da Controladoria. **Sempre o servidor antes do app**: o app novo pode
    usar rotas novas da API; o app antigo continua funcionando com o servidor novo, porque a API só
@@ -355,10 +360,24 @@ Financeiro envia os pedidos de cobrança direto para ela:
   reserva é verificada no Hunit (só leitura): a que não exige mais cobrança é retirada, e a que não
   pode ser verificada não é enviada. A enviada fica como **Tratativa enviada**, como a tratativa por
   e-mail.
-- O Comercial preenche, na aba "A cobrar", o código de autorização, o hotel da cobrança (o que
-  aparece na maquininha), o valor cobrado e o responsável. O servidor lê os retornos a cada
-  10 minutos (ou na hora, com **Ler retornos agora**, na área **Comercial**) e a reserva passa a
-  **Validar comprovante**.
+- O Comercial preenche, na aba "A cobrar", a **situação da cobrança** (obrigatória) e, conforme
+  ela, o restante (o que cada situação faz está em "Planilha do Comercial", abaixo). Na cobrança na
+  maquininha: o código de autorização, o hotel da cobrança (o que aparece na maquininha), o valor
+  cobrado, o responsável e a data da cobrança (obrigatória, mas não bloqueia a confirmação). O
+  servidor lê a planilha a cada 10 minutos (ou na hora, com **Ler retornos agora**, na área
+  **Comercial**) e a reserva passa a **Validar comprovante**. Faltou alguma coluna: o retorno vai
+  para **Retornos com problema**, com o que falta, até o Comercial completar.
+- **Cobrada no Hunit**: a reserva entra na aba **Cobradas no Hunit** da área **Comercial**, como
+  "Aguardando verificação". A cada execução (ou com **Verificar agora**, que pede o acesso e o token
+  como um envio) o app lê a reserva no Hunit: com a cobrança, fica "Confirmada no Hunit" e vai para
+  "Concluídas"; sem ela, "Não encontrada no Hunit", e a planilha mostra a recusa do Financeiro.
+- **Cancelada** (ou um texto que comece por "Cancelada", como "Cancelada na Expedia"): basta a
+  situação. A reserva aparece no topo de **Retornos a validar**, com o selo vermelho "Cancelada", o
+  texto do Comercial e o valor que vira R$ 0,00. **Confirmar** (na gaveta da reserva, **Confirmar
+  cancelamento**) marca a reserva como **Cancelada sem cobrança** (vai para "Concluídas", e a linha
+  da planilha também); **Recusar** pede o motivo, que o Comercial vê na coluna J. Também entra no **Confirmar marcados** e no
+  **Confirmar ▾** → **Confirmar retornos** da seleção. Desfazer a marcação devolve a "Cancelada"
+  para validar.
 - O Financeiro confere o retorno no detalhe da reserva ou na aba **Retornos a validar** e
   **confirma** (vale como comprovante, e o valor cobrado do Comercial passa a valer) ou **recusa**
   com o motivo, que o Comercial vê na planilha. A confirmação pode ser em lote (**Confirmar
@@ -371,6 +390,11 @@ Financeiro envia os pedidos de cobrança direto para ela:
   hóspede, para colar no corpo do e-mail.
 - Um envio em andamento aparece em card escuro no topo da aba **Envios**; fechar o diálogo do envio
   não o interrompe.
+- **Cancelada sem cobrança**: no detalhe de uma reserva que exige cobrança (sem comprovante e sem
+  retorno a validar), o operador marca a reserva como cancelada sem cobrança, com uma observação
+  opcional. O valor a cobrar fica R$ 0,00, a reserva vai para "Concluídas" e não é mais enviada; se
+  já estava na planilha, a linha vai para "Concluídas". **Desfazer** volta tudo. Nada muda no
+  Hunit.
 
 ## Planilha do Comercial
 
@@ -405,7 +429,18 @@ leitura. Sem as duas variáveis da planilha, o envio ao Comercial fica desligado
    apaga as que alguém tiver criado ali.
 6. Compartilhe a planilha com as contas do Comercial no Google, como **Editor**: as colunas do
    sistema (A a J de "A cobrar") e a aba "Concluídas" ficam protegidas; o Comercial só preenche as
-   colunas de retorno (K a N).
+   colunas de retorno (K a P). Na coluna O, **Situação da cobrança**, ele escolhe (ou escreve):
+   - **Cobrada na maquininha**: o retorno completo, de K a N, e a data (P) vão para **Retornos a
+     validar**;
+   - **Cobrada no Hunit**: o responsável (N) e a data (P); a reserva entra na fila **Cobradas no
+     Hunit**;
+   - **Cancelada** (ou um texto que comece por "Cancelada"): basta a situação; o responsável é
+     opcional e a data não é pedida. A reserva vai para **Retornos a validar**, com o selo
+     "Cancelada", e a coluna J mostra "Cancelada: aguardando validação do Financeiro";
+   - outro texto: aparece como foi escrito e segue a regra da maquininha.
+   A situação (O) é obrigatória, e a **Data da cobrança** (P) também, menos na "Cancelada": o que
+   faltar leva o retorno para **Retornos com problema**, e a coluna J diz o que falta. A data não
+   bloqueia a confirmação do Financeiro.
 7. No app, a área **Comercial → Planilha** deve mostrar "Funcionando".
 
 Se a planilha ficar fora do ar, nada se perde: o servidor guarda as atualizações e as aplica quando

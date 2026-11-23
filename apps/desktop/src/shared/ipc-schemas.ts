@@ -63,8 +63,12 @@ export const connectionInputSchema = z.strictObject({
 
 export const idleHoursSchema = z.number().int().min(1).max(24);
 
+/** Volume do som do aviso (specs/008, FR-002). */
+export const soundVolumeSchema = z.number().int().min(0).max(100);
+
 export const preferencesInputSchema = z.strictObject({
   soundEnabled: z.boolean().optional(),
+  soundVolume: soundVolumeSchema.optional(),
   idleHours: idleHoursSchema.optional(),
 });
 
@@ -136,6 +140,21 @@ export const reservationKeySchema = z.strictObject({
   reservationNumber: shortText,
 });
 
+/** Situações detalhadas que a pessoa pode ter visto (o servidor confere o valor, specs/008). */
+const detailedSituation = z.string().trim().min(1).max(50);
+
+export const markNoChargeInputSchema = z.strictObject({
+  key: reservationKeySchema,
+  expectedSituation: detailedSituation,
+  // Observação opcional, até 500 caracteres (FR-019); vazia vira "sem observação".
+  note: z.string().trim().max(500).optional(),
+});
+
+export const undoNoChargeInputSchema = z.strictObject({
+  key: reservationKeySchema,
+  markId: uuid,
+});
+
 export const evidenceSaveInputSchema = z.strictObject({
   evidenceId: uuid,
   file: z.enum(['screenshot', 'html', 'response']),
@@ -195,11 +214,18 @@ const commercialReservations = z
 /** Envio, conferência e confirmações em lote: de 1 a 2 000 reservas. */
 export const reservationsInputSchema = z.strictObject({ reservations: commercialReservations });
 
+/** Confirmação em lote dos retornos, com as "Cancelada" quando pedido (homologação, R-19). */
+export const confirmReturnsInputSchema = z.strictObject({
+  reservations: commercialReservations,
+  includeCancellations: z.boolean().optional(),
+});
+
 export const dispatchIdSchema = uuid;
 export const returnIdSchema = uuid;
 
 export const dispatchListInputSchema = z.strictObject({
   active: z.boolean().optional(),
+  purpose: z.enum(['send', 'hunit_check', 'all']).optional(),
   cursor: cursor.optional(),
   limit: limit.optional(),
 });
@@ -211,6 +237,11 @@ export const dispatchTokenInputSchema = z.strictObject({
 
 export const rejectReturnInputSchema = z.strictObject({
   returnId: uuid,
+  reason: z.string().trim().min(1, 'informe o motivo').max(500),
+});
+
+export const rejectCancellationInputSchema = z.strictObject({
+  key: reservationKeySchema,
   reason: z.string().trim().min(1, 'informe o motivo').max(500),
 });
 

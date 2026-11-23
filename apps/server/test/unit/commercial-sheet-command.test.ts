@@ -56,6 +56,29 @@ describe('commercial-sheet (T023)', () => {
     expect(sheet.header('toCharge')[4]).toBe('Valor');
   });
 
+  it('planilha da 005, sem O e P: check aponta as colunas faltando; setup acrescenta (specs/008)', async () => {
+    const sheet = new MemorySheetGateway();
+    sheet.setCell('toCharge', 0, 14, '');
+    sheet.setCell('toCharge', 0, 15, '');
+    sheet.setCell('done', 0, 14, '');
+    sheet.setCell('done', 0, 15, '');
+
+    const before = await run(['check'], ENV, sheet);
+    expect(before.code).toBe(EXIT.layoutInvalid);
+    expect(before.stdout).toContain(
+      'faltam na aba "A cobrar" as colunas O ("Situação da cobrança") e P ("Data da cobrança")',
+    );
+
+    const setup = await run(['setup'], ENV, sheet);
+    expect(setup.code).toBe(EXIT.ok);
+    expect(setup.stdout).toContain('Colunas do Comercial');
+    expect(sheet.header('toCharge').slice(14)).toEqual([
+      'Situação da cobrança',
+      'Data da cobrança',
+    ]);
+    expect((await run(['check'], ENV, sheet)).code).toBe(EXIT.ok);
+  });
+
   it('sem configuração: código 1, com a orientação', async () => {
     const result = await run(['setup'], {});
     expect(result.code).toBe(EXIT.notConfigured);

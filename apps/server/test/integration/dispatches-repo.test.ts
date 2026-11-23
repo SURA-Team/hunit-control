@@ -144,6 +144,7 @@ describe('transições e desfechos', () => {
       withdrawn: 1,
       notVerified: 1,
       ignored: 1,
+      checked: 0,
     });
   });
 

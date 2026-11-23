@@ -568,6 +568,8 @@ describe('GET /v1/reservations/{hotelCode}/{reservationNumber}/treatment', () =>
         effectiveChargedAmount: null,
         chargedAmountOrigin: null,
         acceptsDocuments: false,
+        // Acréscimo da 1.9.0 (specs/008).
+        noChargeHistory: [],
       },
       documents: [],
       events: [],

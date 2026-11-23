@@ -33,13 +33,14 @@ import {
 import type { Database } from './db.js';
 import type { HotelProgress } from './execution-hotels-repo.js';
 import { InvalidCursorError } from './executions-repo.js';
-import { refreshCommercialLinesOf } from './commercial-repo.js';
+import { noChargeMarkedCondition, qualified, refreshCommercialLinesOf } from './commercial-repo.js';
 import {
   commercialLines,
   commercialReturns,
   executionHotels,
   hotels,
   legacyReservations,
+  noChargeMarks,
   reservationManualAmounts,
   reservationObservations,
   reservations,
@@ -414,8 +415,24 @@ function freeTextCondition(text: string): SQL {
     or lower(${reservations.transactionId}) = lower(${text})
     or lower(${reservations.authorizationCode}) = lower(${text})
     or lower(${reservations.processorReference}) = lower(${text})
+    or ${confirmedReturnCodeCondition(text)}
     or (${reservations.anonymizedAt} is null
       and strpos(unaccent(lower(${reservations.guestName})), unaccent(lower(${text}))) > 0))`;
+}
+
+/**
+ * O código de autorização do retorno do Comercial confirmado pelo Financeiro é o texto inteiro, sem
+ * diferenciar maiúsculas, como o código do Hunit (specs/008, US7, FR-029). Retorno aguardando
+ * validação, recusado, substituído ou com a confirmação desfeita não conta.
+ *
+ * Subconsulta sem correlação: o banco monta uma vez o conjunto das reservas com aquele código (um
+ * "hashed SubPlan"), em vez de procurar o retorno de cada reserva. As colunas da reserva vão com o
+ * nome da tabela, como nas outras condições usadas dentro de subconsultas.
+ */
+function confirmedReturnCodeCondition(text: string): SQL {
+  return sql`(${qualified(reservations.hotelCode)}, ${qualified(reservations.reservationNumber)}) in (
+    select cr.hotel_code, cr.reservation_number from ${commercialReturns} cr
+    where cr.state = 'confirmed' and lower(cr.authorization_code) = lower(${text}))`;
 }
 
 /** A reserva tem um documento vigente desse tipo? (specs/003: `ended_at` nulo = vigente.) */
@@ -461,14 +478,31 @@ function pendingChargeCondition(): SQL {
   return sql`(${requiresChargeCondition()} and not ${hasProofCondition()})`;
 }
 
-/** A classificação da reserva aceita tratativa? (Lista do domínio, FR-003.) */
-function acceptsTreatmentCondition(): SQL {
-  return inArray(reservations.classification, [...CLASSIFICATIONS_ACCEPTING_TREATMENT]);
+/**
+ * Classificação efetiva (specs/008, research R-08; mesma regra de `effectiveClassification`): com a
+ * marcação "Cancelada sem cobrança" ativa, `cancelled_no_charge`; senão, a do Hunit. Vale para
+ * situação, pendências, filtros rápidos e contagens; o filtro `classification` continua sendo o do
+ * Hunit.
+ */
+function effectiveClassificationSql(): SQL {
+  return sql`(case when ${noChargeMarkedCondition()} then 'cancelled_no_charge' else ${reservations.classification}::text end)`;
 }
 
-/** A classificação exige cobrança? (Mesma regra de `requiresCharge`, specs/004, R-04.) */
+function classificationListSql(list: readonly Classification[]): SQL {
+  return sql.join(
+    list.map((value) => sql`${value}`),
+    sql`, `,
+  );
+}
+
+/** A classificação (efetiva) aceita tratativa? (Lista do domínio, FR-003.) */
+function acceptsTreatmentCondition(): SQL {
+  return sql`${effectiveClassificationSql()} in (${classificationListSql(CLASSIFICATIONS_ACCEPTING_TREATMENT)})`;
+}
+
+/** A classificação (efetiva) exige cobrança? (Mesma regra de `requiresCharge`, specs/004, R-04.) */
 function requiresChargeCondition(): SQL {
-  return inArray(reservations.classification, [...CLASSIFICATIONS_REQUIRING_CHARGE]);
+  return sql`${effectiveClassificationSql()} in (${classificationListSql(CLASSIFICATIONS_REQUIRING_CHARGE)})`;
 }
 
 /** A reserva veio do sistema anterior? (specs/004, FR-011.) */
@@ -491,7 +525,7 @@ function situationCondition(situation: ReservationSituation): SQL {
   const shown = CLASSIFICATIONS_REQUIRING_CHARGE.includes(situation)
     ? sql`(not ${hasProof} and not ${hasRequest})`
     : sql`(not ${hasProof})`;
-  return sql`(${eq(reservations.classification, situation)} and ${shown})`;
+  return sql`(${effectiveClassificationSql()} = ${situation} and ${shown})`;
 }
 
 /**
@@ -500,7 +534,8 @@ function situationCondition(situation: ReservationSituation): SQL {
  * specs/004) e nenhuma confirmação desde a última mudança de situação.
  */
 function needsReviewCondition(): SQL {
-  return sql`(${hasRequestCondition()} and not ${hasProofCondition()} and not ${acceptsTreatmentCondition()} and not ${reviewedSinceChangeCondition()})`;
+  // Marcada como cancelada sem cobrança: o Financeiro já decidiu, sem alerta (specs/008).
+  return sql`(${hasRequestCondition()} and not ${hasProofCondition()} and not ${acceptsTreatmentCondition()} and not ${reviewedSinceChangeCondition()} and not ${noChargeMarkedCondition()})`;
 }
 
 /** Alguém confirmou o "Verificar" depois da última mudança de situação no Hunit? (specs/003.) */
@@ -530,20 +565,24 @@ function detailedSituationCondition(situation: ReservationDetailedSituation): SQ
  * repetiria as mesmas subconsultas, e a contagem de 20 000 reservas passaria de 1 s).
  */
 interface TreatmentFacts {
+  /** Classificação efetiva (specs/008). */
   classification: SQL;
   hasRequest: SQL;
   hasProof: SQL;
   awaitingReturn: SQL;
   reviewedSinceChange: SQL;
+  /** Marcação "Cancelada sem cobrança" ativa (specs/008). */
+  noChargeMarked: SQL;
 }
 
 function inlineFacts(): TreatmentFacts {
   return {
-    classification: sql`${reservations.classification}`,
+    classification: effectiveClassificationSql(),
     hasRequest: hasRequestCondition(),
     hasProof: hasProofCondition(),
     awaitingReturn: commercialReturnCondition('awaiting_validation'),
     reviewedSinceChange: reviewedSinceChangeCondition(),
+    noChargeMarked: noChargeMarkedCondition(),
   };
 }
 
@@ -584,7 +623,7 @@ function quickFilterOver(filter: QuickFilter, facts: TreatmentFacts): SQL {
   if (filter !== 'to_review') return inGroup;
   // Alerta "Verificar" (`needsReview`): só tratativa, classificação que não aceita tratativa e
   // nenhuma confirmação desde a última mudança de situação.
-  const needsReview = sql`(${facts.hasRequest} and not ${facts.hasProof} and not ${classificationIn(facts, CLASSIFICATIONS_ACCEPTING_TREATMENT)} and not ${facts.reviewedSinceChange})`;
+  const needsReview = sql`(${facts.hasRequest} and not ${facts.hasProof} and not ${classificationIn(facts, CLASSIFICATIONS_ACCEPTING_TREATMENT)} and not ${facts.reviewedSinceChange} and not ${facts.noChargeMarked})`;
   return sql`(${needsReview} or ${inGroup})`;
 }
 
@@ -748,6 +787,7 @@ export async function countQuickFilters(
     hasProof: sql.raw('facts.has_proof'),
     awaitingReturn: sql.raw('facts.awaiting_return'),
     reviewedSinceChange: sql.raw('facts.reviewed_since_change'),
+    noChargeMarked: sql.raw('facts.no_charge_marked'),
   };
   const sameReservation = (alias: string) =>
     sql`${sql.raw(alias)}.hotel_code = ${reservations.hotelCode} and ${sql.raw(alias)}.reservation_number = ${reservations.reservationNumber}`;
@@ -779,8 +819,15 @@ export async function countQuickFilters(
       where type = 'review_confirmed'
       group by hotel_code, reservation_number
     ),
+    qf_marks as (
+      select distinct hotel_code, reservation_number
+      from ${noChargeMarks}
+      where undone_at is null
+    ),
     facts as materialized (
-      select ${reservations.classification} as classification,
+      select (case when qm.hotel_code is not null then 'cancelled_no_charge'
+          else ${reservations.classification}::text end) as classification,
+        (qm.hotel_code is not null) as no_charge_marked,
         (coalesce(qd.has_request, false) or ql.hotel_code is not null) as has_request,
         (coalesce(qd.has_proof, false) or coalesce(qr.confirmed, false)) as has_proof,
         coalesce(qr.awaiting, false) as awaiting_return,
@@ -791,6 +838,7 @@ export async function countQuickFilters(
       left join qf_lines ql on ${sameReservation('ql')}
       left join qf_returns qr on ${sameReservation('qr')}
       left join qf_reviews qv on ${sameReservation('qv')}
+      left join qf_marks qm on ${sameReservation('qm')}
       where ${where}
     )
     select count(*)::int as "all",

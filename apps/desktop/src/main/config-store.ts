@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
-import { idleHoursSchema, serverUrlSchema } from '../shared/ipc-schemas.js';
+import { idleHoursSchema, serverUrlSchema, soundVolumeSchema } from '../shared/ipc-schemas.js';
 import type { Preferences, PreferencesInput } from '../shared/ipc-types.js';
 
 /** O que o app precisa do `safeStorage` do Electron (simulado nos testes). */
@@ -40,6 +40,11 @@ export interface SaveConfigInput {
   caFingerprint256: string;
   /** Omitida = mantém a chave já guardada. */
   apiKey?: string | undefined;
+  /**
+   * Preferências escolhidas antes da primeira conexão salva (o som do aviso, specs/008, tela 1.2).
+   * Só valem quando ainda não há configuração; depois, ficam as gravadas.
+   */
+  preferences?: Preferences | undefined;
 }
 
 export type ConfigStoreErrorCode =
@@ -55,7 +60,14 @@ export class ConfigStoreError extends Error {
   }
 }
 
-export const DEFAULT_PREFERENCES: Preferences = { soundEnabled: true, idleHours: 8 };
+/** Volume quando o arquivo não tem o campo (app até a 0.3): o som de antes, inteiro (specs/008). */
+export const DEFAULT_SOUND_VOLUME = 100;
+
+export const DEFAULT_PREFERENCES: Preferences = {
+  soundEnabled: true,
+  soundVolume: DEFAULT_SOUND_VOLUME,
+  idleHours: 8,
+};
 
 const fileSchema = z.object({
   version: z.literal(1),
@@ -65,7 +77,12 @@ const fileSchema = z.object({
     caFingerprint256: z.string().min(1),
   }),
   apiKey: z.object({ ciphertext: z.string().min(1) }),
-  preferences: z.object({ soundEnabled: z.boolean(), idleHours: idleHoursSchema }),
+  // `soundVolume` veio na 008: o arquivo da 0.3 não tem e vale 100 (FR-005).
+  preferences: z.object({
+    soundEnabled: z.boolean(),
+    soundVolume: soundVolumeSchema.default(DEFAULT_SOUND_VOLUME),
+    idleHours: idleHoursSchema,
+  }),
 });
 
 type ConfigFile = z.input<typeof fileSchema>;
@@ -133,7 +150,7 @@ export class ConfigStore {
       certificatePem: input.certificatePem,
       caFingerprint256: input.caFingerprint256,
       apiKeyCiphertext,
-      preferences: previous?.preferences ?? DEFAULT_PREFERENCES,
+      preferences: previous?.preferences ?? input.preferences ?? DEFAULT_PREFERENCES,
     };
     await this.write(config);
     return config;
@@ -147,8 +164,12 @@ export class ConfigStore {
     }
     const preferences: Preferences = {
       soundEnabled: input.soundEnabled ?? current.config.preferences.soundEnabled,
+      soundVolume: input.soundVolume ?? current.config.preferences.soundVolume,
       idleHours: input.idleHours ?? current.config.preferences.idleHours,
     };
+    if (!soundVolumeSchema.safeParse(preferences.soundVolume).success) {
+      throw new ConfigStoreError('invalid_preferences', 'O volume deve ser de 0 a 100.');
+    }
     if (!idleHoursSchema.safeParse(preferences.idleHours).success) {
       throw new ConfigStoreError(
         'invalid_preferences',

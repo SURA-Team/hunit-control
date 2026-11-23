@@ -142,7 +142,8 @@ async function setup(
   lines.push(
     `Cabeçalhos: ${report.headersWritten.length > 0 ? 'gravados' : 'já estavam certos'}`,
     'Aparência: cabeçalho preto e lima, listras, bordas tracejadas e cores da Validação do Financeiro',
-    `Proteções: colunas A:J de "${TAB_NAMES.toCharge}" e "${TAB_NAMES.done}" inteira (só a conta de serviço edita)` +
+    'Colunas do Comercial: lista de "Situação da cobrança" (aceita outro texto) e "Data da cobrança" só com data',
+    `Proteções: colunas A:J de "${TAB_NAMES.toCharge}" (K:P ficam para o Comercial) e "${TAB_NAMES.done}" inteira (só a conta de serviço edita)` +
       (report.protectionsAdded > 0 ? '' : ' — já existiam'),
     'Pronto. Compartilhe a planilha com o Comercial como editor, no Google.',
     '',

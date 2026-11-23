@@ -51,17 +51,19 @@ class FakeWindow implements AttentionWindow {
 
 let window: FakeWindow;
 let notifications: NotificationOptions[];
-let sounds: number;
+let sounds: number[];
 let soundEnabled: boolean;
+let soundVolume: number;
 
 function newAttention() {
   return new Attention({
     getWindow: () => window,
     showNotification: (options) => notifications.push(options),
-    playSound: () => {
-      sounds += 1;
+    playSound: (volume) => {
+      sounds.push(volume);
     },
     isSoundEnabled: () => soundEnabled,
+    soundVolume: () => soundVolume,
     alwaysOnTopMs: 1_500,
   });
 }
@@ -70,8 +72,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   window = new FakeWindow();
   notifications = [];
-  sounds = 0;
+  sounds = [];
   soundEnabled = true;
+  soundVolume = 100;
 });
 
 afterEach(() => {
@@ -79,11 +82,11 @@ afterEach(() => {
 });
 
 describe('Attention.alertTwoFactor (FR-011)', () => {
-  it('mostra a notificação com som, restaura e mostra a janela e pisca', () => {
+  it('mostra a notificação sem som (o único som é o do app), restaura e mostra a janela e pisca', () => {
     newAttention().alertTwoFactor();
 
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toMatchObject({ silent: false });
+    expect(notifications[0]).toMatchObject({ silent: true });
     expect(notifications[0]?.title).toMatch(/token/i);
     expect(window.minimized).toBe(false);
     expect(window.visible).toBe(true);
@@ -110,11 +113,21 @@ describe('Attention.alertTwoFactor (FR-011)', () => {
 
   it('toca o som do app só com a preferência ligada', () => {
     newAttention().alertTwoFactor();
-    expect(sounds).toBe(1);
+    expect(sounds).toHaveLength(1);
 
     soundEnabled = false;
     newAttention().alertTwoFactor();
-    expect(sounds).toBe(1);
+    expect(sounds).toHaveLength(1);
+  });
+
+  it('pede o som no volume escolhido (specs/008, FR-002)', () => {
+    soundVolume = 35;
+    newAttention().alertTwoFactor();
+    expect(sounds).toEqual([35]);
+
+    soundVolume = 0;
+    newAttention().alertTwoFactor();
+    expect(sounds).toEqual([35, 0]);
   });
 
   it('sem janela (fechando), ainda mostra a notificação', () => {
@@ -123,6 +136,7 @@ describe('Attention.alertTwoFactor (FR-011)', () => {
       showNotification: (options) => notifications.push(options),
       playSound: () => undefined,
       isSoundEnabled: () => true,
+      soundVolume: () => 100,
     });
 
     attention.alertTwoFactor();
@@ -138,7 +152,8 @@ describe('Attention.test ("Testar aviso")', () => {
     expect(notifications).toHaveLength(1);
     expect(window.visible).toBe(true);
     expect(window.flashing).toEqual([true]);
-    expect(sounds).toBe(1);
+    expect(notifications[0]).toMatchObject({ silent: true });
+    expect(sounds).toEqual([100]);
     await vi.advanceTimersByTimeAsync(1_500);
     expect(window.alwaysOnTop).toEqual([true, false]);
   });
@@ -158,6 +173,6 @@ describe('Attention.notifyFinished (FR-014)', () => {
       }),
     ]);
     expect(window.visible).toBe(false);
-    expect(sounds).toBe(0);
+    expect(sounds).toEqual([]);
   });
 });

@@ -169,8 +169,8 @@ describe('GoogleSheetGateway (T022)', () => {
     });
     expect(snapshot.done).toEqual({ sheetId: 22, rows: [] });
     const batchGet = decodeURIComponent(calls[1]?.url ?? '');
-    expect(batchGet).toContain("ranges='A cobrar'!A1:N");
-    expect(batchGet).toContain("ranges='Concluídas'!A1:N");
+    expect(batchGet).toContain("ranges='A cobrar'!A1:P");
+    expect(batchGet).toContain("ranges='Concluídas'!A1:P");
     expect(batchGet).toContain('valueRenderOption=UNFORMATTED_VALUE');
   });
 
@@ -336,7 +336,7 @@ describe('GoogleSheetGateway (T022)', () => {
       { status: 200, body: {} },
     ]);
     await gateway(fetch).setupLayout();
-    expect(decodeURIComponent(calls[1]?.url ?? '')).toContain("'A cobrar'!A1:N&");
+    expect(decodeURIComponent(calls[1]?.url ?? '')).toContain("'A cobrar'!A1:P&");
 
     type Request = Record<string, Record<string, unknown>>;
     const requests = (calls[2]?.body as { requests: Request[] }).requests;
@@ -346,7 +346,7 @@ describe('GoogleSheetGateway (T022)', () => {
         .map((request) => request[kind] as Record<string, unknown>)
         .filter((body) => JSON.stringify(body).includes(`"sheetId":${sheetId}`));
 
-    // Cabeçalho: A a J preto com letra lima; K a N lima com letra preta; sem bordas.
+    // Cabeçalho: A a J preto com letra lima; K a P lima com letra preta; sem bordas.
     const headers = of('repeatCell', 11).filter(
       (body) => (body['range'] as { endRowIndex?: number }).endRowIndex === 1,
     );
@@ -361,7 +361,7 @@ describe('GoogleSheetGateway (T022)', () => {
       },
     });
     expect(headers[1]).toMatchObject({
-      range: { startColumnIndex: 10, endColumnIndex: 14 },
+      range: { startColumnIndex: 10, endColumnIndex: 16 },
       cell: {
         userEnteredFormat: {
           backgroundColorStyle: colorStyle(SHEET_COLORS.lime),
@@ -383,7 +383,7 @@ describe('GoogleSheetGateway (T022)', () => {
         startRowIndex: 1,
         endRowIndex: 3,
         startColumnIndex: 0,
-        endColumnIndex: 14,
+        endColumnIndex: 16,
       },
       top: { style: 'DASHED' },
       innerHorizontal: { style: 'DASHED' },
@@ -407,7 +407,7 @@ describe('GoogleSheetGateway (T022)', () => {
         };
       };
     }>;
-    expect(added.map((body) => body.index)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(added.map((body) => body.index)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
     const conditions = added.map((body) => [
       body.rule.booleanRule.condition.type,
       body.rule.booleanRule.condition.values[0]?.userEnteredValue,
@@ -416,19 +416,87 @@ describe('GoogleSheetGateway (T022)', () => {
     expect(conditions).toEqual([
       ['TEXT_EQ', 'Aguardando retorno do Comercial', colorStyle(SHEET_COLORS.lime)],
       ['TEXT_EQ', 'Aguardando validação do Financeiro', colorStyle(SHEET_COLORS.orange)],
+      ['TEXT_EQ', 'Aguardando verificação no Hunit', colorStyle(SHEET_COLORS.orange)],
+      // A "Cancelada" aguardando a validação, em laranja (homologação, R-19).
+      ['TEXT_EQ', 'Cancelada: aguardando validação do Financeiro', colorStyle(SHEET_COLORS.orange)],
       ['TEXT_STARTS_WITH', 'Recusado pelo Financeiro', colorStyle(SHEET_COLORS.red)],
       ['TEXT_STARTS_WITH', 'Retorno incompleto', colorStyle(SHEET_COLORS.red)],
       ['TEXT_STARTS_WITH', 'Retorno não entendido', colorStyle(SHEET_COLORS.red)],
       ['CUSTOM_FORMULA', STRIPE_FORMULA, colorStyle(SHEET_COLORS.stripe)],
     ]);
-    // Cores na coluna J, a partir da linha 2; listras de A a N.
+    // Cores na coluna J, a partir da linha 2; listras de A a P.
     expect(added[0]?.rule.ranges).toEqual([
       { sheetId: 11, startRowIndex: 1, startColumnIndex: 9, endColumnIndex: 10 },
     ]);
-    expect(added[5]?.rule.ranges).toEqual([
-      { sheetId: 11, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: 14 },
+    expect(added[7]?.rule.ranges).toEqual([
+      { sheetId: 11, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: 16 },
     ]);
-    expect(of('addConditionalFormatRule', 22)).toHaveLength(6);
+    expect(of('addConditionalFormatRule', 22)).toHaveLength(8);
+
+    // specs/008: O com a lista sugerida, não estrita; P só com data, estrita (research R-05).
+    const validations = of('setDataValidation', 11) as Array<{
+      range: Record<string, number>;
+      rule: {
+        condition: { type: string; values?: Array<{ userEnteredValue: string }> };
+        strict: boolean;
+        showCustomUi?: boolean;
+      };
+    }>;
+    expect(validations).toHaveLength(2);
+    expect(validations[0]).toMatchObject({
+      range: { sheetId: 11, startRowIndex: 1, startColumnIndex: 14, endColumnIndex: 15 },
+      rule: {
+        condition: {
+          type: 'ONE_OF_LIST',
+          values: [
+            { userEnteredValue: 'Cobrada na maquininha' },
+            { userEnteredValue: 'Cobrada no Hunit' },
+            { userEnteredValue: 'Cancelada' },
+          ],
+        },
+        strict: false,
+        showCustomUi: true,
+      },
+    });
+    expect(validations[1]).toMatchObject({
+      range: { sheetId: 11, startRowIndex: 1, startColumnIndex: 15, endColumnIndex: 16 },
+      rule: { condition: { type: 'DATE_IS_VALID' }, strict: true },
+    });
+    expect(of('setDataValidation', 22)).toHaveLength(2);
+  });
+
+  it('a preparação numa planilha da 005 acrescenta O e P sem mexer nas linhas (specs/008)', async () => {
+    const meta = {
+      sheets: [
+        { properties: { sheetId: 11, title: 'A cobrar' } },
+        { properties: { sheetId: 22, title: 'Concluídas' } },
+      ],
+    };
+    const header005 = COMMERCIAL_SHEET_HEADERS.slice(0, 14);
+    const { fetch, calls } = fakeFetch([
+      { status: 200, body: meta },
+      {
+        status: 200,
+        body: {
+          valueRanges: [
+            { values: [header005, ['H', '1', '', '', '', '', '', '', '', '', 'AUT1']] },
+            { values: [header005] },
+          ],
+        },
+      },
+      { status: 200, body: {} },
+    ]);
+    const report = await gateway(fetch).setupLayout();
+
+    expect(report.headersWritten).toEqual(['toCharge', 'done']);
+    type Request = Record<string, Record<string, unknown>>;
+    const requests = (calls[2]?.body as { requests: Request[] }).requests;
+    const cellUpdates = requests
+      .filter((request) => 'updateCells' in request)
+      .map((request) => request['updateCells'] as { start: { rowIndex: number } });
+    // Só o cabeçalho (linha 0) é escrito; as linhas de dados ficam como estão.
+    expect(cellUpdates.map((update) => update.start.rowIndex)).toEqual([0, 0]);
+    expect(requests.some((request) => 'deleteDimension' in request)).toBe(false);
   });
 });
 
@@ -456,6 +524,12 @@ describe('aparência das linhas (FR-010a)', () => {
       horizontalAlignment: 'RIGHT',
       numberFormat: { type: 'CURRENCY' },
     });
+    // specs/008: situação como texto e a data em dd/mm/aaaa.
+    expect(dataCellFormat(14)).toMatchObject({ numberFormat: { type: 'TEXT' } });
+    expect(dataCellFormat(15)).toMatchObject({
+      numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' },
+    });
+    expect(COLUMN_COUNT).toBe(16);
   });
 
   it('a fórmula das listras não usa separador de argumentos (localidade pt_BR)', () => {

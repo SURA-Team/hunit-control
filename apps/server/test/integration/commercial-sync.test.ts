@@ -257,6 +257,19 @@ describe('planilha indisponível (FR-013, SC-010)', () => {
     expect(result).toMatchObject({ ok: false, errorCode: 'sheet_layout_invalid' });
     expect(sheet.applies).toBe(0);
   });
+
+  it('planilha da 005 (sem O e P) fica "Formato alterado" até rodar a preparação (specs/008, R-05)', async () => {
+    await sentReservation();
+    for (const tab of ['toCharge', 'done'] as const) {
+      sheet.setCell(tab, 0, 14, '');
+      sheet.setCell(tab, 0, 15, '');
+    }
+    expect(await sync.runRound()).toMatchObject({ ok: false, errorCode: 'sheet_layout_invalid' });
+    expect(sheet.applies).toBe(0);
+
+    await sheet.setupLayout();
+    expect(await sync.runRound()).toMatchObject({ ok: true, linesWritten: 1 });
+  });
 });
 
 describe('coluna J "Aguardando retorno do Comercial" (FR-010a, migration 0012)', () => {

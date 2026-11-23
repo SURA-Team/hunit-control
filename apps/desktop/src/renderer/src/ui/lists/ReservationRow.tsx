@@ -28,7 +28,10 @@ export interface ReservationRowProps {
   nights: string;
   /** "R$ 380,00". */
   amount: string;
-  /** "cobrado R$ 1.280,00 · Hunit"; sem valor cobrado, nada. */
+  /**
+   * "cobrado R$ 1.280,00 · Hunit"; marcada como cancelada sem cobrança, "antes R$ 655,00" (com o
+   * valor "R$ 0,00", specs/008); sem nenhum dos dois, nada.
+   */
   chargedAmount?: string | null;
   /** Os selos (`SituationBadges`). */
   situation: ReactNode;

@@ -9,13 +9,18 @@ import {
 } from '../../src/persistence/errors.js';
 import {
   apiClients,
+  commercialDispatchItems,
+  commercialReports,
+  commercialReturns,
   evidence,
   executions,
+  noChargeMarks,
   reservationManualAmounts,
   reservationObservations,
   treatmentDocuments,
   treatmentFiles,
 } from '../../src/persistence/schema.js';
+import { insertDispatch } from '../helpers/commercial-fixtures.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/db.js';
 import {
   insertClient,
@@ -65,6 +70,7 @@ describe('migrations (T012)', () => {
       'commercial_dispatches',
       'commercial_events',
       'commercial_lines',
+      'commercial_reports',
       'commercial_returns',
       'commercial_sheet_state',
       'evidence',
@@ -75,6 +81,7 @@ describe('migrations (T012)', () => {
       'legacy_hotel_mappings',
       'legacy_imports',
       'legacy_reservations',
+      'no_charge_marks',
       'reservation_manual_amounts',
       'reservation_observations',
       'reservations',
@@ -442,5 +449,194 @@ describe('tratativas (specs/003, data-model §1)', () => {
       code: PG_FOREIGN_KEY_VIOLATION,
       constraint: 'reservation_manual_amounts_reservation_fk',
     });
+  });
+});
+
+describe('ajustes de cobrança (specs/008, data-model §1 e §2)', () => {
+  async function enumValues(name: string) {
+    const result = await database.db.execute<{ value: string }>(sql`
+      select e.enumlabel as value from pg_enum e join pg_type t on t.oid = e.enumtypid
+      where t.typname = ${name} order by e.enumsortorder
+    `);
+    return result.rows.map((row) => row.value);
+  }
+
+  it('cria os enums novos e acrescenta os valores aos que já existiam', async () => {
+    expect(await enumValues('charge_situation_kind')).toEqual([
+      'charged_at_terminal',
+      'charged_in_hunit',
+      // "Não cobrada" (not_charged) virou "Cancelada" na homologação (R-19, migration 0014).
+      'cancelled',
+      'other',
+    ]);
+    expect(await enumValues('commercial_report_kind')).toEqual(['charged_in_hunit', 'cancelled']);
+    expect(await enumValues('commercial_report_validation')).toEqual([
+      'awaiting_validation',
+      'confirmed',
+      'rejected',
+    ]);
+    expect(await enumValues('dispatch_purpose')).toEqual(['send', 'hunit_check']);
+    expect(await enumValues('hunit_check_result')).toEqual(['confirmed', 'not_found']);
+    expect(await enumValues('dispatch_item_outcome')).toContain('checked');
+    expect((await enumValues('commercial_event_type')).slice(-6)).toEqual([
+      'report_received',
+      'report_changed',
+      'report_cleared',
+      'hunit_checked',
+      'cancellation_confirmed',
+      'cancellation_rejected',
+    ]);
+  });
+
+  it('no_charge_marks: no máximo uma marcação ativa por reserva; desfeita libera outra', async () => {
+    const client = await insertClient(database.db);
+    const reservation = await insertReservation({ reservationNumber: 'SEMCOB-1' });
+    const mark = {
+      hotelCode: reservation.hotelCode,
+      reservationNumber: 'SEMCOB-1',
+      markedByClientId: client.id,
+      previousAmount: '655.00',
+    };
+    const [first] = await database.db.insert(noChargeMarks).values(mark).returning();
+
+    expect(await violation(database.db.insert(noChargeMarks).values(mark))).toEqual({
+      code: PG_UNIQUE_VIOLATION,
+      constraint: 'no_charge_marks_one_active',
+    });
+
+    await database.db
+      .update(noChargeMarks)
+      .set({ undoneAt: new Date(), undoneByClientId: client.id })
+      .where(sql`${noChargeMarks.id} = ${first?.id}`);
+    await expect(database.db.insert(noChargeMarks).values(mark)).resolves.toBeDefined();
+  });
+
+  it('no_charge_marks: observação de 1 a 500 e desfazer com quem e quando juntos', async () => {
+    const client = await insertClient(database.db);
+    const reservation = await insertReservation({ reservationNumber: 'SEMCOB-2' });
+    const mark = {
+      hotelCode: reservation.hotelCode,
+      reservationNumber: 'SEMCOB-2',
+      markedByClientId: client.id,
+    };
+
+    expect(
+      await violation(database.db.insert(noChargeMarks).values({ ...mark, note: '' })),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'no_charge_marks_note_check' });
+    expect(
+      await violation(database.db.insert(noChargeMarks).values({ ...mark, note: 'x'.repeat(501) })),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'no_charge_marks_note_check' });
+    expect(
+      await violation(database.db.insert(noChargeMarks).values({ ...mark, undoneAt: new Date() })),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'no_charge_marks_undone_check' });
+    expect(
+      await violation(
+        database.db.insert(noChargeMarks).values({ ...mark, reservationNumber: 'NAO-EXISTE' }),
+      ),
+    ).toEqual({ code: PG_FOREIGN_KEY_VIOLATION, constraint: 'no_charge_marks_reservation_fk' });
+    await expect(
+      database.db.insert(noChargeMarks).values({ ...mark, note: 'x'.repeat(500) }),
+    ).resolves.toBeDefined();
+  });
+
+  it('commercial_reports: um relato por reserva, textos de 1 a 100', async () => {
+    const reservation = await insertReservation({ reservationNumber: 'RELATO-1' });
+    const report = {
+      hotelCode: reservation.hotelCode,
+      reservationNumber: 'RELATO-1',
+      kind: 'charged_in_hunit' as const,
+      situationText: 'Cobrada no Hunit',
+      chargedBy: 'Comercial Fictício 1',
+      readAt: new Date(),
+    };
+    await database.db.insert(commercialReports).values(report);
+
+    expect(await violation(database.db.insert(commercialReports).values(report))).toEqual({
+      code: PG_UNIQUE_VIOLATION,
+      constraint: 'commercial_reports_hotel_code_reservation_number_pk',
+    });
+    expect(
+      await violation(
+        database.db.insert(commercialReports).values({ ...report, reservationNumber: 'RELATO-2' }),
+      ),
+    ).toEqual({ code: PG_FOREIGN_KEY_VIOLATION, constraint: 'commercial_reports_reservation_fk' });
+    await insertReservation({ hotelCode: reservation.hotelCode, reservationNumber: 'RELATO-3' });
+    expect(
+      await violation(
+        database.db
+          .insert(commercialReports)
+          .values({ ...report, reservationNumber: 'RELATO-3', situationText: 'x'.repeat(101) }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'commercial_reports_texts_check' });
+  });
+
+  it('commercial_returns: situação da cobrança até 100 caracteres, data opcional', async () => {
+    const reservation = await insertReservation({ reservationNumber: 'RETSIT-1' });
+    const value = {
+      hotelCode: reservation.hotelCode,
+      reservationNumber: 'RETSIT-1',
+      authorizationCode: 'AUT1',
+      chargeHotel: 'Estabelecimento Fictício',
+      chargedAmount: '10.00',
+      chargedBy: 'Comercial Fictício 1',
+      readAt: new Date(),
+      state: 'rejected' as const,
+    };
+    expect(
+      await violation(
+        database.db
+          .insert(commercialReturns)
+          .values({ ...value, chargeSituationText: 'x'.repeat(101), chargeSituationKind: 'other' }),
+      ),
+    ).toEqual({
+      code: PG_CHECK_VIOLATION,
+      constraint: 'commercial_returns_charge_situation_check',
+    });
+    const [row] = await database.db
+      .insert(commercialReturns)
+      .values({
+        ...value,
+        chargeSituationText: 'Cobrada na maquininha',
+        chargeSituationKind: 'charged_at_terminal',
+        chargeDate: '2026-11-19',
+      })
+      .returning();
+    expect(row?.chargeDate).toBe('2026-11-19');
+  });
+
+  it('envios: propósito padrão "send"; resultado da verificação só em item "checked"', async () => {
+    const dispatch = await insertDispatch(database.db);
+    expect(dispatch.purpose).toBe('send');
+
+    const item = {
+      dispatchId: dispatch.id,
+      hotelCode: 'h',
+      reservationNumber: '1',
+      position: 1,
+      processedAt: new Date(),
+    };
+    expect(
+      await violation(
+        database.db
+          .insert(commercialDispatchItems)
+          .values({ ...item, outcome: 'sent', checkResult: 'confirmed' }),
+      ),
+    ).toEqual({
+      code: PG_CHECK_VIOLATION,
+      constraint: 'commercial_dispatch_items_check_result_check',
+    });
+    expect(
+      await violation(
+        database.db.insert(commercialDispatchItems).values({ ...item, outcome: 'checked' }),
+      ),
+    ).toEqual({
+      code: PG_CHECK_VIOLATION,
+      constraint: 'commercial_dispatch_items_check_result_check',
+    });
+    await expect(
+      database.db
+        .insert(commercialDispatchItems)
+        .values({ ...item, outcome: 'checked', checkResult: 'not_found' }),
+    ).resolves.toBeDefined();
   });
 });

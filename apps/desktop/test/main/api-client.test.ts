@@ -415,3 +415,114 @@ describe('ApiClient — filtros rápidos e ordem (specs/006, T032)', () => {
     }
   });
 });
+
+describe('ApiClient — "Cancelada sem cobrança" (specs/008, T030)', () => {
+  const key = { hotelCode: '31', reservationNumber: '7001' };
+  const markId = '55555555-5555-4555-8555-555555555555';
+
+  it('marca e desfaz pelas rotas do contrato, com o corpo esperado', async () => {
+    const reservation = { ...key, noCharge: { id: markId } };
+    server.on('POST', '/v1/reservations/31/7001/no-charge', (_request, response) =>
+      sendJson(response, 200, reservation),
+    );
+    server.on('POST', '/v1/reservations/31/7001/no-charge/undo', (_request, response) =>
+      sendJson(response, 200, { ...key, noCharge: null }),
+    );
+    const client = newClient();
+
+    expect(
+      await client.markNoCharge(key, {
+        expectedSituation: 'virtual_card_pending_charge',
+        note: 'Observação',
+      }),
+    ).toEqual({ ok: true, data: reservation });
+    expect(await client.undoNoCharge(key, markId)).toEqual({
+      ok: true,
+      data: { ...key, noCharge: null },
+    });
+
+    const [mark, undo] = server.requests;
+    expect(JSON.parse(mark?.body ?? '{}')).toEqual({
+      expectedSituation: 'virtual_card_pending_charge',
+      note: 'Observação',
+    });
+    expect(JSON.parse(undo?.body ?? '{}')).toEqual({ markId });
+  });
+
+  it('recusas do servidor viram o código do contrato', async () => {
+    server.on('POST', '/v1/reservations/31/7001/no-charge', (_request, response) =>
+      sendProblem(response, 409, 'reservation_changed', 'A situação mudou.'),
+    );
+    server.on('POST', '/v1/reservations/31/7001/no-charge/undo', (_request, response) =>
+      sendProblem(response, 409, 'no_charge_not_active'),
+    );
+    const client = newClient();
+
+    expect(
+      errorOf(await client.markNoCharge(key, { expectedSituation: 'virtual_card_pending_charge' })),
+    ).toMatchObject({ code: 'reservation_changed', status: 409 });
+    expect(errorOf(await client.undoNoCharge(key, markId))).toMatchObject({
+      code: 'no_charge_not_active',
+      status: 409,
+    });
+  });
+});
+
+describe('ApiClient — "Cancelada" do Comercial (homologação da 008, R-19)', () => {
+  const key = { hotelCode: '31', reservationNumber: '7020' };
+
+  it('confirma e recusa pelas rotas do contrato, com o motivo no corpo', async () => {
+    server.on(
+      'POST',
+      '/v1/reservations/31/7020/commercial/cancellation/confirm',
+      (_request, response) => sendJson(response, 200, { ...key, noCharge: { id: 'm' } }),
+    );
+    server.on(
+      'POST',
+      '/v1/reservations/31/7020/commercial/cancellation/reject',
+      (_request, response) => sendJson(response, 200, key),
+    );
+    const client = newClient();
+
+    expect(await client.confirmCommercialCancellation(key)).toEqual({
+      ok: true,
+      data: { ...key, noCharge: { id: 'm' } },
+    });
+    expect(await client.rejectCommercialCancellation(key, 'Hóspede fez check-in')).toEqual({
+      ok: true,
+      data: key,
+    });
+    const [, reject] = server.requests;
+    expect(JSON.parse(reject?.body ?? '{}')).toEqual({ reason: 'Hóspede fez check-in' });
+  });
+
+  it('o lote só manda includeCancellations quando pede as "Cancelada"', async () => {
+    const result = { batchId: 'b', items: [], countsByClassification: {} };
+    server.on('POST', '/v1/commercial-returns/confirm', (_request, response) =>
+      sendJson(response, 200, result),
+    );
+    const client = newClient();
+
+    await client.confirmCommercialReturns([key]);
+    await client.confirmCommercialReturns([key], true);
+    const [plain, withCancellations] = server.requests;
+    expect(JSON.parse(plain?.body ?? '{}')).toEqual({ reservations: [key] });
+    expect(JSON.parse(withCancellations?.body ?? '{}')).toEqual({
+      reservations: [key],
+      includeCancellations: true,
+    });
+  });
+
+  it('sem "Cancelada" aguardando validação: o código do contrato', async () => {
+    server.on(
+      'POST',
+      '/v1/reservations/31/7020/commercial/cancellation/confirm',
+      (_request, response) => sendProblem(response, 409, 'no_cancellation_awaiting_validation'),
+    );
+    const client = newClient();
+    expect(errorOf(await client.confirmCommercialCancellation(key))).toMatchObject({
+      code: 'no_cancellation_awaiting_validation',
+      status: 409,
+    });
+  });
+});

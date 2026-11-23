@@ -9,4 +9,5 @@ export { SelectField, type SelectFieldProps } from './SelectField';
 export { SelectionBox, type SelectionBoxProps } from './SelectionBox';
 export { SwitchField, type SwitchFieldProps } from './SwitchField';
 export { TextAreaField, type TextAreaFieldProps } from './TextAreaField';
+export { VolumeField, type VolumeFieldProps } from './VolumeField';
 export type { FieldSize } from './shared';
