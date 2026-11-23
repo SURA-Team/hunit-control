@@ -14,6 +14,8 @@ import {
   FINANCE_VALIDATION_TONES,
   financeValidationText,
   financeValidationTone,
+  HUNIT_NOT_FOUND_REASON,
+  RETURN_COLUMN_FIELDS,
   formatBrDate,
   formatBrDateTime,
   formatBrl,
@@ -44,7 +46,7 @@ describe('abas e colunas (FR-009, FR-010)', () => {
     expect(COMMERCIAL_SHEET_TABS).toEqual({ toCharge: 'A cobrar', done: 'Concluídas' });
   });
 
-  it('14 colunas, na ordem e com os nomes confirmados', () => {
+  it('16 colunas, na ordem e com os nomes confirmados (O e P da 008 no fim)', () => {
     expect(COMMERCIAL_SHEET_HEADERS).toEqual([
       'Hotel',
       'Reserva',
@@ -60,8 +62,13 @@ describe('abas e colunas (FR-009, FR-010)', () => {
       'Hotel da cobrança',
       'Valor cobrado',
       'Responsável pela cobrança',
+      'Situação da cobrança',
+      'Data da cobrança',
     ]);
     expect(SYSTEM_COLUMN_COUNT).toBe(10);
+    expect(RETURN_COLUMN_FIELDS).toHaveLength(
+      COMMERCIAL_SHEET_HEADERS.length - SYSTEM_COLUMN_COUNT,
+    );
   });
 
   it('todas as classificações e situações têm nome', () => {
@@ -132,6 +139,15 @@ describe('financeValidationText (coluna J)', () => {
       { kind: 'problem', text: 'Retorno incompleto: falta o valor cobrado' } as const,
       'Retorno incompleto: falta o valor cobrado',
     ],
+    // specs/008 (contracts/sheet-layout.md)
+    [{ kind: 'hunit_awaiting' } as const, 'Aguardando verificação no Hunit'],
+    [{ kind: 'hunit_confirmed' } as const, 'Cobrança confirmada no Hunit'],
+    [
+      { kind: 'rejected', reason: HUNIT_NOT_FOUND_REASON } as const,
+      'Recusado pelo Financeiro: cobrança não encontrada no Hunit',
+    ],
+    [{ kind: 'cancellation_awaiting' } as const, 'Cancelada: aguardando validação do Financeiro'],
+    [{ kind: 'no_charge' } as const, 'Cancelada sem cobrança pelo Financeiro'],
   ])('%j', (validation, expected) => {
     expect(financeValidationText(validation)).toBe(expected);
   });
@@ -154,6 +170,11 @@ describe('financeValidationTone (cores da coluna J, FR-010a)', () => {
     [{ kind: 'rejected', reason: 'Valor diferente' } as const, 'attention'],
     [{ kind: 'problem', text: incomplete } as const, 'attention'],
     [{ kind: 'problem', text: illegible } as const, 'attention'],
+    [{ kind: 'hunit_awaiting' } as const, 'awaiting_validation'],
+    [{ kind: 'hunit_confirmed' } as const, null],
+    [{ kind: 'rejected', reason: HUNIT_NOT_FOUND_REASON } as const, 'attention'],
+    [{ kind: 'cancellation_awaiting' } as const, 'awaiting_validation'],
+    [{ kind: 'no_charge' } as const, null],
   ])('%j', (validation, tone) => {
     expect(financeValidationTone(financeValidationText(validation))).toBe(tone);
   });

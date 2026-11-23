@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.8.0
+  version: 1.9.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -32,6 +32,15 @@ info:
     filtros rápidos da lista (`quickFilter`), a ordem por hotel e check-in (`order`) e a contagem
     das reservas de cada filtro rápido (`/reservations/quick-filter-counts`). Sem os parâmetros
     novos, as rotas respondem como na 1.7.0. Nada disso acessa o Hunit.
+    A feature 008 (ajustes de cobrança) acrescenta, sem quebrar os clientes existentes: a situação
+    e a data da cobrança no retorno do Comercial (`chargeSituation`, `chargeDate`), os relatos
+    "Cobrada no Hunit" e "Cancelada", que o Financeiro valida (`report`, `reports`,
+    `/commercial/cancellation`), a fila "Cobradas no Hunit"
+    (`/commercial-hunit-charges`) com a verificação no Hunit (um envio com `purpose` =
+    `hunit_check`, só leitura), a marcação "Cancelada sem cobrança" do Financeiro (`/no-charge`,
+    `noCharge`, `amountToCharge`) e a busca pelo código de autorização do retorno confirmado. As
+    enumerações que o app 0.3 usa como chave não ganham valores; a lista de envios só traz as
+    verificações com `purpose`.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -379,7 +388,9 @@ paths:
             código de autorização ou a referência da operadora forem iguais ao texto (sem
             diferenciar maiúsculas), ou se o nome do hóspede contiver o texto (sem diferenciar
             maiúsculas e acentos). Espaços nas pontas são ignorados. Reservas anonimizadas não são
-            encontradas pelo nome.
+            encontradas pelo nome. Desde a 1.9.0 (feature 008), também acha pelo código de
+            autorização de um retorno do Comercial confirmado pelo Financeiro (texto inteiro, sem
+            diferenciar maiúsculas); retornos não confirmados ficam de fora.
           schema: { type: string, minLength: 2, maxLength: 100 }
         - name: channel
           in: query
@@ -886,6 +897,9 @@ paths:
           schema: { type: string, format: date }
         - name: q
           in: query
+          description: >-
+            Busca livre, como em GET /reservations (inclui o código de autorização do retorno do
+            Comercial confirmado, feature 008)
           schema: { type: string, minLength: 2, maxLength: 100 }
         - name: channel
           in: query
@@ -967,6 +981,9 @@ paths:
           schema: { type: string, format: date }
         - name: q
           in: query
+          description: >-
+            Busca livre, como em GET /reservations (inclui o código de autorização do retorno do
+            Comercial confirmado, feature 008)
           schema: { type: string, minLength: 2, maxLength: 100 }
         - name: channel
           in: query
@@ -1006,6 +1023,73 @@ paths:
               schema: { $ref: '#/components/schemas/ReservationQuickFilterCounts' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reservations/{hotelCode}/{reservationNumber}/no-charge:
+    parameters:
+      - $ref: '#/components/parameters/HotelCode'
+      - $ref: '#/components/parameters/ReservationNumber'
+    post:
+      tags: [treatments]
+      operationId: markReservationNoCharge
+      summary: Marca a reserva como cancelada sem cobrança (feature 008, FR-018 a FR-022) — somente operador
+      description: |
+        A reserva passa a ter a situação `cancelled_no_charge` (classificação efetiva): sai de
+        "Falta cobrar", entra em "Concluídas", não é mais enviada ao Comercial e a linha da planilha
+        vai para "Concluídas" com o valor a cobrar R$ 0,00. A classificação do Hunit não muda.
+        `expectedSituation` é a situação detalhada que a pessoa viu: se mudou, nada é gravado
+        (`reservation_changed`). Recusada (`no_charge_not_accepted`, com `reason`) se já está
+        marcada, já concluída, com comprovante ou com retorno do Comercial aguardando validação.
+        Não acessa o Hunit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NoChargeRequest' }
+      responses:
+        '200':
+          description: Reserva atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /reservations/{hotelCode}/{reservationNumber}/no-charge/undo:
+    parameters:
+      - $ref: '#/components/parameters/HotelCode'
+      - $ref: '#/components/parameters/ReservationNumber'
+    post:
+      tags: [treatments]
+      operationId: undoReservationNoCharge
+      summary: Desfaz a marcação "Cancelada sem cobrança" (feature 008, FR-021) — somente operador
+      description: |
+        Tudo volta a ser derivado da classificação do Hunit, inclusive a linha da planilha. Recusado
+        (`no_charge_not_active`) se a marcação informada já foi desfeita ou não é a ativa. Não
+        acessa o Hunit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [markId]
+              additionalProperties: false
+              properties:
+                markId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Reserva atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /reservations/{hotelCode}/{reservationNumber}/commercial:
     parameters:
@@ -1116,6 +1200,15 @@ paths:
           in: query
           description: true = só os ativos (fila, em andamento, aguardando token); false = só os encerrados
           schema: { type: boolean }
+        - name: purpose
+          in: query
+          description: >-
+            send = só os envios ao Comercial (padrão, o comportamento até a 1.8.0); hunit_check = só
+            as verificações da fila "Cobradas no Hunit"; all = os dois (feature 008)
+          schema:
+            type: string
+            enum: [send, hunit_check, all]
+            default: send
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -1318,6 +1411,63 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /commercial-hunit-charges:
+    get:
+      tags: [commercial]
+      operationId: listCommercialHunitCharges
+      summary: Fila "Cobradas no Hunit" — relatos do Comercial e a verificação no Hunit (feature 008, FR-013)
+      description: |
+        Os relatos "Cobrada no Hunit" com a situação derivada da última leitura da reserva no Hunit
+        depois do relato: aguardando verificação e não encontradas que ainda exigem cobrança sempre;
+        confirmadas e não encontradas que não exigem mais cobrança por 7 dias depois da leitura que
+        as definiu. Ordem: aguardando, não encontrada, confirmada; leitura mais antiga primeiro.
+        Sem paginação. Não acessa o Hunit.
+      responses:
+        '200':
+          description: A fila e as contagens
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HunitChargeQueue' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /commercial-hunit-charges/check:
+    post:
+      tags: [commercial]
+      operationId: checkCommercialHunitCharges
+      summary: '"Verificar agora": confere no Hunit as reservas da fila (feature 008, FR-014) — somente operador'
+      description: |
+        Cria uma verificação (um envio com `purpose` = `hunit_check`) com os relatos aguardando
+        verificação e os não encontrados que ainda exigem cobrança, e a executa como um envio: login
+        com token, leitura de cada reserva no Hunit (só leitura), cancelamento e retomada pelas rotas
+        de `/commercial-dispatches/{dispatchId}`. Não escreve linha nova na planilha. Credenciais só
+        em memória, como em POST /executions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credentials]
+              additionalProperties: false
+              properties:
+                credentials: { $ref: '#/components/schemas/HunitCredentials' }
+      responses:
+        '202':
+          description: Verificação criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommercialDispatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            Nenhum relato para conferir (`no_reports_to_check`) ou já há execução ou envio ativo na
+            mesma conta do Hunit (`account_busy`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /commercial-returns/confirm:
     post:
       tags: [commercial]
@@ -1326,6 +1476,10 @@ paths:
       description: |
         Uma transação por reserva. Reservas sem retorno aguardando validação ficam de fora, com o
         motivo. A resposta é 200 mesmo com reservas ignoradas ou com falha. Não acessa o Hunit.
+        Com `includeCancellations` (feature 008, homologação), a reserva com a situação "Cancelada"
+        do Comercial aguardando validação é confirmada como em
+        `/reservations/{h}/{n}/commercial/cancellation/confirm` (marcada como "Cancelada sem
+        cobrança"); a que não aceita a marcação fica de fora com `cancellation_not_accepted`.
       requestBody:
         required: true
         content:
@@ -1340,6 +1494,11 @@ paths:
                   minItems: 1
                   maxItems: 2000
                   items: { $ref: '#/components/schemas/ReservationKey' }
+                includeCancellations:
+                  type: boolean
+                  description: >-
+                    Confirma também as "Cancelada" aguardando validação (feature 008); sem o campo,
+                    como antes (só retornos)
       responses:
         '200':
           description: Desfecho de cada reserva
@@ -1369,6 +1528,73 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: O retorno não está aguardando validação (`return_not_awaiting_validation`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/confirm:
+    parameters:
+      - $ref: '#/components/parameters/HotelCode'
+      - $ref: '#/components/parameters/ReservationNumber'
+    post:
+      tags: [commercial]
+      operationId: confirmCommercialCancellation
+      summary: Confirma a situação "Cancelada" informada pelo Comercial (feature 008, homologação) — somente operador
+      description: |
+        Marca a reserva como "Cancelada sem cobrança" (as mesmas regras de
+        `POST /reservations/{h}/{n}/no-charge`, com a observação de que a situação veio do
+        Comercial) e a linha da planilha vai para "Concluídas". Desfazer a marcação devolve a
+        "Cancelada" para validar. Não acessa o Hunit.
+      responses:
+        '200':
+          description: Reserva atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: >-
+            Sem "Cancelada" aguardando validação (`no_cancellation_awaiting_validation`) ou a
+            reserva não aceita a marcação (`no_charge_not_accepted`, com `reason`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/reject:
+    parameters:
+      - $ref: '#/components/parameters/HotelCode'
+      - $ref: '#/components/parameters/ReservationNumber'
+    post:
+      tags: [commercial]
+      operationId: rejectCommercialCancellation
+      summary: Recusa a situação "Cancelada" informada pelo Comercial, com o motivo (feature 008, homologação) — somente operador
+      description: |
+        O motivo aparece para o Comercial na planilha ("Recusado pelo Financeiro: <motivo>"): não
+        escreva dado pessoal do hóspede. A reserva não muda.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Reserva atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Sem "Cancelada" aguardando validação (`no_cancellation_awaiting_validation`)
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -1645,7 +1871,19 @@ components:
             - return_not_confirmed
             - not_in_commercial_sheet
             - restore_expired
+            - no_charge_not_accepted
+            - reservation_changed
+            - no_charge_not_active
+            - no_reports_to_check
+            - no_cancellation_awaiting_validation
             - internal_error
+        reason:
+          type: string
+          description: >-
+            Só em no_charge_not_accepted (feature 008): already_marked = já marcada; not_accepting =
+            a situação não aceita a marcação (já concluída); has_proof = já tem comprovante;
+            return_awaiting_validation = há retorno do Comercial aguardando validação
+          enum: [already_marked, not_accepting, has_proof, return_awaiting_validation]
 
     HunitCredentials:
       type: object
@@ -1862,6 +2100,8 @@ components:
         - lastVerifiedAt
         - verificationCount
         - treatment
+        - amountToCharge
+        - noCharge
       properties:
         hotelCode: { type: string }
         reservationNumber: { type: string }
@@ -1940,6 +2180,19 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/CommercialSummary'
+        amountToCharge:
+          description: >-
+            Valor a cobrar (feature 008): totalAmount, ou 0.00 com a marcação "Cancelada sem
+            cobrança" ativa (totalAmount continua o do Hunit)
+          $ref: '#/components/schemas/Money'
+        noCharge:
+          description: >-
+            Marcação "Cancelada sem cobrança" ativa (feature 008); null = sem marcação. Com ela,
+            treatment.situation e treatment.detailedSituation são cancelled_no_charge e a
+            classificação (do Hunit) não muda.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ReservationNoCharge'
 
     ReservationLegacyOrigin:
       type: object
@@ -2114,6 +2367,7 @@ components:
         - effectiveChargedAmount
         - chargedAmountOrigin
         - acceptsDocuments
+        - noChargeHistory
       properties:
         status: { $ref: '#/components/schemas/TreatmentStatus' }
         situation: { $ref: '#/components/schemas/ReservationSituation' }
@@ -2144,6 +2398,12 @@ components:
         acceptsDocuments:
           type: boolean
           description: A classificação atual aceita registrar, substituir e reverter (FR-003)
+        noChargeHistory:
+          type: array
+          description: >-
+            Marcações "Cancelada sem cobrança" da reserva, da mais recente para a mais antiga, com
+            quem marcou e quem desfez (feature 008), para o histórico do card "Tratativa"
+          items: { $ref: '#/components/schemas/NoChargeMark' }
 
     TreatmentEvent:
       type: object
@@ -2256,7 +2516,7 @@ components:
       type: object
       description: Resumo do envio ao Comercial de uma reserva (feature 005)
       required:
-        [lineState, inSheet, lastSentAt, lastDispatchId, returnState, currentReturn, returnProblem, syncPending]
+        [lineState, inSheet, lastSentAt, lastDispatchId, returnState, currentReturn, returnProblem, syncPending, report]
       properties:
         lineState: { $ref: '#/components/schemas/CommercialLineState' }
         inSheet:
@@ -2283,11 +2543,19 @@ components:
         syncPending:
           type: boolean
           description: A linha tem atualização da planilha ainda não aplicada (FR-013)
+        report:
+          description: >-
+            Relato atual do Comercial ("Cobrada no Hunit" ou "Cancelada", feature 008); null = sem
+            relato
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CommercialReportBrief'
 
     CommercialReturnBrief:
       type: object
       description: Resumo do retorno atual de uma reserva (feature 005), na lista de reservas
-      required: [id, state, authorizationCode, chargeHotel, chargedAmount, chargedBy, readAt, difference]
+      required:
+        [id, state, authorizationCode, chargeHotel, chargedAmount, chargedBy, readAt, difference, chargeSituation, chargeDate]
       properties:
         id: { type: string, format: uuid }
         state: { $ref: '#/components/schemas/CommercialReturnState' }
@@ -2301,6 +2569,15 @@ components:
         difference:
           description: Valor cobrado menos o valor total da reserva (o valor a cobrar)
           $ref: '#/components/schemas/Money'
+        chargeSituation:
+          description: Situação da cobrança informada pelo Comercial (feature 008); null = não informada
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ChargeSituation'
+        chargeDate:
+          type: [string, 'null']
+          format: date
+          description: Data da cobrança informada pelo Comercial (feature 008); null = não informada
 
     CommercialLine:
       type: object
@@ -2360,6 +2637,8 @@ components:
         - rejectionReason
         - expectedAmount
         - difference
+        - chargeSituation
+        - chargeDate
       properties:
         id: { type: string, format: uuid }
         authorizationCode: { type: string }
@@ -2377,6 +2656,15 @@ components:
           $ref: '#/components/schemas/Money'
         difference:
           $ref: '#/components/schemas/Money'
+        chargeSituation:
+          description: Situação da cobrança informada pelo Comercial (feature 008); null = não informada
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ChargeSituation'
+        chargeDate:
+          type: [string, 'null']
+          format: date
+          description: Data da cobrança informada pelo Comercial (feature 008); null = não informada
 
     CommercialEvent:
       type: object
@@ -2423,7 +2711,7 @@ components:
 
     CommercialDetail:
       type: object
-      required: [line, returns, events]
+      required: [line, returns, events, report, history]
       properties:
         line:
           oneOf:
@@ -2434,7 +2722,19 @@ components:
           items: { $ref: '#/components/schemas/CommercialReturn' }
         events:
           type: array
+          description: Histórico com os tipos da 1.7.0 (os eventos novos da 008 ficam só em history)
           items: { $ref: '#/components/schemas/CommercialEvent' }
+        report:
+          description: Relato atual do Comercial (feature 008); null = sem relato
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CommercialReportBrief'
+        history:
+          type: array
+          description: >-
+            Histórico completo do Comercial, com os tipos novos da feature 008 (relatos e verificação
+            no Hunit), do mais recente para o mais antigo
+          items: { $ref: '#/components/schemas/CommercialHistoryEvent' }
 
     CommercialDispatchCheck:
       type: object
@@ -2474,7 +2774,7 @@ components:
 
     CommercialDispatchCounts:
       type: object
-      required: [total, pending, sent, withdrawn, notVerified, ignored]
+      required: [total, pending, sent, withdrawn, notVerified, ignored, checked]
       properties:
         total: { type: integer }
         pending: { type: integer }
@@ -2482,11 +2782,14 @@ components:
         withdrawn: { type: integer }
         notVerified: { type: integer }
         ignored: { type: integer }
+        checked:
+          type: integer
+          description: Conferidas no Hunit (só em verificações, purpose = hunit_check; feature 008)
 
     CommercialDispatchSummary:
       type: object
       required:
-        [id, requestedClient, parentDispatchId, status, endReason, createdAt, finishedAt, counts]
+        [id, requestedClient, parentDispatchId, status, endReason, createdAt, finishedAt, counts, purpose]
       properties:
         id: { type: string, format: uuid }
         requestedClient: { type: string, description: Cliente da API que fez o envio }
@@ -2499,11 +2802,12 @@ components:
         createdAt: { type: string, format: date-time }
         finishedAt: { type: [string, 'null'], format: date-time }
         counts: { $ref: '#/components/schemas/CommercialDispatchCounts' }
+        purpose: { $ref: '#/components/schemas/CommercialDispatchPurpose' }
 
     CommercialDispatchItem:
       type: object
       required:
-        [hotelCode, reservationNumber, position, outcome, classificationBefore, classificationAfter, reason, processedAt]
+        [hotelCode, reservationNumber, position, outcome, classificationBefore, classificationAfter, reason, processedAt, checkResult]
       properties:
         hotelCode: { type: string }
         reservationNumber: { type: string }
@@ -2513,8 +2817,15 @@ components:
           description: >-
             pending = ainda não verificada; sent = enviada; withdrawn = retirada (o Hunit não exige
             mais cobrança; reason = a classificação); not_verified = não verificada (reason diz por
-            quê); ignored = não aceitou o envio (reason = o código de elegibilidade)
-          enum: [pending, sent, withdrawn, not_verified, ignored]
+            quê); ignored = não aceitou o envio (reason = o código de elegibilidade); checked =
+            conferida no Hunit (só em verificações, purpose = hunit_check; ver checkResult)
+          enum: [pending, sent, withdrawn, not_verified, ignored, checked]
+        checkResult:
+          type: [string, 'null']
+          description: >-
+            Só em verificações (feature 008): confirmed = o Hunit mostra a cobrança; not_found = o
+            Hunit não mostra a cobrança; null = não conferida
+          enum: [confirmed, not_found, null]
         classificationBefore:
           oneOf:
             - $ref: '#/components/schemas/Classification'
@@ -2544,6 +2855,7 @@ components:
         - current
         - items
         - lastEventId
+        - purpose
       properties:
         id: { type: string, format: uuid }
         requestedClient: { type: string }
@@ -2562,6 +2874,7 @@ components:
         finishedAt: { type: [string, 'null'], format: date-time }
         twoFactorDeadline: { type: [string, 'null'], format: date-time }
         counts: { $ref: '#/components/schemas/CommercialDispatchCounts' }
+        purpose: { $ref: '#/components/schemas/CommercialDispatchPurpose' }
         current:
           description: Reserva em verificação agora; null fora do andamento
           oneOf:
@@ -2611,7 +2924,17 @@ components:
                 enum: [confirmed, ignored, failed]
               reason:
                 type: [string, 'null']
-                enum: [not_found, no_return_awaiting_validation, no_review_alert, null]
+                description: >-
+                  cancellation_not_accepted (feature 008, só com includeCancellations) = a reserva
+                  não aceita a marcação "Cancelada sem cobrança" (ex.: já tem comprovante)
+                enum:
+                  [
+                    not_found,
+                    no_return_awaiting_validation,
+                    no_review_alert,
+                    cancellation_not_accepted,
+                    null,
+                  ]
         countsByClassification:
           $ref: '#/components/schemas/ClassificationCounts'
 
@@ -2701,6 +3024,8 @@ components:
         - pending
         - awaitingValidation
         - problems
+        - reports
+        - hunitQueueCount
       properties:
         configured: { type: boolean }
         status:
@@ -2730,10 +3055,26 @@ components:
           properties:
             count: { type: integer, description: Linhas com atualização ainda não aplicada na planilha }
             oldestChangeAt: { type: [string, 'null'], format: date-time }
-        awaitingValidation: { type: integer, description: Retornos aguardando a validação do Financeiro }
+        awaitingValidation:
+          type: integer
+          description: >-
+            Retornos aguardando a validação do Financeiro; desde a 008, com as "Cancelada" aguardando
+            validação (os itens de `reports`)
         problems:
           type: array
           items: { $ref: '#/components/schemas/CommercialSheetProblem' }
+        reports:
+          type: array
+          description: >-
+            "Cancelada" do Comercial aguardando a validação do Financeiro (feature 008), para
+            "Retornos a validar": só com a linha em "A cobrar" e a reserva sem a marcação
+            "Cancelada sem cobrança" (até a homologação, relatos "Não cobrada" para "Retornos com
+            problema")
+          items: { $ref: '#/components/schemas/CommercialReportProblem' }
+        hunitQueueCount:
+          type: integer
+          minimum: 0
+          description: Reservas na fila "Cobradas no Hunit" (feature 008), a contagem da aba
 
     CommercialSheetRead:
       type: object
@@ -2748,3 +3089,240 @@ components:
             returnsChanged: { type: integer, description: Retornos alterados pelo Comercial nesta rodada }
             problems: { type: integer, description: Retornos com problema encontrados nesta rodada }
             linesWritten: { type: integer, description: Linhas escritas ou movidas nesta rodada }
+
+    ChargeSituation:
+      type: object
+      description: Situação da cobrança informada pelo Comercial na planilha (feature 008)
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          description: >-
+            charged_at_terminal = "Cobrada na maquininha"; charged_in_hunit = "Cobrada no Hunit";
+            cancelled = "Cancelada" (texto que começa com "cancelad"; era not_charged, "Não
+            cobrada", até a homologação); other = outro texto, mostrado como veio
+          enum: [charged_at_terminal, charged_in_hunit, cancelled, other]
+        text: { type: string, maxLength: 100, description: Como o Comercial escreveu }
+
+    NoChargeRequest:
+      type: object
+      required: [expectedSituation]
+      additionalProperties: false
+      properties:
+        expectedSituation:
+          $ref: '#/components/schemas/ReservationDetailedSituation'
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Observação opcional (apagada na anonimização da reserva)
+
+    NoChargeMark:
+      type: object
+      description: Marcação "Cancelada sem cobrança" feita pelo Financeiro (feature 008)
+      required: [id, markedAt, markedBy, note, previousAmount, undoneAt, undoneBy]
+      properties:
+        id: { type: string, format: uuid }
+        markedAt: { type: string, format: date-time }
+        markedBy: { type: string, description: Nome do cliente da API que marcou }
+        note: { type: [string, 'null'] }
+        previousAmount:
+          description: Valor a cobrar no momento da marcação ("antes R$ …")
+          $ref: '#/components/schemas/Money'
+        undoneAt: { type: [string, 'null'], format: date-time }
+        undoneBy: { type: [string, 'null'], description: Nome do cliente da API que desfez }
+
+    ReservationNoCharge:
+      description: A marcação ativa da reserva (feature 008)
+      allOf:
+        - $ref: '#/components/schemas/NoChargeMark'
+        - type: object
+          required: [hunitShowsCharge]
+          properties:
+            hunitShowsCharge:
+              type: boolean
+              description: O Hunit mostra a reserva como cobrada (FR-023); a marcação continua
+
+    CommercialReportBrief:
+      type: object
+      description: Relato atual do Comercial na planilha, sem retorno de cobrança (feature 008)
+      required: [kind, situationText, chargedBy, chargeDate, readAt, hunitStatus, validation]
+      properties:
+        kind:
+          type: string
+          description: >-
+            charged_in_hunit = "Cobrada no Hunit"; cancelled = "Cancelada" (validada pelo
+            Financeiro; era not_charged até a homologação)
+          enum: [charged_in_hunit, cancelled]
+        situationText: { type: string, description: A situação como o Comercial escreveu }
+        chargedBy:
+          type: [string, 'null']
+          description: Responsável no Comercial; null só na "Cancelada" sem o responsável
+        validation:
+          description: Só na "Cancelada"; null em "Cobrada no Hunit" (homologação)
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CancellationValidation'
+        chargeDate: { type: [string, 'null'], format: date }
+        readAt: { type: string, format: date-time, description: Quando o servidor leu esta versão do relato }
+        hunitStatus:
+          type: [string, 'null']
+          description: >-
+            Só em charged_in_hunit; null em cancelled. awaiting = não lida no Hunit depois do
+            relato; confirmed = o Hunit mostra a cobrança; not_found = lida depois do relato e o
+            Hunit não mostra a cobrança
+          enum: [awaiting, confirmed, not_found, null]
+
+    HunitChargeStatus:
+      type: string
+      description: >-
+        Situação na fila "Cobradas no Hunit" (feature 008): awaiting = "Aguardando verificação";
+        confirmed = "Confirmada no Hunit"; not_found = "Não encontrada no Hunit"
+      enum: [awaiting, confirmed, not_found]
+
+    HunitChargeItem:
+      type: object
+      description: Linha da fila "Cobradas no Hunit" (feature 008)
+      required:
+        - hotelCode
+        - hotelName
+        - reservationNumber
+        - guestName
+        - channel
+        - amountToCharge
+        - situationText
+        - chargedBy
+        - chargeDate
+        - readAt
+        - status
+        - checkedAt
+        - classification
+        - requiresCharge
+      properties:
+        hotelCode: { type: string }
+        hotelName: { type: string }
+        reservationNumber: { type: string }
+        guestName: { type: [string, 'null'], description: null após anonimização }
+        channel: { type: [string, 'null'] }
+        amountToCharge: { $ref: '#/components/schemas/Money' }
+        situationText: { type: string }
+        chargedBy: { type: string }
+        chargeDate: { type: [string, 'null'], format: date }
+        readAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/HunitChargeStatus' }
+        checkedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Última leitura da reserva no Hunit depois do relato; null = ainda não lida
+        classification:
+          description: Classificação do Hunit (não a efetiva da marcação)
+          $ref: '#/components/schemas/Classification'
+        requiresCharge:
+          type: boolean
+          description: A reserva ainda exige cobrança (classificação efetiva, sem comprovante)
+
+    HunitChargeQueue:
+      type: object
+      required: [items, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/HunitChargeItem' }
+        counts:
+          type: object
+          required: [awaiting, notFound, confirmed]
+          properties:
+            awaiting: { type: integer, minimum: 0 }
+            notFound: { type: integer, minimum: 0 }
+            confirmed: { type: integer, minimum: 0 }
+
+    CancellationValidation:
+      type: object
+      description: Validação da "Cancelada" pelo Financeiro (feature 008, homologação)
+      required: [state, decidedAt, decidedBy, rejectionReason]
+      properties:
+        state:
+          type: string
+          description: >-
+            awaiting_validation = aguardando; confirmed = confirmada (a reserva foi marcada como
+            "Cancelada sem cobrança"); rejected = recusada com o motivo
+          enum: [awaiting_validation, confirmed, rejected]
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decidedBy: { type: [string, 'null'], description: Nome do cliente da API que decidiu }
+        rejectionReason: { type: [string, 'null'] }
+
+    CommercialReportProblem:
+      type: object
+      description: >-
+        "Cancelada" do Comercial aguardando a validação do Financeiro, para "Retornos a validar"
+        (feature 008; até a homologação era o relato "Não cobrada", em "Retornos com problema")
+      required: [hotelCode, reservationNumber, situationText, chargedBy, chargeDate, readAt, totalAmount]
+      properties:
+        hotelCode: { type: string }
+        reservationNumber: { type: string }
+        situationText: { type: string }
+        chargedBy: { type: [string, 'null'] }
+        chargeDate: { type: [string, 'null'], format: date }
+        readAt: { type: string, format: date-time }
+        totalAmount:
+          description: Valor a cobrar da reserva hoje (vira R$ 0,00 ao confirmar)
+          $ref: '#/components/schemas/Money'
+
+    CommercialHistoryEvent:
+      type: object
+      description: >-
+        Item do histórico do Comercial com os tipos novos da feature 008: report_received (o
+        Comercial informou "Cobrada no Hunit" ou "Cancelada"; reason = a situação),
+        report_changed (mudou o responsável, a data ou o texto), report_cleared (trocou a situação ou
+        apagou) e hunit_checked (verificação no Hunit; classification = a lida; reason = "cobrança
+        encontrada" ou "cobrança não encontrada"); da homologação, cancellation_confirmed e
+        cancellation_rejected (o Financeiro confirmou ou recusou a "Cancelada"; reason = o motivo da
+        recusa)
+      required: [id, type, actor, at, dispatchId, returnId, classification, reason, batchId]
+      properties:
+        id: { type: integer }
+        type:
+          type: string
+          enum:
+            - dispatched
+            - withdrawn
+            - line_cancelled
+            - line_restored
+            - line_concluded
+            - return_received
+            - return_changed
+            - return_ignored
+            - return_confirmed
+            - return_rejected
+            - return_confirmation_undone
+            - return_closed
+            - report_received
+            - report_changed
+            - report_cleared
+            - hunit_checked
+            - cancellation_confirmed
+            - cancellation_rejected
+        actor:
+          type: object
+          required: [kind, name]
+          properties:
+            kind:
+              type: string
+              enum: [client, commercial_sheet, system]
+            name: { type: string }
+        at: { type: string, format: date-time }
+        dispatchId: { type: [string, 'null'], format: uuid }
+        returnId: { type: [string, 'null'], format: uuid }
+        classification:
+          oneOf:
+            - $ref: '#/components/schemas/Classification'
+            - type: 'null'
+        reason: { type: [string, 'null'] }
+        batchId: { type: [string, 'null'], format: uuid }
+
+    CommercialDispatchPurpose:
+      type: string
+      description: >-
+        send = envio ao Comercial (feature 005); hunit_check = verificação da fila "Cobradas no
+        Hunit" (feature 008): lê as reservas no Hunit sem escrever linha nova na planilha
+      enum: [send, hunit_check]

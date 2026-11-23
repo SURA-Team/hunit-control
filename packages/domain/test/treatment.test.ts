@@ -21,7 +21,12 @@ import {
   requiresCharge,
   revertDeadline,
   treatmentStatus,
+  amountToCharge,
+  effectiveClassification,
+  hunitShowsCharge,
+  noChargeEligibility,
 } from '../src/treatment.js';
+import { quickFiltersOf } from '../src/quick-filters.js';
 import { CLASSIFICATIONS, type Classification } from '../src/types.js';
 
 /** Uma linha por classificação: o teste abaixo falha se uma classificação nova ficar de fora. */
@@ -365,5 +370,90 @@ describe('lineState (specs/005, FR-009, data-model §3.3)', () => {
         hasCurrentProof: false,
       }),
     ).toBe('open');
+  });
+});
+
+describe('"Cancelada sem cobrança" do Financeiro (specs/008, research R-08)', () => {
+  it('classificação efetiva: marcada vale cancelled_no_charge; sem marcação, a do Hunit', () => {
+    for (const classification of CLASSIFICATIONS) {
+      expect(effectiveClassification(classification, true)).toBe('cancelled_no_charge');
+      expect(effectiveClassification(classification, false)).toBe(classification);
+    }
+  });
+
+  it('marcada: sai de "Falta cobrar", situação "Cancelada sem cobrança" e só em "Concluídas"', () => {
+    const marked = effectiveClassification('virtual_card_pending_charge', true);
+    for (const status of ['none', 'sent'] as const) {
+      expect(isPendingCharge(marked, status)).toBe(false);
+      const situation = detailedSituation(marked, status, false);
+      expect(situation).toBe('cancelled_no_charge');
+      expect(
+        quickFiltersOf({ pendingCharge: false, needsReview: false, detailedSituation: situation }),
+      ).toEqual(['done']);
+    }
+    expect(lineState({ cancelled: false, classification: marked, hasCurrentProof: false })).toBe(
+      'concluded',
+    );
+  });
+
+  it('marcada com tratativa não tem o alerta "Verificar"', () => {
+    const input = {
+      classification: effectiveClassification('virtual_card_pending_charge', true),
+      status: 'sent' as const,
+      statusChangedAt: null,
+      lastReviewAt: null,
+    };
+    expect(needsReview(input)).toBe(true);
+    expect(needsReview({ ...input, noChargeMarked: true })).toBe(false);
+  });
+
+  it('valor a cobrar: R$ 0,00 com a marcação; o total do Hunit sem ela', () => {
+    expect(amountToCharge('655.00', true)).toBe('0.00');
+    expect(amountToCharge(null, true)).toBe('0.00');
+    expect(amountToCharge('655.00', false)).toBe('655.00');
+    expect(amountToCharge(null, false)).toBeNull();
+  });
+
+  it('o Hunit mostra a cobrança só em "Já cobrada"', () => {
+    for (const classification of CLASSIFICATIONS) {
+      expect(hunitShowsCharge(classification)).toBe(
+        classification === 'virtual_card_already_charged',
+      );
+    }
+  });
+
+  describe('noChargeEligibility (FR-022)', () => {
+    const base = {
+      classification: 'virtual_card_pending_charge' as Classification,
+      noChargeMarked: false,
+      hasCurrentProof: false,
+      hasReturnAwaiting: false,
+    };
+
+    it('aceita as classificações que aceitam tratativa (ativa ou cancelada no Hunit)', () => {
+      for (const classification of CLASSIFICATIONS) {
+        expect(noChargeEligibility({ ...base, classification }).eligible, classification).toBe(
+          acceptsTreatment(classification),
+        );
+      }
+    });
+
+    it('recusa com o motivo, na ordem: já marcada, concluída, comprovante, retorno a validar', () => {
+      expect(noChargeEligibility({ ...base, noChargeMarked: true, hasCurrentProof: true })).toEqual(
+        { eligible: false, reason: 'already_marked' },
+      );
+      expect(noChargeEligibility({ ...base, classification: 'invoiced' })).toEqual({
+        eligible: false,
+        reason: 'not_accepting',
+      });
+      expect(noChargeEligibility({ ...base, hasCurrentProof: true })).toEqual({
+        eligible: false,
+        reason: 'has_proof',
+      });
+      expect(noChargeEligibility({ ...base, hasReturnAwaiting: true })).toEqual({
+        eligible: false,
+        reason: 'return_awaiting_validation',
+      });
+    });
   });
 });

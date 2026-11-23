@@ -112,7 +112,10 @@ export function needsReview(input: {
   status: TreatmentStatus;
   statusChangedAt: Date | null;
   lastReviewAt: Date | null;
+  /** Marcada como cancelada sem cobrança (specs/008): o Financeiro já decidiu, sem alerta. */
+  noChargeMarked?: boolean;
 }): boolean {
+  if (input.noChargeMarked === true) return false;
   // `acceptsTreatment`, e não `requiresCharge`: "A revisar (sistema anterior)" aceita tratativa e
   // não gera alerta (specs/004, FR-007a).
   if (input.status !== 'sent' || acceptsTreatment(input.classification)) return false;
@@ -236,4 +239,61 @@ export function lineState(input: {
   if (input.cancelled) return 'cancelled';
   if (input.hasCurrentProof || !acceptsTreatment(input.classification)) return 'concluded';
   return 'open';
+}
+
+// ---------------------------------------------------------------------------
+// Feature 008 — "Cancelada sem cobrança" do Financeiro (research R-08; data-model §3.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Classificação efetiva (research R-08): com a marcação "Cancelada sem cobrança" ativa, a reserva
+ * vale como `cancelled_no_charge` para tudo que é exibido e filtrado (situação, "Falta cobrar",
+ * "Concluídas", envio, linha da planilha). A classificação do Hunit não muda e continua guardada.
+ */
+export function effectiveClassification(
+  classification: Classification,
+  noChargeMarked: boolean,
+): Classification {
+  return noChargeMarked ? 'cancelled_no_charge' : classification;
+}
+
+/** Valor a cobrar (FR-020): o total do Hunit, ou R$ 0,00 com a marcação. */
+export function amountToCharge(totalAmount: Money | null, noChargeMarked: boolean): Money | null {
+  return noChargeMarked ? '0.00' : totalAmount;
+}
+
+/** O Hunit mostra a cobrança? Base da fila "Cobradas no Hunit" e do aviso do FR-023. */
+export function hunitShowsCharge(classification: Classification): boolean {
+  return classification === 'virtual_card_already_charged';
+}
+
+/** Por que a reserva não aceita a marcação (FR-022). */
+export const NO_CHARGE_INELIGIBILITY_REASONS = [
+  'already_marked',
+  'not_accepting',
+  'has_proof',
+  'return_awaiting_validation',
+] as const;
+export type NoChargeIneligibility = (typeof NO_CHARGE_INELIGIBILITY_REASONS)[number];
+
+export type NoChargeEligibility =
+  { eligible: true } | { eligible: false; reason: NoChargeIneligibility };
+
+/**
+ * A reserva aceita "Marcar como cancelada sem cobrança"? (FR-022, research R-08.) Aceitam as
+ * classificações do Hunit que aceitam tratativa (ativa ou cancelada no Hunit), inclusive enviada ao
+ * Comercial sem retorno e com a "Cancelada" do Comercial (R-19); recusa já marcada, já concluída, com
+ * comprovante ou com retorno do Comercial aguardando validação.
+ */
+export function noChargeEligibility(input: {
+  classification: Classification;
+  noChargeMarked: boolean;
+  hasCurrentProof: boolean;
+  hasReturnAwaiting: boolean;
+}): NoChargeEligibility {
+  if (input.noChargeMarked) return { eligible: false, reason: 'already_marked' };
+  if (!acceptsTreatment(input.classification)) return { eligible: false, reason: 'not_accepting' };
+  if (input.hasCurrentProof) return { eligible: false, reason: 'has_proof' };
+  if (input.hasReturnAwaiting) return { eligible: false, reason: 'return_awaiting_validation' };
+  return { eligible: true };
 }

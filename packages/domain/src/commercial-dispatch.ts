@@ -5,6 +5,7 @@
  */
 import {
   acceptsTreatment,
+  hunitShowsCharge,
   requiresCharge,
   TREATMENT_REVERT_DAYS,
   type CommercialLineState,
@@ -38,9 +39,13 @@ export function dispatchEligibility(input: {
   hasCurrentProof: boolean;
   hasReturnAwaiting: boolean;
   lineState: CommercialLineState | null;
+  /** Marcada como cancelada sem cobrança (specs/008): não vai mais ao Comercial. */
+  noChargeMarked?: boolean;
 }): DispatchEligibility {
   if (input.classification === null) return { eligible: false, reason: 'not_found' };
-  if (!acceptsTreatment(input.classification)) return { eligible: false, reason: 'not_accepting' };
+  if (input.noChargeMarked === true || !acceptsTreatment(input.classification)) {
+    return { eligible: false, reason: 'not_accepting' };
+  }
   if (input.hasCurrentProof) return { eligible: false, reason: 'has_proof' };
   if (input.hasReturnAwaiting) return { eligible: false, reason: 'return_awaiting_validation' };
   return { eligible: true, resend: input.lineState !== null };
@@ -58,6 +63,15 @@ export function dispatchOutcome(classificationAfter: Classification): DispatchOu
   return requiresCharge(classificationAfter)
     ? { outcome: 'sent' }
     : { outcome: 'withdrawn', classification: classificationAfter };
+}
+
+/**
+ * Resultado de uma reserva conferida pelo "Verificar agora" (specs/008, research R-07):
+ * `confirmed` só quando o Hunit mostra a cobrança; qualquer outra classificação (pendente,
+ * cancelada sem cobrança, faturada…) é `not_found`.
+ */
+export function hunitCheckResult(classificationAfter: Classification): 'confirmed' | 'not_found' {
+  return hunitShowsCharge(classificationAfter) ? 'confirmed' : 'not_found';
 }
 
 /**
