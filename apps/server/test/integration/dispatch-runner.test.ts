@@ -10,11 +10,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { HunitUnavailableError, SessionExpiredError } from '../../src/hunit/errors.js';
 import { findLine, getCommercialDetail } from '../../src/persistence/commercial-repo.js';
 import { findReservation } from '../../src/persistence/reservations-repo.js';
-import { commercialDispatchEvents } from '../../src/persistence/schema.js';
+import { commercialDispatchEvents, commercialReports } from '../../src/persistence/schema.js';
 import { createTestApp, type TestApp, type TestClient } from '../helpers/app.js';
 import {
   GUEST_MARKER,
   insertCommercialReservation,
+  insertLine,
   seedTestHotels,
 } from '../helpers/commercial-fixtures.js';
 import { expectMatchesContract } from '../helpers/contract.js';
@@ -105,12 +106,19 @@ async function get(id: string): Promise<DispatchBody> {
 
 const wait = { timeout: 10_000, interval: 20 };
 
-async function untilStatus(id: string, status: string): Promise<DispatchBody> {
+async function untilStatus(
+  id: string,
+  status: string,
+  timeout = wait.timeout,
+): Promise<DispatchBody> {
   let body: DispatchBody | null = null;
-  await vi.waitFor(async () => {
-    body = await get(id);
-    expect(body.status).toBe(status);
-  }, wait);
+  await vi.waitFor(
+    async () => {
+      body = await get(id);
+      expect(body.status).toBe(status);
+    },
+    { ...wait, timeout },
+  );
   return body as unknown as DispatchBody;
 }
 
@@ -196,6 +204,8 @@ describe('envio com verificação no Hunit (US1, cenários 1 e 2)', () => {
       'Maquininha Fictícia',
       10,
       'Comercial Fictício 1',
+      'Cobrada na maquininha',
+      46345,
     ]);
     hunitWith([1, 2, 3].map((n) => ({ n })));
     const body = await dispatchAndFinish([key(1), key(2), key(3)]);
@@ -209,6 +219,8 @@ describe('envio com verificação no Hunit (US1, cenários 1 e 2)', () => {
       'Maquininha Fictícia',
       10,
       'Comercial Fictício 1',
+      'Cobrada na maquininha',
+      46345,
     ]);
     expect(
       (await getCommercialDetail(test.database.db, key(1))).events.filter(
@@ -427,4 +439,214 @@ it('o perfil consulta acompanha, mas não cancela', async () => {
   expect(cancel.statusCode).toBe(403);
   // Nada de execução sobrou ativa (o teste de conta cancelou a sua).
   expect(insertExecution).toBeDefined();
+});
+
+describe('"Verificar agora" da fila "Cobradas no Hunit" (specs/008, US3; research R-07)', () => {
+  type HunitQueue = {
+    items: Array<{ reservationNumber: string; status: string; requiresCharge: boolean }>;
+    counts: Record<string, number>;
+  };
+  type CheckBody = Omit<DispatchBody, 'items'> & {
+    purpose: string;
+    parentDispatchId: string | null;
+    items: Array<DispatchBody['items'][number] & { checkResult: string | null }>;
+  };
+
+  /** Reserva enviada ao Comercial, lida no Hunit antes do relato "Cobrada no Hunit". */
+  async function reported(n: number, hotelCode = 'hml_um'): Promise<void> {
+    const { db } = test.database;
+    await insertCommercialReservation(db, n, {
+      hotelCode,
+      lastVerifiedAt: new Date('2026-11-17T10:00:00Z'),
+    });
+    await insertLine(db, key(n, hotelCode));
+    await db.insert(commercialReports).values({
+      ...key(n, hotelCode),
+      kind: 'charged_in_hunit',
+      situationText: 'Cobrada no Hunit',
+      chargedBy: 'Comercial Fictício 1',
+      readAt: new Date('2026-11-18T10:00:00Z'),
+    });
+  }
+
+  function check(client = operator): Promise<LightMyRequestResponse> {
+    return test.app.inject({
+      method: 'POST',
+      url: '/v1/commercial-hunit-charges/check',
+      headers: client.headers,
+      payload: { credentials: credentials() },
+    });
+  }
+
+  /** `timeout`: espera pelo fim da verificação (a de 50 reservas leva mais com a máquina ocupada). */
+  async function checkAndFinish(
+    finalStatus = 'completed',
+    timeout = wait.timeout,
+  ): Promise<CheckBody> {
+    const created = await check();
+    expect(created.statusCode).toBe(202);
+    expectMatchesContract('checkCommercialHunitCharges', created);
+    const { id } = created.json<CheckBody>();
+    await untilStatus(id, 'awaiting_2fa');
+    await sendToken(id);
+    await untilStatus(id, finalStatus, timeout);
+    const response = await test.app.inject({
+      method: 'GET',
+      url: `/v1/commercial-dispatches/${id}`,
+      headers: reader.headers,
+    });
+    return response.json<CheckBody>();
+  }
+
+  async function queue(): Promise<HunitQueue> {
+    const response = await test.app.inject({
+      method: 'GET',
+      url: '/v1/commercial-hunit-charges',
+      headers: reader.headers,
+    });
+    expect(response.statusCode).toBe(200);
+    expectMatchesContract('listCommercialHunitCharges', response);
+    return response.json<HunitQueue>();
+  }
+
+  const statusOf = async (n: number) =>
+    (await queue()).items.find((item) => item.reservationNumber === number(n));
+
+  it('confere cada relato: confirmada só com a cobrança no Hunit; sem abrir linha nem registrar envio', async () => {
+    const { db } = test.database;
+    await db.delete(commercialReports);
+    for (const n of [61, 62, 63]) await reported(n);
+    expect((await queue()).counts).toEqual({ awaiting: 3, notFound: 0, confirmed: 0 });
+    hunitWith([
+      { n: 61, detail: reservationDetails.alreadyCharged() },
+      { n: 62 },
+      { n: 63, detail: reservationDetails.invoiced() },
+    ]);
+
+    const body = await checkAndFinish();
+    expect(body.purpose).toBe('hunit_check');
+    expect(body.counts).toMatchObject({ total: 3, checked: 3, sent: 0, notVerified: 0 });
+    expect(
+      Object.fromEntries(body.items.map((item) => [item.reservationNumber, item.checkResult])),
+    ).toEqual({ [number(61)]: 'confirmed', [number(62)]: 'not_found', [number(63)]: 'not_found' });
+
+    // A leitura grava a classificação do Hunit; nada de envio novo no histórico.
+    expect((await findReservation(db, 'hml_um', number(61)))?.classification).toBe(
+      'virtual_card_already_charged',
+    );
+    const history = await getCommercialDetail(db, key(61));
+    expect(history.events.map((event) => event.type)).toContain('hunit_checked');
+    expect(history.events.map((event) => event.type)).not.toContain('dispatched');
+    expect(history.events.find((event) => event.type === 'hunit_checked')?.reason).toBe(
+      'cobrança encontrada',
+    );
+
+    // A fila: confirmada vai para "Concluídas"; a pendente continua não encontrada.
+    expect(await statusOf(61)).toMatchObject({ status: 'confirmed', requiresCharge: false });
+    expect(await statusOf(62)).toMatchObject({ status: 'not_found', requiresCharge: true });
+    expect(await statusOf(63)).toMatchObject({ status: 'not_found', requiresCharge: false });
+    expect((await findLine(db, key(61)))?.state).toBe('concluded');
+    expect((await findLine(db, key(62)))?.state).toBe('open');
+
+    // A coluna J acompanha a situação derivada.
+    expect((await test.sync?.runRound())?.ok).toBe(true);
+    const columnJ = (tab: 'toCharge' | 'done', n: number) =>
+      test.sheet?.rows(tab).find((row) => row[1] === number(n))?.[9];
+    expect(columnJ('done', 61)).toBe('Cobrança confirmada no Hunit');
+    expect(columnJ('toCharge', 62)).toBe(
+      'Recusado pelo Financeiro: cobrança não encontrada no Hunit',
+    );
+  });
+
+  it('o próximo "Verificar agora" confere só as não encontradas que ainda exigem cobrança', async () => {
+    hunitWith([{ n: 62, detail: reservationDetails.alreadyCharged() }]);
+    const body = await checkAndFinish();
+    expect(body.items.map((item) => item.reservationNumber)).toEqual([number(62)]);
+    expect(await statusOf(62)).toMatchObject({ status: 'confirmed' });
+  });
+
+  it('sem relato para conferir: 409 no_reports_to_check; perfil consulta: 403', async () => {
+    const response = await check();
+    expect(response.statusCode).toBe(409);
+    expectMatchesContract('checkCommercialHunitCharges', response);
+    expect(response.json()).toMatchObject({ code: 'no_reports_to_check' });
+    expect((await check(reader)).statusCode).toBe(403);
+  });
+
+  it('Hunit indisponível numa reserva: não verificada e a situação na fila não muda (FR-016)', async () => {
+    await test.database.db.delete(commercialReports);
+    await reported(64);
+    await reported(65, 'hml_dois');
+    hunitWith([{ n: 64 }, { n: 65, hotelCode: 'hml_dois' }], {
+      hml_dois: { searchError: new HunitUnavailableError('teste') },
+    });
+    const body = await checkAndFinish();
+    expect(outcomes(body)).toEqual({ [number(64)]: 'checked', [number(65)]: 'not_verified' });
+    expect(await statusOf(65)).toMatchObject({ status: 'awaiting' });
+    expect(await statusOf(64)).toMatchObject({ status: 'not_found' });
+  });
+
+  it('a lista padrão de envios nunca traz uma verificação; purpose=all e hunit_check trazem (R-02)', async () => {
+    const list = async (query: string) => {
+      const response = await test.app.inject({
+        method: 'GET',
+        url: `/v1/commercial-dispatches${query}`,
+        headers: reader.headers,
+      });
+      expectMatchesContract('listCommercialDispatches', response);
+      return response.json<{ items: Array<{ purpose: string }> }>().items;
+    };
+    expect((await list('')).every((item) => item.purpose === 'send')).toBe(true);
+    const checks = await list('?purpose=hunit_check');
+    expect(checks.length).toBeGreaterThan(0);
+    expect(checks.every((item) => item.purpose === 'hunit_check')).toBe(true);
+    const all = await list('?purpose=all&limit=100');
+    expect(new Set(all.map((item) => item.purpose))).toEqual(new Set(['send', 'hunit_check']));
+  });
+
+  it('cancelada antes do token e retomada: a retomada continua sendo verificação', async () => {
+    await test.database.db.delete(commercialReports);
+    await reported(66);
+    hunitWith([{ n: 66 }]);
+    const created = await check();
+    const { id } = created.json<CheckBody>();
+    await untilStatus(id, 'awaiting_2fa');
+    const cancel = await test.app.inject({
+      method: 'POST',
+      url: `/v1/commercial-dispatches/${id}/cancel`,
+      headers: operator.headers,
+    });
+    expect(cancel.statusCode).toBe(202);
+    await untilStatus(id, 'cancelled');
+
+    const resumed = await test.app.inject({
+      method: 'POST',
+      url: `/v1/commercial-dispatches/${id}/resume`,
+      headers: operator.headers,
+      payload: { credentials: credentials() },
+    });
+    expect(resumed.statusCode).toBe(202);
+    const child = resumed.json<CheckBody>();
+    expect(child).toMatchObject({ purpose: 'hunit_check', parentDispatchId: id });
+    await untilStatus(child.id, 'awaiting_2fa');
+    await sendToken(child.id);
+    await untilStatus(child.id, 'completed');
+    expect(await statusOf(66)).toMatchObject({ status: 'not_found' });
+  });
+
+  it('50 relatos numa verificação: todos com resultado (SC-005)', async () => {
+    await test.database.db.delete(commercialReports);
+    const numbers = Array.from({ length: 50 }, (_unused, i) => 700 + i);
+    for (const n of numbers) await reported(n);
+    hunitWith(
+      numbers.map((n) => ({
+        n,
+        ...(n % 2 === 0 ? { detail: reservationDetails.alreadyCharged() } : {}),
+      })),
+    );
+    const body = await checkAndFinish('completed', 45_000);
+    expect(body.counts).toMatchObject({ total: 50, checked: 50, notVerified: 0, pending: 0 });
+    expect(body.items.every((item) => item.checkResult !== null)).toBe(true);
+    expect((await queue()).counts).toEqual({ awaiting: 0, notFound: 25, confirmed: 25 });
+  }, 60_000);
 });

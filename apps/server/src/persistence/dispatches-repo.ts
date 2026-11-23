@@ -64,6 +64,8 @@ export interface NewDispatch {
   accountKey: string;
   clientId: string;
   parentDispatchId?: string | null;
+  /** Envio ao Comercial (padrão) ou verificação da fila "Cobradas no Hunit" (specs/008). */
+  purpose?: DispatchRow['purpose'];
   items: readonly NewDispatchItem[];
   now: Date;
 }
@@ -90,6 +92,7 @@ export async function createDispatch(db: Database, input: NewDispatch): Promise<
           accountKey: input.accountKey,
           clientId: input.clientId,
           parentDispatchId: input.parentDispatchId ?? null,
+          purpose: input.purpose ?? 'send',
           createdAt: input.now,
         })
         .returning();
@@ -274,6 +277,8 @@ export async function recordItemOutcome(
     outcome: Exclude<DispatchItemOutcome, 'pending' | 'ignored'>;
     classificationAfter: Classification | null;
     reason: string | null;
+    /** Só em `checked` (verificação, specs/008). */
+    checkResult?: DispatchItemRow['checkResult'];
     now: Date;
   },
 ): Promise<void> {
@@ -283,6 +288,7 @@ export async function recordItemOutcome(
       outcome: input.outcome,
       classificationAfter: input.classificationAfter,
       reason: input.reason,
+      checkResult: input.outcome === 'checked' ? (input.checkResult ?? null) : null,
       processedAt: input.now,
     })
     .where(
@@ -322,6 +328,8 @@ export interface DispatchCounts {
   withdrawn: number;
   notVerified: number;
   ignored: number;
+  /** Conferidas no Hunit (verificações da fila "Cobradas no Hunit", specs/008). */
+  checked: number;
 }
 
 const EMPTY_COUNTS: DispatchCounts = {
@@ -331,6 +339,7 @@ const EMPTY_COUNTS: DispatchCounts = {
   withdrawn: 0,
   notVerified: 0,
   ignored: 0,
+  checked: 0,
 };
 
 /** Contagem dos desfechos de vários envios, numa consulta só. */
@@ -363,6 +372,10 @@ export async function countDispatchItems(
 export interface ListDispatchesOptions {
   /** true = só ativos; false = só encerrados. */
   active?: boolean | undefined;
+  /**
+   * `send` (padrão: o que o app 0.3 espera), `hunit_check` ou `all` (specs/008, research R-02).
+   */
+  purpose?: DispatchRow['purpose'] | 'all' | undefined;
   limit: number;
   cursor?: string | undefined;
 }
@@ -392,6 +405,8 @@ export async function listDispatches(
   options: ListDispatchesOptions,
 ): Promise<{ items: DispatchListItem[]; nextCursor: string | null }> {
   const conditions: SQL[] = [];
+  const purpose = options.purpose ?? 'send';
+  if (purpose !== 'all') conditions.push(eq(commercialDispatches.purpose, purpose));
   if (options.active === true) {
     conditions.push(inArray(commercialDispatches.status, [...ACTIVE_EXECUTION_STATUSES]));
   } else if (options.active === false) {

@@ -92,6 +92,20 @@
       "when": 1794940422269,
       "tag": "0012_commercial_lines_awaiting_return",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795115882466,
+      "tag": "0013_ajustes_cobranca_aviso",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795453823246,
+      "tag": "0014_ajustes_homologacao",
+      "breakpoints": true
     }
   ]
 }

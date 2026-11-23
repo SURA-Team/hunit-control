@@ -26,13 +26,18 @@ import {
   type SheetTab,
 } from './gateway.js';
 import type { ServiceAccountKey } from './key.js';
-import { appearanceRequests, COLUMN_COUNT, dataCellFormat } from './sheet-appearance.js';
+import {
+  appearanceRequests,
+  COLUMN_COUNT,
+  dataCellFormat,
+  LAST_COLUMN_LETTER,
+} from './sheet-appearance.js';
 
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 const DEFAULT_BASE_URL = 'https://sheets.googleapis.com/v4/spreadsheets';
 const DEFAULT_TIMEOUT_MS = 30_000;
-/** Última coluna da planilha (N = 14 colunas). */
-const LAST_COLUMN = 'N';
+/** Última coluna da planilha (P = 16 colunas, specs/008). */
+const LAST_COLUMN = LAST_COLUMN_LETTER;
 
 /** O que o comando de preparação lê da planilha: abas, proteções e formatação condicional. */
 const SETUP_FIELDS =
@@ -94,7 +99,7 @@ function rowData(values: readonly SheetCellValue[]) {
 }
 
 /**
- * Linha acrescentada: as 14 células, cada uma com as bordas e o formato da coluna (FR-010a). As
+ * Linha acrescentada: as 16 células, cada uma com as bordas e o formato da coluna (FR-010a). As
  * bordas não podem ser condicionais, então a linha nova já sai com elas (research R-18).
  */
 function appendedRowData(values: readonly SheetCellValue[]) {

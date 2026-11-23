@@ -119,13 +119,14 @@ export async function insertReturn(
     chargedAmount?: string;
     readAt?: Date;
     rejectionReason?: string;
+    authorizationCode?: string;
   } = {},
 ) {
   const [row] = await db
     .insert(commercialReturns)
     .values({
       ...key,
-      authorizationCode: 'AUT123',
+      authorizationCode: options.authorizationCode ?? 'AUT123',
       chargeHotel: 'Estabelecimento Fictício',
       chargedAmount: options.chargedAmount ?? '1234.56',
       chargedBy: 'Comercial Fictício 1',

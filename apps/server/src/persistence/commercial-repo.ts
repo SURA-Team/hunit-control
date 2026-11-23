@@ -9,11 +9,27 @@
  */
 import {
   canRestoreLine,
+  hunitChargeStatus,
   lineState,
+  type ChargeSituationKind,
   type Classification,
   type CommercialLineState,
+  type HunitChargeStatus,
 } from '@hunit/domain';
-import { and, asc, desc, eq, inArray, isNull, lt, ne, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableName,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  sql,
+  type AnyColumn,
+  type SQL,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Transaction } from './account-lock.js';
 import type { Database } from './db.js';
@@ -21,9 +37,11 @@ import {
   apiClients,
   commercialEvents,
   commercialLines,
+  commercialReports,
   commercialReturns,
   commercialSheetState,
   commercialEventTypeEnum,
+  noChargeMarks,
   reservations,
   treatmentDocuments,
   type SheetRoundProblem,
@@ -54,7 +72,7 @@ function ofReservation(
 }
 
 function inReservations(
-  table: typeof commercialLines | typeof commercialReturns,
+  table: typeof commercialLines | typeof commercialReturns | typeof commercialReports,
   keys: readonly ReservationKey[],
 ): SQL {
   const tuples = keys.map((key) => sql`(${key.hotelCode}, ${key.reservationNumber})`);
@@ -76,7 +94,36 @@ export interface CurrentReturnSummary {
   readAt: Date;
   /** Motivo da recusa, quando recusado (vai para a coluna "Validação do Financeiro"). */
   rejectionReason: string | null;
+  /** Situação e data da cobrança informadas pelo Comercial (specs/008); nulas = não informadas. */
+  chargeSituationText: string | null;
+  chargeSituationKind: ChargeSituationKind | null;
+  chargeDate: string | null;
 }
+
+/** Validação da "Cancelada" pelo Financeiro (homologação da 008, R-19). */
+export interface CancellationValidationRecord {
+  state: NonNullable<(typeof commercialReports.$inferSelect)['validationState']>;
+  decidedAt: Date | null;
+  decidedBy: string | null;
+  rejectionReason: string | null;
+}
+
+/** Relato atual do Comercial (specs/008, R-06 e R-19), com a situação derivada da fila (R-07). */
+export interface CommercialReportRecord {
+  kind: (typeof commercialReports.$inferSelect)['kind'];
+  situationText: string;
+  /** Nulo só na "Cancelada" sem o responsável. */
+  chargedBy: string | null;
+  chargeDate: string | null;
+  readAt: Date;
+  /** Só em `charged_in_hunit`. */
+  hunitStatus: HunitChargeStatus | null;
+  /** Só na "Cancelada". */
+  validation: CancellationValidationRecord | null;
+}
+
+/** Quem decidiu a "Cancelada" (o cliente da API). */
+const reportDecider = alias(apiClients, 'report_decider');
 
 export interface CommercialSummaryRecord {
   lineState: CommercialLineState;
@@ -86,6 +133,77 @@ export interface CommercialSummaryRecord {
   returnProblem: string | null;
   syncPending: boolean;
   currentReturn: CurrentReturnSummary | null;
+  report: CommercialReportRecord | null;
+}
+
+/** Os relatos de várias reservas, com a situação derivada pela classificação do Hunit. */
+async function loadReports(
+  executor: Executor,
+  keys: readonly ReservationKey[],
+): Promise<Map<string, CommercialReportRecord>> {
+  const rows = await executor
+    .select({
+      hotelCode: commercialReports.hotelCode,
+      reservationNumber: commercialReports.reservationNumber,
+      kind: commercialReports.kind,
+      situationText: commercialReports.situationText,
+      chargedBy: commercialReports.chargedBy,
+      chargeDate: commercialReports.chargeDate,
+      readAt: commercialReports.readAt,
+      lastVerifiedAt: reservations.lastVerifiedAt,
+      classification: reservations.classification,
+      validationState: commercialReports.validationState,
+      decidedAt: commercialReports.decidedAt,
+      decidedBy: reportDecider.name,
+      rejectionReason: commercialReports.rejectionReason,
+    })
+    .from(commercialReports)
+    .innerJoin(
+      reservations,
+      and(
+        eq(reservations.hotelCode, commercialReports.hotelCode),
+        eq(reservations.reservationNumber, commercialReports.reservationNumber),
+      ),
+    )
+    .leftJoin(reportDecider, eq(reportDecider.id, commercialReports.decidedByClientId))
+    .where(inReservations(commercialReports, keys));
+  return new Map(
+    rows.map((row) => [
+      keyOf(row),
+      {
+        kind: row.kind,
+        situationText: row.situationText,
+        chargedBy: row.chargedBy,
+        chargeDate: row.chargeDate,
+        readAt: row.readAt,
+        hunitStatus:
+          row.kind === 'charged_in_hunit'
+            ? hunitChargeStatus({
+                readAt: row.readAt,
+                lastVerifiedAt: row.lastVerifiedAt,
+                hunitClassification: row.classification,
+              })
+            : null,
+        validation:
+          row.validationState === null
+            ? null
+            : {
+                state: row.validationState,
+                decidedAt: row.decidedAt,
+                decidedBy: row.decidedBy,
+                rejectionReason: row.rejectionReason,
+              },
+      },
+    ]),
+  );
+}
+
+/** O relato atual de uma reserva (detalhe do Comercial). */
+export async function loadReport(
+  executor: Executor,
+  key: ReservationKey,
+): Promise<CommercialReportRecord | null> {
+  return (await loadReports(executor, [key])).get(keyOf(key)) ?? null;
 }
 
 /** Resumo do Comercial de várias reservas, em duas consultas. Sem linha = fora do mapa. */
@@ -109,9 +227,15 @@ export async function loadCommercialSummaries(
       returnProblem: line.returnProblem,
       syncPending: line.syncedVersion < line.version,
       currentReturn: null,
+      report: null,
     });
   }
   if (summaries.size === 0) return summaries;
+
+  for (const [mapKey, report] of await loadReports(executor, keys)) {
+    const summary = summaries.get(mapKey);
+    if (summary) summary.report = report;
+  }
 
   const returns = await executor
     .select({
@@ -125,6 +249,9 @@ export async function loadCommercialSummaries(
       chargedBy: commercialReturns.chargedBy,
       readAt: commercialReturns.readAt,
       rejectionReason: commercialReturns.rejectionReason,
+      chargeSituationText: commercialReturns.chargeSituationText,
+      chargeSituationKind: commercialReturns.chargeSituationKind,
+      chargeDate: commercialReturns.chargeDate,
     })
     .from(commercialReturns)
     .where(and(inReservations(commercialReturns, keys), ne(commercialReturns.state, 'superseded')))
@@ -141,6 +268,9 @@ export async function loadCommercialSummaries(
       chargedBy: row.chargedBy,
       readAt: row.readAt,
       rejectionReason: row.rejectionReason,
+      chargeSituationText: row.chargeSituationText,
+      chargeSituationKind: row.chargeSituationKind,
+      chargeDate: row.chargeDate,
     };
   }
   return summaries;
@@ -272,9 +402,13 @@ async function hasCurrentProof(tx: Executor, key: ReservationKey): Promise<boole
   return confirmed !== undefined;
 }
 
+/**
+ * Classificação que decide a linha: a efetiva, `cancelled_no_charge` com a marcação "Cancelada sem
+ * cobrança" do Financeiro (specs/008, research R-08); senão, a do Hunit.
+ */
 async function classificationOf(tx: Executor, key: ReservationKey): Promise<Classification | null> {
   const [row] = await tx
-    .select({ classification: reservations.classification })
+    .select({ classification: reservations.classification, marked: noChargeMarkedCondition() })
     .from(reservations)
     .where(
       and(
@@ -282,7 +416,8 @@ async function classificationOf(tx: Executor, key: ReservationKey): Promise<Clas
         eq(reservations.reservationNumber, key.reservationNumber),
       ),
     );
-  return row?.classification ?? null;
+  if (!row) return null;
+  return row.marked ? 'cancelled_no_charge' : row.classification;
 }
 
 /** Motivo do encerramento de um retorno sem validação (spec FR-009, análise "A verificar"). */
@@ -304,6 +439,7 @@ export async function refreshCommercialLine(
 ): Promise<void> {
   const line = await lockLine(tx, key);
   if (!line) return;
+  await settleCommercialReport(tx, key, now);
   const classification = await classificationOf(tx, key);
   if (classification === null) return;
   const proof = await hasCurrentProof(tx, key);
@@ -350,6 +486,34 @@ export async function refreshCommercialLine(
       });
     }
   }
+}
+
+/**
+ * Registra a leitura no Hunit que definiu a situação do relato "Cobrada no Hunit" (specs/008,
+ * FR-013): quando a reserva foi lida depois do relato e o resultado (o Hunit mostra ou não a
+ * cobrança) é diferente do registrado. A situação continua derivada; isto só conta os 7 dias da
+ * fila. Chamado a cada leitura da reserva (execução, envio ou verificação), por
+ * `refreshCommercialLine`.
+ */
+export async function settleCommercialReport(
+  tx: Transaction,
+  key: ReservationKey,
+  now: Date,
+): Promise<void> {
+  await tx.execute(sql`
+    update ${commercialReports} cr
+    set settled_result = derived.result, settled_at = ${now}
+    from (
+      select (case when r.classification = 'virtual_card_already_charged'
+        then 'confirmed' else 'not_found' end)::hunit_check_result as result
+      from ${reservations} r
+      join ${commercialReports} c
+        on c.hotel_code = r.hotel_code and c.reservation_number = r.reservation_number
+      where r.hotel_code = ${key.hotelCode} and r.reservation_number = ${key.reservationNumber}
+        and c.kind = 'charged_in_hunit' and r.last_verified_at > c.read_at
+    ) derived
+    where cr.hotel_code = ${key.hotelCode} and cr.reservation_number = ${key.reservationNumber}
+      and cr.settled_result is distinct from derived.result`);
 }
 
 /** `refreshCommercialLine` para as reservas de um hotel que têm linha (gravação de uma execução). */
@@ -531,6 +695,8 @@ export interface CommercialDetail {
   line: CommercialLineDetail | null;
   returns: CommercialReturnDetail[];
   events: CommercialEventRecord[];
+  /** Relato atual do Comercial (specs/008). */
+  report: CommercialReportRecord | null;
 }
 
 export async function getCommercialDetail(
@@ -578,6 +744,7 @@ export async function getCommercialDetail(
       : null,
     returns: returns.map(({ row, decidedBy }) => ({ ...row, decidedBy })),
     events,
+    report: await loadReport(db, key),
   };
 }
 
@@ -606,11 +773,48 @@ export interface SheetLineSource {
   statusChangedAt: Date | null;
   /** Reserva anonimizada pelo prazo de retenção: a linha sai da planilha (research R-15). */
   anonymized: boolean;
+  /** Última leitura da reserva no Hunit (base da fila "Cobradas no Hunit", specs/008, R-07). */
+  lastVerifiedAt: Date;
+  /** Marcação "Cancelada sem cobrança" ativa (specs/008, R-08). */
+  noChargeMarked: boolean;
+  /** Relato atual do Comercial (specs/008, R-06); `null` = sem relato. */
+  report: SheetLineReport | null;
+}
+
+/** O relato do Comercial que a linha da planilha precisa (coluna J e reconstrução). */
+export interface SheetLineReport {
+  kind: (typeof commercialReports.$inferSelect)['kind'];
+  situationText: string;
+  chargedBy: string | null;
+  chargeDate: string | null;
+  readAt: Date;
+  /** Validação da "Cancelada" (R-19); nula em "Cobrada no Hunit". */
+  validationState: (typeof commercialReports.$inferSelect)['validationState'];
+  rejectionReason: string | null;
+}
+
+/**
+ * A coluna com o nome da tabela. Num `select` de uma tabela só, o Drizzle escreve as colunas dos
+ * campos sem a tabela; dentro de uma subconsulta, `hotel_code` passaria a ser o da subconsulta.
+ */
+export function qualified(column: AnyColumn): SQL {
+  return sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+}
+
+/**
+ * A reserva tem marcação "Cancelada sem cobrança" ativa? (specs/008, R-08.) Serve em `where` e nos
+ * campos do `select`: as colunas de fora vão sempre com o nome da tabela.
+ */
+export function noChargeMarkedCondition(
+  hotelCode: AnyColumn = reservations.hotelCode,
+  reservationNumber: AnyColumn = reservations.reservationNumber,
+): SQL<boolean> {
+  return sql<boolean>`exists (select 1 from ${noChargeMarks} ncm where ncm.hotel_code = ${qualified(hotelCode)} and ncm.reservation_number = ${qualified(reservationNumber)} and ncm.undone_at is null)`;
 }
 
 /** Todas as linhas que ainda podem estar na planilha (as que saíram ficam de fora). */
 export async function listSheetLines(db: Database): Promise<SheetLineSource[]> {
-  return db
+  const rows = await db
     .select({
       hotelCode: commercialLines.hotelCode,
       reservationNumber: commercialLines.reservationNumber,
@@ -629,6 +833,15 @@ export async function listSheetLines(db: Database): Promise<SheetLineSource[]> {
       reservationStatus: reservations.reservationStatus,
       statusChangedAt: reservations.statusChangedAt,
       anonymized: sql<boolean>`${reservations.anonymizedAt} is not null`,
+      lastVerifiedAt: reservations.lastVerifiedAt,
+      noChargeMarked: noChargeMarkedCondition(),
+      reportKind: commercialReports.kind,
+      reportSituationText: commercialReports.situationText,
+      reportChargedBy: commercialReports.chargedBy,
+      reportChargeDate: commercialReports.chargeDate,
+      reportReadAt: commercialReports.readAt,
+      reportValidationState: commercialReports.validationState,
+      reportRejectionReason: commercialReports.rejectionReason,
     })
     .from(commercialLines)
     .innerJoin(
@@ -638,8 +851,41 @@ export async function listSheetLines(db: Database): Promise<SheetLineSource[]> {
         eq(reservations.reservationNumber, commercialLines.reservationNumber),
       ),
     )
+    .leftJoin(
+      commercialReports,
+      and(
+        eq(commercialReports.hotelCode, commercialLines.hotelCode),
+        eq(commercialReports.reservationNumber, commercialLines.reservationNumber),
+      ),
+    )
     .where(isNull(commercialLines.removedFromSheetAt))
     .orderBy(asc(commercialLines.firstSentAt), asc(commercialLines.hotelCode));
+  return rows.map(
+    ({
+      reportKind,
+      reportSituationText,
+      reportChargedBy,
+      reportChargeDate,
+      reportReadAt,
+      reportValidationState,
+      reportRejectionReason,
+      ...line
+    }) => ({
+      ...line,
+      report:
+        reportKind === null || reportSituationText === null || reportReadAt === null
+          ? null
+          : {
+              kind: reportKind,
+              situationText: reportSituationText,
+              chargedBy: reportChargedBy,
+              chargeDate: reportChargeDate,
+              readAt: reportReadAt,
+              validationState: reportValidationState,
+              rejectionReason: reportRejectionReason,
+            },
+    }),
+  );
 }
 
 /**

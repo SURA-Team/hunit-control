@@ -14,7 +14,11 @@ import {
   NothingToResumeDispatchError,
   resumeDispatch,
 } from '../../dispatches/resume.js';
-import { NoEligibleReservationsError, type DispatchRunner } from '../../dispatches/runner.js';
+import {
+  NoEligibleReservationsError,
+  NoReportsToCheckError,
+  type DispatchRunner,
+} from '../../dispatches/runner.js';
 import type { Database } from '../../persistence/db.js';
 import {
   AccountBusyError,
@@ -46,6 +50,8 @@ type TokenBody =
   operations['sendCommercialDispatchTwoFactor']['requestBody']['content']['application/json'];
 type ResumeBody =
   operations['resumeCommercialDispatch']['requestBody']['content']['application/json'];
+type HunitCheckBody =
+  operations['checkCommercialHunitCharges']['requestBody']['content']['application/json'];
 
 export interface DispatchHandlerDependencies {
   db: Database;
@@ -142,6 +148,7 @@ export function createDispatchHandlers(dependencies: DispatchHandlerDependencies
         withdrawn: 0,
         notVerified: 0,
         ignored: 0,
+        checked: 0,
       },
       resumedByDispatchId: resumedBy?.id ?? null,
       lastStatusEvent,
@@ -208,12 +215,45 @@ export function createDispatchHandlers(dependencies: DispatchHandlerDependencies
         return viewOf(await load(dispatchId));
       },
 
+      /**
+       * POST /v1/commercial-hunit-charges/check — "Verificar agora" da fila "Cobradas no Hunit"
+       * (specs/008, FR-014; research R-07): uma verificação com os relatos aguardando e os não
+       * encontrados que ainda exigem cobrança, executada como um envio.
+       */
+      async checkCommercialHunitCharges(request: FastifyRequest, reply: FastifyReply) {
+        requireSheet();
+        const client = clientOf(request);
+        const body = request.body as HunitCheckBody;
+        let dispatchId: string;
+        try {
+          const dispatch = await runner().startHunitCheck({
+            clientId: client.id,
+            credentials: body.credentials,
+          });
+          dispatchId = dispatch.id;
+        } catch (error) {
+          if (error instanceof AccountBusyError) {
+            throw new ProblemError(
+              'account_busy',
+              'Aguarde a execução ou o envio em andamento desta conta do Hunit terminar, ou cancele-o.',
+            );
+          }
+          if (error instanceof NoReportsToCheckError) throw new ProblemError('no_reports_to_check');
+          throw error;
+        }
+        request.log.info({ dispatchId }, 'verificação da fila "Cobradas no Hunit" iniciada');
+        void reply.code(202);
+        return viewOf(await load(dispatchId));
+      },
+
       /** GET /v1/commercial-dispatches — envios, dos mais recentes para os mais antigos. */
       async listCommercialDispatches(request: FastifyRequest) {
         const query = request.query as ListQuery;
         try {
           const page = await listDispatches(db, {
             active: query.active,
+            // Sem o parâmetro, só os envios: o app 0.3 nunca recebe uma verificação (specs/008, R-02).
+            purpose: query.purpose,
             limit: query.limit ?? DEFAULT_PAGE_SIZE,
             cursor: query.cursor,
           });
@@ -233,6 +273,7 @@ export function createDispatchHandlers(dependencies: DispatchHandlerDependencies
                   withdrawn: 0,
                   notVerified: 0,
                   ignored: 0,
+                  checked: 0,
                 },
               ),
             ),

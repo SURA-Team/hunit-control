@@ -84,6 +84,27 @@ export const PROBLEMS: Readonly<Record<ProblemCode, ProblemDefinition>> = {
     title: 'A reserva não está nesta situação na planilha do Comercial',
   },
   restore_expired: { status: 409, title: 'O prazo de 30 dias para reverter terminou' },
+  // Ajustes de cobrança (specs/008, contracts/api-changes.md).
+  no_charge_not_accepted: {
+    status: 409,
+    title: 'A reserva não aceita a marcação "Cancelada sem cobrança"',
+  },
+  reservation_changed: {
+    status: 409,
+    title: 'A situação da reserva mudou; confira de novo antes de marcar',
+  },
+  no_charge_not_active: {
+    status: 409,
+    title: 'A marcação "Cancelada sem cobrança" não está mais ativa',
+  },
+  no_reports_to_check: {
+    status: 409,
+    title: 'Nenhuma reserva da fila "Cobradas no Hunit" para conferir',
+  },
+  no_cancellation_awaiting_validation: {
+    status: 409,
+    title: 'A reserva não tem "Cancelada" do Comercial aguardando validação',
+  },
   internal_error: { status: 500, title: 'Erro interno' },
 };
 
@@ -94,6 +115,8 @@ export interface ProblemOptions {
   title?: string;
   /** Erro original, mantido só para os logs; nunca é enviado ao cliente. */
   cause?: unknown;
+  /** Motivo estável (`no_charge_not_accepted`, specs/008), enviado ao cliente. */
+  reason?: Problem['reason'];
 }
 
 /**
@@ -107,6 +130,7 @@ export class ProblemError extends Error {
   readonly status: number;
   readonly title: string;
   readonly detail: string | undefined;
+  readonly reason: Problem['reason'] | undefined;
 
   constructor(code: ProblemCode, detail?: string, options: ProblemOptions = {}) {
     const definition = PROBLEMS[code];
@@ -117,6 +141,7 @@ export class ProblemError extends Error {
     this.status = options.status ?? definition.status;
     this.title = title;
     this.detail = detail;
+    this.reason = options.reason;
   }
 
   toProblem(): Problem {
@@ -126,6 +151,7 @@ export class ProblemError extends Error {
       status: this.status,
       code: this.code,
       ...(this.detail !== undefined && { detail: this.detail }),
+      ...(this.reason !== undefined && { reason: this.reason }),
     };
   }
 }

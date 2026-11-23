@@ -3,13 +3,18 @@
  * contracts/api-changes.md). Datas em ISO 8601; nenhum campo fora do contrato.
  */
 import type { components } from '@hunit/contracts';
-import { lineRestoreDeadline } from '@hunit/domain';
+import { amountToCharge, lineRestoreDeadline } from '@hunit/domain';
 import type { DispatchEvent } from '../dispatches/events.js';
 import type {
   CommercialEventRecord,
   CommercialLineDetail,
+  CommercialReportRecord,
   CommercialReturnDetail,
 } from '../persistence/commercial-repo.js';
+import type {
+  CancellationAwaitingRow,
+  HunitQueueRow,
+} from '../persistence/commercial-reports-repo.js';
 import type {
   DispatchCounts,
   DispatchItemRow,
@@ -22,6 +27,7 @@ export type CommercialDispatchSummaryView = Schemas['CommercialDispatchSummary']
 export type CommercialLineView = Schemas['CommercialLine'];
 export type CommercialReturnView = Schemas['CommercialReturn'];
 export type CommercialEventView = Schemas['CommercialEvent'];
+export type CommercialHistoryEventView = Schemas['CommercialHistoryEvent'];
 
 function iso(date: Date): string;
 function iso(date: Date | null): string | null;
@@ -57,6 +63,7 @@ export function toDispatchSummaryView(
     createdAt: iso(dispatch.createdAt),
     finishedAt: iso(dispatch.finishedAt),
     counts,
+    purpose: dispatch.purpose,
   };
 }
 
@@ -89,6 +96,7 @@ export function toDispatchView(parts: {
       classificationAfter: item.classificationAfter,
       reason: item.reason,
       processedAt: iso(item.processedAt),
+      checkResult: item.checkResult,
     })),
     lastEventId: parts.lastEventId === null ? null : String(parts.lastEventId),
   };
@@ -131,6 +139,90 @@ export function toCommercialLineView(line: CommercialLineDetail, now: Date): Com
   };
 }
 
+/** Situação da cobrança no formato da API (specs/008); `null` = não informada. */
+export function toChargeSituationView(
+  text: string | null,
+  kind: Schemas['ChargeSituation']['kind'] | null,
+): Schemas['ChargeSituation'] | null {
+  return text === null || kind === null ? null : { kind, text };
+}
+
+/** Relato atual do Comercial (specs/008, `CommercialReportBrief`). */
+export function toCommercialReportView(
+  report: CommercialReportRecord | null,
+): Schemas['CommercialReportBrief'] | null {
+  if (report === null) return null;
+  return {
+    kind: report.kind,
+    situationText: report.situationText,
+    chargedBy: report.chargedBy,
+    chargeDate: report.chargeDate,
+    readAt: iso(report.readAt),
+    hunitStatus: report.hunitStatus,
+    // Validação da "Cancelada" pelo Financeiro (homologação, R-19).
+    validation:
+      report.validation === null
+        ? null
+        : {
+            state: report.validation.state,
+            decidedAt: report.validation.decidedAt ? iso(report.validation.decidedAt) : null,
+            decidedBy: report.validation.decidedBy,
+            rejectionReason: report.validation.rejectionReason,
+          },
+  };
+}
+
+/** Linha da fila "Cobradas no Hunit" (specs/008, tela 7.15). */
+export function toHunitChargeItemView(row: HunitQueueRow): Schemas['HunitChargeItem'] {
+  return {
+    hotelCode: row.hotelCode,
+    hotelName: row.hotelName,
+    reservationNumber: row.reservationNumber,
+    guestName: row.guestName,
+    channel: row.channel,
+    amountToCharge: amountToCharge(row.totalAmount, row.noChargeMarked),
+    situationText: row.situationText,
+    chargedBy: row.chargedBy,
+    chargeDate: row.chargeDate,
+    readAt: iso(row.readAt),
+    status: row.status,
+    checkedAt: row.status === 'awaiting' ? null : iso(row.lastVerifiedAt),
+    classification: row.classification,
+    requiresCharge: row.requiresChargeNow,
+  };
+}
+
+/** A fila e as contagens (`GET /commercial-hunit-charges`). */
+export function toHunitChargeQueueView(
+  rows: readonly HunitQueueRow[],
+): Schemas['HunitChargeQueue'] {
+  const count = (status: HunitQueueRow['status']) =>
+    rows.filter((row) => row.status === status).length;
+  return {
+    items: rows.map(toHunitChargeItemView),
+    counts: {
+      awaiting: count('awaiting'),
+      notFound: count('not_found'),
+      confirmed: count('confirmed'),
+    },
+  };
+}
+
+/** "Cancelada" aguardando validação, para "Retornos a validar" (homologação da 008, R-19). */
+export function toReportProblemView(
+  row: CancellationAwaitingRow,
+): Schemas['CommercialReportProblem'] {
+  return {
+    hotelCode: row.hotelCode,
+    reservationNumber: row.reservationNumber,
+    situationText: row.situationText,
+    chargedBy: row.chargedBy,
+    chargeDate: row.chargeDate,
+    readAt: iso(row.readAt),
+    totalAmount: row.totalAmount,
+  };
+}
+
 export function toCommercialReturnView(
   row: CommercialReturnDetail,
   expectedAmount: string | null,
@@ -148,6 +240,8 @@ export function toCommercialReturnView(
     rejectionReason: row.rejectionReason,
     expectedAmount,
     difference: difference(row.chargedAmount, expectedAmount),
+    chargeSituation: toChargeSituationView(row.chargeSituationText, row.chargeSituationKind),
+    chargeDate: row.chargeDate,
   };
 }
 
@@ -156,9 +250,44 @@ const COMMERCIAL_SHEET_EVENTS: ReadonlySet<CommercialEventRecord['type']> = new 
   'return_received',
   'return_changed',
   'return_ignored',
+  'report_received',
+  'report_changed',
+  'report_cleared',
 ]);
 
-export function toCommercialEventView(event: CommercialEventRecord): CommercialEventView {
+/** Tipos do histórico da 1.8.0: os únicos que `CommercialDetail.events` traz (specs/008, R-02). */
+const EVENT_TYPES_1_8_0: ReadonlySet<string> = new Set<CommercialEventView['type']>([
+  'dispatched',
+  'withdrawn',
+  'line_cancelled',
+  'line_restored',
+  'line_concluded',
+  'return_received',
+  'return_changed',
+  'return_ignored',
+  'return_confirmed',
+  'return_rejected',
+  'return_confirmation_undone',
+  'return_closed',
+]);
+
+/** Evento que o app 0.3 conhece (vai em `events`); os novos da 008 ficam só em `history`. */
+export function isEventType1_8_0(
+  event: CommercialEventRecord,
+): event is CommercialEventRecord & { type: CommercialEventView['type'] } {
+  return EVENT_TYPES_1_8_0.has(event.type);
+}
+
+export function toCommercialEventView(
+  event: CommercialEventRecord & { type: CommercialEventView['type'] },
+): CommercialEventView {
+  return { ...toCommercialHistoryEventView(event), type: event.type };
+}
+
+/** Item do histórico completo (`CommercialDetail.history`, specs/008), com os tipos novos. */
+export function toCommercialHistoryEventView(
+  event: CommercialEventRecord,
+): CommercialHistoryEventView {
   const actor =
     event.clientName !== null
       ? { kind: 'client' as const, name: event.clientName }

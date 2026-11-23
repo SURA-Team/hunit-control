@@ -17,7 +17,13 @@ import {
   getCommercialDetail,
   insertCommercialEvent,
 } from '../../src/persistence/commercial-repo.js';
-import { commercialLines, commercialReturns } from '../../src/persistence/schema.js';
+import {
+  commercialLines,
+  commercialReports,
+  commercialReturns,
+  noChargeMarks,
+} from '../../src/persistence/schema.js';
+import { insertClient } from '../helpers/factories.js';
 import { SecretRegistry } from '../../src/secrets.js';
 import {
   insertCommercialReservation,
@@ -67,6 +73,28 @@ beforeAll(async () => {
         },
       })
       .where(eq(commercialLines.reservationNumber, key.reservationNumber));
+    // specs/008: observação da marcação, situação escrita como texto livre e relato.
+    const client = await insertClient(db);
+    await db.insert(noChargeMarks).values({
+      ...key,
+      markedByClientId: client.id,
+      note: 'Hóspede Fictício cancelou por telefone',
+      undoneAt: NOW,
+      undoneByClientId: client.id,
+    });
+    await db
+      .update(commercialReturns)
+      .set({ chargeSituationText: 'Paga pelo Hóspede Fictício', chargeSituationKind: 'other' })
+      .where(eq(commercialReturns.reservationNumber, key.reservationNumber));
+    await db.insert(commercialReports).values({
+      ...key,
+      kind: 'cancelled',
+      situationText: 'Cancelada: Hóspede Fictício não apareceu',
+      validationState: 'rejected',
+      rejectionReason: 'Hóspede Fictício pagou na recepção',
+      chargedBy: 'Comercial Fictício 1',
+      readAt: NOW,
+    });
   }
 });
 
@@ -109,6 +137,33 @@ describe('anonimização do envio ao Comercial (T057)', () => {
     expect(oldDetail.returns[0]?.rejectionReason).toBeNull();
     expect(oldDetail.events.find((event) => event.type === 'return_rejected')?.reason).toBeNull();
     expect((await findLine(db, OLD))?.lastReadReturn).toBeNull();
+    // specs/008: a observação da marcação, a situação em texto livre e o texto do relato saem.
+    const textsOf = async (key: typeof OLD) => ({
+      note: (
+        await db
+          .select({ note: noChargeMarks.note })
+          .from(noChargeMarks)
+          .where(eq(noChargeMarks.reservationNumber, key.reservationNumber))
+      )[0]?.note,
+      situation: (
+        await db
+          .select({ text: commercialReturns.chargeSituationText })
+          .from(commercialReturns)
+          .where(eq(commercialReturns.reservationNumber, key.reservationNumber))
+      )[0]?.text,
+      report: (
+        await db
+          .select({ text: commercialReports.situationText })
+          .from(commercialReports)
+          .where(eq(commercialReports.reservationNumber, key.reservationNumber))
+      )[0]?.text,
+    });
+    expect(await textsOf(OLD)).toEqual({ note: null, situation: null, report: 'Cancelada' });
+    expect(await textsOf(RECENT)).toEqual({
+      note: 'Hóspede Fictício cancelou por telefone',
+      situation: 'Paga pelo Hóspede Fictício',
+      report: 'Cancelada: Hóspede Fictício não apareceu',
+    });
     // A recente fica como estava.
     const recentDetail = await getCommercialDetail(db, RECENT);
     expect(recentDetail.returns[0]?.rejectionReason).toBe(

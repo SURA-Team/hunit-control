@@ -213,8 +213,8 @@ export class MemorySheetGateway implements CommercialSheetGateway {
   }
 
   /**
-   * O Comercial preenche as colunas de retorno (K a N) de uma linha. Recusa escrever nas colunas
-   * do sistema e na aba "Concluídas", como as proteções da planilha real (FR-011).
+   * O Comercial preenche as colunas de retorno (K a P, specs/008) de uma linha. Recusa escrever nas
+   * colunas do sistema e na aba "Concluídas", como as proteções da planilha real (FR-011).
    */
   fillReturn(hotelName: string, reservationNumber: string, cells: readonly SheetCellValue[]): void {
     const index = this.rowIndexOf('toCharge', hotelName, reservationNumber);

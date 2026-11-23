@@ -53,6 +53,14 @@ export const OPERATOR_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   'undoCommercialReturnConfirmation',
   'confirmCommercialReturns',
   'readCommercialSheet',
+  // Ajustes de cobrança (specs/008): o perfil consulta vê a fila e a marcação, mas não marca, não
+  // desfaz e não pede a verificação no Hunit.
+  'markReservationNoCharge',
+  'undoReservationNoCharge',
+  'checkCommercialHunitCharges',
+  // A "Cancelada" do Comercial: só o operador confirma ou recusa (homologação, R-19).
+  'confirmCommercialCancellation',
+  'rejectCommercialCancellation',
 ]);
 
 /** Gera uma chave de API nova, com 256 bits aleatórios. */

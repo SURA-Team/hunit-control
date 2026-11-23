@@ -71,6 +71,8 @@ export async function checkDispatchEligibility(
         hasCurrentProof: flags.hasCurrentProof,
         hasReturnAwaiting: flags.hasReturnAwaiting,
         lineState: summary?.commercial?.lineState ?? null,
+        // Marcada como cancelada sem cobrança: não vai mais ao Comercial (specs/008, FR-020).
+        noChargeMarked: summary ? treatmentFlags(summary).noChargeMarked : false,
       }),
     };
   });

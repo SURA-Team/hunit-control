@@ -53,7 +53,13 @@ describe('GET .../commercial', () => {
     const response = await call('GET', path(1), reader);
     expect(response.statusCode).toBe(200);
     expectMatchesContract('getReservationCommercial', response);
-    expect(response.json()).toEqual({ line: null, returns: [], events: [] });
+    expect(response.json()).toEqual({
+      line: null,
+      returns: [],
+      events: [],
+      history: [],
+      report: null,
+    });
   });
 
   it('linha, retorno com a diferença para o valor a cobrar e reserva inexistente (404)', async () => {

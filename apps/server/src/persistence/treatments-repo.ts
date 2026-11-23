@@ -10,6 +10,7 @@
  */
 import {
   acceptsTreatment,
+  effectiveClassification,
   isRevertible,
   needsReview,
   treatmentStatus,
@@ -21,6 +22,7 @@ import { and, desc, eq, isNull, max, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   loadCommercialSummaries,
+  noChargeMarkedCondition,
   refreshCommercialLine,
   type CommercialSummaryRecord,
 } from './commercial-repo.js';
@@ -28,6 +30,7 @@ import type { Database } from './db.js';
 import {
   apiClients,
   commercialReturns,
+  noChargeMarks,
   reservationManualAmounts,
   reservations,
   treatmentDocuments,
@@ -81,6 +84,23 @@ export interface TreatmentEventRecord {
   fromLegacy: boolean;
 }
 
+/** Uma marcação "Cancelada sem cobrança" do Financeiro, com quem marcou e quem desfez (specs/008). */
+export interface NoChargeMarkRecord {
+  id: string;
+  markedAt: Date;
+  markedBy: string;
+  note: string | null;
+  previousAmount: string | null;
+  undoneAt: Date | null;
+  undoneBy: string | null;
+}
+
+/** Marcações da reserva: a ativa e todas, da mais recente para a mais antiga (specs/008, R-08). */
+export interface NoChargeSummary {
+  active: NoChargeMarkRecord | null;
+  history: NoChargeMarkRecord[];
+}
+
 /** O que a reserva tem de tratativa neste momento. */
 export interface TreatmentSummary {
   /** Tratativa vigente. */
@@ -92,6 +112,8 @@ export interface TreatmentSummary {
   lastReviewAt: Date | null;
   /** Envio ao Comercial pela planilha (specs/005); `null` = nunca enviada pela planilha. */
   commercial: CommercialSummaryRecord | null;
+  /** Marcação "Cancelada sem cobrança" (specs/008). */
+  noCharge: NoChargeSummary;
 }
 
 export const EMPTY_TREATMENT: TreatmentSummary = {
@@ -100,6 +122,7 @@ export const EMPTY_TREATMENT: TreatmentSummary = {
   manualAmount: null,
   lastReviewAt: null,
   commercial: null,
+  noCharge: { active: null, history: [] },
 };
 
 /**
@@ -113,6 +136,8 @@ export function treatmentFlags(summary: TreatmentSummary): {
   hasReturnAwaiting: boolean;
   /** Valor do retorno confirmado, se houver. */
   commercialAmount: string | null;
+  /** Marcada como cancelada sem cobrança (specs/008): vale a classificação efetiva. */
+  noChargeMarked: boolean;
 } {
   const commercial = summary.commercial;
   const currentReturn = commercial?.currentReturn ?? null;
@@ -123,6 +148,7 @@ export function treatmentFlags(summary: TreatmentSummary): {
     hasCurrentProof: summary.proof !== null || confirmed,
     hasReturnAwaiting: currentReturn?.state === 'awaiting_validation',
     commercialAmount: confirmed ? currentReturn.chargedAmount : null,
+    noChargeMarked: summary.noCharge.active !== null,
   };
 }
 
@@ -181,7 +207,11 @@ function ofReservation(
 
 /** `(hotel, número) in (...)`, para ler os dados de várias reservas numa consulta só. */
 function inReservations(
-  table: typeof treatmentDocuments | typeof reservationManualAmounts | typeof treatmentEvents,
+  table:
+    | typeof treatmentDocuments
+    | typeof reservationManualAmounts
+    | typeof treatmentEvents
+    | typeof noChargeMarks,
   keys: readonly ReservationKey[],
 ): SQL {
   const tuples = keys.map((key) => sql`(${key.hotelCode}, ${key.reservationNumber})`);
@@ -203,7 +233,7 @@ export async function loadTreatmentSummaries(
     const mapKey = reservationKeyOf(key);
     let summary = summaries.get(mapKey);
     if (!summary) {
-      summary = { ...EMPTY_TREATMENT };
+      summary = { ...EMPTY_TREATMENT, noCharge: { active: null, history: [] } };
       summaries.set(mapKey, summary);
     }
     return summary;
@@ -238,8 +268,35 @@ export async function loadTreatmentSummaries(
     summaryOf({ hotelCode, reservationNumber }).commercial = record;
   }
 
+  // Marcações "Cancelada sem cobrança" (specs/008, research R-08), da mais recente.
+  const marks = await executor
+    .select({
+      hotelCode: noChargeMarks.hotelCode,
+      reservationNumber: noChargeMarks.reservationNumber,
+      id: noChargeMarks.id,
+      markedAt: noChargeMarks.markedAt,
+      markedBy: markedByClient.name,
+      note: noChargeMarks.note,
+      previousAmount: noChargeMarks.previousAmount,
+      undoneAt: noChargeMarks.undoneAt,
+      undoneBy: undoneByClient.name,
+    })
+    .from(noChargeMarks)
+    .innerJoin(markedByClient, eq(markedByClient.id, noChargeMarks.markedByClientId))
+    .leftJoin(undoneByClient, eq(undoneByClient.id, noChargeMarks.undoneByClientId))
+    .where(inReservations(noChargeMarks, keys))
+    .orderBy(desc(noChargeMarks.markedAt), desc(noChargeMarks.id));
+  for (const { hotelCode, reservationNumber, ...mark } of marks) {
+    const summary = summaryOf({ hotelCode, reservationNumber });
+    summary.noCharge.history.push(mark);
+    if (mark.undoneAt === null) summary.noCharge.active = mark;
+  }
+
   return summaries;
 }
+
+const markedByClient = alias(apiClients, 'no_charge_marked_by');
+const undoneByClient = alias(apiClients, 'no_charge_undone_by');
 
 export async function loadTreatmentSummary(
   executor: Executor,
@@ -263,6 +320,7 @@ async function lockReservation(
       classification: reservations.classification,
       totalAmount: reservations.totalAmount,
       statusChangedAt: reservations.statusChangedAt,
+      noChargeMarked: noChargeMarkedCondition(),
     })
     .from(reservations)
     .where(
@@ -272,7 +330,14 @@ async function lockReservation(
       ),
     )
     .for('update');
-  return row ?? null;
+  if (!row) return null;
+  // Marcada como cancelada sem cobrança, vale a classificação efetiva: não aceita documentos
+  // (specs/008, research R-08).
+  const { noChargeMarked, ...reservation } = row;
+  return {
+    ...reservation,
+    classification: effectiveClassification(reservation.classification, noChargeMarked),
+  };
 }
 
 type DocumentRow = typeof treatmentDocuments.$inferSelect;
@@ -454,7 +519,7 @@ export async function checkDocuments(
     .select({
       hotelCode: reservations.hotelCode,
       reservationNumber: reservations.reservationNumber,
-      classification: reservations.classification,
+      classification: sql<Classification>`(case when ${noChargeMarkedCondition()} then 'cancelled_no_charge' else ${reservations.classification}::text end)`,
       totalAmount: reservations.totalAmount,
     })
     .from(reservations)
@@ -676,6 +741,7 @@ export async function confirmReview(
       status,
       statusChangedAt: reservation.statusChangedAt,
       lastReviewAt: summary.lastReviewAt,
+      noChargeMarked: treatmentFlags(summary).noChargeMarked,
     });
     if (pending) {
       await tx.insert(treatmentEvents).values({
@@ -779,6 +845,7 @@ async function confirmReviewChunk(
         status: treatmentStatus(treatmentFlags(summary)),
         statusChangedAt: reservation.statusChangedAt,
         lastReviewAt: summary.lastReviewAt,
+        noChargeMarked: treatmentFlags(summary).noChargeMarked,
       });
     if (!pending) {
       return {

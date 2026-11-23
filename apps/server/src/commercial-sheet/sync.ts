@@ -6,15 +6,19 @@
  *
  * Regras que protegem o que o Comercial digita:
  * - numa linha que continua em "A cobrar", só as colunas do sistema (A a J) são escritas;
- * - as colunas de retorno (K a N) só são escritas ao criar a linha ou ao movê-la para "Concluídas"
- *   (cópia do que foi lido).
+ * - as colunas de retorno (K a P; O e P desde a 008) só são escritas ao criar a linha ou ao movê-la
+ *   para "Concluídas" (cópia do que foi lido).
  *
  * Uma rodada por vez, neste processo (o servidor é um só, constitution V). Gatilhos: mudanças
  * pendentes (verificadas a cada 30 s), a leitura a cada 10 min, "Ler retornos agora" e as novas
  * tentativas depois de uma falha (1, 2, 4 e 5 min, depois a cada 5 min — SC-010).
  */
 import {
+  amountToCharge,
   detailedSituation,
+  effectiveClassification,
+  HUNIT_NOT_FOUND_REASON,
+  hunitChargeStatus,
   RETURN_COLUMN_FIELDS,
   sheetHotelNames,
   sheetSystemRow,
@@ -121,7 +125,7 @@ interface SheetEntry {
 const asText = (value: SheetCellValue): string =>
   value === null || value === undefined ? '' : String(value);
 
-/** Células de retorno (K a N) de uma linha da planilha. */
+/** Células de retorno (K a P) de uma linha da planilha. */
 function returnCellsOf(row: readonly SheetCellValue[]): CommercialReturnCells {
   const cells: CommercialReturnCells = {};
   RETURN_COLUMN_FIELDS.forEach((field, offset) => {
@@ -130,10 +134,17 @@ function returnCellsOf(row: readonly SheetCellValue[]): CommercialReturnCells {
   return cells;
 }
 
+const returnCellsSlice = (row: readonly SheetCellValue[]) =>
+  row.slice(SYSTEM_COLUMN_COUNT, SYSTEM_COLUMN_COUNT + RETURN_COLUMN_FIELDS.length);
+
 const hasAnyReturn = (row: readonly SheetCellValue[]) =>
-  row
-    .slice(SYSTEM_COLUMN_COUNT, SYSTEM_COLUMN_COUNT + 4)
-    .some((cell) => asText(cell).trim() !== '');
+  returnCellsSlice(row).some((cell) => asText(cell).trim() !== '');
+
+/** "2026-11-19" → número de série das datas do Google (dias desde 30/12/1899). */
+function serialDate(isoDate: string): number {
+  const [year = 0, month = 1, day = 1] = isoDate.split('-').map(Number);
+  return Math.round((Date.UTC(year, month - 1, day) - Date.UTC(1899, 11, 30)) / DAY_MS);
+}
 
 /** A linha toda vazia (o Google pode devolver linhas vazias no meio). */
 const isBlankRow = (row: readonly SheetCellValue[]) =>
@@ -408,7 +419,8 @@ export class CommercialSheetSync {
         reservationNumber: line.reservationNumber,
         checkIn: line.checkIn,
         channel: line.channel,
-        totalAmount: line.totalAmount,
+        // Valor a cobrar: R$ 0,00 com a marcação "Cancelada sem cobrança" (specs/008, FR-020).
+        totalAmount: amountToCharge(line.totalAmount, line.noChargeMarked),
         classification: line.classification,
         reservationStatus: line.reservationStatus,
         detailedSituation: this.situationOf(line, summaries),
@@ -457,7 +469,7 @@ export class CommercialSheetSync {
       // Linha nova na aba (envio novo, mudança de aba ou linha apagada por alguém).
       const source = elsewhere[0];
       const returnCells: SheetCellValue[] = source
-        ? source.row.slice(SYSTEM_COLUMN_COUNT, SYSTEM_COLUMN_COUNT + 4)
+        ? returnCellsSlice(source.row)
         : this.lastReadCells(line);
       appends[target].push([...desired, ...returnCells]);
       for (const entry of elsewhere)
@@ -497,10 +509,19 @@ export class CommercialSheetSync {
     const flags = summary
       ? treatmentFlags(summary)
       : { hasCurrentRequest: false, hasCurrentProof: false, hasReturnAwaiting: false };
-    return detailedSituation(line.classification, treatmentStatus(flags), flags.hasReturnAwaiting);
+    return detailedSituation(
+      effectiveClassification(line.classification, line.noChargeMarked),
+      treatmentStatus(flags),
+      flags.hasReturnAwaiting,
+    );
   }
 
-  /** O que a coluna "Validação do Financeiro" mostra (FR-010). */
+  /**
+   * O que a coluna "Validação do Financeiro" mostra (FR-010; specs/008, contracts/sheet-layout.md):
+   * o problema do retorno; a marcação "Cancelada sem cobrança"; o retorno a validar ou confirmado; o
+   * relato "Cobrada no Hunit" pela situação derivada da última leitura no Hunit (R-07) ou a
+   * "Cancelada" aguardando ou recusada pelo Financeiro (R-19); e, sem nada disso, o de antes.
+   */
   private validationOf(
     line: SheetLineSource,
     summaries: Awaited<ReturnType<typeof loadTreatmentSummaries>>,
@@ -508,9 +529,33 @@ export class CommercialSheetSync {
     if (line.state === 'open' && line.returnProblem !== null) {
       return { kind: 'problem', text: line.returnProblem };
     }
+    if (line.noChargeMarked && line.state !== 'cancelled') return { kind: 'no_charge' };
     const current = summaries.get(reservationKeyOf(line))?.commercial?.currentReturn ?? null;
     if (current?.state === 'awaiting_validation') return { kind: 'awaiting' };
     if (current?.state === 'confirmed') return { kind: 'confirmed' };
+    if (line.report !== null && line.state !== 'cancelled') {
+      if (line.report.kind === 'cancelled') {
+        // Confirmada, a reserva está marcada ("no_charge", acima); aguardando ou recusada, aqui.
+        if (line.state === 'open' && line.report.validationState === 'awaiting_validation') {
+          return { kind: 'cancellation_awaiting' };
+        }
+        if (line.state === 'open' && line.report.validationState === 'rejected') {
+          return {
+            kind: 'rejected',
+            reason: line.report.rejectionReason ?? 'sem motivo informado',
+          };
+        }
+      } else {
+        const status = hunitChargeStatus({
+          readAt: line.report.readAt,
+          lastVerifiedAt: line.lastVerifiedAt,
+          hunitClassification: line.classification,
+        });
+        if (status === 'awaiting') return { kind: 'hunit_awaiting' };
+        if (status === 'confirmed') return { kind: 'hunit_confirmed' };
+        return { kind: 'rejected', reason: HUNIT_NOT_FOUND_REASON };
+      }
+    }
     if (line.state !== 'open') return { kind: 'none' };
     if (current?.state === 'rejected') {
       return { kind: 'rejected', reason: current.rejectionReason ?? 'sem motivo informado' };
@@ -519,8 +564,21 @@ export class CommercialSheetSync {
     return { kind: 'awaiting_return' };
   }
 
-  /** Retorno já lido, para reconstruir uma linha apagada sem perder o que o Comercial informou. */
+  /**
+   * Retorno ou relato já lido, para reconstruir uma linha apagada sem perder o que o Comercial
+   * informou (a data volta como data da planilha, não como texto).
+   */
   private lastReadCells(line: SheetLineSource): SheetCellValue[] {
+    if (line.report !== null) {
+      return [
+        '',
+        '',
+        '',
+        line.report.chargedBy ?? '',
+        line.report.situationText,
+        line.report.chargeDate === null ? '' : serialDate(line.report.chargeDate),
+      ];
+    }
     const values = line.lastReadReturn;
     if (!values) return [];
     return [
@@ -528,6 +586,8 @@ export class CommercialSheetSync {
       values.chargeHotel,
       Number(values.chargedAmount),
       values.chargedBy,
+      values.chargeSituation ?? '',
+      values.chargeDate === undefined ? '' : serialDate(values.chargeDate),
     ];
   }
 }

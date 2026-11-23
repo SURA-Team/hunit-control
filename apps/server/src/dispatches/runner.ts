@@ -9,6 +9,11 @@
  * retomada processa só as não verificadas.
  *
  * Roda no mesmo processo da API, como as execuções: usuário, senha e token ficam só em memória.
+ *
+ * Desde a 008 (research R-07), o mesmo executor faz o "Verificar agora" da fila "Cobradas no Hunit"
+ * (`purpose = hunit_check`): mesmo login, token, cancelamento, retomada e trava por conta; cada
+ * reserva é lida e gravada como no envio, mas sem abrir linha nem registrar envio; o item termina
+ * `checked`, com o resultado (o Hunit mostra ou não a cobrança).
  */
 import {
   buildReservationData,
@@ -16,6 +21,8 @@ import {
   CLASSIFICATION_NAMES,
   dispatchOutcome,
   formatBrDate,
+  hunitCheckResult,
+  isHunitCheckTarget,
   type ReservationSnapshot,
 } from '@hunit/domain';
 import { and, eq } from 'drizzle-orm';
@@ -46,6 +53,7 @@ import {
   openLineOnSend,
   refreshCommercialLine,
 } from '../persistence/commercial-repo.js';
+import { listHunitQueue } from '../persistence/commercial-reports-repo.js';
 import type { Database } from '../persistence/db.js';
 import {
   createDispatch,
@@ -65,6 +73,22 @@ import type { ReservationKey } from '../persistence/treatments-repo.js';
 import type { SecretRegistry } from '../secrets.js';
 import { checkDispatchEligibility, uniqueReservationKeys } from './eligibility.js';
 import type { DispatchEventBus } from './events.js';
+
+/** A fila "Cobradas no Hunit" não tem relato para conferir (specs/008, FR-014). */
+export class NoReportsToCheckError extends Error {
+  constructor() {
+    super('Nenhuma reserva da fila "Cobradas no Hunit" precisa ser conferida agora.');
+    this.name = 'NoReportsToCheckError';
+  }
+}
+
+export interface StartHunitCheckInput {
+  clientId: string;
+  credentials: HunitCredentials;
+  /** Só nas retomadas: as reservas não verificadas da verificação anterior. */
+  reservations?: readonly ReservationKey[];
+  parentDispatchId?: string | null;
+}
 
 /** Nenhuma das reservas pedidas aceita o envio (FR-003). */
 export class NoEligibleReservationsError extends Error {
@@ -125,6 +149,7 @@ const CANCELLED_MESSAGE =
 interface ActiveDispatch {
   dispatchId: string;
   clientId: string;
+  purpose: DispatchRow['purpose'];
   logger: Logger;
   gateway: HunitGateway | null;
   tokenGate: TokenGate;
@@ -139,6 +164,10 @@ interface ItemCounts {
   sent: number;
   withdrawn: number;
   notVerified: number;
+  /** Verificação (specs/008): o Hunit mostra a cobrança. */
+  confirmed: number;
+  /** Verificação (specs/008): o Hunit não mostra a cobrança. */
+  notFound: number;
 }
 
 export class DispatchRunner {
@@ -181,10 +210,61 @@ export class DispatchRunner {
       releaseAll(secrets);
       throw error;
     }
+    return this.launch(dispatch, input.clientId, input.credentials, secrets);
+  }
 
+  /**
+   * "Verificar agora" da fila "Cobradas no Hunit" (specs/008, FR-014; research R-07): cria a
+   * verificação com os relatos aguardando e os não encontrados que ainda exigem cobrança, e a
+   * executa como um envio. Na retomada, as reservas vêm da verificação anterior.
+   *
+   * @throws AccountBusyError, DispatchAlreadyResumedError, NoReportsToCheckError
+   */
+  async startHunitCheck(input: StartHunitCheckInput): Promise<DispatchRow> {
+    const secrets = registerRunSecrets(this.options.secrets, input.credentials);
+    let dispatch: DispatchRow;
+    try {
+      const targets =
+        input.reservations?.map((key) => ({ ...key, classification: null })) ??
+        (await listHunitQueue(this.options.db, this.now()))
+          .filter(isHunitCheckTarget)
+          .map((row) => ({
+            hotelCode: row.hotelCode,
+            reservationNumber: row.reservationNumber,
+            classification: row.classification,
+          }));
+      if (targets.length === 0) throw new NoReportsToCheckError();
+      dispatch = await createDispatch(this.options.db, {
+        accountKey: accountKeyFor(input.credentials.username, this.options.accountKeySecret),
+        clientId: input.clientId,
+        parentDispatchId: input.parentDispatchId ?? null,
+        purpose: 'hunit_check',
+        items: targets.map((target) => ({
+          hotelCode: target.hotelCode,
+          reservationNumber: target.reservationNumber,
+          classificationBefore: target.classification,
+          outcome: 'pending',
+          reason: null,
+        })),
+        now: this.now(),
+      });
+    } catch (error) {
+      releaseAll(secrets);
+      throw error;
+    }
+    return this.launch(dispatch, input.clientId, input.credentials, secrets);
+  }
+
+  private launch(
+    dispatch: DispatchRow,
+    clientId: string,
+    credentials: HunitCredentials,
+    secrets: RunSecrets,
+  ): DispatchRow {
     const run: ActiveDispatch = {
       dispatchId: dispatch.id,
-      clientId: input.clientId,
+      clientId,
+      purpose: dispatch.purpose,
       logger: this.options.logger.child({ dispatchId: dispatch.id }),
       gateway: null,
       tokenGate: new TokenGate(),
@@ -195,7 +275,7 @@ export class DispatchRunner {
       done: Promise.resolve(),
     };
     this.active.set(dispatch.id, run);
-    run.done = this.execute(run, input.credentials, secrets);
+    run.done = this.execute(run, credentials, secrets);
     return dispatch;
   }
 
@@ -289,7 +369,10 @@ export class DispatchRunner {
           dispatchId: run.dispatchId,
           type: 'status_changed',
           status: 'queued',
-          message: 'Envio ao Comercial criado.',
+          message:
+            run.purpose === 'hunit_check'
+              ? 'Verificação no Hunit criada.'
+              : 'Envio ao Comercial criado.',
         });
         await this.changeStatus(run, { to: 'running' }, 'Acessando o Hunit.');
         const gateway = await this.openGateway(run);
@@ -322,7 +405,9 @@ export class DispatchRunner {
         await this.changeStatus(
           run,
           { to: 'completed' },
-          `Envio concluído: ${counts.sent} enviadas ao Comercial, ${counts.withdrawn} retiradas e ${counts.notVerified} não verificadas.${late}`,
+          run.purpose === 'hunit_check'
+            ? `Verificação concluída: ${counts.confirmed} com a cobrança no Hunit, ${counts.notFound} sem a cobrança e ${counts.notVerified} não verificadas.${late}`
+            : `Envio concluído: ${counts.sent} enviadas ao Comercial, ${counts.withdrawn} retiradas e ${counts.notVerified} não verificadas.${late}`,
         );
       } catch (error) {
         await this.fail(run, error);
@@ -351,7 +436,7 @@ export class DispatchRunner {
 
   /** Verifica as reservas pendentes, uma por vez, na ordem do envio (FR-004, FR-005). */
   private async verifyAll(run: ActiveDispatch, gateway: HunitGateway): Promise<ItemCounts> {
-    const counts: ItemCounts = { sent: 0, withdrawn: 0, notVerified: 0 };
+    const counts: ItemCounts = { sent: 0, withdrawn: 0, notVerified: 0, confirmed: 0, notFound: 0 };
     const items = await listDispatchItems(this.options.db, run.dispatchId);
     // Uma retomada já começa sem as verificadas: só as pendentes interessam.
     for (const item of items) {
@@ -417,9 +502,12 @@ export class DispatchRunner {
       snapshot,
       result,
     });
-    const decision = dispatchOutcome(result.classification);
     const now = this.now();
     const name = CLASSIFICATION_NAMES[result.classification];
+    if (run.purpose === 'hunit_check') {
+      return this.recordCheck(run, key, data, result.classification, now);
+    }
+    const decision = dispatchOutcome(result.classification);
 
     await commitVerifiedReservation(this.options.db, {
       data,
@@ -475,6 +563,56 @@ export class DispatchRunner {
           : `Reserva ${key.reservationNumber}: retirada — ${name}.`,
     });
     return decision.outcome;
+  }
+
+  /**
+   * Grava a leitura de uma verificação (specs/008, research R-07): os dados e a classificação do
+   * Hunit, o evento `hunit_checked` e o item `checked`, sem abrir linha nem registrar envio. A linha
+   * da reserva é atualizada (coluna J e "Concluídas" se o Hunit mostra a cobrança).
+   */
+  private async recordCheck(
+    run: ActiveDispatch,
+    key: ReservationKey,
+    data: Parameters<typeof commitVerifiedReservation>[1]['data'],
+    classification: Parameters<typeof hunitCheckResult>[0],
+    now: Date,
+  ): Promise<keyof ItemCounts> {
+    const result = hunitCheckResult(classification);
+    const reason = result === 'confirmed' ? 'cobrança encontrada' : 'cobrança não encontrada';
+    await commitVerifiedReservation(this.options.db, {
+      data,
+      dispatchId: run.dispatchId,
+      now,
+      within: async (tx) => {
+        await insertCommercialEvent(tx, {
+          ...key,
+          type: 'hunit_checked',
+          clientId: run.clientId,
+          dispatchId: run.dispatchId,
+          classification,
+          reason,
+          at: now,
+        });
+        await recordItemOutcome(tx, {
+          dispatchId: run.dispatchId,
+          ...key,
+          outcome: 'checked',
+          classificationAfter: classification,
+          reason: CLASSIFICATION_NAMES[classification],
+          checkResult: result,
+          now,
+        });
+        await refreshCommercialLine(tx, key, now);
+      },
+    });
+    this.options.onLinesChanged?.();
+    await this.options.events.publish({
+      dispatchId: run.dispatchId,
+      type: 'item_processed',
+      ...key,
+      message: `Reserva ${key.reservationNumber}: ${reason} no Hunit (${CLASSIFICATION_NAMES[classification]}).`,
+    });
+    return result === 'confirmed' ? 'confirmed' : 'notFound';
   }
 
   private async notVerified(

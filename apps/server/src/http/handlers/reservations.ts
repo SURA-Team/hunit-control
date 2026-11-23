@@ -1,6 +1,13 @@
 import type { operations } from '@hunit/contracts';
+import type { NoChargeIneligibility } from '@hunit/domain';
 import type { FastifyRequest } from 'fastify';
+import type { CommercialSheetSync } from '../../commercial-sheet/sync.js';
 import type { Database } from '../../persistence/db.js';
+import { markNoCharge, undoNoCharge } from '../../persistence/no-charge-repo.js';
+import {
+  confirmCancellation,
+  rejectCancellation,
+} from '../../persistence/commercial-reports-repo.js';
 import { InvalidCursorError } from '../../persistence/executions-repo.js';
 import {
   countQuickFilters,
@@ -32,6 +39,21 @@ type FilterQuery = CountQuery & Pick<SelectQuery, 'quickFilter'>;
 /** Limite da seleção do filtro (specs/005, FR-030; o mesmo da seleção da 003, FR-006a). */
 export const MAX_SELECTION = 2000;
 type ReservationParams = operations['getReservation']['parameters']['path'];
+type NoChargeBody =
+  operations['markReservationNoCharge']['requestBody']['content']['application/json'];
+type UndoNoChargeBody =
+  operations['undoReservationNoCharge']['requestBody']['content']['application/json'];
+type CancellationRejectBody =
+  operations['rejectCommercialCancellation']['requestBody']['content']['application/json'];
+
+/** Por que a reserva não aceita a marcação "Cancelada sem cobrança" (specs/008, FR-022). */
+const NO_CHARGE_REASONS: Readonly<Record<NoChargeIneligibility, string>> = {
+  already_marked: 'A reserva já está marcada como cancelada sem cobrança.',
+  not_accepting: 'A reserva já está concluída: a situação dela não exige cobrança.',
+  has_proof: 'A reserva já tem comprovante.',
+  return_awaiting_validation:
+    'Há retorno do Comercial aguardando validação: confirme ou recuse o retorno antes.',
+};
 
 const DEFAULT_PAGE_SIZE = 50;
 /** Tamanho mínimo da busca livre depois de tirar os espaços das pontas (contrato: `q`). */
@@ -79,11 +101,128 @@ function filtersOf(query: FilterQuery): ReservationFilters {
   };
 }
 
-export function createReservationHandlers(dependencies: { db: Database; now?: () => Date }) {
+export function createReservationHandlers(dependencies: {
+  db: Database;
+  now?: () => Date;
+  commercialSheet?: CommercialSheetSync | null | undefined;
+}) {
   const { db } = dependencies;
   const now = dependencies.now ?? (() => new Date());
 
+  /** A reserva no formato do contrato, lida de novo depois de uma mudança. */
+  async function reservationView(hotelCode: string, reservationNumber: string) {
+    const row = await findReservation(db, hotelCode, reservationNumber);
+    if (!row) throw new ProblemError('not_found', 'Reserva não encontrada.');
+    const treatments = await loadTreatmentSummaries(db, [row]);
+    const origins = await loadLegacyOrigins(db, [row]);
+    return toReservationView(
+      row,
+      treatments.get(reservationKeyOf(row)),
+      now(),
+      origins.get(reservationKeyOf(row)) ?? null,
+    );
+  }
+
+  function clientIdOf(request: FastifyRequest): string {
+    if (!request.client) throw new ProblemError('unauthorized');
+    return request.client.id;
+  }
+
   return {
+    /**
+     * POST .../no-charge — marca a reserva como cancelada sem cobrança (specs/008, FR-018 a
+     * FR-022). Só operador; não acessa o Hunit.
+     */
+    async markReservationNoCharge(request: FastifyRequest) {
+      const key = request.params as ReservationParams;
+      const body = request.body as NoChargeBody;
+      const note = body.note?.trim() ?? '';
+      const result = await markNoCharge(db, {
+        key,
+        expectedSituation: body.expectedSituation,
+        note: note === '' ? null : note,
+        clientId: clientIdOf(request),
+        now: now(),
+      });
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          throw new ProblemError('not_found', 'Reserva não encontrada.');
+        }
+        if (result.reason === 'reservation_changed') throw new ProblemError('reservation_changed');
+        throw new ProblemError('no_charge_not_accepted', NO_CHARGE_REASONS[result.detail], {
+          reason: result.detail,
+        });
+      }
+      request.log.info('reserva marcada como cancelada sem cobrança');
+      dependencies.commercialSheet?.requestRound();
+      return reservationView(key.hotelCode, key.reservationNumber);
+    },
+
+    /**
+     * POST .../commercial/cancellation/confirm — confirma a "Cancelada" do Comercial: a reserva é
+     * marcada como cancelada sem cobrança (homologação da 008, R-19; spec FR-007c). Só operador.
+     */
+    async confirmCommercialCancellation(request: FastifyRequest) {
+      const key = request.params as ReservationParams;
+      const result = await confirmCancellation(db, {
+        key,
+        clientId: clientIdOf(request),
+        now: now(),
+      });
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          throw new ProblemError('not_found', 'Reserva não encontrada.');
+        }
+        if (result.reason === 'not_awaiting') {
+          throw new ProblemError('no_cancellation_awaiting_validation');
+        }
+        if (result.reason === 'reservation_changed') throw new ProblemError('reservation_changed');
+        throw new ProblemError('no_charge_not_accepted', NO_CHARGE_REASONS[result.detail], {
+          reason: result.detail,
+        });
+      }
+      request.log.info('"Cancelada" do Comercial confirmada');
+      dependencies.commercialSheet?.requestRound();
+      return reservationView(key.hotelCode, key.reservationNumber);
+    },
+
+    /** POST .../commercial/cancellation/reject — recusa a "Cancelada" com o motivo (R-19). */
+    async rejectCommercialCancellation(request: FastifyRequest) {
+      const key = request.params as ReservationParams;
+      const body = request.body as CancellationRejectBody;
+      const result = await rejectCancellation(db, {
+        key,
+        clientId: clientIdOf(request),
+        reason: body.reason.trim(),
+        now: now(),
+      });
+      if (!result.ok) throw new ProblemError('no_cancellation_awaiting_validation');
+      request.log.info('"Cancelada" do Comercial recusada');
+      dependencies.commercialSheet?.requestRound();
+      return reservationView(key.hotelCode, key.reservationNumber);
+    },
+
+    /** POST .../no-charge/undo — desfaz a marcação (specs/008, FR-021). Só operador. */
+    async undoReservationNoCharge(request: FastifyRequest) {
+      const key = request.params as ReservationParams;
+      const body = request.body as UndoNoChargeBody;
+      const result = await undoNoCharge(db, {
+        key,
+        markId: body.markId,
+        clientId: clientIdOf(request),
+        now: now(),
+      });
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          throw new ProblemError('not_found', 'Reserva não encontrada.');
+        }
+        throw new ProblemError('no_charge_not_active');
+      }
+      request.log.info('marcação "cancelada sem cobrança" desfeita');
+      dependencies.commercialSheet?.requestRound();
+      return reservationView(key.hotelCode, key.reservationNumber);
+    },
+
     /** GET /v1/reservations — reservas com filtros combináveis (FR-020). */
     async listReservations(request: FastifyRequest) {
       const query = request.query as ListReservationsQuery;
