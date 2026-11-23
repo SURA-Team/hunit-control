@@ -16,9 +16,11 @@ foram tocadas. A 7.7a (envio em andamento na aba "Envios", aprovada pela UX) tem
 roteiro de captura, mas não entra na marcação enquanto o número não for definitivo. O mesmo vale
 para a 7.5a e a 7.8a (a "Cancelada" do Comercial, da homologação da 008, sem desenho).
 
-Na conclusão da 008 (T038, 23/11/2026): 1.1, 1.2, 1.3, 7.5, 7.7, 7.8 e 7.12 passam a ser as da página
-`008-ajustes-cobranca-e-aviso`, e as telas novas 7.15, 7.17 e 7.18 entram no catálogo; a marcação no
-Figma é a T043.
+Na conclusão da 008 (T038 e T043, 23/11/2026): 1.1, 1.2, 1.3, 7.5, 7.7, 7.8 e 7.12 passaram a ser as
+da página `008-ajustes-cobranca-e-aviso`, e as telas novas 7.15, 7.17 e 7.18 entraram no catálogo. A
+marcação mudou 17 frames, sem conflitos: as dez da 008 com ✅ e as sete versões da 006 com ❌, ocultas.
+A 007 (relatórios), ainda em desenvolvimento, ficou de fora com `SKIP`. As páginas 002 a 005 agora
+têm ❌ no nome da página e não são mais varridas (as telas delas já estavam com ❌ desde a 006).
 
 ## Catálogo
 
