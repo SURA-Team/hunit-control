@@ -6,6 +6,10 @@
  *
  * Desde a 006 (FR-001, FR-002, T016): cabeçalho com a marca, o cliente e o perfil, menu lateral
  * flutuante com o ícone de cada área e a ativa em pílula, e o conteúdo com largura máxima.
+ *
+ * Desde a 007 (FR-001, research R-08): a área Relatórios, nos dois perfis, entre Comercial e
+ * Configuração. O período do relatório fica aqui (lembrado enquanto o app está aberto), e a ida do
+ * relatório para Reservas leva os filtros (`ReservationsPreset`, research R-07).
  */
 import { Text } from '@mantine/core';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -15,7 +19,15 @@ import { TwoFactorDialog } from './components/TwoFactorDialog';
 import { useHunit } from './hunit';
 import { CommercialScreen } from './screens/commercial/CommercialScreen';
 import { ExecutionsScreen } from './screens/executions/ExecutionsScreen';
-import { ReservationsScreen } from './screens/reservations/ReservationsScreen';
+import {
+  ReportsScreen,
+  defaultReportPeriod,
+  type ReportPeriod,
+} from './screens/reports/ReportsScreen';
+import {
+  ReservationsScreen,
+  type ReservationsPreset,
+} from './screens/reservations/ReservationsScreen';
 import { RunScreen } from './screens/run/RunScreen';
 import { SetupScreen } from './screens/setup/SetupScreen';
 import { playAlertSound } from './sound';
@@ -25,13 +37,14 @@ import {
   CommercialIcon,
   ExecutionsIcon,
   ReservationsIcon,
+  ReportsIcon,
   RunIcon,
   SettingsIcon,
   SideMenu,
   SideMenuItem,
 } from './ui';
 
-export type Area = 'run' | 'executions' | 'reservations' | 'commercial' | 'setup';
+export type Area = 'run' | 'executions' | 'reservations' | 'commercial' | 'reports' | 'setup';
 
 /** No máximo um aviso de atividade por minuto (research R-05). */
 const ACTIVITY_PING_MS = 60_000;
@@ -41,6 +54,7 @@ const AREA_TITLES: Record<Area, string> = {
   executions: 'Execuções',
   reservations: 'Reservas',
   commercial: 'Comercial',
+  reports: 'Relatórios',
   setup: 'Configuração',
 };
 
@@ -49,6 +63,7 @@ const AREA_ICONS: Record<Area, ReactNode> = {
   executions: <ExecutionsIcon />,
   reservations: <ReservationsIcon />,
   commercial: <CommercialIcon />,
+  reports: <ReportsIcon />,
   setup: <SettingsIcon />,
 };
 
@@ -60,6 +75,12 @@ export function App() {
   const [openExecutionId, setOpenExecutionId] = useState<string | null>(null);
   /** Execução usada como filtro ao abrir a área Reservas pelo detalhe de uma execução. */
   const [reservationsExecutionId, setReservationsExecutionId] = useState<string | null>(null);
+  /** Filtros vindos do relatório ao abrir a área Reservas (specs/007, research R-07). */
+  const [reservationsPreset, setReservationsPreset] = useState<ReservationsPreset | null>(null);
+  /** Período do relatório, lembrado enquanto o app está aberto (specs/007, premissas). */
+  const [reportPeriod, setReportPeriod] = useState<ReportPeriod>(defaultReportPeriod);
+  /** Muda a cada ida para Reservas, para a área começar de novo com os filtros pedidos. */
+  const [reservationsVisit, setReservationsVisit] = useState(0);
   const lastPing = useRef(0);
 
   // Sem conexão confirmada (não configurado, certificado ou chave recusados), só a configuração.
@@ -70,8 +91,8 @@ export function App() {
   const available: Area[] = needsSetup
     ? ['setup']
     : isOperator
-      ? ['run', 'executions', 'reservations', 'commercial', 'setup']
-      : ['executions', 'reservations', 'commercial', 'setup'];
+      ? ['run', 'executions', 'reservations', 'commercial', 'reports', 'setup']
+      : ['executions', 'reservations', 'commercial', 'reports', 'setup'];
   const area: Area = available.includes(chosen) ? chosen : (available[0] ?? 'setup');
 
   // Ação do operador renova o prazo do cofre do acesso ao Hunit.
@@ -107,17 +128,32 @@ export function App() {
         initialExecutionId={openExecutionId}
         onOpenReservations={(executionId) => {
           setReservationsExecutionId(executionId);
+          setReservationsPreset(null);
+          setReservationsVisit((visit) => visit + 1);
           setChosen('reservations');
         }}
       />
     ),
     reservations: (
       <ReservationsScreen
-        key={reservationsExecutionId ?? 'todas'}
+        key={`${reservationsExecutionId ?? 'todas'}-${reservationsVisit}`}
         initialExecutionId={reservationsExecutionId}
+        preset={reservationsPreset}
       />
     ),
     commercial: <CommercialScreen />,
+    reports: (
+      <ReportsScreen
+        period={reportPeriod}
+        onPeriodChange={setReportPeriod}
+        onOpenReservations={(preset) => {
+          setReservationsExecutionId(null);
+          setReservationsPreset(preset);
+          setReservationsVisit((visit) => visit + 1);
+          setChosen('reservations');
+        }}
+      />
+    ),
     setup: <SetupScreen />,
   };
 
@@ -139,7 +175,12 @@ export function App() {
               active={area === item}
               onClick={() => {
                 if (item === 'executions') setOpenExecutionId(null);
-                if (item === 'reservations') setReservationsExecutionId(null);
+                if (item === 'reservations') {
+                  // Pelo menu, a área abre sem os filtros da execução ou do relatório.
+                  if (reservationsPreset) setReservationsVisit((visit) => visit + 1);
+                  setReservationsExecutionId(null);
+                  setReservationsPreset(null);
+                }
                 setChosen(item);
               }}
             />

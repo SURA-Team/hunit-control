@@ -13,6 +13,10 @@
  * da 008 vão em campos novos (`CommercialDetail.history`, `CommercialSheetStatus.reports`…). A única
  * exceção, `CommercialDispatchItem.outcome` + `checked`, só aparece em verificações, que a lista de
  * envios deixa de fora por padrão (teste em commercial-hunit-charges.test.ts).
+ *
+ * A 1.10.0 (specs/007, research R-01) só acrescenta a rota `/reports/overview` e o valor
+ * `amount_desc` em `ReservationOrder`, parâmetro de entrada que o app 0.4 não manda; nenhuma das
+ * enumerações congeladas muda.
  */
 import { describe, expect, it } from 'vitest';
 import { contractDocument } from '../helpers/contract.js';
@@ -76,8 +80,8 @@ describe('enumerações usadas pelo app atual não ganham valores (specs/005, R-
     ]);
   });
 
-  it('a versão do contrato é a 1.9.0', () => {
-    expect((contractDocument['info'] as { version?: string } | undefined)?.version).toBe('1.9.0');
+  it('a versão do contrato é a 1.10.0', () => {
+    expect((contractDocument['info'] as { version?: string } | undefined)?.version).toBe('1.10.0');
   });
 });
 

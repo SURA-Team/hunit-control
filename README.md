@@ -329,6 +329,15 @@ listas, as colunas que não cabem passam para a segunda linha.
   esquerda só marca.
 - **Comercial**: as abas **Envios** (os em andamento em cards escuros no topo), **Retornos a
   validar**, **Retornos com problema** e **Planilha**.
+- **Relatórios** (versão 0.5, feature 007): o panorama do período de check-in, para os dois perfis.
+  Abre nos últimos 30 dias; os atalhos (**Últimos 7 dias**, **Últimos 30 dias**, **Este mês**) e
+  **Personalizado** valem na hora. Mostra as reservas, as tratativas enviadas, os hotéis com dados, o
+  **valor em aberto** (solicitado, com tratativa, e pendente, sem tratativa), o **valor já cobrado**
+  (cobrado anteriormente, sem tratativa, e recuperado, depois da tratativa), a distribuição dos
+  valores e o ranking dos hotéis com mais valor em aberto. Clicar num hotel abre o detalhe, com as
+  reservas em aberto; **Ver as N reservas em Reservas** (ou **Ver reservas em aberto**) abre a área
+  Reservas já filtrada. As reservas faturadas, ignoradas (Hotelbeds 258) e "A revisar (sistema
+  anterior)" não entram no relatório. Os números não se atualizam sozinhos: use **Atualizar dados**.
 
 ### Tratativas manuais
 

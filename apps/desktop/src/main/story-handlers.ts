@@ -1,6 +1,7 @@
 /**
  * Canais da ponte das histórias (specs/002, contracts/ipc.md): executar e responder ao token (US1),
- * acompanhar, cancelar e retomar (US2), consultar reservas e evidências (US3).
+ * acompanhar, cancelar e retomar (US2), consultar reservas e evidências (US3). Desde a 007, o resumo
+ * do módulo de Relatórios.
  *
  * Mesmas regras dos canais da fundação (ipc-handlers.ts): entrada validada antes de qualquer
  * efeito, `Result` em toda resposta, nada sensível de volta. Usuário e senha do Hunit saem do cofre
@@ -12,6 +13,7 @@ import {
   evidenceSaveInputSchema,
   executionIdSchema,
   executionListInputSchema,
+  reportOverviewInputSchema,
   reservationCountFiltersSchema,
   markNoChargeInputSchema,
   reservationKeySchema,
@@ -139,6 +141,11 @@ export function createStoryHandlers(services: StoryServices): InvokeHandlers {
           detailedSituation: filters.detailedSituation as never,
         }),
       ),
+    ),
+
+    // Módulo de Relatórios (specs/007): só leitura, para os dois perfis.
+    [INVOKE.reportsOverview]: handle(reportOverviewInputSchema, (input) =>
+      withApi((api) => api.getReportOverview(input)),
     ),
 
     [INVOKE.reservationsGet]: handle(reservationKeySchema, (key) =>

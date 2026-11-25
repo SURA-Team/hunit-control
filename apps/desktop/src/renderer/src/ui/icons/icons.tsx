@@ -98,6 +98,15 @@ export const CommercialIcon = createIcon('CommercialIcon', 20, [
   },
 ]);
 
+/** `reports.svg` (specs/007, T002): item "Relatórios" do menu. */
+export const ReportsIcon = createIcon('ReportsIcon', 20, [
+  {
+    d: 'M3.33333 16.6667V8.33333M8.33333 16.6667V3.33333M13.3333 16.6667V10.8333M18.3333 16.6667H1.66667',
+    width: 1.5,
+    linejoin: 'round',
+  },
+]);
+
 /** `document.svg` */
 export const DocumentIcon = createIcon('DocumentIcon', 20, [
   {

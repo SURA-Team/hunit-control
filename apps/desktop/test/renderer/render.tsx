@@ -150,6 +150,23 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       markNoCharge: vi.fn(() => errorResult('internal_error')),
       undoNoCharge: vi.fn(() => errorResult('internal_error')),
     },
+    // Módulo de Relatórios (specs/007): por padrão, um período sem reservas.
+    reports: {
+      overview: vi.fn((input: { checkInFrom: string; checkInTo: string }) =>
+        okResult({
+          period: { from: input.checkInFrom, to: input.checkInTo },
+          generatedAt: '2026-11-16T13:58:00.000Z',
+          lastVerifiedAt: null,
+          reservations: 0,
+          treatmentsSent: 0,
+          withoutAmount: 0,
+          hotels: { withData: 0, total: 0 },
+          open: { amount: '0.00', count: 0, requested: '0.00', pending: '0.00' },
+          charged: { amount: '0.00', previous: '0.00', recovered: '0.00' },
+          hotelRows: [],
+        }),
+      ),
+    },
     treatments: {
       pickFile: vi.fn(() => okResult(null)),
       discardFile: vi.fn(() => okResult(undefined)),

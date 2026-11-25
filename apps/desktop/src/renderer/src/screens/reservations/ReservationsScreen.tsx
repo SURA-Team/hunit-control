@@ -80,10 +80,26 @@ export const SEARCH_DELAY_MS = 400;
 
 type SearchQuery = Pick<ReservationListInput, 'q' | 'amount'>;
 
+/**
+ * Filtros iniciais vindos do módulo de Relatórios (specs/007, research R-07): período de check-in,
+ * "Falta cobrar" e, a partir da gaveta de um hotel, o hotel. `expectedCount` é a quantidade que o
+ * relatório anunciou: se a lista encontrar outra, a tela avisa que o relatório pode estar
+ * desatualizado (Edge Cases).
+ */
+export interface ReservationsPreset {
+  hotelCodes?: string[];
+  checkInFrom: string;
+  checkInTo: string;
+  quickFilter: 'pending_charge';
+  expectedCount: number;
+}
+
 export function ReservationsScreen({
   initialExecutionId = null,
+  preset = null,
 }: {
   initialExecutionId?: string | null;
+  preset?: ReservationsPreset | null;
 }) {
   const hunit = useHunit();
   const { state, isOperator } = useConnection();
@@ -95,12 +111,21 @@ export function ReservationsScreen({
   const [searchQuery, setSearchQuery] = useState<SearchQuery>({});
   const [searchError, setSearchError] = useState<string | null>(null);
   const [origin, setOrigin] = useState<OriginFilter>('all');
-  const [panel, setPanel] = useState<PanelFilters>({
+  const [panel, setPanel] = useState<PanelFilters>(() => ({
     ...EMPTY_PANEL,
     executionId: initialExecutionId,
-  });
+    ...(preset && {
+      hotelCodes: preset.hotelCodes ?? [],
+      checkInFrom: preset.checkInFrom,
+      checkInTo: preset.checkInTo,
+    }),
+  }));
   const [panelOpen, setPanelOpen] = useState(false);
-  const [quickFilter, setQuickFilter] = useState<ReservationQuickFilter | null>(null);
+  const [quickFilter, setQuickFilter] = useState<ReservationQuickFilter | null>(
+    preset?.quickFilter ?? null,
+  );
+  /** Os filtros do preset, para saber se ainda são os que estão na tela. */
+  const [presetPanel] = useState(panel);
 
   const [opened, setOpened] = useState<Reservation | null>(null);
   const [selectionOpen, setSelectionOpen] = useState(false);
@@ -181,6 +206,17 @@ export function ReservationsScreen({
     placeholderData: keepPreviousData,
   });
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
+
+  // Vindo do relatório com os mesmos filtros, mas outra quantidade em aberto (specs/007, R-07).
+  const reportDiverged =
+    preset !== null &&
+    panel === presetPanel &&
+    quickFilter === preset.quickFilter &&
+    Object.keys(searchQuery).length === 0 &&
+    origin === 'all' &&
+    counts.data !== undefined &&
+    !counts.isPlaceholderData &&
+    counts.data.pendingCharge !== preset.expectedCount;
 
   const searching = Object.keys(searchQuery).length > 0;
   const filtering =
@@ -359,6 +395,12 @@ export function ReservationsScreen({
         >
           Selecione no máximo {SELECTION_LIMIT.toLocaleString('pt-BR')} reservas. As que passaram do
           limite não foram marcadas.
+        </Notice>
+      )}
+      {reportDiverged && (
+        <Notice tone="amber" role="status">
+          Os números do relatório podem estar desatualizados. Atualize o relatório para ver os de
+          agora.
         </Notice>
       )}
       {selectAllNotice && (

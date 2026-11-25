@@ -14,6 +14,7 @@ export {
   type ListHeaderProps,
 } from './ListCard';
 export { ListActions, ListCell, ListRow, type ListCellProps, type ListRowProps } from './ListRow';
+export { RankingList, RankingRow, type RankingListProps, type RankingRowProps } from './RankingRow';
 export { ReservationRow, type ReservationRowProps } from './ReservationRow';
 export {
   ProgressStrip,

@@ -25,8 +25,8 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/memory/constitution.md` | Princípios não negociáveis do projeto |
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
-| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios). Da 008: `src/persistence/no-charge-repo.ts` (marcação "Cancelada sem cobrança") e `src/persistence/commercial-reports-repo.ts` (relatos do Comercial e a fila "Cobradas no Hunit", verificada pelo executor dos envios) |
-| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca. Da 008, `src/main/app-identity.ts` (AUMID e ícone da janela por modo, para a marca na barra de tarefas do Windows) |
+| `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios). Da 008: `src/persistence/no-charge-repo.ts` (marcação "Cancelada sem cobrança") e `src/persistence/commercial-reports-repo.ts` (relatos do Comercial e a fila "Cobradas no Hunit", verificada pelo executor dos envios). Da 007: `src/persistence/reports-repo.ts` (resumo do período do módulo de Relatórios, sobre a mesma CTE das contagens dos filtros rápidos) |
+| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca. Da 008, `src/main/app-identity.ts` (AUMID e ícone da janela por modo, para a marca na barra de tarefas do Windows). Da 007, `src/renderer/src/screens/reports/` (módulo de Relatórios) e `src/renderer/src/ui/charts/` (barras, legendas e cards de valor; catálogo em `specs/007-relatorios-app-desktop/contracts/ui-components.md`) |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
@@ -190,10 +190,10 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/008-ajustes-cobranca-e-aviso/contracts/openapi.yaml`) — as duas cópias devem ficar
+  `specs/007-relatorios-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar
   idênticas. A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001
-  continua na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0, a da 005 na 1.7.0 e a
-  da 006 na 1.8.0, e não devem ser alteradas (a da 008 entrega a 1.9.0)
+  continua na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0, a da 005 na 1.7.0, a
+  da 006 na 1.8.0 e a da 008 na 1.9.0, e não devem ser alteradas (a da 007 entrega a 1.10.0)
   (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
   research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
   `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).
@@ -324,3 +324,18 @@ tarefas). O contrato passou para a 1.9.0 (só acréscimos: `noCharge`, `amountTo
 `commercial.report`, `chargeSituation`, `history`, `/commercial-hunit-charges` e o `check`,
 `purpose` nos envios, `reports` na situação da planilha, as rotas da "Cancelada" e
 `includeCancellations`), e o app para a 0.4.0; o app 0.3 continua funcionando.
+
+Desde a feature 007 (`specs/007-relatorios-app-desktop/`), concluída depois da 008, o app tem a área
+**Relatórios**, nos dois perfis, entre Comercial e Configuração: o panorama do período de check-in
+(padrão "Últimos 30 dias", com atalhos e o calendário dos filtros), com Reservas, Tratativas enviadas e
+"Hotéis com dados" ("X de Y"), o valor em aberto (solicitado = "Falta cobrar" com tratativa; pendente =
+sem tratativa), o valor já cobrado (cobrado anteriormente = sem tratativa; recuperado = com tratativa
+antes da cobrança), a distribuição dos valores e o ranking dos hotéis, com o detalhe do hotel (as
+reservas em aberto, maiores primeiro) e "Todos os hotéis". As reservas "Ignorada (Hotelbeds 258)", "A
+revisar (sistema anterior)" e "Faturada" ficam fora do relatório (FR-008a). "Ver as N reservas" abre
+Reservas com o hotel, o período e "Falta cobrar"; se a contagem não bater, a lista avisa que o
+relatório pode estar desatualizado. A regra das faixas fica no domínio (`packages/domain/src/report.ts`)
+e o servidor a monta em SQL com a mesma CTE das contagens (teste de paridade). O contrato passou para a
+1.10.0 (só acréscimos: `GET /reports/overview` e a ordem `amount_desc` das reservas), e o app para a
+0.5.0; o app 0.4 continua funcionando. Para marcar as telas no Figma, rode a skill com a 008 como
+feature concluída (a página 007 tem número menor: research R-13).

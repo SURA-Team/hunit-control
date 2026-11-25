@@ -384,3 +384,40 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/*
+ * Selo do estado dos dados (specs/007, telas 8.1 e 8.5): pílula no tom com o ponto, em texto normal
+ * ("Dados atualizados", "Atualizando…", "dados de 10:58 — servidor indisponível").
+ */
+.dataStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--hc-radius-pill);
+  font: var(--hc-font-rotulo);
+  white-space: nowrap;
+}
+
+.dataStatus::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentcolor;
+  content: '';
+}
+
+.dataStatus[data-tone='green'] {
+  background: var(--hc-verde-1);
+  color: var(--hc-verde-9);
+}
+
+.dataStatus[data-tone='amber'] {
+  background: var(--hc-amarelo-1);
+  color: var(--hc-amarelo-9);
+}
+
+.dataStatus[data-tone='lime'] {
+  background: var(--hc-destaque-lima-suave);
+  color: var(--hc-azul-9);
+}

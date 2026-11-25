@@ -47,6 +47,8 @@ import type {
   ReservationListInput,
   ReservationOutcome,
   ReservationQuickFilterCounts,
+  ReportOverview,
+  ReportOverviewInput,
   ReservationSelection,
   ReservationTreatment,
   Result,
@@ -308,6 +310,11 @@ export class ApiClient {
     return this.call(() =>
       this.http.GET('/reservations/quick-filter-counts', { params: { query: filters } }),
     );
+  }
+
+  /** Resumo do período do módulo de Relatórios (specs/007, `GET /reports/overview`). */
+  getReportOverview(input: ReportOverviewInput): Promise<Result<ReportOverview>> {
+    return this.call(() => this.http.GET('/reports/overview', { params: { query: input } }));
   }
 
   getReservation(key: ReservationKey): Promise<Result<Reservation>> {
