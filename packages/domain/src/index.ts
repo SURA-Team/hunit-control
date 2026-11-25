@@ -212,6 +212,22 @@ export {
   quickFiltersOf,
   type QuickFilter,
 } from './quick-filters.js';
+export {
+  REPORT_CHARGED_SITUATIONS,
+  REPORT_EXCLUDED_SITUATIONS,
+  REPORT_PERIOD_SHORTCUTS,
+  REPORT_VALUE_BUCKETS,
+  distributionPercentages,
+  reportAmount,
+  reportBucket,
+  reportMissingAmount,
+  reportPeriod,
+  reportShortcutOf,
+  type DistributionShare,
+  type ReportBucket,
+  type ReportPeriodShortcut,
+  type ReportValueBucket,
+} from './report.js';
 export { CLASSIFICATIONS, RESERVATION_STATUSES } from './types.js';
 export type {
   Classification,

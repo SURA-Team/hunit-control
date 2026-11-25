@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.9.0
+  version: 1.10.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -41,6 +41,9 @@ info:
     `noCharge`, `amountToCharge`) e a busca pelo código de autorização do retorno confirmado. As
     enumerações que o app 0.3 usa como chave não ganham valores; a lista de envios só traz as
     verificações com `purpose`.
+    A feature 007 (relatórios) acrescenta, sem quebrar os clientes existentes: o resumo do período
+    de check-in, com os totais e uma linha por hotel (`/reports/overview`), e a ordem `amount_desc`
+    das reservas (valor do maior para o menor). Só leitura; nada disso acessa o Hunit.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -68,6 +71,8 @@ tags:
     description: Tratativas manuais das reservas — documentos, valor informado à mão e histórico (feature 003)
   - name: commercial
     description: Envio dos pedidos de cobrança ao Comercial pela planilha e retorno validado pelo Financeiro (feature 005)
+  - name: reports
+    description: Relatórios do período — valor em aberto, valor já cobrado e hotéis (feature 007)
 
 paths:
   /health:
@@ -1021,6 +1026,37 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReservationQuickFilterCounts' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reports/overview:
+    get:
+      tags: [reports]
+      operationId: getReportOverview
+      summary: Resumo do período de check-in, com uma linha por hotel (feature 007)
+      description: |
+        Reservas com check-in no período (inclusive as pontas), sem as situações "Ignorada
+        (Hotelbeds 258)", "A revisar (sistema anterior)" e "Faturada" (FR-008a). Cada reserva cai
+        numa faixa: pendente ("Falta cobrar" sem tratativa), solicitado ("Falta cobrar" com
+        tratativa), recuperado (cobrada, com tratativa antes) ou cobrado anteriormente (cobrada, sem
+        tratativa); "Cancelada sem cobrança" conta em `reservations`, sem valor. Em aberto vale o
+        valor a cobrar; cobrado vale o valor cobrado exibido ou, sem ele, o total. Os totais são a
+        soma de `hotelRows`. Sem dado de hóspede. Para os dois perfis.
+      parameters:
+        - name: checkInFrom
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: checkInTo
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Resumo do período
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportOverview' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -2287,8 +2323,109 @@ components:
       type: string
       description: >-
         Ordem da lista (feature 006): hotel_number = código do hotel e número da reserva (a ordem
-        da 1.7.0); hotel_check_in = código do hotel, check-in crescente e número da reserva.
-      enum: [hotel_number, hotel_check_in]
+        da 1.7.0); hotel_check_in = código do hotel, check-in crescente e número da reserva;
+        amount_desc (feature 007) = valor total do maior para o menor (nas reservas em aberto, é o
+        valor a cobrar), sem valor no fim, depois código do hotel e número da reserva.
+      enum: [hotel_number, hotel_check_in, amount_desc]
+
+    ReportAmount:
+      type: string
+      pattern: '^[0-9]+\.[0-9]{2}$'
+      description: Soma em BRL (feature 007), nunca nula
+
+    ReportOverview:
+      type: object
+      description: Resumo do período de check-in (feature 007). Sem dado de hóspede.
+      required:
+        - period
+        - generatedAt
+        - lastVerifiedAt
+        - reservations
+        - treatmentsSent
+        - withoutAmount
+        - hotels
+        - open
+        - charged
+        - hotelRows
+      properties:
+        period:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+        generatedAt:
+          type: string
+          format: date-time
+          description: Momento do cálculo
+        lastVerifiedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Leitura mais recente no Hunit entre as reservas do relatório; nulo sem reservas
+        reservations:
+          type: integer
+          minimum: 0
+          description: Reservas do relatório (sem Ignorada, A revisar e Faturada)
+        treatmentsSent:
+          type: integer
+          minimum: 0
+          description: Reservas do relatório com tratativa (documento vigente ou linha enviada ao Comercial)
+        withoutAmount:
+          type: integer
+          minimum: 0
+          description: Reservas numa faixa de valor sem valor nenhum (ficam fora das somas)
+        hotels:
+          type: object
+          required: [withData, total]
+          properties:
+            withData: { type: integer, minimum: 0, description: Hotéis com reservas do relatório no período }
+            total: { type: integer, minimum: 0, description: Hotéis disponíveis mais os indisponíveis com dados no período }
+        open:
+          type: object
+          description: Valor em aberto ("Falta cobrar")
+          required: [amount, count, requested, pending]
+          properties:
+            amount: { $ref: '#/components/schemas/ReportAmount' }
+            count: { type: integer, minimum: 0, description: Reservas em "Falta cobrar" }
+            requested: { $ref: '#/components/schemas/ReportAmount' }
+            pending: { $ref: '#/components/schemas/ReportAmount' }
+        charged:
+          type: object
+          description: Valor já cobrado
+          required: [amount, previous, recovered]
+          properties:
+            amount: { $ref: '#/components/schemas/ReportAmount' }
+            previous: { $ref: '#/components/schemas/ReportAmount' }
+            recovered: { $ref: '#/components/schemas/ReportAmount' }
+        hotelRows:
+          type: array
+          description: Uma linha por hotel com reservas do relatório no período, em ordem de código
+          items: { $ref: '#/components/schemas/HotelReportRow' }
+
+    HotelReportRow:
+      type: object
+      required:
+        - hotelCode
+        - hotelName
+        - reservations
+        - treatmentsSent
+        - openCount
+        - openAmount
+        - requested
+        - pending
+        - previousCharged
+        - recovered
+      properties:
+        hotelCode: { type: string }
+        hotelName: { type: string }
+        reservations: { type: integer, minimum: 0 }
+        treatmentsSent: { type: integer, minimum: 0 }
+        openCount: { type: integer, minimum: 0 }
+        openAmount: { $ref: '#/components/schemas/ReportAmount' }
+        requested: { $ref: '#/components/schemas/ReportAmount' }
+        pending: { $ref: '#/components/schemas/ReportAmount' }
+        previousCharged: { $ref: '#/components/schemas/ReportAmount' }
+        recovered: { $ref: '#/components/schemas/ReportAmount' }
 
     ReservationQuickFilterCounts:
       type: object

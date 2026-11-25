@@ -504,6 +504,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resumo do período de check-in, com uma linha por hotel (feature 007)
+         * @description Reservas com check-in no período (inclusive as pontas), sem as situações "Ignorada
+         *     (Hotelbeds 258)", "A revisar (sistema anterior)" e "Faturada" (FR-008a). Cada reserva cai
+         *     numa faixa: pendente ("Falta cobrar" sem tratativa), solicitado ("Falta cobrar" com
+         *     tratativa), recuperado (cobrada, com tratativa antes) ou cobrado anteriormente (cobrada, sem
+         *     tratativa); "Cancelada sem cobrança" conta em `reservations`, sem valor. Em aberto vale o
+         *     valor a cobrar; cobrado vale o valor cobrado exibido ou, sem ele, o total. Os totais são a
+         *     soma de `hotelRows`. Sem dado de hóspede. Para os dois perfis.
+         */
+        get: operations["getReportOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reservations/{hotelCode}/{reservationNumber}/no-charge": {
         parameters: {
             query?: never;
@@ -1298,10 +1324,71 @@ export interface components {
          */
         ReservationQuickFilter: "pending_charge" | "to_review" | "with_error" | "done";
         /**
-         * @description Ordem da lista (feature 006): hotel_number = código do hotel e número da reserva (a ordem da 1.7.0); hotel_check_in = código do hotel, check-in crescente e número da reserva.
+         * @description Ordem da lista (feature 006): hotel_number = código do hotel e número da reserva (a ordem da 1.7.0); hotel_check_in = código do hotel, check-in crescente e número da reserva; amount_desc (feature 007) = valor total do maior para o menor (nas reservas em aberto, é o valor a cobrar), sem valor no fim, depois código do hotel e número da reserva.
          * @enum {string}
          */
-        ReservationOrder: "hotel_number" | "hotel_check_in";
+        ReservationOrder: "hotel_number" | "hotel_check_in" | "amount_desc";
+        /** @description Soma em BRL (feature 007), nunca nula */
+        ReportAmount: string;
+        /** @description Resumo do período de check-in (feature 007). Sem dado de hóspede. */
+        ReportOverview: {
+            period: {
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+            };
+            /**
+             * Format: date-time
+             * @description Momento do cálculo
+             */
+            generatedAt: string;
+            /**
+             * Format: date-time
+             * @description Leitura mais recente no Hunit entre as reservas do relatório; nulo sem reservas
+             */
+            lastVerifiedAt: string | null;
+            /** @description Reservas do relatório (sem Ignorada, A revisar e Faturada) */
+            reservations: number;
+            /** @description Reservas do relatório com tratativa (documento vigente ou linha enviada ao Comercial) */
+            treatmentsSent: number;
+            /** @description Reservas numa faixa de valor sem valor nenhum (ficam fora das somas) */
+            withoutAmount: number;
+            hotels: {
+                /** @description Hotéis com reservas do relatório no período */
+                withData: number;
+                /** @description Hotéis disponíveis mais os indisponíveis com dados no período */
+                total: number;
+            };
+            /** @description Valor em aberto ("Falta cobrar") */
+            open: {
+                amount: components["schemas"]["ReportAmount"];
+                /** @description Reservas em "Falta cobrar" */
+                count: number;
+                requested: components["schemas"]["ReportAmount"];
+                pending: components["schemas"]["ReportAmount"];
+            };
+            /** @description Valor já cobrado */
+            charged: {
+                amount: components["schemas"]["ReportAmount"];
+                previous: components["schemas"]["ReportAmount"];
+                recovered: components["schemas"]["ReportAmount"];
+            };
+            /** @description Uma linha por hotel com reservas do relatório no período, em ordem de código */
+            hotelRows: components["schemas"]["HotelReportRow"][];
+        };
+        HotelReportRow: {
+            hotelCode: string;
+            hotelName: string;
+            reservations: number;
+            treatmentsSent: number;
+            openCount: number;
+            openAmount: components["schemas"]["ReportAmount"];
+            requested: components["schemas"]["ReportAmount"];
+            pending: components["schemas"]["ReportAmount"];
+            previousCharged: components["schemas"]["ReportAmount"];
+            recovered: components["schemas"]["ReportAmount"];
+        };
         /** @description Reservas de cada filtro rápido com os mesmos filtros (feature 006, FR-017); all = "Todas". */
         ReservationQuickFilterCounts: {
             all: number;
@@ -2956,6 +3043,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReservationQuickFilterCounts"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getReportOverview: {
+        parameters: {
+            query: {
+                checkInFrom: string;
+                checkInTo: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resumo do período */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOverview"];
                 };
             };
             400: components["responses"]["BadRequest"];
