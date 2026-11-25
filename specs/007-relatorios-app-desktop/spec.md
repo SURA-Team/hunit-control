@@ -30,13 +30,45 @@ Ficam **fora do escopo**: exportação (planilha ou PDF) e impressão dos relat�
 períodos, gráficos de evolução no tempo, relatórios por hóspede ou por canal, agendamento ou envio dos
 relatórios por e-mail, e mudança nas regras de classificação e de tratativa.
 
+## Clarifications
+
+### Session 2026-11-25
+
+- Q: Como o relatório separa "Cobrado anteriormente" e "Recuperado"? → A: Pela tratativa: "Cobrado
+  anteriormente" = reserva cobrada que nunca teve tratativa (o Hunit já mostrava a cobrança, ou o
+  comprovante foi anexado sem tratativa); "Recuperado" = reserva cobrada que teve tratativa enviada
+  antes (comprovante anexado, retorno do Comercial confirmado ou o Hunit passou a mostrar a cobrança
+  depois da tratativa). "Cancelada sem cobrança" não entra em nenhum dos dois (R$ 0,00).
+- Q: O que a barra de 100% distribui? → A: Os valores, como no design (tela 8.1, "Distribuição dos
+  valores"): cobrado anteriormente, recuperado, pendente e solicitado, cada um com valor e percentual
+  sobre a soma dos quatro ("Do total de R$ … em cartão virtual"); não as reservas por situação.
+- Q: A lista de reservas em aberto na gaveta do hotel mostra o hóspede? → A: Sim, como no design (tela
+  8.3): hóspede, número, período, valor e selo de cada reserva; os dois perfis já veem o hóspede em
+  Reservas. Indicadores, ranking e "Todos os hotéis" continuam sem dado de hóspede.
+- Q: Quais reservas entram em "Reservas" e em "N reservas no recorte"? → A: As do período, menos as
+  "Ignorada (Hotelbeds 258)", as "A revisar (sistema anterior)" e as "Faturada", que não importam
+  para a cobrança (conferidas situação a situação com o usuário: as outras dez entram); o total deixa
+  de bater com "Todas" da área Reservas e passa a bater com a soma das demais situações.
+- Q: Como o ranking trata o nome da rede dos hotéis? → A: Sem rede: o app não tem cadastro de rede; o
+  subtítulo do ranking fica "Solicitado + pendente · maiores primeiro", o da gaveta do hotel "1º com
+  mais valor em aberto · check-in de …", e cada linha mostra o nome do hotel como está no catálogo.
+
+### Session 2026-11-25 (plano)
+
+- Q: A gaveta "Ver todos os hotéis" (tela 8.7) lista só os hotéis com valor em aberto, como no design?
+  → A: Não: lista todos os hotéis com reservas no período, os sem valor em aberto no fim com
+  R$ 0,00, e o título é "Todos os hotéis" (diferença levada à UX).
+- Q: Quais ordenações a gaveta oferece? → A: As do design: "Maior valor" (valor em aberto), "Mais
+  pendente" (maior valor pendente, sem tratativa) e "Nome A-Z".
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ver o panorama do período e o valor em aberto (Priority: P1)
 
 A pessoa abre "Relatórios" e vê, na tela principal, o resumo do período: quantas reservas existem,
 quantas tratativas foram enviadas, em quantos hotéis há dados, quanto está em aberto — em destaque —
-e quanto já foi cobrado, além de como as reservas se distribuem por situação.
+e quanto já foi cobrado, além de como o valor se distribui entre cobrado, recuperado, pendente e
+solicitado.
 
 **Why this priority**: é a razão de existir do módulo. Sozinha, já responde "quanto falta cobrar" e
 "o que mudou" e permite acompanhar a operação sem abrir lista nenhuma.
@@ -51,14 +83,16 @@ a soma das reservas da lista, no mesmo período.
    indicadores: volume (Reservas, Tratativas enviadas, Hotéis com dados), valor em aberto e valor já
    cobrado, nesta ordem, cada grupo com seu peso visual.
 2. **Given** o grupo de volume, **When** exibido, **Then** "Hotéis com dados" aparece como "79 de 83"
-   (hotéis com reservas no período de todos os hotéis cadastrados), nunca com barra.
+   (hotéis com reservas do relatório no período, de todos os hotéis cadastrados), nunca com barra.
 3. **Given** valor em aberto, **When** exibido, **Then** o card escuro mostra o total em reais (por
    exemplo, "R$ 211.120,47"), a barra dividida em solicitado (cinza, com tratativa enviada) e
    pendente (lima, sem tratativa), com os valores de cada parte, e o botão "Ver reservas em aberto".
 4. **Given** valor já cobrado, **When** exibido, **Then** um único card mostra o total e os dois
-   detalhes: "Cobrado anteriormente" (verde) e "Recuperado" (preto).
-5. **Given** a distribuição das reservas, **When** exibida, **Then** é uma barra de 100% com legenda em
-   que cada linha traz nome da situação, quantidade e percentual, de modo que as fatias pequenas
+   detalhes: "Cobrado anteriormente" (verde, "sem precisar de tratativa") e "Recuperado" (preto,
+   "cobrado depois da tratativa").
+5. **Given** a distribuição dos valores, **When** exibida, **Then** é uma barra de 100% com legenda em
+   que cada linha traz o nome da faixa (cobrado anteriormente, recuperado, pendente e solicitado), o
+   valor e o percentual sobre a soma das quatro, de modo que as fatias pequenas
    (por exemplo, 1,9%, 1,0% e 0,5%) são lidas na legenda mesmo quando quase invisíveis na barra.
 6. **Given** qualquer número do relatório, **When** exibido, **Then** segue o formato brasileiro:
    separador de milhar, vírgula decimal, "R$" nos valores e "%" nos percentuais.
@@ -94,8 +128,9 @@ mudam sem nenhum botão de confirmação e que o total de reservas do recorte ac
    no recorte").
 5. **Given** o período, **When** a pessoa o escolhe, **Then** ele se refere ao check-in das reservas,
    como nos demais filtros do app.
-6. **Given** que o início escolhido é posterior ao fim, **When** a pessoa tenta aplicar, **Then** o app
-   impede e explica o motivo, mantendo o período anterior.
+6. **Given** o calendário aberto, **When** a pessoa clica primeiro num dia posterior e depois num
+   anterior, **Then** o período fica ordenado (o dia menor é o início), como nos outros filtros; um
+   período com início depois do fim nunca chega ao relatório (o servidor também o recusa).
 
 ---
 
@@ -116,12 +151,13 @@ número de reservas anunciado.
 
 1. **Given** o ranking, **When** exibido, **Then** os hotéis aparecem numerados por valor em aberto
    (do maior para o menor), com barras na mesma escala, o valor à direita e uma seta que indica que a
-   linha abre o detalhe; o nome da rede não se repete em cada linha.
+   linha abre o detalhe; o nome do hotel é o do catálogo, sem rede no subtítulo.
 2. **Given** mais hotéis do que cabem no card, **When** a pessoa rola dentro do card, **Then** vê os
    demais hotéis sem que a página inteira role.
 3. **Given** o ranking, **When** a pessoa clica em um hotel, **Then** abre uma gaveta com o nome do
    hotel, o valor em aberto, um resumo (por exemplo, quanto está solicitado e quanto está pendente) e a
-   lista das reservas em aberto.
+   lista das reservas em aberto (hóspede, número, período, valor e selo da situação, maiores valores
+   primeiro).
 4. **Given** a gaveta de um hotel com 37 reservas em aberto, **When** exibida, **Then** o botão diz
    "Ver as 37 reservas em Reservas"; **When** acionado, **Then** o app abre a área Reservas já filtrada
    por esse hotel, pelo período do relatório e pelas reservas em aberto, e a quantidade listada é a
@@ -152,8 +188,8 @@ o detalhe de um hotel a partir dali.
    todos os hotéis do período, cada um com o valor em aberto e o mesmo formato de linha do ranking.
 2. **Given** a gaveta, **When** a pessoa digita parte do nome, **Then** a lista mostra só os hotéis
    cujo nome contém o texto, ignorando maiúsculas e acentos.
-3. **Given** a gaveta, **When** a pessoa troca a ordenação (valor em aberto, nome, quantidade de
-   reservas em aberto), **Then** a lista é reordenada e a ordenação escolhida fica visível.
+3. **Given** a gaveta, **When** a pessoa troca a ordenação ("Maior valor", "Mais pendente", "Nome
+   A-Z"), **Then** a lista é reordenada e a ordenação escolhida fica visível.
 4. **Given** uma linha da gaveta, **When** a pessoa a clica, **Then** abre o detalhe do hotel (história
    3).
 5. **Given** uma busca sem resultado, **When** exibida, **Then** aparece o estado vazio com a opção de
@@ -184,21 +220,23 @@ dados.
 3. **Given** o relatório aberto, **When** o servidor deixa de responder, **Then** o app mostra o mesmo
    alerta de servidor indisponível usado no resto do app, com "dados de HH:MM" (hora da última
    atualização bem-sucedida), mantém os números já exibidos legíveis e desabilita as ações que
-   dependem do servidor ("Atualizar dados", "Ver reservas em aberto", abrir hotel, "Executar").
+   dependem do servidor ("Atualizar dados", "Ver reservas em aberto", abrir hotel).
 4. **Given** o servidor indisponível ao abrir Relatórios pela primeira vez na sessão, **When** a tela é
    exibida, **Then** aparece o alerta e nenhum número, sem exibir dados antigos de outro período.
 5. **Given** o servidor indisponível, **When** volta a responder, **Then** a pessoa pode acionar
    "Atualizar dados" e o alerta some quando a atualização conclui.
 6. **Given** os dados exibidos, **When** o selo é visto, **Then** "Dados atualizados" só aparece quando os
    números correspondem ao período e ao momento mostrados; de outro modo o selo diz o que há de
-   errado (atualizando, desatualizado ou indisponível).
+   errado: "Atualizando…" durante a consulta ou "dados de HH:MM — servidor indisponível". Quando a
+   área Reservas encontra outra quantidade de reservas em aberto, ela avisa que o relatório pode estar
+   desatualizado (Edge Cases).
 
 ---
 
 ### User Story 6 - Consultar os relatórios com o perfil de consulta (Priority: P2)
 
-Quem tem o perfil de consulta (somente leitura) vê o mesmo relatório, com o mesmo menu, mas sem o
-botão "Executar", pois não pode iniciar execuções.
+Quem tem o perfil de consulta (somente leitura) vê o mesmo relatório, com o menu do seu perfil, que
+não tem o item "Executar", pois ele não pode iniciar execuções.
 
 **Why this priority**: o relatório é útil a quem só acompanha; esconder o que o perfil não pode fazer
 evita cliques que falham.
@@ -210,10 +248,10 @@ existe para o perfil operador.
 
 1. **Given** o app com qualquer um dos dois perfis, **When** o menu é exibido, **Then** contém o item
    "Relatórios", com ícone de gráfico, junto das demais áreas.
-2. **Given** o perfil operador, **When** Relatórios é exibido, **Then** o botão "Executar" está
-   disponível e leva ao início de uma nova execução (como na área de Execuções).
-3. **Given** o perfil de consulta, **When** Relatórios é exibido, **Then** o botão "Executar" não
-   aparece e todo o resto (números, ranking, gavetas, navegação para Reservas) funciona igual.
+2. **Given** o perfil operador, **When** Relatórios é exibido, **Then** o item "Executar" do menu está
+   disponível e leva à área Executar, como hoje.
+3. **Given** o perfil de consulta, **When** Relatórios é exibido, **Then** o item "Executar" não
+   aparece no menu (regra já existente) e todo o resto (números, ranking, gavetas, navegação para Reservas) funciona igual.
 4. **Given** o perfil de consulta, **When** a pessoa vai de Relatórios a Reservas, **Then** vê as
    reservas normalmente, sem ações de registro (regra já existente da feature 003).
 
@@ -265,11 +303,20 @@ existe para o perfil operador.
 - **FR-005**: O filtro MUST ser um único campo de período, com os atalhos "Últimos 7 dias", "Últimos 30
   dias", "Este mês" e "Personalizado", aplicados na hora, sem botões "Aplicar filtros" ou "Limpar".
 - **FR-006**: O calendário do período MUST ser o mesmo componente dos filtros de período das outras
-  telas, com o dia de hoje selecionado em lima; o app MUST impedir períodos com início posterior ao fim.
+  telas, com o dia de hoje selecionado em lima; o app MUST impedir períodos com início posterior ao fim
+  (o calendário ordena o intervalo escolhido).
 - **FR-007**: O período MUST se referir ao check-in das reservas e MUST ser o mesmo critério usado na
   área Reservas, de modo que as contagens sejam comparáveis.
 - **FR-008**: O total de reservas do período MUST aparecer alinhado à direita do filtro, com separador
   de milhar e concordância de número ("1 reserva", "34.526 reservas").
+- **FR-008a**: As reservas do relatório MUST ser as do período, menos as das situações "Ignorada
+  (Hotelbeds 258)", "A revisar (sistema anterior)" e "Faturada", que não importam para a cobrança.
+  Esse recorte vale para "Reservas", "N reservas no recorte", "Tratativas enviadas", "Hotéis com
+  dados", o total de reservas de cada hotel e as faixas de valor. Entram as outras dez: Pendente de
+  cobrança, Cobrar na maquininha, Cartão validado (não cobrado), Erro na cobrança e Erro de análise
+  (pendente, ou solicitado com tratativa), Tratativa enviada e Validar comprovante (solicitado),
+  Comprovante enviado e Já cobrada (cobrado anteriormente ou recuperado) e Cancelada sem cobrança
+  (conta em "Reservas", sem valor).
 - **FR-009**: Enquanto os números carregam, o app MUST mostrar um estado de carregamento no lugar dos
   valores; MUST NOT mostrar zeros como se fossem dados.
 
@@ -277,19 +324,24 @@ existe para o perfil operador.
 
 - **FR-010**: Os indicadores MUST ser agrupados em: volume (Reservas, Tratativas enviadas, Hotéis com
   dados), valor em aberto e valor já cobrado.
-- **FR-011**: "Hotéis com dados" MUST ser escrito como "X de Y" (hotéis com reservas no período de todos
-  os hotéis cadastrados).
+- **FR-011**: "Hotéis com dados" MUST ser escrito como "X de Y" (hotéis com reservas do relatório no
+  período, de todos os hotéis cadastrados).
 - **FR-012**: O valor em aberto MUST ser o total das reservas que exigem cobrança e ainda não foram
   cobradas, ou seja, as que continuam como "Falta cobrar" na área Reservas, somando o que tem
   tratativa enviada ("solicitado") e o que não tem ("pendente").
 - **FR-013**: O valor em aberto MUST aparecer num card escuro de destaque com o total, a barra
   solicitado (cinza) / pendente (lima), os valores de cada parte e o botão "Ver reservas em aberto".
 - **FR-014**: O valor já cobrado MUST aparecer num único card com o total e dois detalhes: "Cobrado
-  anteriormente" (verde), o que já constava como cobrado no Hunit, e "Recuperado" (preto), o que foi
-  cobrado depois, com comprovante registrado. O rótulo antigo "Cobrado comercial" MUST ser substituído
-  por "Cobrado anteriormente".
-- **FR-015**: A distribuição das reservas por situação MUST ser uma barra de 100% com legenda; cada linha
-  da legenda MUST trazer o nome, a quantidade e o percentual, inclusive das fatias muito pequenas.
+  anteriormente" (verde), a reserva cobrada que nunca teve tratativa (o Hunit já mostrava a cobrança,
+  ou o comprovante foi anexado sem tratativa), e "Recuperado" (preto), a reserva cobrada que teve
+  tratativa enviada antes da cobrança (comprovante anexado, retorno do Comercial confirmado ou o Hunit
+  passou a mostrar a cobrança depois da tratativa). A reserva marcada como "Cancelada sem cobrança" não
+  entra em nenhum dos dois. O rótulo antigo "Cobrado comercial" MUST ser substituído por "Cobrado
+  anteriormente".
+- **FR-015**: A distribuição dos valores MUST ser uma barra de 100% com legenda, nas faixas cobrado
+  anteriormente, recuperado, pendente e solicitado, sobre a soma das quatro ("Do total de R$ … em
+  cartão virtual"); cada linha da legenda MUST trazer o nome, o valor e o percentual, inclusive das
+  fatias muito pequenas.
 - **FR-016**: Valores MUST seguir o formato brasileiro (R$ 1.234,56; 96,6%); percentuais menores que
   0,1% MUST aparecer como "<0,1%", e os percentuais mostrados MUST somar 100%.
 - **FR-017**: As cores MUST ser as da identidade: cinza = solicitado, lima = pendente, verde =
@@ -299,13 +351,14 @@ existe para o perfil operador.
 **Ranking e detalhe**
 
 - **FR-018**: O ranking MUST listar os hotéis por valor em aberto, do maior para o menor, numerados, com
-  barras na mesma escala entre si, valor à direita, seta de detalhe e sem repetir o nome da rede em
-  cada linha.
+  barras na mesma escala entre si, valor à direita e seta de detalhe; cada linha MUST mostrar o nome
+  do hotel como está no catálogo, e o app MUST NOT mostrar nome de rede (não há cadastro de rede).
 - **FR-019**: O card do ranking MUST rolar internamente quando houver mais hotéis do que cabem, e MUST
   oferecer "Ver todos os hotéis".
-- **FR-020**: A gaveta "Todos os hotéis" MUST listar todos os hotéis do período (inclusive os sem valor
-  em aberto), com busca por nome (sem diferenciar maiúsculas e acentos) e ordenação por valor em
-  aberto, nome e quantidade de reservas em aberto.
+- **FR-020**: A gaveta "Todos os hotéis" MUST listar todos os hotéis com reservas no período (os sem
+  valor em aberto no fim, com R$ 0,00), com busca por nome (sem diferenciar maiúsculas e acentos) e
+  as ordenações "Maior valor" (valor em aberto), "Mais pendente" (maior valor pendente, sem
+  tratativa) e "Nome A-Z"; nas duas primeiras, empate pelo nome.
 - **FR-021**: A gaveta de detalhe do hotel MUST mostrar o valor em aberto, um resumo (solicitado e
   pendente) e as reservas em aberto, com o botão "Ver as N reservas em Reservas".
 - **FR-022**: "Ver as N reservas em Reservas" e "Ver reservas em aberto" MUST abrir a área Reservas já
@@ -320,21 +373,25 @@ existe para o perfil operador.
 - **FR-025**: Com o servidor indisponível, o app MUST usar o mesmo alerta do resto do app, mostrar "dados
   de HH:MM", manter legíveis os números já exibidos e desabilitar as ações que dependem do servidor;
   sem dados anteriores, MUST mostrar só o alerta.
-- **FR-026**: O botão "Executar" MUST aparecer apenas no perfil operador; o perfil de consulta MUST ver
-  todo o restante igual.
-- **FR-027**: O relatório MUST NOT exibir dados de hóspedes; só valores agregados, nomes de hotéis e
-  contagens.
+- **FR-026**: O item "Executar" do menu MUST continuar só no perfil operador (regra já existente); o
+  perfil de consulta MUST ver todo o restante do módulo igual.
+- **FR-027**: Os indicadores, o ranking e a gaveta "Todos os hotéis" MUST NOT exibir dados de
+  hóspedes; só valores agregados, nomes de hotéis e contagens. A exceção é a lista de reservas em
+  aberto da gaveta do hotel, que mostra em cada linha o hóspede, o número da reserva, o período, o
+  valor e o selo da situação, como a área Reservas mostra aos dois perfis.
 - **FR-028**: Os números do relatório MUST ser consistentes com os da área Reservas para o mesmo período
-  e filtros: o total de reservas, o valor em aberto e as quantidades da distribuição MUST coincidir
-  com o que a lista mostra.
+  e filtros: o valor em aberto e a quantidade de reservas em aberto MUST coincidir com o que a lista
+  mostra; o total de reservas MUST coincidir com a soma das situações da lista, menos as três que o
+  FR-008a deixa de fora.
 
 ### Key Entities
 
 - **Relatório do período**: o conjunto de números calculados sobre as reservas gravadas com check-in no
-  período escolhido: totais de volume, valor em aberto (solicitado e pendente), valor já cobrado
-  (cobrado anteriormente e recuperado), distribuição por situação e hora em que foi calculado.
+  período escolhido, sem as três situações do FR-008a: totais de volume, valor em aberto (solicitado e pendente), valor já cobrado
+  (cobrado anteriormente e recuperado), distribuição dos valores e hora em que foi calculado.
 - **Resumo por hotel**: para cada hotel, no mesmo período, o valor em aberto (solicitado e pendente), a
-  quantidade de reservas em aberto e o total de reservas.
+  quantidade de reservas em aberto, o total de reservas, as tratativas enviadas e o valor já cobrado
+  (cobrado anteriormente e recuperado).
 
 ## Success Criteria *(mandatory)*
 
@@ -346,10 +403,12 @@ existe para o perfil operador.
   (do ranking) em no máximo 3 cliques.
 - **SC-003**: Trocar o período (atalho ou personalizado) mostra o relatório completo em até 3 segundos
   em uma base com 35 mil reservas, sem nenhum clique de confirmação.
-- **SC-004**: Em 100% dos casos verificados, o total de reservas, o valor em aberto e a quantidade de
-  reservas em aberto do relatório coincidem com os da área Reservas para o mesmo período.
+- **SC-004**: Em 100% dos casos verificados, o valor em aberto e a quantidade de reservas em aberto do
+  relatório coincidem com os da área Reservas para o mesmo período, e o total de reservas coincide com
+  o da área Reservas sem as três situações deixadas de fora (FR-008a).
 - **SC-005**: Todas as 7 telas do módulo coincidem com o design oficial na revisão lado a lado feita
-  por quem mantém o Figma, incluindo os estados vazio, de erro e de carregamento.
+  por quem mantém o Figma, incluindo os estados vazio e de erro (o de carregamento não foi desenhado e
+  segue os padrões da 006).
 - **SC-006**: Com o servidor indisponível, 100% das ações que dependem dele aparecem desabilitadas e
   a hora dos dados exibidos fica visível; nenhuma tela mostra números sem indicar o momento a que se
   referem.
@@ -364,23 +423,24 @@ existe para o perfil operador.
   dúvida de detalhe, vale o Figma, e esta spec é atualizada se ele mudar.
 - **Dependências**: o módulo parte do app com as features 002, 003 (tratativas, usadas para
   "solicitado", "pendente" e "recuperado") e 006 (identidade visual, componentes de calendário, gaveta,
-  selos e alerta de servidor indisponível, que o design reutiliza) já incorporadas. Só se implementa
-  depois que elas estiverem na `master`.
+  selos e alerta de servidor indisponível, que o design reutiliza), todas na `master` desde 2026-11-19.
+  Também valem as regras da 005 ("Validar comprovante" conta como solicitado, pois continua em "Falta
+  cobrar") e da 008 ("Cancelada sem cobrança" vale R$ 0,00 e fica fora de todas as faixas de valor).
 - **Significado dos valores**: "em aberto" = reservas que ainda faltam cobrar; "solicitado" = parte
-  delas com tratativa enviada; "pendente" = parte sem tratativa; "cobrado anteriormente" = já constava
-  como cobrado no Hunit quando a reserva foi lida (antes chamado "cobrado comercial");
-  "recuperado" = cobrado depois, com comprovante registrado no app. A área responsável confirma essas
-  definições na revisão da spec; se mudarem, só os FR-012 e FR-014 são ajustados.
-- **Distribuição por situação**: a barra de 100% distribui as reservas do período pelas mesmas
-  situações usadas na área Reservas; a legenda mostra quantidade e percentual.
+  delas com tratativa enviada; "pendente" = parte sem tratativa; "cobrado anteriormente" = cobrada sem
+  nunca ter tido tratativa (antes chamado "cobrado comercial"); "recuperado" = cobrada depois de uma
+  tratativa (clarificação de 2026-11-25, FR-014).
+- **Distribuição dos valores**: a barra de 100% distribui o valor do período entre cobrado
+  anteriormente, recuperado, pendente e solicitado; a legenda mostra valor e percentual
+  (clarificação de 2026-11-25, FR-015).
 - **Período padrão**: ao abrir o módulo vale "Últimos 30 dias", o mesmo recorte oferecido no estado
   vazio; o app lembra o último período escolhido só enquanto estiver aberto.
-- **"Executar"**: leva ao início de uma nova execução, como na área de Execuções, e é uma ação do
-  perfil operador; "perfil de consulta" é o perfil somente leitura já existente (nas telas do Figma
+- **"Executar"**: é o item do menu que leva à área Executar (telas 8.1 e 8.6), já escondido do perfil
+  de consulta; o módulo não tem botão "Executar" próprio; "perfil de consulta" é o perfil somente leitura já existente (nas telas do Figma
   a versão sem "Executar" aparece rotulada para o Financeiro; o critério aqui é o perfil de acesso,
   não o setor).
-- **Dados do servidor**: o servidor ainda não informa totais agregados por período e por hotel; isso
-  exige um acréscimo compatível à API, a ser definido no plano, sem alterar o que já existe.
+- **Dados do servidor**: os totais por período e por hotel vêm de uma rota nova, só acréscimo à API
+  (plano, research R-02).
 - **Atualização**: os dados são recalculados quando a pessoa abre o módulo, troca o período ou aciona
   "Atualizar dados"; não há atualização automática em segundo plano.
 - **Uso**: 4 pessoas do Financeiro e da Controladoria, em computadores Windows, em tela de computador;
