@@ -332,7 +332,12 @@ export interface ReservationFilters {
  * Ordem da lista (specs/006, research R-18): `hotel_number` = hotel e número (a da 1.7.0);
  * `hotel_check_in` = hotel, check-in e número.
  */
-export type ReservationOrder = 'hotel_number' | 'hotel_check_in';
+/**
+ * `amount_desc` (specs/007, research R-07): valor total do maior para o menor (sem valor no fim),
+ * depois hotel e número. Nas reservas em aberto, o total é o valor a cobrar (a marcação "Cancelada
+ * sem cobrança" tira a reserva de "Falta cobrar").
+ */
+export type ReservationOrder = 'hotel_number' | 'hotel_check_in' | 'amount_desc';
 
 export interface ListReservationsOptions extends ReservationFilters {
   limit: number;
@@ -355,13 +360,25 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  */
 type CursorPosition =
   | { order: 'hotel_number'; hotelCode: string; reservationNumber: string }
-  | { order: 'hotel_check_in'; hotelCode: string; checkIn: string; reservationNumber: string };
+  | { order: 'hotel_check_in'; hotelCode: string; checkIn: string; reservationNumber: string }
+  | { order: 'amount_desc'; amount: string; hotelCode: string; reservationNumber: string };
+
+/** Sem valor = −1: fica depois de qualquer valor na ordem decrescente. */
+const NO_AMOUNT_KEY = '-1';
+const AMOUNT_KEY = /^-?\d+(\.\d{1,2})?$/;
+
+/** Chave da ordem `amount_desc`: o total, ou −1 sem valor. */
+function amountKeySql(): SQL {
+  return sql`coalesce(${reservations.totalAmount}, ${NO_AMOUNT_KEY}::numeric)`;
+}
 
 function encodeCursor(row: ReservationRow, order: ReservationOrder): string {
   const value =
     order === 'hotel_check_in'
       ? [order, row.hotelCode, row.checkIn, row.reservationNumber]
-      : [order, row.hotelCode, row.reservationNumber];
+      : order === 'amount_desc'
+        ? [order, row.totalAmount ?? NO_AMOUNT_KEY, row.hotelCode, row.reservationNumber]
+        : [order, row.hotelCode, row.reservationNumber];
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
 }
 
@@ -379,6 +396,10 @@ function decodeCursor(cursor: string): CursorPosition {
         const [, hotelCode = '', reservationNumber = ''] = parts;
         return { order: 'hotel_number', hotelCode, reservationNumber };
       }
+      if (parts.length === 4 && parts[0] === 'amount_desc' && AMOUNT_KEY.test(parts[1] ?? '')) {
+        const [, amount = '', hotelCode = '', reservationNumber = ''] = parts;
+        return { order: 'amount_desc', amount, hotelCode, reservationNumber };
+      }
       if (parts.length === 4 && parts[0] === 'hotel_check_in' && ISO_DATE.test(parts[2] ?? '')) {
         const [, hotelCode = '', checkIn = '', reservationNumber = ''] = parts;
         return { order: 'hotel_check_in', hotelCode, checkIn, reservationNumber };
@@ -392,6 +413,10 @@ function decodeCursor(cursor: string): CursorPosition {
 
 /** Reservas depois da posição do cursor, na ordem dele. */
 function afterCursor(position: CursorPosition): SQL {
+  if (position.order === 'amount_desc') {
+    const key = amountKeySql();
+    return sql`(${key} < ${position.amount}::numeric or (${key} = ${position.amount}::numeric and (${reservations.hotelCode}, ${reservations.reservationNumber}) > (${position.hotelCode}, ${position.reservationNumber})))`;
+  }
   if (position.order === 'hotel_check_in') {
     return sql`(${reservations.hotelCode}, ${reservations.checkIn}, ${reservations.reservationNumber}) > (${position.hotelCode}, ${position.checkIn}::date, ${position.reservationNumber})`;
   }
@@ -400,6 +425,13 @@ function afterCursor(position: CursorPosition): SQL {
 
 /** Colunas do `order by` de cada ordem (a última coluna desempata: a chave é única). */
 function orderColumns(order: ReservationOrder): SQL[] {
+  if (order === 'amount_desc') {
+    return [
+      sql`${amountKeySql()} desc`,
+      asc(reservations.hotelCode),
+      asc(reservations.reservationNumber),
+    ];
+  }
   return order === 'hotel_check_in'
     ? [asc(reservations.hotelCode), asc(reservations.checkIn), asc(reservations.reservationNumber)]
     : [asc(reservations.hotelCode), asc(reservations.reservationNumber)];
@@ -564,7 +596,7 @@ function detailedSituationCondition(situation: ReservationDetailedSituation): SQ
  * subconsultas de cada reserva; nas contagens, colunas calculadas uma vez por reserva (cada grupo
  * repetiria as mesmas subconsultas, e a contagem de 20 000 reservas passaria de 1 s).
  */
-interface TreatmentFacts {
+export interface TreatmentFacts {
   /** Classificação efetiva (specs/008). */
   classification: SQL;
   hasRequest: SQL;
@@ -781,7 +813,23 @@ export async function countQuickFilters(
   filters: ReservationFilters,
 ): Promise<QuickFilterCounts> {
   const where = and(...filterConditions({ ...filters, quickFilter: undefined })) ?? sql`true`;
-  const columns: TreatmentFacts = {
+  const columns = treatmentFactsColumns();
+  const count = (filter: QuickFilter) =>
+    sql`(count(*) filter (where ${quickFilterOver(filter, columns)}))::int`;
+  const result = await db.execute<{ [K in keyof QuickFilterCounts]: number }>(sql`
+    ${treatmentFactsCte(where)}
+    select count(*)::int as "all",
+      ${count('pending_charge')} as "pendingCharge",
+      ${count('to_review')} as "toReview",
+      ${count('with_error')} as "withError",
+      ${count('done')} as "done"
+    from facts`);
+  return result.rows[0] ?? { all: 0, pendingCharge: 0, toReview: 0, withError: 0, done: 0 };
+}
+
+/** Os fatos da tratativa como colunas da CTE `facts` (`treatmentFactsCte`). */
+export function treatmentFactsColumns(): TreatmentFacts {
+  return {
     classification: sql.raw('facts.classification'),
     hasRequest: sql.raw('facts.has_request'),
     hasProof: sql.raw('facts.has_proof'),
@@ -789,11 +837,33 @@ export async function countQuickFilters(
     reviewedSinceChange: sql.raw('facts.reviewed_since_change'),
     noChargeMarked: sql.raw('facts.no_charge_marked'),
   };
+}
+
+/** Expressão da situação detalhada sobre os fatos (a mesma da lista). */
+export function factsDetailedSituation(facts: TreatmentFacts): SQL {
+  return detailedSituationExpression(facts);
+}
+
+/**
+ * CTE `facts` com os fatos da tratativa de cada reserva que atende a `where`, uma linha por
+ * reserva (specs/006, research R-09; extraída na specs/007, research R-04, para o relatório usar a
+ * mesma regra das contagens). Os fatos saem de junções com os documentos, as linhas, os retornos,
+ * as revisões, as marcações e o valor informado à mão já agrupados por reserva, numa CTE
+ * materializada (sem o `materialized`, o PostgreSQL repetiria as expressões em cada `filter`). As
+ * regras são as de `hasRequestCondition`, `hasProofCondition`, `commercialReturnCondition`,
+ * `reviewedSinceChangeCondition` e `noChargeMarkedCondition`, que a lista usa; o teste de paridade
+ * confere contagens × lista × domínio. Com subconsultas por reserva, a contagem de 20 000 reservas
+ * levava 0,6 s.
+ *
+ * Colunas além dos fatos (specs/007): `hotel_code`, `check_in`, `last_verified_at`,
+ * `total_amount`, `amount_to_charge` (R$ 0,00 com a marcação, `amountToCharge`) e
+ * `charged_amount_shown` (a regra de `chargedAmountWithOrigin`: o do Hunit, se maior que zero; o
+ * informado à mão, com comprovante; o do retorno do Comercial confirmado).
+ */
+export function treatmentFactsCte(where: SQL): SQL {
   const sameReservation = (alias: string) =>
     sql`${sql.raw(alias)}.hotel_code = ${reservations.hotelCode} and ${sql.raw(alias)}.reservation_number = ${reservations.reservationNumber}`;
-  const count = (filter: QuickFilter) =>
-    sql`(count(*) filter (where ${quickFilterOver(filter, columns)}))::int`;
-  const result = await db.execute<{ [K in keyof QuickFilterCounts]: number }>(sql`
+  return sql`
     with qf_documents as (
       select hotel_code, reservation_number,
         bool_or(kind = 'request') as has_request, bool_or(kind = 'proof') as has_proof
@@ -809,7 +879,8 @@ export async function countQuickFilters(
     qf_returns as (
       select hotel_code, reservation_number,
         bool_or(state = 'confirmed') as confirmed,
-        bool_or(state = 'awaiting_validation') as awaiting
+        bool_or(state = 'awaiting_validation') as awaiting,
+        max(charged_amount) filter (where state = 'confirmed') as confirmed_amount
       from ${commercialReturns}
       group by hotel_code, reservation_number
     ),
@@ -825,7 +896,19 @@ export async function countQuickFilters(
       where undone_at is null
     ),
     facts as materialized (
-      select (case when qm.hotel_code is not null then 'cancelled_no_charge'
+      select ${reservations.hotelCode} as hotel_code,
+        ${reservations.checkIn} as check_in,
+        ${reservations.lastVerifiedAt} as last_verified_at,
+        ${reservations.totalAmount} as total_amount,
+        (case when qm.hotel_code is not null then 0::numeric(12, 2)
+          else ${reservations.totalAmount} end) as amount_to_charge,
+        (case
+          when ${reservations.chargedAmount} > 0 then ${reservations.chargedAmount}
+          when (coalesce(qd.has_proof, false) or coalesce(qr.confirmed, false)) and qa.amount is not null
+            then qa.amount
+          else qr.confirmed_amount
+        end) as charged_amount_shown,
+        (case when qm.hotel_code is not null then 'cancelled_no_charge'
           else ${reservations.classification}::text end) as classification,
         (qm.hotel_code is not null) as no_charge_marked,
         (coalesce(qd.has_request, false) or ql.hotel_code is not null) as has_request,
@@ -839,15 +922,9 @@ export async function countQuickFilters(
       left join qf_returns qr on ${sameReservation('qr')}
       left join qf_reviews qv on ${sameReservation('qv')}
       left join qf_marks qm on ${sameReservation('qm')}
+      left join ${reservationManualAmounts} qa on ${sameReservation('qa')}
       where ${where}
-    )
-    select count(*)::int as "all",
-      ${count('pending_charge')} as "pendingCharge",
-      ${count('to_review')} as "toReview",
-      ${count('with_error')} as "withError",
-      ${count('done')} as "done"
-    from facts`);
-  return result.rows[0] ?? { all: 0, pendingCharge: 0, toReview: 0, withError: 0, done: 0 };
+    )`;
 }
 
 /** Canais presentes nas reservas gravadas, em ordem alfabética (specs/002, filtro da FR-020). */

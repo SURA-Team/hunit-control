@@ -28,6 +28,7 @@ import { createExecutionEventsHandlers } from './handlers/execution-events.js';
 import { createExecutionHandlers } from './handlers/executions.js';
 import { createHealthHandlers } from './handlers/health.js';
 import { createHotelHandlers } from './handlers/hotels.js';
+import { createReportHandlers } from './handlers/reports.js';
 import { createReservationHandlers } from './handlers/reservations.js';
 import { createTreatmentHandlers } from './handlers/treatments.js';
 import { ProblemError, sendProblem } from './problem.js';
@@ -173,6 +174,7 @@ export function createOperationHandlers(dependencies: AppDependencies): {
       ...executionEvents.handlers,
       ...dispatches.handlers,
       ...createCommercialHandlers(dependencies),
+      ...createReportHandlers(dependencies),
     },
     closeStreams: () => {
       executionEvents.closeAll();
