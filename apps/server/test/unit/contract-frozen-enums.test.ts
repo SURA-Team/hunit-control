@@ -16,7 +16,7 @@
  *
  * A 1.10.0 (specs/007, research R-01) só acrescenta a rota `/reports/overview` e o valor
  * `amount_desc` em `ReservationOrder`, parâmetro de entrada que o app 0.4 não manda; nenhuma das
- * enumerações congeladas muda.
+ * enumerações congeladas muda. A 1.11.0 (R-14) só acrescenta filtros opcionais ao resumo.
  */
 import { describe, expect, it } from 'vitest';
 import { contractDocument } from '../helpers/contract.js';
@@ -80,8 +80,8 @@ describe('enumerações usadas pelo app atual não ganham valores (specs/005, R-
     ]);
   });
 
-  it('a versão do contrato é a 1.10.0', () => {
-    expect((contractDocument['info'] as { version?: string } | undefined)?.version).toBe('1.10.0');
+  it('a versão do contrato é a 1.11.0', () => {
+    expect((contractDocument['info'] as { version?: string } | undefined)?.version).toBe('1.11.0');
   });
 });
 

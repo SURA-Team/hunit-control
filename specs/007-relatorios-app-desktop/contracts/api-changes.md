@@ -19,6 +19,12 @@ funcionando: nenhum campo some, nenhum tipo muda, nenhuma enumeração congelada
 |---|---|
 | `ReservationOrder` (`order` de `GET /reservations` e `GET /reservations/selection`) | valor novo `amount_desc`: valor total do maior para o menor (nas reservas em aberto, o valor a cobrar), sem valor no fim, depois hotel e número. Só o app 0.5 manda; sem ele, a ordem continua a de antes. `ReservationOrder` é parâmetro de entrada e não está entre as enumerações congeladas |
 
+## 1.10.0 → 1.11.0 (ajuste depois do merge, research R-14)
+
+| Onde | Mudança |
+|---|---|
+| `GET /reports/overview` | parâmetros opcionais `hotelCode` (lista), `detailedSituation` (lista), `reservationStatus` (lista), `channel`, `fromLegacy` e `notFound`, com a mesma regra de `GET /reservations`. Com `hotelCode`, `hotels.total` conta só os hotéis informados. Sem eles, a resposta é a da 1.10.0. Só o app 0.5.1 manda; o servidor 1.10.0 os ignoraria, por isso o servidor sobe antes |
+
 ## Esquemas novos
 
 ```yaml

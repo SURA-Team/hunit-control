@@ -8,6 +8,7 @@ import type { components } from '@hunit/contracts';
 import {
   effectiveClassification,
   isPendingCharge,
+  REPORT_EXCLUDED_SITUATIONS,
   reportBucket,
   type ReportBucket,
 } from '@hunit/domain';
@@ -269,6 +270,60 @@ describe('GET /reports/overview (specs/007)', () => {
   it('sem chave: 401', async () => {
     const response = await get(`/reports/overview?${PERIOD}`, null);
     expect(response.statusCode).toBe(401);
+    expectMatchesContract('getReportOverview', response);
+  });
+});
+
+describe('GET /reports/overview com os filtros da lista (specs/007, FR-005a, R-14)', () => {
+  it('filtro de hotel: só as linhas e o "X de Y" dos hotéis escolhidos', async () => {
+    const body = await overview(`${PERIOD}&hotelCode=hml_dois`);
+    expect(body.hotelRows.map((row) => row.hotelCode)).toEqual(['hml_dois']);
+    expect(body.hotels).toEqual({ withData: 1, total: 1 });
+    expect(body.open).toEqual({
+      amount: '1000.00',
+      count: 1,
+      requested: '0.00',
+      pending: '1000.00',
+    });
+    const both = await overview(`${PERIOD}&hotelCode=hml_um&hotelCode=hml_dois`);
+    expect(both.hotels).toEqual({ withData: 2, total: 2 });
+  });
+
+  it.each([
+    'hotelCode=hml_um',
+    'reservationStatus=active',
+    'reservationStatus=cancelled&reservationStatus=unknown',
+    'fromLegacy=false',
+    'fromLegacy=true',
+    'notFound=true',
+    'detailedSituation=treatment_sent&detailedSituation=return_pending',
+    'detailedSituation=invoiced',
+    'channel=Canal%20inexistente',
+  ])('paridade com a lista: %s', async (filters) => {
+    const body = await overview(`${PERIOD}&${filters}`);
+    const listed = await listAll(`${PERIOD}&${filters}`);
+    const counted = listed.filter(
+      (item) => !REPORT_EXCLUDED_SITUATIONS.includes(item.treatment.detailedSituation),
+    );
+    expect(body.reservations).toBe(counted.length);
+    const open = await listAll(`${PERIOD}&${filters}&quickFilter=pending_charge`);
+    expect(body.open.count).toBe(open.length);
+    const sum = open.reduce((total, item) => total + cents(item.amountToCharge), 0);
+    expect(cents(body.open.amount)).toBe(sum);
+  });
+
+  it('todos os hotéis escolhidos: o mesmo resumo de sem filtro', async () => {
+    const plain = await overview();
+    const empty = await overview(
+      `${PERIOD}&hotelCode=hml_um&hotelCode=hml_dois&hotelCode=hml_tres&hotelCode=hml_quatro`,
+    );
+    expect(empty.reservations).toBe(plain.reservations);
+    expect(empty.open).toEqual(plain.open);
+  });
+
+  it('filtro inválido: 400', async () => {
+    const response = await get(`/reports/overview?${PERIOD}&reservationStatus=talvez`);
+    expect(response.statusCode).toBe(400);
     expectMatchesContract('getReportOverview', response);
   });
 });
