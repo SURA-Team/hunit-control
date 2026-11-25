@@ -27,6 +27,7 @@ fica em `../brand.svg` e gera o ícone do app (`scripts/generate-icon.mjs`, T018
 | `attention.svg` | `88:3572` |
 | `document.svg` | `77:3970` |
 | `search-empty.svg` | `77:2490` |
+| `reports.svg` | `90:3628` (página `007-relatorios-app-desktop`, item "Relatórios" do menu; specs/007, T002) |
 
 Da feature 008 (specs/008, T002), para o controle de volume ("Controle de volume" da biblioteca):
 

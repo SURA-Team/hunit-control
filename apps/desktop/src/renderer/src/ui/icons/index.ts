@@ -15,6 +15,7 @@ export {
   InfoIcon,
   MinusIcon,
   RemoveIcon,
+  ReportsIcon,
   ReservationsIcon,
   RevertIcon,
   RunIcon,

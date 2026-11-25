@@ -49,6 +49,8 @@ const BRIDGE = {
     'selectAll',
     'undoNoCharge',
   ],
+  // Módulo de Relatórios (specs/007, contracts/ipc.md).
+  reports: ['overview'],
   // Tratativas manuais (specs/003, contracts/ipc.md).
   treatments: [
     'apply',

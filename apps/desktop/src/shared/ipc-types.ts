@@ -64,6 +64,15 @@ export type ReservationSelection = Schemas['ReservationSelection'];
 /** Filtros rápidos e ordem da lista (specs/006, contrato 1.8.0). */
 export type ReservationQuickFilter = Schemas['ReservationQuickFilter'];
 export type ReservationOrder = Schemas['ReservationOrder'];
+/** Resumo do período do módulo de Relatórios (specs/007, contrato 1.10.0). */
+export type ReportOverview = Schemas['ReportOverview'];
+export type HotelReportRow = Schemas['HotelReportRow'];
+
+/** Período do resumo: datas AAAA-MM-DD, início até o fim. */
+export interface ReportOverviewInput {
+  checkInFrom: string;
+  checkInTo: string;
+}
 export type ReservationQuickFilterCounts = Schemas['ReservationQuickFilterCounts'];
 export type SelectionItem = Schemas['SelectionItem'];
 export type ChargedAmountOrigin = NonNullable<ReservationTreatment['chargedAmountOrigin']>;
@@ -279,7 +288,10 @@ export interface ReservationListInput {
   detailedSituation?: ReservationDetailedSituation[] | undefined;
   /** Filtro rápido (specs/006, FR-016): só as reservas do grupo. */
   quickFilter?: ReservationQuickFilter | undefined;
-  /** Ordem da lista (specs/006, R-18); a tela sempre manda `hotel_check_in`. */
+  /**
+   * Ordem da lista (specs/006, R-18): a lista de Reservas manda `hotel_check_in`; a gaveta do hotel
+   * do módulo de Relatórios, `amount_desc` (specs/007).
+   */
   order?: ReservationOrder | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
@@ -561,6 +573,10 @@ export interface HunitApi {
     markNoCharge: (input: MarkNoChargeInput) => Promise<Result<Reservation>>;
     /** Desfaz a marcação ativa (specs/008, FR-021). */
     undoNoCharge: (input: UndoNoChargeInput) => Promise<Result<Reservation>>;
+  };
+  /** Módulo de Relatórios (specs/007, contracts/ipc.md): só leitura, para os dois perfis. */
+  reports: {
+    overview: (input: ReportOverviewInput) => Promise<Result<ReportOverview>>;
   };
   treatments: {
     /** Abre "Abrir arquivo"; `null` = cancelado. O arquivo fica na memória do principal. */

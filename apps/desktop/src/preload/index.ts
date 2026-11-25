@@ -89,6 +89,9 @@ const hunit: HunitApi = {
     markNoCharge: (input) => invoke(INVOKE.reservationsMarkNoCharge, input),
     undoNoCharge: (input) => invoke(INVOKE.reservationsUndoNoCharge, input),
   },
+  reports: {
+    overview: (input) => invoke(INVOKE.reportsOverview, input),
+  },
   treatments: {
     pickFile: (input) => invoke(INVOKE.treatmentsPickFile, input),
     discardFile: (selectionId) => invoke(INVOKE.treatmentsDiscardFile, selectionId),

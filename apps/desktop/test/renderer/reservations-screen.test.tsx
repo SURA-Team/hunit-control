@@ -218,3 +218,42 @@ describe('servidor indisponível (FR-005 da 002)', () => {
     expect(screen.getByRole('button', { name: 'Copiar para e-mail' })).toBeDisabled();
   });
 });
+
+describe('vindo do módulo de Relatórios (specs/007, T018, research R-07)', () => {
+  const preset = {
+    hotelCodes: ['31'],
+    checkInFrom: '2026-11-01',
+    checkInTo: '2026-11-30',
+    quickFilter: 'pending_charge' as const,
+    expectedCount: 2,
+  };
+
+  function counts(pendingCharge: number) {
+    mocked(hunit.api.reservations.quickFilterCounts).mockImplementation(() =>
+      okResult({ all: 10, pendingCharge, toReview: 0, withError: 0, done: 0 }),
+    );
+  }
+
+  it('abre com o hotel, o período e "Falta cobrar"', async () => {
+    counts(2);
+    renderWithApp(<ReservationsScreen preset={preset} />, hunit);
+    await waitFor(() =>
+      expect(lastListQuery(hunit)).toMatchObject({
+        hotelCode: ['31'],
+        checkInFrom: '2026-11-01',
+        checkInTo: '2026-11-30',
+        quickFilter: 'pending_charge',
+      }),
+    );
+    await screen.findByText('Check-in de 01/11/2026 a 30/11/2026');
+    expect(screen.queryByText(/relatório podem estar desatualizados/)).not.toBeInTheDocument();
+  });
+
+  it('outra quantidade em aberto: avisa que o relatório pode estar desatualizado', async () => {
+    counts(3);
+    renderWithApp(<ReservationsScreen preset={preset} />, hunit);
+    expect(
+      await screen.findByText(/Os números do relatório podem estar desatualizados/),
+    ).toBeInTheDocument();
+  });
+});

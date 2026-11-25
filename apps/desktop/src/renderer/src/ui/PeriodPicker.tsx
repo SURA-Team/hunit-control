@@ -29,6 +29,9 @@ interface Props {
   placeholder?: string;
   /** Permite limpar o período (filtros); na execução o período é obrigatório. */
   clearable?: boolean;
+  /** Calendário aberto por fora (o "Personalizado" dos relatórios, specs/007); sem ele, só o clique. */
+  opened?: boolean;
+  onOpenedChange?: (opened: boolean) => void;
 }
 
 const DISPLAY = 'DD/MM/YYYY';
@@ -53,8 +56,15 @@ export function PeriodPicker({
   label = 'Período de check-in',
   placeholder = 'Escolha o início e o fim',
   clearable = false,
+  opened: controlledOpened,
+  onOpenedChange,
 }: Props) {
-  const [opened, setOpened] = useState(false);
+  const [ownOpened, setOwnOpened] = useState(false);
+  const opened = controlledOpened ?? ownOpened;
+  const setOpened = (next: boolean) => {
+    if (onOpenedChange) onOpenedChange(next);
+    else setOwnOpened(next);
+  };
   const [month, setMonth] = useState(() => value.from ?? today());
   const text = value.from
     ? `${dayjs(value.from).format(DISPLAY)} a ${value.to ? dayjs(value.to).format(DISPLAY) : '…'}`

@@ -416,6 +416,54 @@ describe('ApiClient — filtros rápidos e ordem (specs/006, T032)', () => {
   });
 });
 
+describe('ApiClient — módulo de Relatórios (specs/007, T008)', () => {
+  it('resumo do período: a rota nova com as duas datas', async () => {
+    let query = new URLSearchParams();
+    const overview = {
+      period: { from: '2026-11-01', to: '2026-11-30' },
+      generatedAt: '2026-11-16T13:58:00.000Z',
+      lastVerifiedAt: null,
+      reservations: 0,
+      treatmentsSent: 0,
+      withoutAmount: 0,
+      hotels: { withData: 0, total: 0 },
+      open: { amount: '0.00', count: 0, requested: '0.00', pending: '0.00' },
+      charged: { amount: '0.00', previous: '0.00', recovered: '0.00' },
+      hotelRows: [],
+    };
+    server.on('GET', '/v1/reports/overview', (request, response) => {
+      query = request.query;
+      sendJson(response, 200, overview);
+    });
+
+    const result = await newClient().getReportOverview({
+      checkInFrom: '2026-11-01',
+      checkInTo: '2026-11-30',
+    });
+
+    expect(result).toEqual({ ok: true, data: overview });
+    expect(query.get('checkInFrom')).toBe('2026-11-01');
+    expect(query.get('checkInTo')).toBe('2026-11-30');
+  });
+
+  it('a lista aceita a ordem amount_desc da gaveta do hotel', async () => {
+    let query = new URLSearchParams();
+    server.on('GET', '/v1/reservations', (request, response) => {
+      query = request.query;
+      sendJson(response, 200, { items: [], nextCursor: null });
+    });
+    expect(reservationListInputSchema.safeParse({ order: 'amount_desc' }).success).toBe(true);
+    const result = await newClient().listReservations({
+      hotelCode: ['31'],
+      quickFilter: 'pending_charge',
+      order: 'amount_desc',
+      limit: 50,
+    });
+    expect(result.ok).toBe(true);
+    expect(query.get('order')).toBe('amount_desc');
+  });
+});
+
 describe('ApiClient — "Cancelada sem cobrança" (specs/008, T030)', () => {
   const key = { hotelCode: '31', reservationNumber: '7001' };
   const markId = '55555555-5555-4555-8555-555555555555';

@@ -21,6 +21,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { InvalidCredentialsError } from '../../../server/src/hunit/errors.js';
 import { setHotelMapping } from '../../../server/src/persistence/legacy-import-repo.js';
+import { insertDispatch, insertLine } from '../../../server/test/helpers/commercial-fixtures.js';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import {
   reservationDetails,
@@ -92,6 +93,21 @@ const GUESTS = [
   'João Pereira',
 ];
 const CHANNELS = ['Booking.com', 'Expedia', 'Decolar', 'Site próprio', 'Airbnb'];
+/**
+ * Hotéis do módulo de Relatórios (specs/007, telas 8.1 a 8.7), com os nomes fictícios do design e
+ * reservas com check-in nos últimos 30 dias: valor em aberto decrescente, como no ranking do design.
+ */
+const REPORT_HOTELS = [
+  { code: '201', name: 'Hotel Praia Azul', open: 9 },
+  { code: '202', name: 'Pousada Serra Verde', open: 8 },
+  { code: '203', name: 'Hotel Centro Histórico', open: 6 },
+  { code: '204', name: 'Resort Lagoa Clara', open: 5 },
+  { code: '205', name: 'Hotel Mirante do Sol', open: 4 },
+  { code: '206', name: 'Pousada Vento Sul', open: 3 },
+  { code: '207', name: 'Hotel Jardim Atlântico', open: 2 },
+  { code: '208', name: 'Pousada Maré Alta', open: 0 },
+];
+
 /** Uma reserva de cada situação de cobrança, em ciclo. */
 const DETAILS = [
   reservationDetails.pendingCharge(),
@@ -897,6 +913,83 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await closeOverlays();
     });
 
+    await step('8.1 a 8.4 e 8.7 relatórios', async () => {
+      const { db } = server.test.database;
+      const dispatch = await insertDispatch(db, { clientId: server.operator.id });
+      let n = 0;
+      for (const [index, item] of REPORT_HOTELS.entries()) {
+        await server.insertHotel(item.code, item.name);
+        for (let i = 0; i < item.open + 4; i++) {
+          n += 1;
+          const charged = i >= item.open;
+          const key = {
+            hotelCode: item.code,
+            reservationNumber: `${item.code}-2${String(i).padStart(3, '0')}`,
+          };
+          await server.insertReservation({
+            ...key,
+            guestName: GUESTS[n % GUESTS.length],
+            channel: CHANNELS[n % CHANNELS.length],
+            checkIn: isoDate(daysFromToday(-2 - (n % 18))),
+            checkOut: isoDate(daysFromToday(-1 - (n % 18))),
+            totalAmount: (900 + (7 - index) * 410 + i * 97.5).toFixed(2),
+            chargedAmount: charged ? (900 + i * 97.5).toFixed(2) : null,
+            classification: charged
+              ? 'virtual_card_already_charged'
+              : i % 3 === 0
+                ? 'virtual_card_charge_error'
+                : 'virtual_card_pending_charge',
+          });
+          // Parte com tratativa enviada (solicitado) e uma cobrada depois dela (recuperado).
+          if ((!charged && i % 2 === 0) || i === item.open) {
+            await insertLine(db, key, {
+              dispatchId: dispatch.id,
+              clientId: dispatch.clientId,
+              state: charged ? 'concluded' : 'open',
+            });
+          }
+        }
+      }
+
+      await goTo('Relatórios');
+      await window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
+      await window.getByRole('button', { name: 'Atualizar dados' }).click();
+      await window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
+      await window.getByText('Dados atualizados').waitFor();
+      await shot('8.1', 'relatorios-visao-geral', true);
+
+      await window.getByRole('button', { name: 'Personalizado' }).click();
+      await window.getByText('Ir para hoje').waitFor();
+      await shot('8.2', 'relatorios-escolhendo-o-periodo');
+      await closeOverlays();
+      await window.keyboard.press('Escape');
+
+      await window
+        .getByRole('button', { name: /^Abrir o detalhe de / })
+        .first()
+        .click();
+      const drawer = window.getByTestId('report-hotel-drawer');
+      await drawer.getByText(/maiores valores primeiro/).waitFor();
+      await drawer.locator('li').first().waitFor({ timeout: 15_000 });
+      await shot('8.3', 'relatorios-detalhe-do-hotel');
+      await closeOverlays();
+
+      await window.getByRole('button', { name: 'Ver todos os hotéis' }).click();
+      await window
+        .getByTestId('report-all-hotels')
+        .getByRole('list', { name: 'Todos os hotéis' })
+        .waitFor();
+      await shot('8.7', 'relatorios-todos-os-hoteis');
+      await closeOverlays();
+
+      // Um período sem reservas (antes das que o roteiro gravou).
+      await pickPeriod(window, daysFromToday(-28), daysFromToday(-25));
+      await window.getByText('Nenhuma reserva neste período').waitFor({ timeout: 20_000 });
+      await shot('8.4', 'relatorios-nenhuma-reserva-no-periodo');
+      await window.getByRole('button', { name: 'Ver os últimos 30 dias' }).click();
+      await window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
+    });
+
     await step('1.3 configuração conectada', async () => {
       await goTo('Configuração');
       await window.getByRole('heading', { name: 'Preferências' }).waitFor();
@@ -958,6 +1051,14 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('5.1', 'servidor-indisponivel');
     });
 
+    await step('8.5 relatórios com o servidor indisponível', async () => {
+      await goTo('Relatórios');
+      await window
+        .getByText(/dados de \d{2}:\d{2} — servidor indisponível/)
+        .waitFor({ timeout: 15_000 });
+      await shot('8.5', 'relatorios-servidor-indisponivel', true);
+    });
+
     await step('6.1 e 6.2 perfil consulta', async () => {
       await stubMessageBox(launched.app, 0);
       await launched.close();
@@ -970,6 +1071,10 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await goTo('Reservas');
       await launched.window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
       await shot('6.2', 'consulta-reservas');
+      await goTo('Relatórios');
+      await launched.window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
+      await launched.window.getByText('Dados atualizados').waitFor();
+      await shot('8.6', 'consulta-relatorios', true);
     });
   }, 600_000);
 });

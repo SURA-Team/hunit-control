@@ -30,7 +30,14 @@ describe('estrutura do app', () => {
 
     const { nav, names } = await menuItems();
     await waitFor(() =>
-      expect(names()).toEqual(['Executar', 'Execuções', 'Reservas', 'Comercial', 'Configuração']),
+      expect(names()).toEqual([
+        'Executar',
+        'Execuções',
+        'Reservas',
+        'Comercial',
+        'Relatórios',
+        'Configuração',
+      ]),
     );
     expect(within(nav).getByRole('button', { name: 'Executar' })).toHaveAttribute(
       'aria-current',
@@ -61,7 +68,7 @@ describe('estrutura do app', () => {
     );
     const { names } = await menuItems();
     await waitFor(() =>
-      expect(names()).toEqual(['Execuções', 'Reservas', 'Comercial', 'Configuração']),
+      expect(names()).toEqual(['Execuções', 'Reservas', 'Comercial', 'Relatórios', 'Configuração']),
     );
   });
 

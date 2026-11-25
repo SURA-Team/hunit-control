@@ -50,6 +50,8 @@ export const INVOKE = {
   reservationsSelectAll: 'reservations:selectAll',
   /** Contagens dos filtros rápidos (specs/006). */
   reservationsQuickFilterCounts: 'reservations:quickFilterCounts',
+  /** Resumo do período do módulo de Relatórios (specs/007, contracts/ipc.md). */
+  reportsOverview: 'reports:overview',
   treatmentsConfirmReviews: 'treatments:confirmReviews',
   dispatchesCheck: 'dispatches:check',
   dispatchesStart: 'dispatches:start',

@@ -12,11 +12,19 @@ export interface EmptyStateProps {
   description?: ReactNode;
   /** Com busca ou filtro em vigor: mostra "Limpar busca e filtros". */
   onClear?: () => void;
+  /** Texto do botão de `onClear` (specs/007: "Ver os últimos 30 dias", "Limpar busca"). */
+  clearLabel?: string;
   /** Ícone no lugar da lupa. */
   icon?: ReactNode;
 }
 
-export function EmptyState({ title, description, onClear, icon }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  onClear,
+  clearLabel = 'Limpar busca e filtros',
+  icon,
+}: EmptyStateProps) {
   return (
     <div className={classes.empty} data-block="estado vazio">
       <span className={classes.emptyIcon}>{icon ?? <SearchEmptyIcon />}</span>
@@ -24,7 +32,7 @@ export function EmptyState({ title, description, onClear, icon }: EmptyStateProp
       {description && <p className={classes.emptyText}>{description}</p>}
       {onClear && (
         <Action variant="secondary" onClick={onClear}>
-          Limpar busca e filtros
+          {clearLabel}
         </Action>
       )}
     </div>

@@ -1,0 +1,295 @@
+/*
+ * Barras e legendas do módulo de Relatórios (specs/007, research R-10; telas 8.1, 8.3 e 8.7).
+ * Cores de significado fixo (FR-017): cinza = solicitado, lima = pendente, verde = cobrado
+ * anteriormente, preto = recuperado.
+ */
+
+.track {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-cinza-1);
+}
+
+.track[data-size='sm'] {
+  height: 10px;
+}
+
+.track[data-size='md'] {
+  height: 14px;
+}
+
+.track[data-surface='dark'] {
+  background: var(--hc-superficie-escura-2);
+}
+
+/* Na barra do ranking o fundo é o do card: só os segmentos aparecem (8.1). */
+.track[data-bare] {
+  background: transparent;
+}
+
+.segment {
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 100%;
+  border-radius: var(--hc-radius-pill);
+}
+
+.segment[data-tone='requested'] {
+  background: var(--hc-texto-apagado);
+}
+
+.track[data-surface='dark'] .segment[data-tone='requested'] {
+  background: var(--hc-texto-inverso-apagado);
+}
+
+.segment[data-tone='pending'] {
+  background: var(--hc-destaque-lima);
+}
+
+.segment[data-tone='previous'] {
+  background: var(--hc-verde-8);
+}
+
+.segment[data-tone='recovered'] {
+  background: var(--hc-superficie-escura);
+}
+
+.dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot[data-tone='requested'] {
+  background: var(--hc-texto-apagado);
+}
+
+[data-surface='dark'] .dot[data-tone='requested'] {
+  background: var(--hc-texto-inverso-apagado);
+}
+
+.dot[data-tone='pending'] {
+  background: var(--hc-destaque-lima);
+}
+
+.dot[data-tone='previous'] {
+  background: var(--hc-verde-8);
+}
+
+.dot[data-tone='recovered'] {
+  background: var(--hc-superficie-escura);
+}
+
+/* Legendas: em linhas com separador (distribuição), em caixas (valor já cobrado), em duas colunas
+   (valor em aberto) e em linha (ranking). */
+.legend {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend[data-variant='rows'] > li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+}
+
+.legend[data-variant='rows'] > li:last-child {
+  border-bottom: 0;
+}
+
+.legend[data-variant='boxes'] {
+  gap: 8px;
+}
+
+.legend[data-variant='boxes'] > li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-sutil);
+}
+
+.legend[data-variant='inline'] {
+  flex-flow: row wrap;
+  gap: 6px 20px;
+}
+
+.legend[data-variant='inline'] > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.legend[data-variant='split'] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 24px;
+}
+
+.legend[data-variant='split'] > li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+}
+
+.legend[data-variant='split'] .itemValue,
+.legend[data-variant='split'] .itemDetail {
+  grid-column: 2;
+}
+
+.itemText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.itemName {
+  overflow: hidden;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend[data-variant='split'] .itemName {
+  font: var(--hc-font-descricao);
+}
+
+.itemDetail {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.itemValue {
+  flex: 0 0 auto;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo-forte);
+  white-space: nowrap;
+}
+
+.itemPercent {
+  flex: 0 0 auto;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo-grande);
+  letter-spacing: var(--hc-font-rotulo-grande-tracking);
+  white-space: nowrap;
+}
+
+.legend[data-surface='dark'] .itemName,
+.legend[data-surface='dark'] .itemValue {
+  color: var(--hc-texto-inverso);
+}
+
+.legend[data-surface='dark'] .itemDetail,
+.legend[data-surface='dark'][data-variant='split'] .itemName {
+  color: var(--hc-texto-inverso-apagado);
+}
+
+/* Card de valor (8.1): "Valor em aberto" (escuro) e "Valor já cobrado" (claro). */
+.amountCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
+  border-radius: var(--hc-radius-card);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-card);
+}
+
+.amountCard[data-surface='dark'] {
+  background: var(--hc-superficie-escura);
+  box-shadow: var(--hc-shadow-flutuante);
+}
+
+.amountHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.amountLabel {
+  margin: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-rotulo);
+}
+
+.amountCard[data-surface='dark'] .amountLabel,
+.amountCard[data-surface='dark'] .amountDescription {
+  color: var(--hc-texto-inverso-apagado);
+}
+
+.amountValue {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-cronometro);
+  letter-spacing: var(--hc-font-cronometro-tracking);
+}
+
+.amountCard[data-surface='dark'] .amountValue {
+  color: var(--hc-texto-inverso);
+}
+
+.amountDescription {
+  margin: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-corpo);
+}
+
+/* Número ainda carregando (FR-009): uma faixa cinza no lugar do valor, nunca um zero. */
+.placeholder {
+  display: inline-block;
+  width: var(--placeholder-width, 120px);
+  max-width: 100%;
+  height: 0.8em;
+  border-radius: var(--hc-radius-option);
+  background: var(--hc-cinza-1);
+  vertical-align: middle;
+  animation: placeholder-pulse 1.2s ease-in-out infinite;
+}
+
+[data-surface='dark'] .placeholder {
+  background: var(--hc-superficie-escura-2);
+}
+
+@keyframes placeholder-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placeholder {
+    animation: none;
+  }
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

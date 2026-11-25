@@ -1040,3 +1040,92 @@ describe('larguras: Execuções (US6, SC-007)', () => {
     }
   });
 });
+
+describe('larguras: Relatórios (specs/007, T025)', () => {
+  beforeAll(async () => {
+    // Reservas em aberto e cobradas nos últimos 30 dias, em todos os hotéis (nomes longos).
+    for (const [index, hotel] of HOTELS.entries()) {
+      for (let n = 1; n <= 3; n += 1) {
+        await server.insertReservation({
+          hotelCode: hotel.code,
+          reservationNumber: `REL-${index + 1}-${n}`,
+          guestName: 'Maria Aparecida de Albuquerque Figueiredo Nogueira da Silva',
+          channel: 'Booking.com',
+          checkIn: isoDate(daysFromToday(-3 - n)),
+          checkOut: isoDate(daysFromToday(-1)),
+          totalAmount: `${123456 + index * 1000 + n}.78`,
+          chargedAmount: n === 3 ? '123456.78' : null,
+          classification: n === 3 ? 'virtual_card_already_charged' : 'virtual_card_pending_charge',
+        });
+      }
+    }
+  });
+
+  it('visão geral (telas 8.1 e 8.6)', async () => {
+    const { window } = launched;
+    await goTo('Relatórios');
+    await window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
+    await checkAllSizes({
+      name: 'Relatórios',
+      area: 'Relatórios',
+      reachable: () => [
+        window.getByRole('region', { name: 'Valor em aberto' }),
+        window.getByRole('region', { name: 'Valor já cobrado' }),
+        button('Atualizar dados'),
+        button('Ver reservas em aberto'),
+        button('Ver todos os hotéis'),
+        window.getByRole('list', { name: 'Hotéis com mais valor em aberto' }),
+      ],
+    });
+  });
+
+  it('sem sobrepor em qualquer largura da janela', async () => {
+    await sweepWidths();
+  });
+
+  it('gaveta do hotel (tela 8.3)', async () => {
+    const { window } = launched;
+    await window
+      .getByRole('button', { name: /^Abrir o detalhe de / })
+      .first()
+      .click();
+    const drawer = window.getByTestId('report-hotel-drawer');
+    await drawer.getByText(/^Reservas em aberto \(/).waitFor();
+    try {
+      await checkAllSizes({
+        name: 'gaveta do hotel',
+        area: 'Relatórios',
+        reachable: () => [
+          drawer.getByRole('button', { name: /^Ver as \d+ reservas em Reservas$/ }),
+          drawer.getByRole('region', { name: 'Valor em aberto' }),
+        ],
+      });
+    } finally {
+      await window.keyboard.press('Escape');
+      await drawer.waitFor({ state: 'hidden' });
+    }
+  });
+
+  it('todos os hotéis (tela 8.7)', async () => {
+    const { window } = launched;
+    await button('Ver todos os hotéis').click();
+    const drawer = window.getByTestId('report-all-hotels');
+    await drawer.getByRole('list', { name: 'Todos os hotéis' }).waitFor();
+    try {
+      await checkAllSizes({
+        name: 'todos os hotéis',
+        area: 'Relatórios',
+        reachable: () => [
+          drawer.getByLabel('Buscar hotel pelo nome'),
+          drawer.getByRole('button', { name: 'Nome A-Z' }),
+          drawer.getByRole('button', {
+            name: 'Abrir o detalhe de Pousada Serra Verde e Centro de Convenções do Vale',
+          }),
+        ],
+      });
+    } finally {
+      await window.keyboard.press('Escape');
+      await drawer.waitFor({ state: 'hidden' });
+    }
+  });
+});

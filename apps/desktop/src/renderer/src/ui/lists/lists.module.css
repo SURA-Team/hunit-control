@@ -646,3 +646,111 @@
   flex: 1 1 160px;
   min-width: 120px;
 }
+
+/*
+ * Linha do ranking de hotéis (specs/007, research R-10; telas 8.1 e 8.7): número em pílula, nome
+ * numa linha, barra, valor e seta. A linha inteira é o botão que abre o detalhe do hotel.
+ */
+.ranking {
+  display: grid;
+  grid-template-columns: 40px minmax(120px, 1.1fr) minmax(80px, 1fr) minmax(96px, auto) 20px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--hc-borda-padrao);
+  background: transparent;
+  color: var(--hc-texto-padrao);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ranking:hover:not(:disabled) {
+  background: var(--hc-fundo-sutil);
+}
+
+.ranking:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: -2px;
+}
+
+.ranking:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.rankingPosition {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 26px;
+  border-radius: var(--hc-radius-pill);
+  background: var(--hc-fundo-sutil);
+  font: var(--hc-font-descricao);
+  font-weight: 600;
+}
+
+.rankingName {
+  overflow: hidden;
+  font: var(--hc-font-corpo-forte);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rankingValue {
+  font: var(--hc-font-corpo-forte);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rankingArrow {
+  display: inline-flex;
+  color: var(--hc-texto-icone);
+}
+
+/* Conteúdo estreito: a barra vai para baixo do nome. */
+@container (width < 560px) {
+  .ranking {
+    grid-template-columns: 40px minmax(0, 1fr) auto 20px;
+    grid-template-areas:
+      'pos name value arrow'
+      'pos bar bar arrow';
+    row-gap: 8px;
+  }
+
+  .rankingPosition {
+    grid-area: pos;
+  }
+
+  .rankingName {
+    grid-area: name;
+  }
+
+  .rankingBar {
+    grid-area: bar;
+  }
+
+  .rankingValue {
+    grid-area: value;
+  }
+
+  .rankingArrow {
+    grid-area: arrow;
+  }
+}
+
+/* Lista do ranking: rola dentro do card (FR-019) e mede a própria largura para a linha estreita. */
+.rankingList {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  container-type: inline-size;
+}

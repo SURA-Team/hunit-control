@@ -89,6 +89,11 @@ export const executionListInputSchema = z.strictObject({
   limit: limit.optional(),
 });
 
+/** Período do resumo do módulo de Relatórios (specs/007): as duas datas, início até o fim. */
+export const reportOverviewInputSchema = z
+  .strictObject({ checkInFrom: isoDate, checkInTo: isoDate })
+  .refine((input) => input.checkInFrom <= input.checkInTo, 'o início não pode ser depois do fim');
+
 export const startExecutionInputSchema = z.strictObject({
   period: z
     .strictObject({ from: isoDate, to: isoDate })
@@ -130,7 +135,8 @@ export const reservationListInputSchema = z.strictObject({
   detailedSituation: z.array(z.string().min(1).max(64)).max(20).optional(),
   // Filtro rápido e ordem da lista (specs/006, contrato 1.8.0).
   quickFilter: z.enum(['pending_charge', 'to_review', 'with_error', 'done']).optional(),
-  order: z.enum(['hotel_number', 'hotel_check_in']).optional(),
+  // `amount_desc` (specs/007, contrato 1.10.0): a gaveta do hotel no módulo de Relatórios.
+  order: z.enum(['hotel_number', 'hotel_check_in', 'amount_desc']).optional(),
   cursor: cursor.optional(),
   limit: limit.optional(),
 });
