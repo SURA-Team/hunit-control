@@ -233,7 +233,8 @@ produção.
 - [X] T042 ⛔ HOMOLOGAÇÃO: quickstart §2 a §4 — servidor de homologação na 1.9.0, `commercial-sheet setup` na planilha de teste, instalador 0.4; cenários 3.1 a 3.24 (e 3.11a) com os dois perfis e a seção 4 (ícone, depois das medidas da T034: registrar em `research.md`, "Ícone na barra de tarefas", qual medida resolveu); o app 0.3 contra a 1.9.0 continua funcionando. Registrar em `research.md` ("Homologação")
 - [X] T043 ⛔ FIGMA: skill `figma-screens-sync` com `FEATURE = '008-ajustes-cobranca-e-aviso'`: simulação, relatório ao usuário e, com o ok dele, aplicação — telas da página 008 com ✅ e as mesmas da página 006 com ❌ e ocultas (research R-14)
   - 23/11/2026: feita depois do PR (o conector do Figma estava desconectado na hora): 17 frames, sem conflitos; 1.1, 1.2, 1.3, 7.5, 7.7, 7.8, 7.12, 7.15, 7.17 e 7.18 da 008 com ✅, e as sete versões da 006 com ❌. A 007 ficou de fora (`SKIP`, opção nova do script); as 7.5a e 7.8a não têm desenho
-- [ ] T044 ⛔ PRODUÇÃO: quickstart §6 — servidor na 1.9.0, `commercial-sheet setup` (o `check` confirma), instalador 0.4 nas máquinas do Financeiro e da Controladoria, aviso ao Comercial das colunas novas. Registrar em `research.md` ("Produção")
+- [X] T044 ⛔ PRODUÇÃO: quickstart §6 — servidor na 1.9.0, `commercial-sheet setup` (o `check` confirma), instalador 0.4 nas máquinas do Financeiro e da Controladoria, aviso ao Comercial das colunas novas. Registrar em `research.md` ("Produção")
+  - 24/11/2026: feita, sem problemas (research "Produção")
 - [ ] T045 ⛔ USUÁRIO: atualizar o doc "HUNIT Control — ajustes e bugs para a PM" — itens 1 a 5 e 7 a 9 com o status da 008 e a tabela "Andamento do desenvolvimento" (o doc não abre pelo Claude Code; feito pelo usuário ou por uma conversa no claude.ai)
 
 ---
