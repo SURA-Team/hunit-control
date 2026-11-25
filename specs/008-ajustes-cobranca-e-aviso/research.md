@@ -511,3 +511,17 @@ a validar" (277 px numa coluna de 216 px, `responsive.test.ts`). Na linha, o bot
 como nos retornos, com o nome acessível "Confirmar cancelamento"; a gaveta mantém o texto inteiro.
 
 **Nova rodada (23/11/2026)**: 3.7, 3.8, 3.9 e 3.15 aprovados pelo usuário, com o rótulo da lista.
+
+## Produção (T044, 2026-11-24)
+
+No PC de produção, no clone `C:\Dev\producao\hunit-control`, pelo quickstart §6 e o passo 9 do
+`README.md`. O usuário relatou que todos os passos deram certo, sem nenhum ajuste no roteiro.
+
+| Passo | Resultado |
+|---|---|
+| Aviso ao Comercial | Feito antes da subida: "Situação da cobrança" e "Data da cobrança" obrigatórias, e "Cancelada" para a reserva cancelada |
+| Versão | Clone de produção no merge do PR #14 (contrato 1.9.0) |
+| Subida | Servidor no ar, com as migrations 0013 e 0014 aplicadas ao subir |
+| `commercial-sheet setup` e `check` | OK, com a lista de opções nova da coluna O |
+| App | Instalador 0.4 nas máquinas do Financeiro e da Controladoria |
+| Conferência | Versão 0.4.0 na Configuração e "Comercial → Planilha" funcionando |

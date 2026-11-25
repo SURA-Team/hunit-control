@@ -26,7 +26,8 @@ código (trabalho da spec) e, ao concluir a feature, marca no Figma o que está 
   features concluídas, que tem aquele número. Ela fica com `✅ ` no começo do nome e visível; as
   versões das páginas anteriores ficam com `❌ ` e ocultas (nunca são apagadas).
 - **Feature em desenvolvimento não entra.** As páginas de features posteriores à concluída ficam
-  como estão: o app ainda não mostra aquelas telas.
+  como estão: o app ainda não mostra aquelas telas. Se uma feature de número menor ainda está em
+  desenvolvimento (a 008 foi concluída antes da 007), liste a página dela em `SKIP`.
 
 ## Quando usar
 
@@ -65,8 +66,11 @@ A página do Figma com esse nome precisa existir. Se a feature não mudou telas,
 ```js
 const FEATURE = '<NNN-nome da branch>';
 const DRY_RUN = true;
+const SKIP = []; // páginas de features de número menor ainda em desenvolvimento (ex.: '007-…')
 // + o conteúdo de references/mark-screens.js
 ```
+
+Uma página com ❌ no próprio nome (as espelho antigas, 002 a 005) não é varrida.
 
 O retorno lista `active` e `obsolete` (número, página, `id`, se muda) e `conflicts`. Mostre ao usuário
 um resumo: quantas telas ficam ativas em cada página, quais mudam de estado e os conflitos.

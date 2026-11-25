@@ -95,12 +95,12 @@ aplicação (research R-14).
 
 Pelo passo 9 do `README.md` ("Atualizar para uma versão nova"), nesta ordem:
 
-1. Servidor na 1.9.0 (com a migration da 008).
-2. `docker compose exec server node dist/cli.js commercial-sheet setup` — sem ele, a planilha fica
+1. **Antes**, avisar o Comercial das colunas "Situação da cobrança" e "Data da cobrança",
+   **obrigatórias** (homologação, R-19): os retornos que já aguardavam validação passam a "Retornos
+   com problema" até ele preencher a situação e a data; "Cancelada" basta para reserva cancelada.
+2. Servidor na 1.9.0 (com as migrations 0013 e 0014 da 008).
+3. `docker compose exec server node dist/cli.js commercial-sheet setup` — sem ele, a planilha fica
    "Formato alterado" e nada é escrito; o `check` confirma.
-3. Instalador 0.4 nas máquinas do Financeiro e da Controladoria.
-4. Avisar o Comercial das colunas "Situação da cobrança" e "Data da cobrança", **obrigatórias**
-   (homologação, R-19): os retornos que já aguardavam validação passam a "Retornos com problema" até
-   ele preencher a situação e a data; "Cancelada" basta para reserva cancelada.
+4. Instalador 0.4 nas máquinas do Financeiro e da Controladoria.
 
 Registrar o resultado em `research.md` ("Produção").
