@@ -178,6 +178,107 @@ export function appliedChips(panel: PanelFilters, hotels: readonly Hotel[]): App
   return chips;
 }
 
+export interface PanelFieldsProps {
+  panel: PanelFilters;
+  onPanel: (panel: PanelFilters) => void;
+  hotels: readonly Hotel[];
+  channels: readonly string[];
+  /** O período de check-in; o relatório tem o próprio campo (specs/007). */
+  withPeriod?: boolean;
+  /** Situações oferecidas; o relatório tira as três do FR-008a. */
+  situations?: readonly ReservationDetailedSituation[];
+  /** A Origem como campo do painel (no relatório, que não tem a barra de busca). */
+  origin?: { value: OriginFilter; onChange: (origin: OriginFilter) => void };
+}
+
+/**
+ * Os campos do painel "Filtros avançados" (tela 4.12), valendo na hora. Usados pela lista de
+ * reservas e, desde o ajuste da 007 (FR-005a), pelo relatório, sem o período e com a Origem.
+ */
+export function PanelFields({
+  panel,
+  onPanel,
+  hotels,
+  channels,
+  withPeriod = true,
+  situations = SITUATION_ORDER,
+  origin,
+}: PanelFieldsProps) {
+  const set = <K extends keyof PanelFilters>(key: K, value: PanelFilters[K]) =>
+    onPanel({ ...panel, [key]: value });
+  return (
+    <>
+      <MultiSelectField
+        label="Hotéis"
+        placeholder={panel.hotelCodes.length === 0 ? 'Todos os hotéis' : undefined}
+        data={hotels.map((hotel) => ({
+          value: hotel.code,
+          label: `${hotel.name} (${hotel.code})`,
+        }))}
+        value={panel.hotelCodes}
+        onChange={(value) => set('hotelCodes', value)}
+        clearable
+        hidePickedOptions
+        nothingFoundMessage="Nenhum hotel encontrado"
+      />
+      {withPeriod && (
+        <PeriodPicker
+          value={{ from: panel.checkInFrom, to: panel.checkInTo }}
+          onChange={({ from, to }) => onPanel({ ...panel, checkInFrom: from, checkInTo: to })}
+          placeholder="Qualquer data"
+          clearable
+          error={
+            periodIncomplete(panel) ? 'Escolha também o fim do período (ou limpe o período).' : null
+          }
+        />
+      )}
+      <MultiSelectField
+        label="Situação da reserva"
+        placeholder={panel.situations.length === 0 ? 'Todas as situações' : undefined}
+        data={situations.map((value) => ({
+          value,
+          label: DETAILED_SITUATION_LABELS[value].name,
+        }))}
+        value={panel.situations}
+        onChange={(value) => set('situations', value as ReservationDetailedSituation[])}
+        clearable
+        hidePickedOptions
+      />
+      <SelectField
+        label="Ativa ou cancelada"
+        data={[...STATUS_OPTIONS]}
+        optionDescriptions={STATUS_DESCRIPTIONS}
+        value={panel.status}
+        onChange={(value) => set('status', (value ?? 'all') as StatusFilter)}
+      />
+      <SelectField
+        label="Canal"
+        placeholder="Todos os canais"
+        data={[...channels]}
+        value={panel.channel}
+        onChange={(value) => set('channel', value)}
+        allowDeselect
+        clearable
+      />
+      {origin && (
+        <SelectField
+          label="Origem"
+          data={[...ORIGIN_OPTIONS]}
+          value={origin.value}
+          onChange={(value) => origin.onChange((value ?? 'all') as OriginFilter)}
+        />
+      )}
+      <FilterPanelWide>
+        <CheckboxField
+          label="Só as não encontradas na última verificação"
+          checked={panel.notFound}
+          onChange={(event) => set('notFound', event.currentTarget.checked)}
+        />
+      </FilterPanelWide>
+    </>
+  );
+}
+
 interface BarProps {
   search: string;
   onSearch: (text: string) => void;
@@ -206,72 +307,12 @@ export function ReservationFilterBar({
   channels,
 }: BarProps) {
   const panelId = useId();
-  const set = <K extends keyof PanelFilters>(key: K, value: PanelFilters[K]) =>
-    onPanel({ ...panel, [key]: value });
 
   return (
     <FilterBar
       panel={
         <FilterPanel id={panelId} opened={panelOpen} onClose={() => onPanelOpen(false)}>
-          <MultiSelectField
-            label="Hotéis"
-            placeholder={panel.hotelCodes.length === 0 ? 'Todos os hotéis' : undefined}
-            data={hotels.map((hotel) => ({
-              value: hotel.code,
-              label: `${hotel.name} (${hotel.code})`,
-            }))}
-            value={panel.hotelCodes}
-            onChange={(value) => set('hotelCodes', value)}
-            clearable
-            hidePickedOptions
-            nothingFoundMessage="Nenhum hotel encontrado"
-          />
-          <PeriodPicker
-            value={{ from: panel.checkInFrom, to: panel.checkInTo }}
-            onChange={({ from, to }) => onPanel({ ...panel, checkInFrom: from, checkInTo: to })}
-            placeholder="Qualquer data"
-            clearable
-            error={
-              periodIncomplete(panel)
-                ? 'Escolha também o fim do período (ou limpe o período).'
-                : null
-            }
-          />
-          <MultiSelectField
-            label="Situação da reserva"
-            placeholder={panel.situations.length === 0 ? 'Todas as situações' : undefined}
-            data={SITUATION_ORDER.map((value) => ({
-              value,
-              label: DETAILED_SITUATION_LABELS[value].name,
-            }))}
-            value={panel.situations}
-            onChange={(value) => set('situations', value as ReservationDetailedSituation[])}
-            clearable
-            hidePickedOptions
-          />
-          <SelectField
-            label="Ativa ou cancelada"
-            data={[...STATUS_OPTIONS]}
-            optionDescriptions={STATUS_DESCRIPTIONS}
-            value={panel.status}
-            onChange={(value) => set('status', (value ?? 'all') as StatusFilter)}
-          />
-          <SelectField
-            label="Canal"
-            placeholder="Todos os canais"
-            data={[...channels]}
-            value={panel.channel}
-            onChange={(value) => set('channel', value)}
-            allowDeselect
-            clearable
-          />
-          <FilterPanelWide>
-            <CheckboxField
-              label="Só as não encontradas na última verificação"
-              checked={panel.notFound}
-              onChange={(event) => set('notFound', event.currentTarget.checked)}
-            />
-          </FilterPanelWide>
+          <PanelFields panel={panel} onPanel={onPanel} hotels={hotels} channels={channels} />
         </FilterPanel>
       }
     >
@@ -313,16 +354,25 @@ export function AppliedFilterChips({
   hotels,
   onPanel,
   onClearAll,
+  origin,
+  clearLabel,
 }: {
   panel: PanelFilters;
   hotels: readonly Hotel[];
   onPanel: (panel: PanelFilters) => void;
   onClearAll: () => void;
+  /** A Origem como chip (no relatório, onde ela fica no painel; specs/007). */
+  origin?: { value: OriginFilter; onChange: (origin: OriginFilter) => void };
+  clearLabel?: string;
 }) {
   const chips = appliedChips(panel, hotels);
-  if (chips.length === 0) return null;
+  const originLabel =
+    origin && origin.value !== 'all'
+      ? ORIGIN_OPTIONS.find((option) => option.value === origin.value)?.label
+      : undefined;
+  if (chips.length === 0 && !originLabel) return null;
   return (
-    <AppliedFilters onClearAll={onClearAll}>
+    <AppliedFilters onClearAll={onClearAll} {...(clearLabel && { clearLabel })}>
       {chips.map((chip) => (
         <RemovableChip
           key={chip.key}
@@ -331,6 +381,13 @@ export function AppliedFilterChips({
           onRemove={() => onPanel(chip.remove(panel))}
         />
       ))}
+      {origin && originLabel && (
+        <RemovableChip
+          label={`Origem: ${originLabel}`}
+          removeLabel="de origem"
+          onRemove={() => origin.onChange('all')}
+        />
+      )}
     </AppliedFilters>
   );
 }

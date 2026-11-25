@@ -180,6 +180,17 @@ describe('período (US2)', () => {
     await loaded();
     await userEvent.click(screen.getByRole('button', { name: 'Personalizado' }));
     expect(await screen.findByText('Ir para hoje')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Personalizado' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // Fechado sem escolher: o atalho do período em vigor volta a ficar ativo.
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByText('Ir para hoje')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Últimos 30 dias' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });
 

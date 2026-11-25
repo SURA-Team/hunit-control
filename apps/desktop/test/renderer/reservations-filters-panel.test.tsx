@@ -202,7 +202,7 @@ describe('seletores só pelo teclado (specs/008, T035, SC-010)', () => {
       channel: 'Expedia',
       fromLegacy: true,
     });
-  });
+  }, 30_000); // Cenário longo (cinco seletores pelo teclado): na rodada completa em paralelo passa dos 15 s.
 
   it('texto sem opção: "Nenhuma opção encontrada" e o filtro não muda', async () => {
     renderWithApp(<ReservationsScreen />, hunit);

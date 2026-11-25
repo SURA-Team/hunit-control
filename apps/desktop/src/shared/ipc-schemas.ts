@@ -89,9 +89,22 @@ export const executionListInputSchema = z.strictObject({
   limit: limit.optional(),
 });
 
-/** Período do resumo do módulo de Relatórios (specs/007): as duas datas, início até o fim. */
+/**
+ * Período do resumo do módulo de Relatórios (specs/007): as duas datas, início até o fim; desde o
+ * contrato 1.11.0, os filtros do painel da área Reservas (FR-005a, research R-14). Os valores das
+ * situações são conferidos pelo servidor.
+ */
 export const reportOverviewInputSchema = z
-  .strictObject({ checkInFrom: isoDate, checkInTo: isoDate })
+  .strictObject({
+    checkInFrom: isoDate,
+    checkInTo: isoDate,
+    hotelCode: z.array(shortText).max(1000).optional(),
+    detailedSituation: z.array(z.string().min(1).max(64)).max(20).optional(),
+    reservationStatus: z.array(z.string().min(1).max(64)).max(10).optional(),
+    channel: z.string().min(1).max(100).optional(),
+    fromLegacy: z.boolean().optional(),
+    notFound: z.boolean().optional(),
+  })
   .refine((input) => input.checkInFrom <= input.checkInTo, 'o início não pode ser depois do fim');
 
 export const startExecutionInputSchema = z.strictObject({

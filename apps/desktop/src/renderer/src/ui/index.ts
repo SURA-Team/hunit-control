@@ -48,6 +48,7 @@ export { EmptyState, type EmptyStateProps } from './EmptyState';
 export * from './fields';
 export {
   AppliedFilters,
+  FilterAnchor,
   FilterBar,
   FilterBarSearch,
   FilterPanel,

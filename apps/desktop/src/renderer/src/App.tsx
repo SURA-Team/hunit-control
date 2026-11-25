@@ -24,6 +24,7 @@ import {
   defaultReportPeriod,
   type ReportPeriod,
 } from './screens/reports/ReportsScreen';
+import { EMPTY_REPORT_FILTERS, type ReportFilterState } from './screens/reports/ReportFilters';
 import {
   ReservationsScreen,
   type ReservationsPreset,
@@ -79,6 +80,7 @@ export function App() {
   const [reservationsPreset, setReservationsPreset] = useState<ReservationsPreset | null>(null);
   /** Período do relatório, lembrado enquanto o app está aberto (specs/007, premissas). */
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>(defaultReportPeriod);
+  const [reportFilters, setReportFilters] = useState<ReportFilterState>(EMPTY_REPORT_FILTERS);
   /** Muda a cada ida para Reservas, para a área começar de novo com os filtros pedidos. */
   const [reservationsVisit, setReservationsVisit] = useState(0);
   const lastPing = useRef(0);
@@ -146,6 +148,8 @@ export function App() {
       <ReportsScreen
         period={reportPeriod}
         onPeriodChange={setReportPeriod}
+        filters={reportFilters}
+        onFiltersChange={setReportFilters}
         onOpenReservations={(preset) => {
           setReservationsExecutionId(null);
           setReservationsPreset(preset);

@@ -8,6 +8,7 @@ import { Group, Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import type { HotelReportRow } from '../../../../shared/ipc-types';
 import { unwrap, useHunit } from '../../hunit';
+import type { ReportFilterInput } from '../../state/reports';
 import { formatDate, formatInteger, formatMoney } from '../../presentation/format';
 import { amountValue, periodRange } from '../../presentation/report';
 import { situationBadges } from '../../presentation/reservations';
@@ -39,6 +40,7 @@ function stay(checkIn: string | null | undefined, checkOut: string | null | unde
 export function HotelDetailDrawer({
   row,
   period,
+  filters = {},
   position,
   onClose,
   onOpenReservations,
@@ -46,6 +48,8 @@ export function HotelDetailDrawer({
 }: {
   row: HotelReportRow | null;
   period: { from: string; to: string };
+  /** Os filtros do painel do relatório (FR-005a): as reservas em aberto seguem o mesmo recorte. */
+  filters?: ReportFilterInput;
   /** Posição no ranking; `null` sem valor em aberto. */
   position: number | null;
   onClose: () => void;
@@ -54,10 +58,18 @@ export function HotelDetailDrawer({
 }) {
   const hunit = useHunit();
   const open = useQuery({
-    queryKey: ['reservations', 'report-hotel', row?.hotelCode ?? '', period.from, period.to],
+    queryKey: [
+      'reservations',
+      'report-hotel',
+      row?.hotelCode ?? '',
+      period.from,
+      period.to,
+      filters,
+    ],
     queryFn: () =>
       unwrap(
         hunit.reservations.list({
+          ...filters,
           hotelCode: [row?.hotelCode ?? ''],
           checkInFrom: period.from,
           checkInTo: period.to,

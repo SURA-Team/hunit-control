@@ -256,4 +256,35 @@ describe('vindo do módulo de Relatórios (specs/007, T018, research R-07)', () 
       await screen.findByText(/Os números do relatório podem estar desatualizados/),
     ).toBeInTheDocument();
   });
+  it('com os filtros do relatório (FR-005a): o painel e a Origem já aplicados', async () => {
+    counts(2);
+    renderWithApp(
+      <ReservationsScreen
+        preset={{
+          ...preset,
+          filters: {
+            situations: ['treatment_sent'],
+            status: 'active',
+            channel: 'Expedia',
+            notFound: false,
+          },
+          origin: 'legacy',
+        }}
+      />,
+      hunit,
+    );
+    await waitFor(() =>
+      expect(lastListQuery(hunit)).toMatchObject({
+        hotelCode: ['31'],
+        detailedSituation: ['treatment_sent'],
+        reservationStatus: ['active'],
+        channel: 'Expedia',
+        fromLegacy: true,
+        quickFilter: 'pending_charge',
+      }),
+    );
+    await screen.findByText('Canal: Expedia');
+    // Mesmos filtros do relatório e mesma quantidade: sem aviso.
+    expect(screen.queryByText(/relatório podem estar desatualizados/)).not.toBeInTheDocument();
+  });
 });

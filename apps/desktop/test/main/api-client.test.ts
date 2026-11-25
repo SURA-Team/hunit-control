@@ -8,9 +8,10 @@ import { ApiClient, fileNameFromDisposition } from '../../src/main/api-client.js
 import {
   reservationCountFiltersSchema,
   reservationFiltersSchema,
+  reportOverviewInputSchema,
   reservationListInputSchema,
 } from '../../src/shared/ipc-schemas.js';
-import type { AppError, Result } from '../../src/shared/ipc-types.js';
+import type { AppError, ReportOverviewInput, Result } from '../../src/shared/ipc-types.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
 import {
   sendJson,
@@ -444,6 +445,33 @@ describe('ApiClient — módulo de Relatórios (specs/007, T008)', () => {
     expect(result).toEqual({ ok: true, data: overview });
     expect(query.get('checkInFrom')).toBe('2026-11-01');
     expect(query.get('checkInTo')).toBe('2026-11-30');
+  });
+
+  it('o resumo leva os filtros do painel (contrato 1.11.0)', async () => {
+    let query = new URLSearchParams();
+    server.on('GET', '/v1/reports/overview', (request, response) => {
+      query = request.query;
+      sendJson(response, 200, {});
+    });
+    const input: ReportOverviewInput = {
+      checkInFrom: '2026-11-01',
+      checkInTo: '2026-11-30',
+      hotelCode: ['31', '32'],
+      detailedSituation: ['treatment_sent', 'return_pending'],
+      reservationStatus: ['active'],
+      channel: 'Canal Fictício',
+      fromLegacy: false,
+      notFound: true,
+    };
+    expect(reportOverviewInputSchema.safeParse(input).success).toBe(true);
+    expect(reportOverviewInputSchema.safeParse({ ...input, q: 'texto' }).success).toBe(false);
+    await newClient().getReportOverview(input);
+    expect(query.getAll('hotelCode')).toEqual(['31', '32']);
+    expect(query.getAll('detailedSituation')).toEqual(['treatment_sent', 'return_pending']);
+    expect(query.getAll('reservationStatus')).toEqual(['active']);
+    expect(query.get('channel')).toBe('Canal Fictício');
+    expect(query.get('fromLegacy')).toBe('false');
+    expect(query.get('notFound')).toBe('true');
   });
 
   it('a lista aceita a ordem amount_desc da gaveta do hotel', async () => {

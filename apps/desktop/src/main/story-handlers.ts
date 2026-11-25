@@ -145,7 +145,14 @@ export function createStoryHandlers(services: StoryServices): InvokeHandlers {
 
     // Módulo de Relatórios (specs/007): só leitura, para os dois perfis.
     [INVOKE.reportsOverview]: handle(reportOverviewInputSchema, (input) =>
-      withApi((api) => api.getReportOverview(input)),
+      withApi((api) =>
+        api.getReportOverview({
+          ...input,
+          // Os valores das situações são conferidos pelo servidor (como na lista).
+          detailedSituation: input.detailedSituation as never,
+          reservationStatus: input.reservationStatus as never,
+        }),
+      ),
     ),
 
     [INVOKE.reservationsGet]: handle(reservationKeySchema, (key) =>
