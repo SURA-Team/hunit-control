@@ -1,0 +1,1 @@
+ALTER TABLE "reservations" ALTER COLUMN "total_amount" DROP NOT NULL;

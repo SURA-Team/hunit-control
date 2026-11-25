@@ -2,7 +2,8 @@
  * US3 de ponta a ponta (specs/002, T071, FR-020 a FR-024, SC-005, SC-009): achar uma reserva pelo
  * código de autorização e pelo valor do extrato sem saber o hotel, pelo nome sem acento, filtrar
  * por canal, abrir o detalhe e salvar uma evidência; com a chave de consulta, nenhuma ação de
- * operador aparece. Reservas fictícias inseridas pelo servidor de teste.
+ * operador aparece. Reservas fictícias inseridas pelo servidor de teste. Desde a 006 (T036): busca
+ * única sem "Buscar" (código, nome ou valor no mesmo campo) e o canal no painel "Filtros avançados".
  */
 import { access, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -10,7 +11,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
-import { configureApp, launchApp, stubSaveDialog, type LaunchedApp } from './app-fixture.js';
+import {
+  configureApp,
+  launchApp,
+  openReservationFilters,
+  searchReservations,
+  stubSaveDialog,
+  waitForReservationRows,
+  type LaunchedApp,
+} from './app-fixture.js';
 
 let certificates: TestCertificates;
 let server: E2eServer;
@@ -75,11 +84,10 @@ async function goTo(window: LaunchedApp['window'], area: string) {
   await window.getByRole('navigation').getByText(area, { exact: true }).click();
 }
 
-async function searchFor(window: LaunchedApp['window'], fields: { q?: string; amount?: string }) {
-  await window.getByRole('button', { name: 'Limpar' }).click();
-  if (fields.q) await window.getByLabel('Busca livre').fill(fields.q);
-  if (fields.amount) await window.getByLabel('Valor (R$)').fill(fields.amount);
-  await window.getByRole('button', { name: 'Buscar' }).click();
+/** Busca única: código, nome ou valor no mesmo campo, e a lista com `rows` linhas. */
+async function searchFor(window: LaunchedApp['window'], text: string, rows: number) {
+  await searchReservations(window, text);
+  await waitForReservationRows(window, rows);
 }
 
 function resultRows(window: LaunchedApp['window']) {
@@ -91,34 +99,33 @@ describe('US3 — consultar reservas e evidências', () => {
     const { window } = launched;
     await goTo(window, 'Reservas');
 
-    await searchFor(window, { q: 'aut-0042' });
+    await searchFor(window, 'aut-0042', 1);
     await resultRows(window).filter({ hasText: '258-1234' }).waitFor();
-    expect(await resultRows(window).count()).toBe(1);
 
-    await searchFor(window, { amount: '987,65' });
+    // O valor do extrato vai no mesmo campo (research R-10).
+    await searchFor(window, '987,65', 1);
     await resultRows(window).filter({ hasText: '7001' }).waitFor();
-    expect(await resultRows(window).count()).toBe(1);
   });
 
   it('acha pelo nome sem acento e filtra por canal', async () => {
     const { window } = launched;
-    await searchFor(window, { q: 'joao' });
+    await searchFor(window, 'joao', 1);
     await resultRows(window).filter({ hasText: 'João Silva' }).waitFor();
-    expect(await resultRows(window).count()).toBe(1);
 
-    await window.getByRole('button', { name: 'Limpar' }).click();
-    await window.getByPlaceholder('Todos os canais').click();
+    await searchFor(window, '', 2);
+    const panel = await openReservationFilters(window);
+    await panel.getByPlaceholder('Todos os canais').click();
     await window.getByRole('option', { name: 'Expedia' }).click();
-    await window.getByRole('button', { name: 'Buscar' }).click();
+    await panel.getByRole('button', { name: 'Fechar os filtros' }).click();
+    await waitForReservationRows(window, 1);
     await resultRows(window).filter({ hasText: 'Maria Souza' }).waitFor();
-    expect(await resultRows(window).count()).toBe(1);
   });
 
   it('abre o detalhe com os dados da cobrança', async () => {
     const { window } = launched;
     await resultRows(window).filter({ hasText: 'Maria Souza' }).click();
     const detail = window.getByTestId('reservation-detail');
-    await detail.getByText('Valor cobrado').waitFor();
+    await detail.getByText('Valor cobrado no Hunit').waitFor();
     expect(await detail.innerText()).toContain('987,65');
     await window.getByRole('button', { name: 'Fechar detalhe' }).click();
   });
@@ -156,7 +163,7 @@ describe('US3 — consultar reservas e evidências', () => {
       ).toBe(0);
 
       await goTo(window, 'Reservas');
-      await searchFor(window, { q: 'aut-0042' });
+      await searchFor(window, 'aut-0042', 1);
       await resultRows(window).filter({ hasText: '258-1234' }).waitFor();
 
       await goTo(window, 'Execuções');

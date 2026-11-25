@@ -71,11 +71,12 @@ export default defineConfig({
       {
         // App desktop, processo principal (specs/002, research R-12): configuração, cofre, cliente
         // da API com TLS fixado contra um servidor HTTPS local, fluxo de eventos. Sem dependência
-        // externa: o Electron é simulado.
+        // externa: o Electron é simulado. Inclui a preparação da homologação (specs/003, T056), que
+        // fica desligada sem as variáveis `HUNIT_HOMOLOG_*`.
         test: {
           name: 'desktop',
           root: fromRoot('./apps/desktop'),
-          include: ['test/main/**/*.test.ts'],
+          include: ['test/main/**/*.test.ts', 'test/homolog/**/*.test.ts'],
           environment: 'node',
         },
       },

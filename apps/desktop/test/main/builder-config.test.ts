@@ -15,6 +15,8 @@ interface BuilderConfig {
   asar?: boolean;
   files?: string[];
   nsis?: { oneClick?: boolean; perMachine?: boolean };
+  win?: { icon?: string };
+  extraResources?: Array<{ from: string; to: string }>;
   publish?: unknown;
   electronFuses?: Record<string, boolean>;
 }
@@ -40,6 +42,15 @@ describe('electron-builder.yml', () => {
     expect(builder.asar).toBe(true);
     expect(builder.files).toEqual(['out/**']);
     expect(builder.publish).toBeNull();
+  });
+
+  it('o executável, os atalhos e o instalador usam o ícone gerado da marca (specs/006, R-04)', () => {
+    expect(builder.win?.icon).toBe('resources/icon.ico');
+  });
+
+  it('o icon.ico vai junto do app, para a janela empacotada usar (specs/008, R-10)', () => {
+    // A janela empacotada lê process.resourcesPath/icon.ico (src/main/app-identity.ts).
+    expect(builder.extraResources).toContainEqual({ from: 'resources/icon.ico', to: 'icon.ico' });
   });
 
   it('fuses: sem rodar como Node, sem NODE_OPTIONS, sem inspeção, asar verificado', () => {

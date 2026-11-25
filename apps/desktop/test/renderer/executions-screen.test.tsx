@@ -1,7 +1,9 @@
 /**
  * Tela Execuções (specs/002, T054, US2, FR-015 a FR-019, FR-016a): lista com quem iniciou, detalhe
  * com andamento, estimativa, contagens e avisos, cancelar com confirmação, retomar usando o cofre,
- * ligação entre a original e a retomada e campo de token para o perfil operador.
+ * ligação entre a original e a retomada e campo de token para o perfil operador. Desde a 006 (T055 e
+ * T056; telas 3.1 a 3.4): a em andamento num card escuro e as demais no "Histórico"; no detalhe, a
+ * faixa de progresso, as contagens em caixas e os hotéis em linhas.
  */
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -118,25 +120,45 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * Abre o detalhe da execução cujo texto bate com `name`: a em andamento pelo "Ver detalhes" do card
+ * escuro (tela 3.1), as encerradas pela linha do "Histórico".
+ */
 async function openDetail(name: RegExp) {
-  const rows = await screen.findAllByRole('row');
-  const row = rows.find((candidate) => name.test(candidate.textContent ?? ''));
-  if (!row) throw new Error('linha não encontrada');
-  await userEvent.click(row);
+  await screen.findByText(/desktop-controladoria/);
+  const card = screen
+    .queryAllByRole('region')
+    .find((candidate) => name.test(candidate.textContent ?? ''));
+  if (card) {
+    await userEvent.click(within(card).getByRole('button', { name: 'Ver detalhes' }));
+  } else {
+    const row = screen
+      .getAllByRole('row')
+      .find((candidate) => name.test(candidate.textContent ?? ''));
+    if (!row) throw new Error('execução não encontrada');
+    await userEvent.click(row);
+  }
   return screen.findByTestId('execution-detail');
 }
 
 describe('lista de execuções (FR-015)', () => {
-  it('mostra quem iniciou, período, estado, motivo de término e datas, na ordem do servidor', async () => {
+  it('a em andamento num card escuro; as encerradas no "Histórico", com quem iniciou e o resultado', async () => {
     renderWithApp(<ExecutionsScreen />, hunit);
 
-    const rows = (await screen.findAllByRole('row')).slice(1);
-    expect(rows[0]).toHaveTextContent('desktop-financeiro');
-    expect(rows[0]).toHaveTextContent('01/11/2026 a 07/11/2026');
-    expect(rows[0]).toHaveTextContent('Em andamento');
-    expect(rows[1]).toHaveTextContent('desktop-controladoria');
-    expect(rows[1]).toHaveTextContent('Falhou');
-    expect(rows[1]).toHaveTextContent('O servidor reiniciou durante a execução');
+    const card = await screen.findByRole('region', { name: /^Em andamento: Iniciada em/ });
+    expect(card).toHaveTextContent(
+      'Check-in 01/11 a 07/11/2026 · desktop-financeiro (esta máquina)',
+    );
+    expect(within(card).getByRole('button', { name: 'Ver detalhes' })).toBeInTheDocument();
+
+    const history = screen.getByRole('table', { name: 'Histórico das execuções' });
+    expect(screen.getByRole('heading', { name: 'Histórico' })).toBeInTheDocument();
+    const rows = within(history).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('desktop-controladoria');
+    expect(rows[0]).toHaveTextContent('Falhou');
+    expect(rows[0]).toHaveTextContent('O servidor reiniciou durante a execução');
+    expect(screen.getByText('2 execuções · as mais recentes primeiro')).toBeInTheDocument();
   });
 
   it('atualiza a lista a cada 10 s enquanto está na tela', async () => {
@@ -162,7 +184,9 @@ describe('detalhe da execução (FR-016, FR-016a)', () => {
     expect(panel.getByText(/página 2 de 5/i)).toBeInTheDocument();
     expect(panel.getByText(/12 min 30 s/)).toBeInTheDocument();
     expect(panel.getByTestId('count-virtual_card_pending_charge')).toHaveTextContent('4');
-    expect(panel.getByText('1 de 5')).toBeInTheDocument();
+    expect(panel.getByTestId('hotel-31')).toHaveTextContent(
+      'Código 31 · lendo reservas · página 1 de 5',
+    );
     expect(panel.getByText('A conta do Hunit usada não acessa este hotel.')).toBeInTheDocument();
   });
 
@@ -217,9 +241,20 @@ describe('ações do operador (FR-017, FR-018)', () => {
     renderWithApp(<ExecutionsScreen />, hunit);
     const panel = within(await openDetail(/desktop-financeiro/));
 
-    await userEvent.click(await panel.findByRole('button', { name: /cancelar execução/i }));
+    const cancelButton = await panel.findByRole('button', { name: /cancelar execução/i });
+    // Sem o "Leve" (specs/006, FR-013): destrutiva em vermelho suave.
+    expect(cancelButton).toHaveAttribute('data-variant', 'danger-light');
+    await userEvent.click(cancelButton);
     expect(hunit.api.executions.cancel).not.toHaveBeenCalled();
-    await userEvent.click(await screen.findByRole('button', { name: /sim, cancelar/i }));
+    // Tela 3.3: "Não" em contorno e "Sim, cancelar" em vermelho cheio (FR-009).
+    const confirm = within(await screen.findByRole('dialog', { name: 'Cancelar a execução?' }));
+    expect(confirm.getByRole('button', { name: 'Não' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+    const yes = confirm.getByRole('button', { name: /sim, cancelar/i });
+    expect(yes).toHaveAttribute('data-variant', 'danger');
+    await userEvent.click(yes);
 
     await waitFor(() => expect(hunit.api.executions.cancel).toHaveBeenCalledWith(RUNNING));
   });
@@ -318,5 +353,86 @@ describe('ações do operador (FR-017, FR-018)', () => {
 
     expect(await screen.findByTestId('execution-detail')).toBeInTheDocument();
     expect(hunit.api.executions.get).toHaveBeenCalledWith(RUNNING);
+  });
+});
+
+describe('visual novo de Execuções (specs/006, T055 e T056; telas 3.1 a 3.4)', () => {
+  const summary = (id: string, client: string): ExecutionSummary => ({
+    ...(SUMMARIES[0] as ExecutionSummary),
+    id,
+    requestedClient: client,
+  });
+
+  it('duas em andamento (contas diferentes): um card para cada, com o andamento dos hotéis', async () => {
+    const other = '44444444-4444-4444-8444-444444444444';
+    mocked(hunit.api.executions.list).mockImplementation(() =>
+      okResult({
+        items: [summary(RUNNING, 'desktop-financeiro'), summary(other, 'desktop-controladoria')],
+        nextCursor: null,
+      }),
+    );
+    mocked(hunit.api.executions.get).mockImplementation((id: string) =>
+      okResult({ ...RUNNING_DETAIL, id }),
+    );
+    renderWithApp(<ExecutionsScreen />, hunit);
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('region', { name: /^Em andamento:/ })).toHaveLength(2),
+    );
+    const cards = screen.getAllByRole('region', { name: /^Em andamento:/ });
+    // 1 de 2 hotéis terminou? Nenhum: um em andamento e um pendente.
+    await waitFor(() => expect(cards[0]).toHaveTextContent('0 de 2 hotéis concluídos'));
+    expect(cards[1]).toHaveTextContent('desktop-controladoria');
+    expect(screen.queryByRole('table', { name: 'Histórico das execuções' })).toBeNull();
+  });
+
+  it('nenhuma em andamento: sem card, só o "Histórico"', async () => {
+    mocked(hunit.api.executions.list).mockImplementation(() =>
+      okResult({ items: [SUMMARIES[1] as ExecutionSummary], nextCursor: null }),
+    );
+    renderWithApp(<ExecutionsScreen />, hunit);
+
+    expect(
+      await screen.findByRole('table', { name: 'Histórico das execuções' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /^Em andamento:/ })).toBeNull();
+    // Sem card escuro acima, a lista vem sem o título "Histórico" (telas 5.1 e 6.1).
+    expect(screen.queryByRole('heading', { name: 'Histórico' })).toBeNull();
+  });
+
+  it('detalhe em andamento: faixa de progresso, contagens em caixas e hotéis em linhas (3.2)', async () => {
+    renderWithApp(<ExecutionsScreen />, hunit);
+    const detailPanel = await openDetail(/desktop-financeiro/);
+    const panel = within(detailPanel);
+
+    expect(
+      await panel.findByRole('progressbar', { name: '0 de 2 hotéis concluídos' }),
+    ).toBeInTheDocument();
+    expect(panel.getByTestId('count-virtual_card_pending_charge')).toHaveAttribute(
+      'data-tone',
+      'amber',
+    );
+    const hotels = panel.getByRole('list', { name: 'Hotéis da execução' });
+    expect(within(hotels).getAllByRole('listitem')).toHaveLength(2);
+    expect(panel.getByTestId('hotel-32')).toHaveTextContent('Código 32 · aguardando na fila');
+    expect(within(panel.getByTestId('hotel-31')).getByText('Em andamento')).toHaveAttribute(
+      'data-tone',
+      'lime',
+    );
+  });
+
+  it('detalhe encerrado: sem faixa de progresso, "Retomar" é a principal', async () => {
+    renderWithApp(<ExecutionsScreen onOpenReservations={vi.fn()} />, hunit);
+    const panel = within(await openDetail(/desktop-controladoria/));
+
+    expect(await panel.findByRole('button', { name: /^retomar$/i })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(panel.queryByRole('progressbar')).toBeNull();
+    expect(panel.getByRole('button', { name: 'Ver as reservas desta execução' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
   });
 });

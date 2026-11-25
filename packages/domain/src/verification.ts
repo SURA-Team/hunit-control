@@ -20,7 +20,8 @@ export interface ReservationData {
   checkIn: IsoDate;
   checkOut: IsoDate;
   stayPeriod: string;
-  totalAmount: Money;
+  /** `null` só em reserva importada sem total, até a primeira verificação (specs/004, FR-008). */
+  totalAmount: Money | null;
   reservationStatus: ReservationStatus;
   classification: Classification;
   reason: string;

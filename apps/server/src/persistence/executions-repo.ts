@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, notInArray, sql, type SQL } from 'drizzle-orm';
 import type { Period } from '@hunit/domain';
+import { activeAutomationsOf, lockHunitAccount } from './account-lock.js';
 import type { Database } from './db.js';
 import { isConstraintViolation, PG_UNIQUE_VIOLATION } from './errors.js';
 import {
@@ -66,19 +67,26 @@ export interface NewExecution {
  */
 export async function createExecution(db: Database, input: NewExecution): Promise<ExecutionRow> {
   try {
-    const [row] = await db
-      .insert(executions)
-      .values({
-        accountKey: input.accountKey,
-        clientId: input.clientId,
-        periodFrom: input.period.from,
-        periodTo: input.period.to,
-        requestedHotelCodes: input.requestedHotelCodes,
-        parentExecutionId: input.parentExecutionId ?? null,
-      })
-      .returning();
-    if (!row) throw new Error('O banco não devolveu a execução criada.');
-    return row;
+    return await db.transaction(async (tx) => {
+      // Um envio ao Comercial ativo na mesma conta também ocupa a conta (specs/005, R-01).
+      await lockHunitAccount(tx, input.accountKey);
+      if ((await activeAutomationsOf(tx, input.accountKey)).dispatch) {
+        throw new ExecutionAlreadyActiveError();
+      }
+      const [row] = await tx
+        .insert(executions)
+        .values({
+          accountKey: input.accountKey,
+          clientId: input.clientId,
+          periodFrom: input.period.from,
+          periodTo: input.period.to,
+          requestedHotelCodes: input.requestedHotelCodes,
+          parentExecutionId: input.parentExecutionId ?? null,
+        })
+        .returning();
+      if (!row) throw new Error('O banco não devolveu a execução criada.');
+      return row;
+    });
   } catch (error) {
     if (isConstraintViolation(error, PG_UNIQUE_VIOLATION, 'executions_one_active_per_account')) {
       throw new ExecutionAlreadyActiveError();

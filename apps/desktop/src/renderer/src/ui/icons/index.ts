@@ -1,0 +1,28 @@
+/** Ícones do design e a marca (specs/006, research R-04). */
+export { BrandMark } from './BrandMark';
+export {
+  AttentionIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  CommercialIcon,
+  DocumentIcon,
+  DownloadIcon,
+  ExecutionsIcon,
+  EyeIcon,
+  InfoIcon,
+  MinusIcon,
+  RemoveIcon,
+  ReservationsIcon,
+  RevertIcon,
+  RunIcon,
+  SearchEmptyIcon,
+  SelectorIcon,
+  SettingsIcon,
+  SoundHighIcon,
+  SoundLowIcon,
+  UndoIcon,
+  type IconProps,
+} from './icons';

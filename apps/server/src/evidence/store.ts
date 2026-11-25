@@ -12,14 +12,26 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type EvidenceRow = typeof evidence.$inferSelect;
 
-export interface NewEvidence {
-  executionId: string;
+/** Dono da evidência: a execução ou o envio ao Comercial (specs/005). */
+export type EvidenceOwner = { executionId: string } | { dispatchId: string };
+
+export type NewEvidence = EvidenceOwner & {
   hotelCode?: string | null;
   reservationNumber?: string | null;
   kind: EvidenceKind;
   /** Por que a evidência foi gerada. Não pode conter credenciais nem nome de hóspede. */
   reason: string;
   material: EvidenceMaterial;
+};
+
+/** Pasta da evidência: a do dono (execução ou envio). */
+export function evidenceFolderOf(owner: {
+  executionId?: string | null;
+  dispatchId?: string | null;
+}): string {
+  const folder = owner.executionId ?? owner.dispatchId;
+  if (!folder) throw new Error('Evidência sem dono (execução ou envio).');
+  return folder;
 }
 
 export interface StoredEvidence {
@@ -71,7 +83,7 @@ export class EvidenceStore {
     const files: Array<{ relativePath: string; content: Buffer | string }> = [];
     const fileFor = (extension: string, content: Buffer | string | undefined): string | null => {
       if (content === undefined || content.length === 0) return null;
-      const relativePath = `${input.executionId}/${id}.${extension}`;
+      const relativePath = `${evidenceFolderOf(input)}/${id}.${extension}`;
       files.push({ relativePath, content });
       return relativePath;
     };
@@ -86,7 +98,7 @@ export class EvidenceStore {
       responsePath: fileFor('json', response === undefined ? undefined : secrets.scrub(response)),
     };
 
-    await mkdir(this.resolve(input.executionId), { recursive: true });
+    await mkdir(this.resolve(evidenceFolderOf(input)), { recursive: true });
     const written: string[] = [];
     try {
       for (const file of files) {
@@ -97,7 +109,8 @@ export class EvidenceStore {
 
       await db.insert(evidence).values({
         id,
-        executionId: input.executionId,
+        executionId: 'executionId' in input ? input.executionId : null,
+        dispatchId: 'dispatchId' in input ? input.dispatchId : null,
         hotelCode: input.hotelCode ?? null,
         reservationNumber: input.reservationNumber ?? null,
         kind: input.kind,

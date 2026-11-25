@@ -16,6 +16,8 @@ export interface E2eServerOptions {
   scenario?: FakeScenario;
   /** Prazo do token. Nos testes, alguns segundos. */
   twoFactorTimeoutMs?: number;
+  /** Planilha do Comercial em memória (specs/005): liga o envio ao Comercial. */
+  commercialSheet?: boolean;
 }
 
 export interface E2eServer {
@@ -28,6 +30,8 @@ export interface E2eServer {
   /** Hunit simulado: troque `hunit.scenario` ou registre `hunit.before(...)` para programar. */
   hunit: FakeHunit;
   test: TestApp;
+  /** Planilha do Comercial em memória, quando ligada (specs/005). */
+  sheet: TestApp['sheet'];
   /** Cadastra outro cliente da API (outra máquina). */
   createClient(role: 'operator' | 'reader'): Promise<TestClient>;
   /** Troca o roteiro do Hunit simulado para as próximas execuções. */
@@ -54,6 +58,7 @@ export async function startE2eServer(options: E2eServerOptions = {}): Promise<E2
     ...(options.twoFactorTimeoutMs !== undefined && {
       twoFactorTimeoutMs: options.twoFactorTimeoutMs,
     }),
+    ...(options.commercialSheet && { commercialSheet: true }),
   });
   const address = await test.app.listen({ host: '127.0.0.1', port: 0 });
   const port = Number(new URL(address).port);
@@ -86,6 +91,7 @@ export async function startE2eServer(options: E2eServerOptions = {}): Promise<E2
     reader,
     hunit,
     test,
+    sheet: test.sheet,
     createClient: (role) => test.createClient(role),
     setScenario(scenario) {
       hunit.scenario = scenario;

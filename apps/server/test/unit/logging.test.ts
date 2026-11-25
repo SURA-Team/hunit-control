@@ -68,10 +68,31 @@ describe('logger (T014, research R-12)', () => {
     expect(logs.records()[0]).toMatchObject({
       password: REDACTED,
       credentials: REDACTED,
-      req: { method: 'POST', headers: { authorization: REDACTED }, body: REDACTED },
       hotelCode: 'H1',
       msg: 'tentativa de acesso',
     });
+    // A requisição é registrada só pelo método e pelo caminho: sem cabeçalhos nem corpo (R-13).
+    expect(logs.records()[0]?.['req']).toEqual({ method: 'POST' });
+  });
+
+  it('registra a requisição pelo caminho, sem a query (specs/003, research R-13)', () => {
+    const logs = captureLogs();
+
+    logs.logger.info(
+      { req: { method: 'GET', url: '/v1/reservations?q=Nome%20do%20Hospede&limit=50' } },
+      'requisição',
+    );
+    logs.logger.info(
+      { req: { method: 'POST', url: '/v1/treatment-files?name=Fulano%20de%20Tal.pdf' } },
+      'requisição',
+    );
+
+    expect(logs.records().map((record) => record['req'])).toEqual([
+      { method: 'GET', url: '/v1/reservations' },
+      { method: 'POST', url: '/v1/treatment-files' },
+    ]);
+    expect(logs.text()).not.toContain('Hospede');
+    expect(logs.text()).not.toContain('Fulano');
   });
 
   it('apaga segredos registrados onde quer que apareçam, mantendo o JSON válido', () => {

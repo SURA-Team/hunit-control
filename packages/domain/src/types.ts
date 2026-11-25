@@ -11,11 +11,13 @@
  *
  * - `ignored_hotelbeds_258`: número começa com "258-"; a reserva não é aberta.
  * - `invoiced`: sem pré-pagamento e forma de pagamento "faturado": não exige ação (R-22).
- * - `charge_at_terminal`: sem pré-pagamento e forma "cartão de crédito": cobrar na maquininha.
+ * - `charge_at_terminal`: cobrar na maquininha — sem pré-pagamento e forma "cartão de crédito"; ou
+ *   com o cartão do hóspede no Hunit, sem cobrança e sem a ação de cobrar (regra 6a, 19/11/2026).
  * - `cancelled_no_charge`: cancelada, sem pré-pagamento e sem forma de pagamento: cancelamento
  *   antecipado ou no-show isento, sem cobrança.
- * - `not_virtual_card`: **obsoleta** — não é mais produzida; só aparece em registros gravados antes
- *   da R-22 (o banco e o contrato a mantêm para esse histórico).
+ * - `not_virtual_card`: **"A revisar (sistema anterior)"** (specs/004, FR-007a). O coletor não a
+ *   produz desde a R-22 da 001; só aparece em reservas importadas do sistema anterior cuja
+ *   classificação não tem correspondência, e sai na primeira verificação pelo HUNIT Control.
  * - `virtual_card_charge_error`: o estado atual do pré-pagamento indica falha de cobrança.
  * - `virtual_card_already_charged`: há registro de cobrança ("Cobrado em").
  * - `virtual_card_validated_only`: o cartão foi apenas validado ("Validado em"), sem cobrança.

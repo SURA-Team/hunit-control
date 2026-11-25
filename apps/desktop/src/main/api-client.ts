@@ -23,6 +23,15 @@ import {
 import type {
   AppError,
   ClientIdentity,
+  CommercialDetail,
+  CommercialDispatch,
+  CommercialDispatchCheck,
+  CommercialDispatchListInput,
+  CommercialDispatchSummary,
+  CommercialLine,
+  CommercialSheetStatus,
+  HunitChargeQueue,
+  ConfirmationBatchResult,
   EvidenceFile,
   EvidenceSummary,
   Execution,
@@ -31,9 +40,20 @@ import type {
   Hotel,
   Page,
   Reservation,
+  ReservationCountFilters,
+  ReservationFilters,
+  ReservationDetailedSituation,
   ReservationKey,
   ReservationListInput,
+  ReservationOutcome,
+  ReservationQuickFilterCounts,
+  ReservationSelection,
+  ReservationTreatment,
   Result,
+  SheetReadResult,
+  TreatmentCheck,
+  TreatmentDetail,
+  TreatmentDocumentKind,
 } from '../shared/ipc-types.js';
 
 type Schemas = components['schemas'];
@@ -59,6 +79,15 @@ const TLS_ERROR_CODES = new Set([
 const UNTRUSTED_DETAIL =
   'Não foi possível confirmar a identidade do servidor: o certificado apresentado não é o do servidor configurado.';
 const OFFLINE_DETAIL = 'O servidor não respondeu.';
+
+/** Tempo máximo do envio de um documento (até 25 MB pela rede local). */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+/**
+ * Tempo máximo das operações longas do Comercial: "Ler retornos agora" responde em até 50 s
+ * (depois disso, 202 e a rodada continua no servidor) e os lotes de até 2 000 reservas.
+ */
+const LONG_TIMEOUT_MS = 150_000;
 
 export interface ApiClientOptions {
   /** Origem do servidor, sem barra no fim (ex.: "https://192.168.0.50"). */
@@ -97,19 +126,65 @@ export function networkError(error: unknown): AppError {
     : { code: 'offline', detail: OFFLINE_DETAIL };
 }
 
-const API_ERROR_CODES = new Set<string>([
-  'validation_error',
-  'unauthorized',
-  'forbidden_for_role',
-  'not_found',
-  'execution_already_active',
-  'not_awaiting_two_factor',
-  'execution_already_finished',
-  'nothing_to_resume',
-  'execution_already_resumed',
-  'evidence_expired',
-  'internal_error',
-] satisfies Schemas['Problem']['code'][]);
+// Todos os códigos do contrato: o `satisfies` com `Record` faz o typecheck falhar quando o
+// contrato ganha um código que o app ainda não reconhece (specs/008).
+const API_ERROR_CODES: ReadonlySet<string> = new Set(
+  Object.keys({
+    validation_error: true,
+    unauthorized: true,
+    forbidden_for_role: true,
+    not_found: true,
+    execution_already_active: true,
+    not_awaiting_two_factor: true,
+    execution_already_finished: true,
+    nothing_to_resume: true,
+    execution_already_resumed: true,
+    evidence_expired: true,
+    empty_file: true,
+    file_too_large: true,
+    unsupported_file_type: true,
+    file_not_found: true,
+    not_eligible_for_treatment: true,
+    document_not_current: true,
+    document_not_revertible: true,
+    proof_required: true,
+    document_purged: true,
+    account_busy: true,
+    commercial_sheet_not_configured: true,
+    commercial_sheet_unavailable: true,
+    no_eligible_reservations: true,
+    dispatch_already_finished: true,
+    dispatch_already_resumed: true,
+    return_awaiting_validation: true,
+    return_not_awaiting_validation: true,
+    return_not_confirmed: true,
+    not_in_commercial_sheet: true,
+    restore_expired: true,
+    // specs/008: "Cancelada sem cobrança" (o motivo da recusa vem no `detail`) e "Verificar agora".
+    no_charge_not_accepted: true,
+    reservation_changed: true,
+    no_charge_not_active: true,
+    no_reports_to_check: true,
+    no_cancellation_awaiting_validation: true,
+    internal_error: true,
+  } satisfies Record<Schemas['Problem']['code'], true>),
+);
+
+/**
+ * Nome do arquivo num `content-disposition`: prefere `filename*` (UTF-8, RFC 6266), depois
+ * `filename`; sem nenhum dos dois, um nome genérico.
+ */
+export function fileNameFromDisposition(header: string | null): string {
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header ?? '')?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // Cai no nome simples.
+    }
+  }
+  return /filename="([^"]*)"/i.exec(header ?? '')?.[1] ?? 'documento';
+}
 
 /** Erro de uma resposta HTTP que não deu certo, a partir do corpo `problem+json` (se houver). */
 export function httpError(status: number, body: unknown): AppError {
@@ -127,6 +202,8 @@ export function httpError(status: number, body: unknown): AppError {
 export class ApiClient {
   private readonly agent: Agent;
   private readonly http: Client<paths>;
+  /** Mesmo cliente, com o tempo das operações longas do Comercial. */
+  private readonly slowHttp: Client<paths>;
   private readonly timeoutMs: number;
   private offsetMs = 0;
 
@@ -140,6 +217,13 @@ export class ApiClient {
       headers: { authorization: `Bearer ${options.apiKey}` },
       Request: UndiciRequest as unknown as typeof Request,
       fetch: (request) => this.send(request as unknown as UndiciRequest, this.timeoutMs),
+    });
+    this.slowHttp = createClient<paths>({
+      baseUrl: `${options.serverUrl}/v1`,
+      headers: { authorization: `Bearer ${options.apiKey}` },
+      Request: UndiciRequest as unknown as typeof Request,
+      fetch: (request) =>
+        this.send(request as unknown as UndiciRequest, Math.max(this.timeoutMs, LONG_TIMEOUT_MS)),
     });
   }
 
@@ -217,9 +301,41 @@ export class ApiClient {
     return result.ok ? { ok: true, data: page(result.data) } : result;
   }
 
+  /** Contagem de cada filtro rápido com os mesmos filtros da lista (specs/006, FR-017). */
+  countReservationQuickFilters(
+    filters: ReservationCountFilters,
+  ): Promise<Result<ReservationQuickFilterCounts>> {
+    return this.call(() =>
+      this.http.GET('/reservations/quick-filter-counts', { params: { query: filters } }),
+    );
+  }
+
   getReservation(key: ReservationKey): Promise<Result<Reservation>> {
     return this.call(() =>
       this.http.GET('/reservations/{hotelCode}/{reservationNumber}', { params: { path: key } }),
+    );
+  }
+
+  /** Marca como cancelada sem cobrança (specs/008, FR-018). */
+  markNoCharge(
+    key: ReservationKey,
+    body: { expectedSituation: ReservationDetailedSituation; note?: string },
+  ): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/no-charge', {
+        params: { path: key },
+        body,
+      }),
+    );
+  }
+
+  /** Desfaz a marcação "Cancelada sem cobrança" (specs/008, FR-021). */
+  undoNoCharge(key: ReservationKey, markId: string): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/no-charge/undo', {
+        params: { path: key },
+        body: { markId },
+      }),
     );
   }
 
@@ -253,6 +369,334 @@ export class ApiClient {
     } catch (error) {
       return { ok: false, error: networkError(error) };
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Tratativas manuais (specs/003, contracts/api-changes.md)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Envia o arquivo de uma tratativa ou de um comprovante. Os bytes saem da memória do processo
+   * principal; o nome vai na query (o servidor não o registra em log).
+   */
+  async uploadTreatmentFile(
+    name: string,
+    content: Uint8Array,
+  ): Promise<Result<Schemas['TreatmentFile']>> {
+    const opened = await this.raw(
+      `/treatment-files?name=${encodeURIComponent(name)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: content,
+      },
+      UPLOAD_TIMEOUT_MS,
+    );
+    if (!opened.ok) return opened;
+    try {
+      return { ok: true, data: (await opened.data.json()) as Schemas['TreatmentFile'] };
+    } catch (error) {
+      return { ok: false, error: networkError(error) };
+    }
+  }
+
+  checkTreatmentDocuments(body: {
+    kind: TreatmentDocumentKind;
+    reservations: ReservationKey[];
+  }): Promise<Result<TreatmentCheck>> {
+    return this.call(() => this.http.POST('/treatment-documents/check', { body }));
+  }
+
+  registerTreatmentDocuments(body: {
+    kind: TreatmentDocumentKind;
+    fileId: string;
+    fileName: string;
+    reservations: ReservationKey[];
+  }): Promise<Result<{ batchId: string; items: ReservationOutcome[] }>> {
+    return this.call(() => this.http.POST('/treatment-documents', { body }));
+  }
+
+  async removeTreatmentDocument(documentId: string): Promise<Result<void>> {
+    const result = await this.call(() =>
+      this.http.DELETE('/treatment-documents/{documentId}', { params: { path: { documentId } } }),
+    );
+    return result.ok ? { ok: true, data: undefined } : result;
+  }
+
+  revertTreatmentDocument(documentId: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/treatment-documents/{documentId}/revert', {
+        params: { path: { documentId } },
+      }),
+    );
+  }
+
+  getReservationTreatment(key: ReservationKey): Promise<Result<TreatmentDetail>> {
+    return this.call(() =>
+      this.http.GET('/reservations/{hotelCode}/{reservationNumber}/treatment', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  setManualChargedAmount(
+    key: ReservationKey,
+    amount: string,
+  ): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.PUT('/reservations/{hotelCode}/{reservationNumber}/manual-amount', {
+        params: { path: key },
+        body: { amount },
+      }),
+    );
+  }
+
+  clearManualChargedAmount(key: ReservationKey): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.DELETE('/reservations/{hotelCode}/{reservationNumber}/manual-amount', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  /** Confirma o alerta "Verificar" de uma reserva (specs/003, FR-002a). */
+  confirmTreatmentReview(key: ReservationKey): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/treatment/review', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  /** Baixa o arquivo de um documento, com o nome original; o conteúdo não vai para a interface. */
+  async downloadTreatmentDocument(
+    documentId: string,
+  ): Promise<Result<{ content: Buffer; fileName: string }>> {
+    const opened = await this.raw(
+      `/treatment-documents/${encodeURIComponent(documentId)}/file`,
+      {},
+      UPLOAD_TIMEOUT_MS,
+    );
+    if (!opened.ok) return opened;
+    const response = opened.data;
+    try {
+      return {
+        ok: true,
+        data: {
+          content: Buffer.from(await response.arrayBuffer()),
+          fileName: fileNameFromDisposition(response.headers.get('content-disposition')),
+        },
+      };
+    } catch (error) {
+      return { ok: false, error: networkError(error) };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Envio ao Comercial pela planilha (specs/005, contracts/api-changes.md)
+  // -------------------------------------------------------------------------
+
+  /** "Selecionar todas do filtro": até 2 000 reservas, na ordem da lista (FR-030). */
+  selectReservations(filters: ReservationFilters): Promise<Result<ReservationSelection>> {
+    return this.call(() =>
+      this.slowHttp.GET('/reservations/selection', { params: { query: filters } }),
+    );
+  }
+
+  /** "Verificar" em lote (FR-029). */
+  confirmTreatmentReviews(
+    reservations: ReservationKey[],
+  ): Promise<Result<ConfirmationBatchResult>> {
+    return this.call(() => this.slowHttp.POST('/treatment-reviews', { body: { reservations } }));
+  }
+
+  checkCommercialDispatch(
+    reservations: ReservationKey[],
+  ): Promise<Result<CommercialDispatchCheck>> {
+    return this.call(() =>
+      this.slowHttp.POST('/commercial-dispatches/check', { body: { reservations } }),
+    );
+  }
+
+  startCommercialDispatch(body: {
+    credentials: CredentialsBody;
+    reservations: ReservationKey[];
+  }): Promise<Result<CommercialDispatch>> {
+    return this.call(() => this.slowHttp.POST('/commercial-dispatches', { body }));
+  }
+
+  async listCommercialDispatches(
+    input: CommercialDispatchListInput,
+  ): Promise<Result<Page<CommercialDispatchSummary>>> {
+    const result = await this.call(() =>
+      this.http.GET('/commercial-dispatches', { params: { query: input } }),
+    );
+    return result.ok ? { ok: true, data: page(result.data) } : result;
+  }
+
+  getCommercialDispatch(dispatchId: string): Promise<Result<CommercialDispatch>> {
+    return this.call(() =>
+      this.http.GET('/commercial-dispatches/{dispatchId}', { params: { path: { dispatchId } } }),
+    );
+  }
+
+  resumeCommercialDispatch(
+    dispatchId: string,
+    credentials: CredentialsBody,
+  ): Promise<Result<CommercialDispatch>> {
+    return this.call(() =>
+      this.http.POST('/commercial-dispatches/{dispatchId}/resume', {
+        params: { path: { dispatchId } },
+        body: { credentials },
+      }),
+    );
+  }
+
+  cancelCommercialDispatch(dispatchId: string): Promise<Result<CommercialDispatch>> {
+    return this.call(() =>
+      this.http.POST('/commercial-dispatches/{dispatchId}/cancel', {
+        params: { path: { dispatchId } },
+      }),
+    );
+  }
+
+  async sendDispatchToken(dispatchId: string, token: string): Promise<Result<void>> {
+    const result = await this.call(() =>
+      this.http.POST('/commercial-dispatches/{dispatchId}/two-factor', {
+        params: { path: { dispatchId } },
+        body: { token },
+      }),
+    );
+    return result.ok ? { ok: true, data: undefined } : result;
+  }
+
+  getReservationCommercial(key: ReservationKey): Promise<Result<CommercialDetail>> {
+    return this.call(() =>
+      this.http.GET('/reservations/{hotelCode}/{reservationNumber}/commercial', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  /** Desfaz o envio: a linha vai para "Concluídas" como "Pedido cancelado pelo Financeiro". */
+  cancelCommercialLine(key: ReservationKey): Promise<Result<CommercialLine>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/commercial/cancel', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  restoreCommercialLine(key: ReservationKey): Promise<Result<CommercialLine>> {
+    return this.call(() =>
+      this.http.POST('/reservations/{hotelCode}/{reservationNumber}/commercial/restore', {
+        params: { path: key },
+      }),
+    );
+  }
+
+  confirmCommercialReturn(returnId: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/commercial-returns/{returnId}/confirm', {
+        params: { path: { returnId } },
+      }),
+    );
+  }
+
+  rejectCommercialReturn(returnId: string, reason: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/commercial-returns/{returnId}/reject', {
+        params: { path: { returnId } },
+        body: { reason },
+      }),
+    );
+  }
+
+  undoCommercialReturnConfirmation(returnId: string): Promise<Result<ReservationTreatment>> {
+    return this.call(() =>
+      this.http.POST('/commercial-returns/{returnId}/undo-confirmation', {
+        params: { path: { returnId } },
+      }),
+    );
+  }
+
+  confirmCommercialReturns(
+    reservations: ReservationKey[],
+    includeCancellations = false,
+  ): Promise<Result<ConfirmationBatchResult>> {
+    return this.call(() =>
+      this.slowHttp.POST('/commercial-returns/confirm', {
+        // Só manda o campo quando pede as "Cancelada" (homologação, R-19).
+        body: { reservations, ...(includeCancellations && { includeCancellations: true }) },
+      }),
+    );
+  }
+
+  /** Confirma a "Cancelada" do Comercial (homologação da 008, R-19). */
+  confirmCommercialCancellation(key: ReservationKey): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST(
+        '/reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/confirm',
+        {
+          params: { path: key },
+        },
+      ),
+    );
+  }
+
+  /** Recusa a "Cancelada" do Comercial com o motivo (R-19). */
+  rejectCommercialCancellation(key: ReservationKey, reason: string): Promise<Result<Reservation>> {
+    return this.call(() =>
+      this.http.POST(
+        '/reservations/{hotelCode}/{reservationNumber}/commercial/cancellation/reject',
+        {
+          params: { path: key },
+          body: { reason },
+        },
+      ),
+    );
+  }
+
+  getCommercialSheetStatus(): Promise<Result<CommercialSheetStatus>> {
+    return this.call(() => this.http.GET('/commercial-sheet'));
+  }
+
+  /** Fila "Cobradas no Hunit" (specs/008). */
+  listHunitCharges(): Promise<Result<HunitChargeQueue>> {
+    return this.call(() => this.http.GET('/commercial-hunit-charges'));
+  }
+
+  /** "Verificar agora" da fila (specs/008): uma verificação, acompanhada como um envio. */
+  checkHunitCharges(body: { credentials: CredentialsBody }): Promise<Result<CommercialDispatch>> {
+    return this.call(() => this.slowHttp.POST('/commercial-hunit-charges/check', { body }));
+  }
+
+  /**
+   * "Ler retornos agora": rodada completa. Passou de 50 s, o servidor responde 202 com o estado e
+   * a rodada continua lá (`round` nulo).
+   */
+  async readCommercialSheet(): Promise<Result<SheetReadResult>> {
+    const result = await this.call(() => this.slowHttp.POST('/commercial-sheet/read'));
+    if (!result.ok) return result;
+    const body = result.data as SheetReadResult | CommercialSheetStatus;
+    return {
+      ok: true,
+      data: 'round' in body ? body : { sheet: body, round: null },
+    };
+  }
+
+  /** Fluxo de eventos (SSE) de um envio ao Comercial; mesmas regras do fluxo das execuções. */
+  openDispatchEventStream(
+    dispatchId: string,
+    options: { lastEventId?: string | undefined; signal?: AbortSignal | undefined },
+  ): Promise<Result<UndiciResponse>> {
+    const headers: Record<string, string> = { accept: 'text/event-stream' };
+    if (options.lastEventId !== undefined) headers['last-event-id'] = options.lastEventId;
+    return this.raw(
+      `/commercial-dispatches/${encodeURIComponent(dispatchId)}/events`,
+      { headers, signal: options.signal },
+      null,
+    );
   }
 
   /**
@@ -296,12 +740,19 @@ export class ApiClient {
   /** Requisição fora do cliente tipado (arquivos e fluxo de eventos). */
   private async raw(
     path: string,
-    init: { headers?: Record<string, string>; signal?: AbortSignal | undefined },
+    init: {
+      method?: 'GET' | 'POST';
+      headers?: Record<string, string>;
+      body?: Uint8Array;
+      signal?: AbortSignal | undefined;
+    },
     timeoutMs: number | null,
   ): Promise<Result<UndiciResponse>> {
     try {
       const request = new UndiciRequest(`${this.options.serverUrl}/v1${path}`, {
+        method: init.method ?? 'GET',
         headers: { ...init.headers, authorization: `Bearer ${this.options.apiKey}` },
+        ...(init.body && { body: init.body }),
         ...(init.signal && { signal: init.signal }),
       });
       const response = (await this.send(request, timeoutMs)) as unknown as UndiciResponse;

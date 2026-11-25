@@ -7,16 +7,20 @@ import { MantineProvider } from '@mantine/core';
 import { DatesProvider } from '@mantine/dates';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { vi, type Mock } from 'vitest';
 import { HunitContext } from '../../src/renderer/src/hunit';
 import { ConnectionProvider } from '../../src/renderer/src/state/connection';
+import { SelectionProvider } from '../../src/renderer/src/state/selection';
+import { cssVariablesResolver, theme } from '../../src/renderer/src/ui/theme';
 import type {
   ConnectionState,
   CredentialsClearReason,
   CredentialsInput,
+  DispatchChanged,
   ExecutionChanged,
   HunitApi,
+  PlaySoundEvent,
   PreferencesInput,
   Result,
   TwoFactorClosed,
@@ -32,9 +36,10 @@ export interface FakeHunit {
     connectionState(state: ConnectionState): void;
     credentialsCleared(reason: CredentialsClearReason): void;
     executionChanged(event: ExecutionChanged): void;
+    dispatchChanged(event: DispatchChanged): void;
     twoFactorRequested(request: TwoFactorRequest): void;
     twoFactorClosed(event: TwoFactorClosed): void;
-    playSound(): void;
+    playSound(event: PlaySoundEvent): void;
   };
 }
 
@@ -67,9 +72,10 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
     connectionState: new Set<Listener<ConnectionState>>(),
     credentialsCleared: new Set<Listener<{ reason: CredentialsClearReason }>>(),
     executionChanged: new Set<Listener<ExecutionChanged>>(),
+    dispatchChanged: new Set<Listener<DispatchChanged>>(),
     twoFactorRequested: new Set<Listener<TwoFactorRequest>>(),
     twoFactorClosed: new Set<Listener<TwoFactorClosed>>(),
-    playSound: new Set<Listener<void>>(),
+    playSound: new Set<Listener<PlaySoundEvent>>(),
   };
   const on =
     <T,>(set: Set<Listener<T>>) =>
@@ -93,7 +99,11 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
     },
     preferences: {
       set: vi.fn((input: PreferencesInput) =>
-        okResult({ soundEnabled: input.soundEnabled ?? true, idleHours: input.idleHours ?? 8 }),
+        okResult({
+          soundEnabled: input.soundEnabled ?? true,
+          soundVolume: input.soundVolume ?? 100,
+          idleHours: input.idleHours ?? 8,
+        }),
       ),
     },
     attention: {
@@ -133,6 +143,79 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       list: vi.fn(() => okResult({ items: [], nextCursor: null })),
       get: vi.fn(() => errorResult('not_found')),
       channels: vi.fn(() => okResult([])),
+      selectAll: vi.fn(() => okResult({ total: 0, truncated: false, items: [] })),
+      quickFilterCounts: vi.fn(() =>
+        okResult({ all: 0, pendingCharge: 0, toReview: 0, withError: 0, done: 0 }),
+      ),
+      markNoCharge: vi.fn(() => errorResult('internal_error')),
+      undoNoCharge: vi.fn(() => errorResult('internal_error')),
+    },
+    treatments: {
+      pickFile: vi.fn(() => okResult(null)),
+      discardFile: vi.fn(() => okResult(undefined)),
+      check: vi.fn(() => errorResult('internal_error')),
+      apply: vi.fn(() => errorResult('internal_error')),
+      get: vi.fn(() =>
+        okResult({
+          treatment: {
+            status: 'none' as const,
+            situation: 'virtual_card_pending_charge' as const,
+            detailedSituation: 'virtual_card_pending_charge' as const,
+            needsReview: false,
+            request: null,
+            proof: null,
+            manualChargedAmount: null,
+            commercialChargedAmount: null,
+            effectiveChargedAmount: null,
+            chargedAmountOrigin: null,
+            acceptsDocuments: true,
+            noChargeHistory: [],
+          },
+          documents: [],
+          events: [],
+        }),
+      ),
+      remove: vi.fn(() => okResult(undefined)),
+      revert: vi.fn(() => errorResult('internal_error')),
+      setManualAmount: vi.fn(() => errorResult('internal_error')),
+      clearManualAmount: vi.fn(() => errorResult('internal_error')),
+      confirmReview: vi.fn(() => errorResult('internal_error')),
+      saveDocument: vi.fn(() => okResult(null)),
+      confirmReviews: vi.fn(() => errorResult('internal_error')),
+    },
+    dispatches: {
+      check: vi.fn(() => errorResult('internal_error')),
+      start: vi.fn(() => errorResult('internal_error')),
+      list: vi.fn(() => okResult({ items: [], nextCursor: null })),
+      get: vi.fn(() => errorResult('not_found')),
+      resume: vi.fn(() => errorResult('internal_error')),
+      cancel: vi.fn(() => errorResult('internal_error')),
+      sendToken: vi.fn(() => okResult(undefined)),
+      watch: vi.fn(() => okResult(undefined)),
+      unwatch: vi.fn(() => okResult(undefined)),
+      onChanged: on(listeners.dispatchChanged),
+    },
+    commercial: {
+      get: vi.fn(() =>
+        okResult({ line: null, returns: [], events: [], report: null, history: [] }),
+      ),
+      cancelLine: vi.fn(() => errorResult('internal_error')),
+      restoreLine: vi.fn(() => errorResult('internal_error')),
+      confirmReturn: vi.fn(() => errorResult('internal_error')),
+      rejectReturn: vi.fn(() => errorResult('internal_error')),
+      undoConfirmation: vi.fn(() => errorResult('internal_error')),
+      confirmReturns: vi.fn(() => errorResult('internal_error')),
+      sheetStatus: vi.fn(() => errorResult('internal_error')),
+      readNow: vi.fn(() => errorResult('internal_error')),
+      hunitCharges: vi.fn(() =>
+        okResult({ items: [], counts: { awaiting: 0, notFound: 0, confirmed: 0 } }),
+      ),
+      checkHunitCharges: vi.fn(() => errorResult('internal_error')),
+      confirmCancellation: vi.fn(() => errorResult('internal_error')),
+      rejectCancellation: vi.fn(() => errorResult('internal_error')),
+    },
+    clipboard: {
+      copyReservations: vi.fn(() => errorResult('internal_error')),
     },
   };
 
@@ -146,9 +229,10 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       connectionState: (next) => emitTo(listeners.connectionState, next),
       credentialsCleared: (reason) => emitTo(listeners.credentialsCleared, { reason }),
       executionChanged: (event) => emitTo(listeners.executionChanged, event),
+      dispatchChanged: (event) => emitTo(listeners.dispatchChanged, event),
       twoFactorRequested: (request) => emitTo(listeners.twoFactorRequested, request),
       twoFactorClosed: (event) => emitTo(listeners.twoFactorClosed, event),
-      playSound: () => emitTo(listeners.playSound, undefined),
+      playSound: (event) => emitTo(listeners.playSound, event),
     },
   };
 }
@@ -156,6 +240,19 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
 /** Atalho para o tipo das funções simuladas: `mocked(hunit.api.connection.test)`. */
 export function mocked<T extends (...args: never[]) => unknown>(fn: T): Mock<T> {
   return fn as unknown as Mock<T>;
+}
+
+function UiProviders({ children }: { children: ReactNode }) {
+  return (
+    <MantineProvider env="test" theme={theme} cssVariablesResolver={cssVariablesResolver}>
+      <DatesProvider settings={{ locale: 'pt-br' }}>{children}</DatesProvider>
+    </MantineProvider>
+  );
+}
+
+/** Renderiza um componente de ui/ só com o Mantine e o tema do app (specs/006). */
+export function renderUi(ui: ReactElement): RenderResult {
+  return render(ui, { wrapper: UiProviders });
 }
 
 export function renderWithApp(
@@ -166,11 +263,13 @@ export function renderWithApp(
     defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } },
   });
   const result = render(
-    <MantineProvider env="test">
+    <MantineProvider env="test" theme={theme} cssVariablesResolver={cssVariablesResolver}>
       <DatesProvider settings={{ locale: 'pt-br' }}>
         <QueryClientProvider client={queryClient}>
           <HunitContext.Provider value={hunit.api}>
-            <ConnectionProvider>{ui}</ConnectionProvider>
+            <ConnectionProvider>
+              <SelectionProvider>{ui}</SelectionProvider>
+            </ConnectionProvider>
           </HunitContext.Provider>
         </QueryClientProvider>
       </DatesProvider>

@@ -12,12 +12,20 @@ import {
   evidenceSaveInputSchema,
   executionIdSchema,
   executionListInputSchema,
+  reservationCountFiltersSchema,
+  markNoChargeInputSchema,
   reservationKeySchema,
+  undoNoChargeInputSchema,
   reservationListInputSchema,
   sendTokenInputSchema,
   startExecutionInputSchema,
 } from '../shared/ipc-schemas.js';
-import type { AppError, EvidenceFile, Result } from '../shared/ipc-types.js';
+import type {
+  AppError,
+  EvidenceFile,
+  ReservationDetailedSituation,
+  Result,
+} from '../shared/ipc-types.js';
 import type { ApiClient } from './api-client.js';
 import type { CredentialsVault } from './credentials-vault.js';
 import type { ExecutionWatcher } from './execution-watcher.js';
@@ -115,6 +123,20 @@ export function createStoryHandlers(services: StoryServices): InvokeHandlers {
           ...input,
           classification: input.classification as never,
           reservationStatus: input.reservationStatus as never,
+          situation: input.situation as never,
+          detailedSituation: input.detailedSituation as never,
+        }),
+      ),
+    ),
+
+    [INVOKE.reservationsQuickFilterCounts]: handle(reservationCountFiltersSchema, (filters) =>
+      withApi((api) =>
+        api.countReservationQuickFilters({
+          ...filters,
+          classification: filters.classification as never,
+          reservationStatus: filters.reservationStatus as never,
+          situation: filters.situation as never,
+          detailedSituation: filters.detailedSituation as never,
         }),
       ),
     ),
@@ -124,6 +146,20 @@ export function createStoryHandlers(services: StoryServices): InvokeHandlers {
     ),
 
     [INVOKE.reservationsChannels]: handleNoInput(() => withApi((api) => api.listChannels())),
+
+    // "Cancelada sem cobrança" (specs/008, US4): o servidor confere a situação e as regras.
+    [INVOKE.reservationsMarkNoCharge]: handle(markNoChargeInputSchema, (input) =>
+      withApi((api) =>
+        api.markNoCharge(input.key, {
+          expectedSituation: input.expectedSituation as ReservationDetailedSituation,
+          ...(input.note ? { note: input.note } : {}),
+        }),
+      ),
+    ),
+
+    [INVOKE.reservationsUndoNoCharge]: handle(undoNoChargeInputSchema, (input) =>
+      withApi((api) => api.undoNoCharge(input.key, input.markId)),
+    ),
 
     [INVOKE.evidenceList]: handle(executionIdSchema, (executionId) =>
       withApi((api) => api.listEvidence(executionId)),

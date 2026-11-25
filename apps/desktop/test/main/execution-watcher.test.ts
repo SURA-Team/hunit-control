@@ -111,7 +111,7 @@ beforeEach(() => {
   });
   watcher = new ExecutionWatcher({
     getApi: () => api,
-    onChanged: (executionId) => changed.push(executionId),
+    onChanged: (job) => changed.push(job.id),
     onTwoFactorRequested: (request) => requests.push(request),
     onTwoFactorClosed: (event) => closed.push(event),
     onFinished: (summary) => finished.push(summary),
@@ -180,7 +180,11 @@ describe('pedido de token (FR-011, FR-012)', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(requests).toEqual([
-      { executionId: ID, deadline: DEADLINE, clockOffsetMs: expect.any(Number) as number },
+      {
+        job: { kind: 'execution', id: ID },
+        deadline: DEADLINE,
+        clockOffsetMs: expect.any(Number) as number,
+      },
     ]);
   });
 
@@ -243,7 +247,9 @@ describe('pedido de token (FR-011, FR-012)', () => {
       else emitStatus(step, step === 'running' ? {} : overrides);
     }
 
-    await vi.waitFor(() => expect(closed).toEqual([{ executionId: ID, reason }]));
+    await vi.waitFor(() =>
+      expect(closed).toEqual([{ job: { kind: 'execution', id: ID }, reason }]),
+    );
   });
 
   it('running logo depois do token ainda não fecha o pedido (o Hunit ainda confere)', async () => {

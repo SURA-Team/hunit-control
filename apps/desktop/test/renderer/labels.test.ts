@@ -6,14 +6,35 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import contractSource from '../../../../packages/contracts/openapi.yaml?raw';
+import { BADGE_TONES } from '../../src/renderer/src/presentation/reservations.js';
 import {
   CLASSIFICATION_LABELS,
+  DISPATCH_STATUS_LABELS,
+  CLASSIFICATION_ORDER,
+  DOCUMENT_STATE_LABELS,
   END_REASON_MESSAGES,
   ERROR_MESSAGES,
   EXECUTION_STATUS_LABELS,
   HOTEL_STATUS_LABELS,
+  OUTCOME_NAMES,
+  OUTCOME_REASON_MESSAGES,
   RESERVATION_STATUS_LABELS,
+  REVIEW_LABEL,
+  DETAILED_SITUATION_LABELS,
+  HUNIT_CHARGE_STATUS_LABELS,
+  LINE_STATE_LABELS,
+  RETURN_STATE_LABELS,
+  SITUATION_LABELS,
+  SITUATION_ORDER,
   TONES,
+  TREATMENT_EVENT_NAMES,
+  TREATMENT_KIND_NAMES,
+  TREATMENT_STATUS_LABELS,
+  CHARGE_SITUATION_NAMES,
+  COMMERCIAL_HISTORY_EVENT_NAMES,
+  chargeDateText,
+  chargeSituationText,
+  describeCharge,
 } from '../../src/renderer/src/presentation/labels.js';
 
 interface Schema {
@@ -35,6 +56,15 @@ describe('todo valor dos enums da API tem nome e tom', () => {
     ['ReservationStatus', RESERVATION_STATUS_LABELS],
     ['ExecutionStatus', EXECUTION_STATUS_LABELS],
     ['HotelRunStatus', HOTEL_STATUS_LABELS],
+    // Tratativas manuais (specs/003, data-model §7).
+    ['TreatmentStatus', TREATMENT_STATUS_LABELS],
+    ['TreatmentDocumentState', DOCUMENT_STATE_LABELS],
+    ['ReservationSituation', SITUATION_LABELS],
+    ['ReservationDetailedSituation', DETAILED_SITUATION_LABELS],
+    ['CommercialLineState', LINE_STATE_LABELS],
+    ['CommercialReturnState', RETURN_STATE_LABELS],
+    // Fila "Cobradas no Hunit" (specs/008).
+    ['HunitChargeStatus', HUNIT_CHARGE_STATUS_LABELS],
   ] as const)('%s', (name, labels) => {
     const table = labels as Record<string, { name: string; tone: string }>;
     for (const value of enumOf(name)) {
@@ -42,6 +72,42 @@ describe('todo valor dos enums da API tem nome e tom', () => {
       expect(TONES, value).toContain(table[value]?.tone);
     }
     expect(Object.keys(table).sort()).toEqual([...enumOf(name)].sort());
+  });
+
+  it('os enums das tratativas têm nome (specs/003, data-model §7)', () => {
+    const named = (table: Record<string, string>, values: Array<string | null>) => {
+      const expected = values.filter((value): value is string => value !== null);
+      for (const value of expected) expect(table[value], value).toBeTruthy();
+      expect(Object.keys(table).sort()).toEqual([...expected].sort());
+    };
+    const property = (schema: string, name: string) =>
+      (schemas[schema]?.properties?.[name]?.enum ?? []) as Array<string | null>;
+
+    named(TREATMENT_KIND_NAMES, enumOf('TreatmentDocumentKind'));
+    named(TREATMENT_EVENT_NAMES, property('TreatmentEvent', 'type'));
+    named(OUTCOME_NAMES, property('ReservationOutcome', 'outcome'));
+    named(OUTCOME_REASON_MESSAGES, property('ReservationOutcome', 'reason'));
+  });
+
+  it('as situações da tratativa têm os nomes da spec 003', () => {
+    expect(TREATMENT_STATUS_LABELS.none.name).toBe('Sem tratativa');
+    expect(TREATMENT_STATUS_LABELS.sent.name).toBe('Tratativa enviada');
+    expect(TREATMENT_STATUS_LABELS.charged.name).toBe('Comprovante enviado');
+    expect(TREATMENT_KIND_NAMES).toEqual({ request: 'Tratativa', proof: 'Comprovante' });
+  });
+
+  it('a situação da reserva tem os nomes da homologação (FR-002, FR-002a)', () => {
+    expect(SITUATION_LABELS.treatment_sent.name).toBe('Tratativa enviada');
+    expect(SITUATION_LABELS.proof_sent.name).toBe('Comprovante enviado');
+    expect(SITUATION_LABELS.virtual_card_already_charged.name).toBe('Já cobrada');
+    // Desde a 005, o filtro usa a situação detalhada: "Validar comprovante" depois de "Tratativa
+    // enviada" (specs/005, FR-023).
+    expect([...SITUATION_ORDER].sort()).toEqual([...enumOf('ReservationDetailedSituation')].sort());
+    expect(SITUATION_ORDER.indexOf('return_pending')).toBe(
+      SITUATION_ORDER.indexOf('treatment_sent') + 1,
+    );
+    expect(REVIEW_LABEL.name).toBe('Verificar');
+    expect(TREATMENT_EVENT_NAMES.review_confirmed).toBe('Confirmou a verificação');
   });
 
   it('ExecutionEndReason tem mensagem', () => {
@@ -89,13 +155,120 @@ describe('situações de cobrança (data-model §6.1)', () => {
       analysis_error: 'Erro de análise',
       cancelled_no_charge: 'Cancelada sem cobrança',
       ignored_hotelbeds_258: 'Ignorada (Hotelbeds 258)',
-      not_virtual_card: 'Não é cartão virtual (situação antiga)',
+      not_virtual_card: 'A revisar (sistema anterior)',
     });
+  });
+
+  it('"A revisar (sistema anterior)" pede atenção e vem logo depois das que pedem ação (specs/004)', () => {
+    expect(CLASSIFICATION_LABELS.not_virtual_card.tone).toBe('warning');
+    expect(CLASSIFICATION_ORDER.indexOf('not_virtual_card')).toBe(
+      CLASSIFICATION_ORDER.indexOf('analysis_error') + 1,
+    );
+    expect(SITUATION_ORDER.indexOf('not_virtual_card')).toBe(
+      SITUATION_ORDER.indexOf('analysis_error') + 1,
+    );
   });
 
   it('pendentes em atenção, cobradas em sucesso, erros em erro', () => {
     expect(CLASSIFICATION_LABELS.virtual_card_pending_charge.tone).toBe('warning');
     expect(CLASSIFICATION_LABELS.virtual_card_already_charged.tone).toBe('success');
     expect(CLASSIFICATION_LABELS.analysis_error.tone).toBe('error');
+  });
+});
+
+describe('tons de significado fixo (specs/006, T060, FR-005)', () => {
+  it('cada tom vira a cor do design: verde, âmbar, vermelho, lima e cinza', () => {
+    expect(BADGE_TONES).toEqual({
+      success: 'green',
+      warning: 'amber',
+      error: 'red',
+      progress: 'lime',
+      info: 'gray',
+      neutral: 'gray',
+    });
+  });
+
+  it('"Em andamento" e "A cobrar" em lima; concluído em verde; falha em vermelho', () => {
+    const tone = (label: { tone: string }) => BADGE_TONES[label.tone as keyof typeof BADGE_TONES];
+    for (const label of [
+      EXECUTION_STATUS_LABELS.running,
+      HOTEL_STATUS_LABELS.running,
+      DISPATCH_STATUS_LABELS.running,
+      LINE_STATE_LABELS.open,
+    ]) {
+      expect(tone(label), label.name).toBe('lime');
+    }
+    for (const label of [
+      EXECUTION_STATUS_LABELS.completed,
+      HOTEL_STATUS_LABELS.completed,
+      DISPATCH_STATUS_LABELS.completed,
+      DOCUMENT_STATE_LABELS.current,
+    ]) {
+      expect(tone(label), label.name).toBe('green');
+    }
+    for (const label of [EXECUTION_STATUS_LABELS.failed, HOTEL_STATUS_LABELS.failed]) {
+      expect(tone(label), label.name).toBe('red');
+    }
+    expect(tone(EXECUTION_STATUS_LABELS.awaiting_2fa)).toBe('amber');
+    expect(tone(REVIEW_LABEL)).toBe('amber');
+  });
+
+  it('os nomes ficam como escritos: a caixa alta é do estilo do selo, não do texto', () => {
+    for (const label of Object.values(DETAILED_SITUATION_LABELS)) {
+      expect(label.name, label.name).not.toBe(label.name.toUpperCase());
+    }
+  });
+});
+
+describe('tons dos selos novos (specs/008, T038)', () => {
+  const tone = (label: { tone: string }) => BADGE_TONES[label.tone as keyof typeof BADGE_TONES];
+
+  it('fila "Cobradas no Hunit": aguardando em laranja, confirmada em verde, não encontrada em vermelho', () => {
+    expect(tone(HUNIT_CHARGE_STATUS_LABELS.awaiting)).toBe('amber');
+    expect(tone(HUNIT_CHARGE_STATUS_LABELS.confirmed)).toBe('green');
+    expect(tone(HUNIT_CHARGE_STATUS_LABELS.not_found)).toBe('red');
+  });
+
+  it('"Cancelada sem cobrança" em neutro', () => {
+    expect(DETAILED_SITUATION_LABELS.cancelled_no_charge.name).toBe('Cancelada sem cobrança');
+    expect(tone(DETAILED_SITUATION_LABELS.cancelled_no_charge)).toBe('gray');
+  });
+});
+
+describe('situação e data da cobrança e o histórico novo (specs/008, R-09)', () => {
+  it('toda situação reconhecida e todo evento do histórico novo têm nome', () => {
+    const situationKinds = (
+      contract.components.schemas['ChargeSituation'] as unknown as {
+        properties: { kind: { enum: string[] } };
+      }
+    ).properties.kind.enum;
+    expect(Object.keys(CHARGE_SITUATION_NAMES).sort()).toEqual([...situationKinds].sort());
+    const historyTypes = (
+      contract.components.schemas['CommercialHistoryEvent'] as unknown as {
+        properties: { type: { enum: string[] } };
+      }
+    ).properties.type.enum;
+    expect(Object.keys(COMMERCIAL_HISTORY_EVENT_NAMES).sort()).toEqual([...historyTypes].sort());
+  });
+
+  it('vazio aparece como "não informada" (FR-011)', () => {
+    expect(chargeSituationText(null)).toBe('não informada');
+    expect(chargeDateText(null)).toBe('não informada');
+    expect(chargeDateText('2026-11-19')).toBe('19/11/2026');
+  });
+
+  it('a linha "situação em data (hoje)" das telas 7.8 e 7.12', () => {
+    const now = new Date('2026-11-19T15:00:00Z');
+    const situation = { kind: 'charged_at_terminal' as const, text: 'Cobrada na maquininha' };
+    expect(describeCharge(situation, '2026-11-19', now)).toBe(
+      'Cobrada na maquininha em 19/11/2026 (hoje)',
+    );
+    expect(describeCharge(situation, '2026-11-18', now)).toBe(
+      'Cobrada na maquininha em 18/11/2026 (ontem)',
+    );
+    expect(describeCharge(situation, '2026-11-01', now)).toBe(
+      'Cobrada na maquininha em 01/11/2026',
+    );
+    expect(describeCharge(null, null, now)).toBe('Situação não informada · data não informada');
   });
 });

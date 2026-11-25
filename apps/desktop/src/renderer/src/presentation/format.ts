@@ -13,6 +13,41 @@ export function formatMoney(value: string | null | undefined): string {
   return Number.isFinite(number) ? money.format(number) : DASH;
 }
 
+/** Tamanho de arquivo: "532 B", "12,4 KB", "3,1 MB". */
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return DASH;
+  if (bytes < 1024) return `${bytes} B`;
+  const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+  if (bytes < 1024 * 1024) return `${decimal.format(bytes / 1024)} KB`;
+  return `${decimal.format(bytes / (1024 * 1024))} MB`;
+}
+
+/** Soma valores da API ("1234.56") em centavos, só para exibir um total na tela. */
+export function sumMoney(values: ReadonlyArray<string | null | undefined>): string {
+  let cents = 0n;
+  for (const value of values) {
+    const match = /^(\d+)\.(\d{2})$/.exec(value ?? '');
+    if (match) cents += BigInt(match[1] ?? '0') * 100n + BigInt(match[2] ?? '0');
+  }
+  return `${cents / 100n}.${(cents % 100n).toString().padStart(2, '0')}`;
+}
+
+const compactCount = new Intl.NumberFormat('pt-BR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+const integerCount = new Intl.NumberFormat('pt-BR');
+
+/** Contagem curta dos filtros rápidos (specs/006, research R-09): "999", "1,2 mil", "12,3 mil", "1,2 mi". */
+export function formatCount(count: number): string {
+  return compactCount.format(count);
+}
+
+/** Contagem inteira, para a dica da contagem curta: "12.345". */
+export function formatInteger(count: number): string {
+  return integerCount.format(count);
+}
+
 const two = (value: number) => String(value).padStart(2, '0');
 
 /** Data da API (YYYY-MM-DD) em DD/MM/AAAA, sem passar pelo fuso horário. */
@@ -20,6 +55,33 @@ export function formatDate(value: string | null | undefined): string {
   if (!value) return DASH;
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   return match ? `${match[3]}/${match[2]}/${match[1]}` : DASH;
+}
+
+const BRASILIA_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** O dia de hoje em Brasília (YYYY-MM-DD). */
+function brasiliaDay(now: Date): string {
+  return BRASILIA_DAY.format(now);
+}
+
+/**
+ * "hoje" ou "ontem" para uma data (YYYY-MM-DD), pelo dia de Brasília (specs/008, R-09); `null` nos
+ * outros dias. Só para exibir: nenhuma regra usa a data da cobrança (FR-011).
+ */
+export function relativeDay(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!value) return null;
+  const today = brasiliaDay(now);
+  if (value === today) return 'hoje';
+  const yesterday = brasiliaDay(new Date(Date.parse(`${today}T12:00:00Z`) - 24 * 60 * 60 * 1000));
+  return value === yesterday ? 'ontem' : null;
 }
 
 /** Data e hora (ISO 8601) no horário da máquina: DD/MM/AAAA HH:MM. */

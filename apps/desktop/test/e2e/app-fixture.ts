@@ -40,7 +40,62 @@ export async function newUserDataDir(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), 'hunit-desktop-e2e-'));
 }
 
-export async function launchApp(options: { userDataDir?: string } = {}): Promise<LaunchedApp> {
+/** Tamanho da janela, em px, como a usuária vê (com a moldura do Windows). */
+export interface WindowSize {
+  width: number;
+  height: number;
+}
+
+export interface LaunchOptions {
+  userDataDir?: string;
+  /** Tamanho da janela; sem ele, o padrão do app (1 280 × 820). */
+  window?: WindowSize;
+  /** Zoom da página (1.25 = 125 %), como a escala de tela do Windows (specs/006, SC-007). */
+  zoomFactor?: number;
+}
+
+/**
+ * Muda o tamanho da janela do app e o zoom da página e espera a interface se acomodar (specs/006,
+ * roteiros de larguras e de redimensionamento, research R-16).
+ *
+ * Numa tela menor que o pedido, o Windows limita a janela; aí o zoom diminui na mesma proporção,
+ * para a página ter a largura em px de CSS que teria com a janela inteira (as quebras do layout são
+ * medidas nela). Numa tela de 1 920 × 1 080 a 100 %, todos os tamanhos dos roteiros cabem.
+ */
+export async function resizeWindow(
+  app: ElectronApplication,
+  window: Page,
+  size: WindowSize,
+  zoomFactor?: number,
+): Promise<void> {
+  const cssWidth = await app.evaluate(
+    ({ BrowserWindow }, { size: target, zoom }) => {
+      const main = BrowserWindow.getAllWindows()[0];
+      if (!main) throw new Error('Janela do app não encontrada.');
+      main.setSize(target.width, target.height);
+      const [width = target.width] = main.getSize();
+      const shrink = Math.min(1, width / target.width);
+      if (zoom !== undefined || shrink < 1) main.webContents.setZoomFactor((zoom ?? 1) * shrink);
+      const [contentWidth = width] = main.getContentSize();
+      return contentWidth / main.webContents.getZoomFactor();
+    },
+    { size, zoom: zoomFactor },
+  );
+  // O tamanho e o zoom chegam à página depois: espera a largura em px de CSS bater.
+  await window.waitForFunction(
+    (expected) => Math.abs(globalThis.innerWidth - expected) <= 1,
+    cssWidth,
+  );
+  // Dois quadros: o redimensionamento e o novo layout já desenhado.
+  await window.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+}
+
+export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedApp> {
   const userDataDir = options.userDataDir ?? (await newUserDataDir());
   const app = await electron.launch({
     args: [MAIN_ENTRY],
@@ -49,6 +104,10 @@ export async function launchApp(options: { userDataDir?: string } = {}): Promise
   });
   const window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
+  if (options.window || options.zoomFactor !== undefined) {
+    const size = options.window ?? { width: 1280, height: 820 };
+    await resizeWindow(app, window, size, options.zoomFactor);
+  }
   return {
     app,
     window,
@@ -130,6 +189,35 @@ export async function configureApp(
 }
 
 export type { ElectronApplication, Page };
+
+/**
+ * Busca única da lista de reservas (specs/006, research R-10): não há "Buscar"; a tela aplica 400 ms
+ * depois da última tecla. Texto vazio tira a busca.
+ */
+export async function searchReservations(window: Page, text: string): Promise<void> {
+  await window.getByRole('textbox', { name: 'Buscar reservas' }).fill(text);
+}
+
+/**
+ * Espera a lista de reservas ficar com `count` linhas. Sem o "Buscar", a lista anterior continua na
+ * tela até a resposta chegar: contar logo depois de digitar ou de escolher um filtro seria instável.
+ */
+export async function waitForReservationRows(window: Page, count: number): Promise<void> {
+  await window.waitForFunction(
+    (expected) =>
+      document.querySelectorAll('table[aria-label="Reservas"] tbody tr').length === expected,
+    count,
+    { timeout: 10_000 },
+  );
+}
+
+/** Abre o painel "Filtros avançados" da lista de reservas (specs/006, tela 4.12). */
+export async function openReservationFilters(window: Page) {
+  await window.getByRole('button', { name: 'Filtros', exact: true }).click();
+  const panel = window.getByRole('region', { name: 'Filtros avançados' });
+  await panel.waitFor();
+  return panel;
+}
 
 const MONTHS = [
   'janeiro',

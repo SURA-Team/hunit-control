@@ -33,10 +33,18 @@ services:
       EVIDENCE_RETENTION_DAYS: ${EVIDENCE_RETENTION_DAYS:-30}
       RESERVATION_RETENTION_YEARS: ${RESERVATION_RETENTION_YEARS:-5}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Planilha do Comercial (specs/005). As duas vazias = integração desligada. A chave nunca vem
+      # por variável: só o caminho do arquivo, na pasta montada abaixo (research R-04).
+      COMMERCIAL_SHEET_ID: ${COMMERCIAL_SHEET_ID:-}
+      COMMERCIAL_SHEET_KEY_FILE: ${COMMERCIAL_SHEET_KEY_FILE:-}
+      COMMERCIAL_SHEET_DONE_RETENTION_DAYS: ${COMMERCIAL_SHEET_DONE_RETENTION_DAYS:-90}
     ports:
       - '127.0.0.1:${PORT:-3000}:3000'
     volumes:
       - evidence:/data/evidence
+      # Chave da conta de serviço da planilha do Comercial, só leitura (research R-04). A pasta
+      # existe no repositório só com o README; o arquivo da chave é ignorado pelo Git.
+      - ${COMMERCIAL_SHEET_SECRETS_DIR:-./deploy/secrets}:/run/secrets/commercial-sheet:ro
 
   proxy:
     image: caddy:2.11.9-alpine

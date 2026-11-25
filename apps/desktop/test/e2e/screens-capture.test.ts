@@ -1,5 +1,6 @@
 /**
- * Captura das telas do app para o espelho no Figma (skill `figma-screens-sync`).
+ * Captura das telas do app para comparar com o design no Figma (spec da feature; a skill
+ * `figma-screens-sync` só marca as telas em uso depois).
  *
  * Não é um teste: fica desligado nas rodadas normais e só roda com `HUNIT_SCREENS_DIR` definida
  * (pasta onde os prints são gravados). Abre o app compilado contra a API da 001 com o Hunit
@@ -7,33 +8,76 @@
  * tela no Figma (ex.: `2.4-executar-pedido-de-token.png`). Passos que falham não interrompem a
  * captura; ficam em `falhas.txt` na mesma pasta (o console do Vitest não mostra o `console.log`).
  *
- * Mudou a lista de telas? Atualize também `.claude/skills/figma-screens-sync/references/screens.md`.
+ * A janela é a do design, 1 440 × 900. Com `HUNIT_SCREENS_WIDTH` = `960` ou `1280`, as mesmas telas
+ * saem em 960 × 640 (a mínima do app) ou 1 280 × 820, para registrar como ficam nas larguras menores
+ * (specs/006, T024, research UX-5). Os nomes dos arquivos não mudam: use uma pasta por largura.
+ *
+ * Mudou a lista de telas? Atualize também o catálogo em
+ * `.claude/skills/figma-screens-sync/references/screens.md`.
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { InvalidCredentialsError } from '../../../server/src/hunit/errors.js';
+import { setHotelMapping } from '../../../server/src/persistence/legacy-import-repo.js';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
 import {
   reservationDetails,
   type FakeScenario,
 } from '../../../server/test/helpers/fake-hunit-gateway.js';
+import {
+  legacyAttachmentPath,
+  legacyFile,
+  legacyReservationRow,
+  legacyTreatmentRow,
+  writeLegacyAttachments,
+  writeLegacyWorkbook,
+} from '../../../server/test/helpers/legacy-fixtures.js';
+import {
+  legacyImport,
+  legacyWorkspace,
+  reportId,
+} from '../../../server/test/helpers/legacy-import.js';
 import { createTestCertificates, type TestCertificates } from '../helpers/certificates.js';
+import { emlFile, pdfFile, pngFile } from '../helpers/synthetic-files.js';
 import { startTlsTerminator, type TlsTerminator } from '../helpers/tls-terminator.js';
 import {
   daysFromToday,
   isoDate,
   launchApp,
+  openReservationFilters,
   pickPeriod,
+  searchReservations,
   stubMessageBox,
   stubOpenDialog,
+  waitForReservationRows,
   type LaunchedApp,
 } from './app-fixture.js';
 
 const OUT = process.env['HUNIT_SCREENS_DIR'];
 const TOKEN = '246810';
-/** Janela de referência das telas no Figma. */
-const WINDOW = { width: 1440, height: 900 };
+/** Área da janela em cada largura de captura; a de 1 440 é a referência das telas no Figma. */
+const WINDOWS: Record<string, { width: number; height: number }> = {
+  '960': { width: 960, height: 640 },
+  '1280': { width: 1280, height: 820 },
+  '1440': { width: 1440, height: 900 },
+};
+
+/** Área da janela pedida em `HUNIT_SCREENS_WIDTH` (padrão: 1 440 × 900). */
+/** A data de hoje como o Google devolve uma data da planilha (número de série). */
+function todaySerial(): number {
+  return Math.floor((Date.now() - Date.UTC(1899, 11, 30)) / 86_400_000);
+}
+
+function captureWindow(): { width: number; height: number } {
+  const width = process.env['HUNIT_SCREENS_WIDTH']?.trim() || '1440';
+  const size = WINDOWS[width];
+  if (!size) {
+    throw new Error(`HUNIT_SCREENS_WIDTH deve ser 960, 1280 ou 1440 (recebido: "${width}").`);
+  }
+  return size;
+}
 
 const GUESTS = [
   'Ana Ribeiro',
@@ -107,7 +151,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       const window = BrowserWindow.getAllWindows()[0];
       window?.setContentSize(size.width, size.height);
       window?.center();
-    }, WINDOW);
+    }, captureWindow());
   }
 
   /** Grava a tela `id` (número no Figma). `fullPage` para telas mais altas que a janela. */
@@ -139,20 +183,66 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
     await launched.window.getByRole('navigation').getByText(area, { exact: true }).click();
   }
 
+  /** A linha da reserva: o número abre a segunda linha do hóspede (specs/006). */
+  function rowOf(number: string) {
+    const { window } = launched;
+    return window
+      .locator('table[aria-label="Reservas"] tbody tr')
+      .filter({ has: window.getByText(new RegExp(`^${number}( ·|$)`)) });
+  }
+
+  function quickFilter(label: string) {
+    return launched.window
+      .getByRole('group', { name: 'Filtros rápidos' })
+      .getByRole('button', { name: new RegExp(`^${label}`) });
+  }
+
+  /** Volta a lista ao início: sem busca, Origem "Todas", sem filtros do painel, "Todas". */
+  async function resetReservations() {
+    const { window } = launched;
+    await searchReservations(window, '');
+    const origin = window.getByRole('combobox', { name: 'Origem' });
+    if ((await origin.inputValue()) !== 'Todas') {
+      await origin.click();
+      await window.getByRole('option', { name: 'Todas', exact: true }).click();
+    }
+    const clear = window
+      .getByRole('group', { name: 'Filtros aplicados' })
+      .getByRole('button', { name: 'Limpar busca e filtros' });
+    if ((await clear.count()) > 0) await clear.click();
+    await quickFilter('Todas').click();
+  }
+
+  /** Abre um menu da barra de seleção ("Anexar", "Confirmar") e escolhe o item. */
+  async function chooseFromMenu(menu: string, item: string) {
+    const { window } = launched;
+    await window.getByTestId('selection-bar').getByRole('button', { name: menu }).click();
+    await window.getByRole('menuitem', { name: item }).click();
+  }
+
   async function connect(apiKey: string, profile: 'Operador' | 'Consulta', capture: boolean) {
     const { app, window } = launched;
     const certificateFile = path.join(launched.userDataDir, 'hunit-raiz.crt');
     await writeFile(certificateFile, certificates.authority.certificatePem);
     await stubOpenDialog(app, certificateFile);
     await window.getByLabel('Endereço do servidor').waitFor();
-    if (capture) await shot('1.1', 'configuracao-primeiro-uso');
+    if (capture) await shot('1.1', 'configuracao-primeiro-uso', true);
     await window.getByLabel('Endereço do servidor').fill(tls.url);
     await window.getByRole('button', { name: /escolher certificado/i }).click();
     await window.getByText('Impressão digital (SHA-256):', { exact: false }).waitFor();
     await window.getByLabel('Chave de acesso').fill(apiKey);
     await window.getByRole('button', { name: 'Testar conexão' }).click();
     await window.getByText('Conexão confirmada').waitFor();
-    if (capture) await shot('1.2', 'configuracao-conexao-confirmada', true);
+    if (capture) {
+      // Tela 1.2 da 008: conexão confirmada com o som do aviso desligado (volume desabilitado).
+      // O input da chave fica por cima do rótulo (transparente): o clique vai nele.
+      const sound = window.getByRole('switch', { name: /^Tocar som do aviso/ });
+      await sound.click();
+      // O clique rola a página até a chave; o print da página inteira começa do topo.
+      await window.evaluate(() => document.scrollingElement?.scrollTo(0, 0));
+      await shot('1.2', 'configuracao-conexao-confirmada', true);
+      await sound.click();
+    }
     await window.getByRole('button', { name: 'Salvar conexão' }).click();
     await window
       .getByRole('banner')
@@ -168,13 +258,19 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
     await dialog.getByRole('button', { name: 'Enviar token' }).click();
     await dialog.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
     if (capture) await shot('2.5', 'executar-token-aceito');
-    await dialog.getByRole('button', { name: 'Fechar' }).click();
+    await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
   }
 
   beforeAll(async () => {
+    captureWindow(); // Largura inválida para antes de subir o servidor.
     await mkdir(outDir, { recursive: true });
     certificates = await createTestCertificates();
-    server = await startE2eServer({ scenario: SCENARIO, twoFactorTimeoutMs: 120_000 });
+    // Planilha do Comercial em memória (specs/005): telas do envio e da área Comercial.
+    server = await startE2eServer({
+      scenario: SCENARIO,
+      twoFactorTimeoutMs: 120_000,
+      commercialSheet: true,
+    });
     for (const item of SCENARIO.hotels ?? []) await server.insertHotel(item.code, item.name ?? '');
     const pool = server.test.database.pool;
     const rename = 'update api_clients set name = $1 where id = $2';
@@ -210,7 +306,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await shot('2.1', 'executar-vazio');
       await window.getByLabel('Usuário do Hunit').fill('operador@exemplo.com.br');
       await window.getByLabel('Senha do Hunit').fill('senha-ficticia');
-      await window.getByLabel('Período de check-in').click();
+      // O pickPeriod abre o calendário sozinho; o clique seguinte o reabre com o intervalo marcado.
       await pickPeriod(window, daysFromToday(0), daysFromToday(6));
       await window.getByLabel('Período de check-in').click();
       await shot('2.2', 'executar-escolhendo-o-periodo');
@@ -235,9 +331,11 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
 
     await step('3.1 a 3.3 execuções em andamento', async () => {
       await goTo('Execuções');
-      await window.locator('tbody tr').first().waitFor();
+      // A em andamento fica no card escuro do topo (specs/006, tela 3.1).
+      const running = window.getByRole('region', { name: /^Em andamento:/ });
+      await running.waitFor();
       await shot('3.1', 'execucoes-lista');
-      await window.locator('tbody tr').first().click();
+      await running.getByRole('button', { name: 'Ver detalhes' }).click();
       await window.getByText('Detalhe da execução').waitFor();
       await shot('3.2', 'execucoes-detalhe-em-andamento');
       await window.getByRole('button', { name: 'Cancelar execução' }).click();
@@ -265,11 +363,538 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await window.getByTestId('reservation-detail').waitFor();
       await shot('4.2', 'reservas-detalhe-da-reserva');
       await window.getByRole('button', { name: 'Fechar detalhe' }).click();
-      await window.getByLabel('Busca livre').fill('Maria Oliveira');
-      await window.getByRole('button', { name: 'Buscar' }).click();
-      await window.getByText('Nenhuma reserva encontrada com estes filtros.').waitFor();
+
+      // Painel "Filtros avançados" com a lista de "Ativa ou cancelada" aberta, como no design.
+      const panel = await openReservationFilters(window);
+      await panel.getByRole('combobox', { name: 'Ativa ou cancelada' }).click();
+      await window.getByRole('option', { name: /Só ativas/ }).waitFor();
+      await shot('4.12', 'reservas-filtros-avancados');
+      await window.keyboard.press('Escape');
+      await panel.getByRole('button', { name: 'Fechar os filtros' }).click();
+
+      await searchReservations(window, 'Maria Oliveira');
+      await window.getByText('Nenhuma reserva encontrada').waitFor();
       await shot('4.3', 'reservas-nenhum-resultado');
-      await window.getByRole('button', { name: 'Limpar' }).click();
+      await resetReservations();
+    });
+
+    // Tratativas (specs/003): documentos fictícios registrados pela API antes das telas.
+    await step('4.4 a 4.8 tratativas', async () => {
+      const files = await mkdtemp(path.join(tmpdir(), 'hunit-telas-arquivos-'));
+      const write = async (name: string, content: Buffer) => {
+        const target = path.join(files, name);
+        await writeFile(target, content);
+        return target;
+      };
+      const comprovante = await write('comprovante-cobranca.png', pngFile());
+      const pedido = await write(
+        'pedido-de-cobranca.eml',
+        emlFile({
+          subject: 'Pedido de cobrança — reserva 101-1005',
+          text:
+            'Olá, equipe do Comercial.\n\nFavor cobrar na maquininha a reserva 101-1005 ' +
+            '(Fábio Rocha), check-out amanhã.\n\nObrigado,\nFinanceiro',
+          attachment: { name: 'resumo-da-reserva.txt', content: 'Reserva 101-1005' },
+        }),
+      );
+
+      const api = (method: 'POST', url: string, payload: unknown, headers = {}) =>
+        server.test.app.inject({
+          method,
+          url,
+          headers: { ...server.operator.headers, ...headers },
+          payload: payload as string,
+        });
+      const register = async (
+        number: string,
+        kind: 'request' | 'proof',
+        name: string,
+        content: Buffer,
+      ) => {
+        const upload = await api(
+          'POST',
+          `/v1/treatment-files?name=${encodeURIComponent(name)}`,
+          content,
+          {
+            'content-type': 'application/octet-stream',
+          },
+        );
+        const { fileId } = upload.json<{ fileId: string }>();
+        await api('POST', '/v1/treatment-documents', {
+          kind,
+          fileId,
+          fileName: name,
+          reservations: [{ hotelCode: number.slice(0, 3), reservationNumber: number }],
+        });
+      };
+      await register(
+        '101-1000',
+        'request',
+        'pedido-ao-comercial.eml',
+        emlFile({ subject: 'Pedido 101-1000' }),
+      );
+      await register('101-1000', 'proof', 'comprovante-antigo.pdf', pdfFile('Comprovante antigo'));
+      await register(
+        '101-1000',
+        'proof',
+        'comprovante-101-1000.pdf',
+        pdfFile('Comprovante 101-1000'),
+      );
+      await register(
+        '101-1003',
+        'request',
+        'pedido-101-1003.eml',
+        emlFile({ subject: 'Pedido 101-1003' }),
+      );
+      // Valor informado, removido e informado de novo: o histórico passa de 5 itens e a tela
+      // 4.7 mostra "Mostrar mais" (FR-017a).
+      for (const method of ['PUT', 'DELETE', 'PUT'] as const) {
+        await server.test.app.inject({
+          method,
+          url: '/v1/reservations/101/101-1000/manual-amount',
+          headers: server.operator.headers,
+          ...(method === 'PUT' && { payload: { amount: '380.00' } }),
+        });
+      }
+      // Tratativa enviada e, depois, o Hunit passou a mostrar "Já cobrada": alerta "Verificar"
+      // (FR-002a, tela 4.9).
+      await register(
+        '102-1007',
+        'request',
+        'pedido-102-1007.eml',
+        emlFile({ subject: 'Pedido 102-1007' }),
+      );
+      await server.test.database.pool.query(
+        `update reservations set classification = 'virtual_card_already_charged',
+           previous_classification = classification, status_changed = true,
+           status_changed_at = now()
+         where hotel_code = '102' and reservation_number = '102-1007'`,
+      );
+
+      await goTo('Reservas');
+      await resetReservations();
+      await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
+      for (const number of ['101-1002', '101-1003', '101-1005']) {
+        await window.getByRole('checkbox', { name: `Selecionar a reserva ${number}` }).check();
+      }
+      await searchReservations(window, '104-1015');
+      await waitForReservationRows(window, 1);
+      await window.getByRole('checkbox', { name: 'Selecionar a reserva 104-1015' }).check();
+      await searchReservations(window, '');
+      await window.getByRole('checkbox', { name: 'Selecionar a reserva 101-1002' }).waitFor();
+      await shot('4.4', 'reservas-selecao-do-lote');
+
+      await window.getByRole('button', { name: 'Ver seleção' }).click();
+      await window.getByRole('list', { name: 'Reservas selecionadas' }).waitFor();
+      await shot('4.5', 'reservas-reservas-selecionadas');
+      await window.getByRole('button', { name: 'Fechar seleção' }).click();
+
+      await stubOpenDialog(launched.app, comprovante);
+      await chooseFromMenu('Anexar', 'Anexar comprovante');
+      const batch = window.getByRole('dialog', { name: /Anexar comprovante a 4 reservas/ });
+      await batch.getByTestId('attach-summary').waitFor({ timeout: 15_000 });
+      await shot('4.6', 'reservas-anexar-comprovante-em-lote', true);
+      await batch.getByRole('button', { name: 'Cancelar' }).click();
+      await batch.waitFor({ state: 'detached' });
+      await window
+        .getByTestId('selection-bar')
+        .getByRole('button', { name: 'Desmarcar todas' })
+        .click();
+
+      await rowOf('101-1000').click();
+      await window
+        .getByTestId('treatment-section')
+        .getByText('Histórico')
+        .waitFor({ timeout: 15_000 });
+      await shot('4.7', 'reservas-detalhe-com-tratativa', true);
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+
+      await rowOf('101-1005').click();
+      await stubOpenDialog(launched.app, pedido);
+      await window
+        .getByTestId('treatment-section')
+        .getByRole('button', { name: 'Anexar tratativa' })
+        .click();
+      const single = window.getByRole('dialog', { name: /Anexar tratativa/ });
+      await single.getByTestId('attach-summary').waitFor({ timeout: 15_000 });
+      await shot('4.8', 'reservas-anexar-tratativa-email');
+      await single.getByRole('button', { name: 'Cancelar' }).click();
+      await single.waitFor({ state: 'detached' });
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+
+      await rowOf('102-1007').click();
+      await window.getByTestId('review-alert').waitFor({ timeout: 15_000 });
+      await shot('4.9', 'reservas-detalhe-verificar', true);
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+    });
+
+    // Importação do histórico (specs/004): reservas importadas pelo comando real, com dados
+    // fictícios, para as telas da origem "Sistema anterior".
+    await step('4.10 e 4.11 sistema anterior', async () => {
+      const workspace = legacyWorkspace();
+      try {
+        await writeLegacyWorkbook(workspace.xlsx, {
+          reservations: [
+            legacyReservationRow({ Reserva: 'SA-2001', Hospede: 'Lúcia Barros' }, 1),
+            legacyReservationRow(
+              {
+                Reserva: 'SA-2002',
+                Hospede: 'Marcos Teixeira',
+                'Codigo status': 'not_virtual_card',
+                Status: 'Sem cartao virtual',
+              },
+              2,
+            ),
+          ],
+          treatments: [
+            legacyTreatmentRow('SA-2002', {
+              'Tratativa - arquivo no Dropbox': legacyAttachmentPath('pedido_sa_2002.pdf'),
+              'Tratativa - nome original': 'Pedido de cobrança SA-2002.pdf',
+              'Tratativa anexada em': '2026-05-02T09:30:00',
+            }),
+          ],
+        });
+        writeLegacyAttachments(workspace.files, {
+          [legacyAttachmentPath('pedido_sa_2002.pdf')]: legacyFile.pdf('sa-2002'),
+        });
+        const args = ['--xlsx', workspace.xlsx, '--files', workspace.files];
+        await legacyImport(server.test.database, ['simulate', ...args]);
+        await setHotelMapping(server.test.database.db, 'legacy_hml_um', '101');
+        const simulation = await legacyImport(server.test.database, ['simulate', ...args]);
+        await legacyImport(server.test.database, [
+          'run',
+          '--simulation',
+          reportId(simulation.stdout),
+          ...args,
+        ]);
+      } finally {
+        workspace.cleanup();
+      }
+
+      await goTo('Reservas');
+      await resetReservations();
+      await window.getByRole('combobox', { name: 'Origem' }).click();
+      await window.getByRole('option', { name: 'Sistema anterior' }).click();
+      await window
+        .getByRole('table', { name: 'Reservas' })
+        .getByText('Sistema anterior', { exact: true })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await waitForReservationRows(window, 2);
+      await shot('4.10', 'reservas-filtro-sistema-anterior');
+
+      await rowOf('SA-2002').click();
+      await window.getByTestId('legacy-origin').waitFor({ timeout: 15_000 });
+      await window
+        .getByTestId('treatment-section')
+        .getByText('Histórico')
+        .waitFor({ timeout: 15_000 });
+      await shot('4.11', 'reservas-detalhe-sistema-anterior', true);
+      await window.getByRole('button', { name: 'Fechar detalhe' }).click();
+      await resetReservations();
+    });
+
+    // Envio ao Comercial (specs/005): envio com token, retornos na planilha em memória, validação,
+    // área "Comercial" e as ações novas da lista de reservas.
+    await step('7.1 a 7.4 envio ao Comercial', async () => {
+      await goTo('Reservas');
+      await resetReservations();
+      await quickFilter('Falta cobrar').click();
+      await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
+      await window.getByRole('checkbox', { name: 'Selecionar todas as reservas listadas' }).check();
+      await window.getByRole('button', { name: 'Enviar ao Comercial' }).click();
+      const dialog = window.getByRole('dialog', { name: 'Enviar ao Comercial' });
+      await dialog.getByTestId('dispatch-summary').waitFor({ timeout: 15_000 });
+      const username = dialog.getByLabel('Usuário do Hunit');
+      if (await username.isVisible()) {
+        await username.fill('operador@exemplo.com.br');
+        await dialog.getByLabel('Senha do Hunit').fill('senha-ficticia');
+      }
+      await shot('7.1', 'envio-conferencia');
+
+      // A leitura de uma reserva do hotel 103 fica travada para mostrar o envio em andamento.
+      let release: () => void = () => undefined;
+      let reached: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      const reachedHotel = new Promise<void>((resolve) => (reached = resolve));
+      gate = { reached, released };
+      await dialog.getByRole('button', { name: /^Enviar \d+ ao Comercial$/ }).click();
+      const token = window.getByRole('dialog', { name: 'O Hunit pediu o token' });
+      await token.waitFor({ timeout: 15_000 });
+      await shot('7.3', 'envio-pedido-de-token');
+      await token.getByLabel('Token do autenticador').fill(TOKEN);
+      await token.getByRole('button', { name: 'Enviar token' }).click();
+      await token.getByText(/token aceito/i).waitFor({ timeout: 10_000 });
+      await token.getByRole('button', { name: 'Fechar', exact: true }).click();
+      await Promise.race([reachedHotel, window.waitForTimeout(15_000)]);
+      await window.waitForTimeout(1000);
+      await shot('7.2', 'envio-em-andamento', true);
+      gate = null;
+      release();
+      await dialog.getByTestId('dispatch-view').getByText('Concluído', { exact: true }).waitFor({
+        timeout: 30_000,
+      });
+      await shot('7.4', 'envio-concluido', true);
+      // A tela 7.4 fecha pelo X (specs/006, T050).
+      await dialog.getByRole('button', { name: 'Fechar o diálogo' }).click();
+    });
+
+    await step('7.5 a 7.10 retornos e área Comercial', async () => {
+      // A planilha recebe as linhas; o Comercial preenche dois retornos (um completo, com a
+      // maquininha de outro estabelecimento, e um incompleto).
+      await server.test.sync?.runRound();
+      const lines = await server.test.database.pool.query<{ number: string; hotel: string }>(
+        `select l.reservation_number as number, h.name as hotel from commercial_lines l
+         join hotels h on h.code = l.hotel_code where l.state = 'open'
+         order by l.reservation_number limit 3`,
+      );
+      const [first, second, third] = lines.rows;
+      if (first) {
+        // Situação e data da cobrança (specs/008, telas 7.5, 7.8 e 7.12): a data de hoje, como o
+        // Google devolve (número de série).
+        server.sheet?.fillReturn(first.hotel, first.number, [
+          'AUT-55210',
+          'Maquininha Centro de Convenções',
+          '1280,00',
+          'Paula (Comercial)',
+          'Cobrada na maquininha',
+          todaySerial(),
+        ]);
+      }
+      if (second) {
+        server.sheet?.fillReturn(second.hotel, second.number, [
+          'AUT-55211',
+          second.hotel,
+          '515,00',
+          'Paula (Comercial)',
+          'Cobrada na maquininha',
+          todaySerial(),
+        ]);
+      }
+      if (third) server.sheet?.fillReturn(third.hotel, third.number, ['AUT-55212', '', '', '']);
+      await server.test.sync?.runRound();
+
+      await goTo('Reservas');
+      await resetReservations();
+      if (first) {
+        await searchReservations(window, first.number);
+        await waitForReservationRows(window, 1);
+      }
+      await window.locator('tbody tr').first().click();
+      await window.getByTestId('commercial-return').waitFor({ timeout: 15_000 });
+      // A gaveta rola por dentro: o print mostra o retorno, com a situação e a data (008).
+      await window.getByTestId('commercial-return').scrollIntoViewIfNeeded();
+      await shot('7.5', 'reservas-detalhe-validar-comprovante', true);
+      await window
+        .getByTestId('commercial-return')
+        .getByRole('button', { name: 'Recusar' })
+        .click();
+      await window.getByText('Valor diferente').click();
+      await shot('7.6', 'reservas-recusar-retorno');
+      // Fecha o diálogo e a gaveta do detalhe.
+      await closeOverlays();
+
+      await goTo('Comercial');
+      await window.getByRole('table', { name: 'Envios ao Comercial' }).waitFor();
+      await shot('7.7', 'comercial-envios');
+
+      // 7.7a (aprovada pela UX, T049): um envio em andamento, criado direto no banco só para o
+      // print, com 8 de 16 reservas verificadas; depois do print ele é encerrado.
+      const created = await server.test.database.pool.query<{ id: string }>(
+        `insert into commercial_dispatches (account_key, client_id, status, started_at)
+         values ('captura-7-7a', $1, 'running', now()) returning id`,
+        [server.operator.id],
+      );
+      const runningDispatch = created.rows[0]?.id;
+      for (const [outcome, first, last] of [
+        ['sent', 1, 8],
+        ['pending', 9, 16],
+      ] as const) {
+        await server.test.database.pool.query(
+          `insert into commercial_dispatch_items
+             (dispatch_id, hotel_code, reservation_number, position, outcome, processed_at)
+           select $1, hotel_code, reservation_number, n, $2, $5::timestamptz
+           from (select hotel_code, reservation_number,
+                        row_number() over (order by hotel_code, reservation_number) as n
+                 from reservations) numbered
+           where n between $3 and $4`,
+          [runningDispatch, outcome, first, last, outcome === 'pending' ? null : new Date()],
+        );
+      }
+      await goTo('Reservas');
+      await goTo('Comercial');
+      await window.getByRole('region', { name: /^Em andamento:/ }).waitFor({ timeout: 15_000 });
+      await shot('7.7a', 'comercial-envios-em-andamento');
+      await server.test.database.pool.query(
+        `update commercial_dispatches set status = 'completed', finished_at = now() where id = $1`,
+        [runningDispatch],
+      );
+
+      await window.getByRole('tab', { name: 'Retornos a validar' }).click();
+      await window.getByRole('table', { name: 'Retornos a validar' }).waitFor({ timeout: 15_000 });
+      await shot('7.8', 'comercial-retornos-a-validar');
+      await window.getByRole('tab', { name: 'Retornos com problema' }).click();
+      await window
+        .getByRole('table', { name: 'Retornos com problema' })
+        .waitFor({ timeout: 15_000 });
+      await shot('7.9', 'comercial-retornos-com-problema');
+      await window.getByRole('tab', { name: 'Planilha' }).click();
+      await window.getByTestId('sheet-status').waitFor({ timeout: 15_000 });
+      await shot('7.10', 'comercial-planilha');
+    });
+
+    await step('7.11 a 7.14 ações da seleção e cópia para e-mail', async () => {
+      await goTo('Reservas');
+      await resetReservations();
+      await window.locator('tbody tr').first().waitFor({ timeout: 15_000 });
+      await window
+        .getByRole('button', { name: 'Desmarcar todas' })
+        .click()
+        .catch(() => undefined);
+      await window.getByRole('button', { name: 'Selecionar todas do filtro' }).click();
+      await window.getByText(/selecionadas do filtro/).waitFor({ timeout: 15_000 });
+      await shot('7.11', 'reservas-selecionar-todas-do-filtro');
+
+      await chooseFromMenu('Confirmar', 'Confirmar retornos');
+      await window.getByTestId('batch-summary').waitFor();
+      await shot('7.12', 'reservas-confirmar-retornos-em-lote');
+      await closeOverlays();
+
+      await chooseFromMenu('Confirmar', 'Confirmar "Verificar"');
+      await window.getByTestId('batch-summary').waitFor();
+      await shot('7.13', 'reservas-confirmar-verificar-em-lote');
+      await closeOverlays();
+
+      await window.getByRole('button', { name: 'Copiar para e-mail' }).click();
+      await window.getByRole('dialog', { name: 'Copiar para e-mail' }).waitFor();
+      await shot('7.14', 'reservas-copiar-para-email');
+      await closeOverlays();
+      await window.getByRole('button', { name: 'Desmarcar todas' }).click();
+    });
+
+    await step('7.17 e 7.18 cancelada sem cobrança', async () => {
+      // Como no design: uma reserva enviada ao Comercial, sem retorno nem problema de retorno
+      // (specs/008).
+      const sent = await server.test.database.pool.query<{ number: string }>(
+        `select l.reservation_number as number from commercial_lines l
+         where l.state = 'open' and l.return_problem is null and not exists (
+           select 1 from commercial_returns r
+           where r.hotel_code = l.hotel_code and r.reservation_number = l.reservation_number)
+         order by l.reservation_number limit 1`,
+      );
+      const number = sent.rows[0]?.number;
+      await goTo('Reservas');
+      await resetReservations();
+      if (number) {
+        await searchReservations(window, number);
+        await waitForReservationRows(window, 1);
+      } else {
+        await quickFilter('Falta cobrar').click();
+      }
+      await window.locator('tbody tr').first().click();
+      const section = window.getByTestId('no-charge-section');
+      await section
+        .getByRole('button', { name: 'Marcar como cancelada sem cobrança' })
+        .click({ timeout: 15_000 });
+      const dialog = window.getByRole('dialog', { name: 'Marcar como cancelada sem cobrança?' });
+      await dialog.waitFor();
+      await shot('7.17', 'reservas-marcar-cancelada-sem-cobranca');
+      await dialog.getByLabel('Observação (opcional)').fill('hóspede cancelou antes do check-in.');
+      await dialog.getByRole('button', { name: 'Marcar como cancelada' }).click();
+      await section.getByRole('button', { name: 'Desfazer' }).waitFor({ timeout: 15_000 });
+      await shot('7.18', 'reservas-cancelada-sem-cobranca', true);
+      // Desfaz, para as telas seguintes continuarem com a lista de antes.
+      await section.getByRole('button', { name: 'Desfazer' }).click();
+      const undo = window.getByRole('dialog', { name: 'Desfazer a marcação?' });
+      await undo.getByRole('button', { name: 'Desfazer' }).click();
+      await undo.waitFor({ state: 'detached' });
+      await closeOverlays();
+    });
+
+    await step('7.15 cobradas no Hunit', async () => {
+      // A 7.17 marcou e desmarcou uma reserva: a planilha volta a ter a linha em "A cobrar".
+      await server.test.sync?.runRound();
+      // Três reservas enviadas, sem retorno: o Comercial informa "Cobrada no Hunit" (specs/008).
+      const sent = await server.test.database.pool.query<{ number: string; hotel: string }>(
+        `select l.reservation_number as number, h.name as hotel from commercial_lines l
+         join hotels h on h.code = l.hotel_code
+         where l.state = 'open' and l.return_problem is null and not exists (
+           select 1 from commercial_returns r
+           where r.hotel_code = l.hotel_code and r.reservation_number = l.reservation_number)
+         order by l.reservation_number limit 3`,
+      );
+      for (const line of sent.rows) {
+        server.sheet?.fillReturn(line.hotel, line.number, [
+          '',
+          '',
+          '',
+          'Paula (Comercial)',
+          'Cobrada no Hunit',
+          todaySerial(),
+        ]);
+      }
+      await server.test.sync?.runRound();
+      // Como no design: uma aguardando, uma confirmada e uma não encontrada. A leitura do Hunit
+      // depois do relato vem direto no banco (a verificação de verdade está em hunit-charges.test.ts).
+      const [, confirmed, notFound] = sent.rows;
+      for (const [line, classification] of [
+        [confirmed, 'virtual_card_already_charged'],
+        [notFound, null],
+      ] as const) {
+        if (!line) continue;
+        await server.test.database.pool.query(
+          `update commercial_reports set read_at = now() - interval '1 hour'
+           where reservation_number = $1`,
+          [line.number],
+        );
+        await server.test.database.pool.query(
+          `update reservations set last_verified_at = now(),
+             classification = coalesce($2::classification, classification)
+           where reservation_number = $1`,
+          [line.number, classification],
+        );
+      }
+      await goTo('Comercial');
+      await window.getByRole('tab', { name: /^Cobradas no Hunit/ }).click();
+      await window
+        .getByRole('table', { name: 'Cobradas no Hunit' })
+        .locator('tbody tr')
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await shot('7.15', 'comercial-cobradas-no-hunit');
+    });
+
+    await step('7.8a e 7.5a "Cancelada" do Comercial', async () => {
+      // Sem desenho (homologação da 008, R-19), como a 7.7a: o Comercial informa só "Cancelada" numa
+      // linha aberta sem retorno; ela aparece no topo de "Retornos a validar" e na gaveta.
+      const [line] = (
+        await server.test.database.pool.query<{ number: string; hotel: string }>(
+          `select l.reservation_number as number, h.name as hotel from commercial_lines l
+           join hotels h on h.code = l.hotel_code
+           where l.state = 'open' and l.return_problem is null
+             and not exists (select 1 from commercial_returns r
+               where r.hotel_code = l.hotel_code and r.reservation_number = l.reservation_number)
+             and not exists (select 1 from commercial_reports p
+               where p.hotel_code = l.hotel_code and p.reservation_number = l.reservation_number)
+           order by l.reservation_number limit 1`,
+        )
+      ).rows;
+      if (!line) throw new Error('nenhuma linha aberta sem retorno para a "Cancelada"');
+      server.sheet?.fillReturn(line.hotel, line.number, ['', '', '', '', 'Cancelada']);
+      await server.test.sync?.runRound();
+
+      await goTo('Comercial');
+      await window.getByRole('tab', { name: /^Retornos a validar/ }).click();
+      const returns = window.getByRole('table', { name: 'Retornos a validar' });
+      await returns.getByText(line.number, { exact: true }).waitFor({ timeout: 15_000 });
+      await shot('7.8a', 'comercial-retornos-a-validar-cancelada');
+
+      await returns.getByRole('button', { name: `Abrir a reserva ${line.number}` }).click();
+      const block = window.getByTestId('commercial-cancellation');
+      await block.waitFor({ timeout: 15_000 });
+      await block.scrollIntoViewIfNeeded();
+      await shot('7.5a', 'reservas-detalhe-cancelada-pelo-comercial', true);
+      await closeOverlays();
     });
 
     await step('1.3 configuração conectada', async () => {
@@ -309,7 +934,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await dialog.getByRole('button', { name: 'Enviar token' }).click();
       await dialog.getByText('O Hunit recusou o token.').waitFor({ timeout: 10_000 });
       await shot('2.9', 'executar-token-recusado-dialogo');
-      await dialog.getByRole('button', { name: 'Fechar' }).click();
+      await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
       await window.getByRole('button', { name: 'Iniciar de novo' }).waitFor();
       await shot('2.10', 'executar-falhou-com-iniciar-de-novo');
     });

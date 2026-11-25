@@ -32,6 +32,8 @@ describe('loadConfig (T010)', () => {
       },
       evidence: { dir: '/data/evidence', retentionDays: 30 },
       reservationRetentionYears: 5,
+      // Sem as variáveis da planilha, a integração com o Comercial fica desligada (specs/005).
+      commercialSheet: { access: null, doneRetentionDays: 90 },
     });
   });
 
@@ -142,5 +144,61 @@ describe('loadConfig (T010)', () => {
       expect(error.message).not.toContain(value);
     }
     expect(error.problems).toHaveLength(5);
+  });
+});
+
+describe('loadConfig: planilha do Comercial (specs/005, T002, research R-04)', () => {
+  const SHEET_ID = '1AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789-ab';
+  const KEY_FILE = '/run/secrets/commercial-sheet/commercial-sheet-key.json';
+
+  it('liga a integração quando as duas variáveis são informadas', () => {
+    const config = loadConfig({
+      ...minimal,
+      COMMERCIAL_SHEET_ID: SHEET_ID,
+      COMMERCIAL_SHEET_KEY_FILE: KEY_FILE,
+      COMMERCIAL_SHEET_DONE_RETENTION_DAYS: '30',
+    });
+
+    expect(config.commercialSheet).toEqual({
+      access: { spreadsheetId: SHEET_ID, keyFile: KEY_FILE },
+      doneRetentionDays: 30,
+    });
+  });
+
+  it('variáveis vazias deixam a integração desligada', () => {
+    const config = loadConfig({
+      ...minimal,
+      COMMERCIAL_SHEET_ID: '',
+      COMMERCIAL_SHEET_KEY_FILE: ' ',
+    });
+
+    expect(config.commercialSheet.access).toBeNull();
+  });
+
+  it.each([
+    ['só o identificador', { COMMERCIAL_SHEET_ID: SHEET_ID }],
+    ['só a chave', { COMMERCIAL_SHEET_KEY_FILE: KEY_FILE }],
+  ])('recusa %s, sem mostrar o valor', (_case, env) => {
+    const error = configError({ ...minimal, ...env });
+
+    expect(error.message).toContain('defina as duas variáveis da planilha do Comercial ou nenhuma');
+    expect(error.message).not.toContain(SHEET_ID);
+    expect(error.message).not.toContain(KEY_FILE);
+  });
+
+  it.each([
+    ['COMMERCIAL_SHEET_ID', 'curto', 'COMMERCIAL_SHEET_ID: deve ser o identificador da planilha'],
+    [
+      'COMMERCIAL_SHEET_KEY_FILE',
+      'chave.json',
+      'COMMERCIAL_SHEET_KEY_FILE: deve ser o caminho absoluto',
+    ],
+    [
+      'COMMERCIAL_SHEET_DONE_RETENTION_DAYS',
+      '0',
+      'COMMERCIAL_SHEET_DONE_RETENTION_DAYS: deve ser no mínimo 1',
+    ],
+  ])('recusa %s=%s', (name, value, expected) => {
+    expect(configError({ ...minimal, [name]: value }).message).toContain(expected);
   });
 });

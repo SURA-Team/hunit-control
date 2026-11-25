@@ -4,13 +4,16 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  formatCount,
   formatDate,
   formatDateTime,
   formatDuration,
+  formatInteger,
   formatMoney,
   formatRemaining,
   formatTime,
   parseAmountInput,
+  relativeDay,
 } from '../../src/renderer/src/presentation/format.js';
 
 /** O Intl separa "R$" do número com um espaço que não quebra a linha. */
@@ -85,5 +88,41 @@ describe('parseAmountInput (campo de valor da busca)', () => {
 
   it.each(['', 'abc', '1,2,3', '12,345', '-5', '1.23.4'])('texto inválido (%s) → null', (input) => {
     expect(parseAmountInput(input)).toBeNull();
+  });
+});
+
+describe('formatCount e formatInteger (contagens dos filtros rápidos, specs/006)', () => {
+  it.each([
+    [0, '0'],
+    [999, '999'],
+    [1000, '1 mil'],
+    [1234, '1,2 mil'],
+    [12345, '12,3 mil'],
+    [1234567, '1,2 mi'],
+  ])('%i → %s', (count, text) => {
+    expect(plain(formatCount(count))).toBe(text);
+  });
+
+  it('contagem inteira com separador de milhar', () => {
+    expect(formatInteger(12345)).toBe('12.345');
+  });
+});
+
+describe('relativeDay — "hoje" e "ontem" no dia de Brasília (specs/008, R-09)', () => {
+  // 19/11/2026 às 01:30 em Brasília (04:30 UTC) e às 23:30 (02:30 UTC do dia 20).
+  const early = new Date('2026-11-19T04:30:00Z');
+  const late = new Date('2026-11-20T02:30:00Z');
+
+  it('hoje e ontem pelo dia de Brasília, não pelo UTC', () => {
+    expect(relativeDay('2026-11-19', early)).toBe('hoje');
+    expect(relativeDay('2026-11-18', early)).toBe('ontem');
+    expect(relativeDay('2026-11-19', late)).toBe('hoje');
+    expect(relativeDay('2026-11-18', late)).toBe('ontem');
+  });
+
+  it('outros dias e vazio não têm rótulo', () => {
+    expect(relativeDay('2026-11-17', early)).toBeNull();
+    expect(relativeDay('2026-11-20', early)).toBeNull();
+    expect(relativeDay(null, early)).toBeNull();
   });
 });

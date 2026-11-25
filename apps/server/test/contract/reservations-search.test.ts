@@ -2,9 +2,16 @@
  * Testes de contrato da busca de reservas da feature 002 (T061, FR-020 a FR-020b): busca livre
  * (`q`), canal e valor, combináveis com os filtros antigos, e a lista de canais. Os exemplos são os
  * de specs/002-app-desktop/contracts/api-changes.md §3. Todos os nomes e códigos são fictícios.
+ *
+ * Desde a 008 (T037, US7, FR-029, SC-011): a busca acha também pelo código de autorização do
+ * retorno do Comercial confirmado pelo Financeiro — na lista, nas contagens dos filtros rápidos e
+ * em "selecionar todas do filtro" —, e não pelo de retornos não confirmados.
  */
 import type { LightMyRequestResponse } from 'fastify';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { commercialReturns } from '../../src/persistence/schema.js';
+import { insertReturn } from '../helpers/commercial-fixtures.js';
 import { createTestApp, type TestApp, type TestClient } from '../helpers/app.js';
 import { expectMatchesContract } from '../helpers/contract.js';
 import { insertExecution, insertHotel, insertReservation } from '../helpers/factories.js';
@@ -82,6 +89,27 @@ beforeAll(async () => {
     reservationStatus: 'cancelled',
     totalAmount: '99.90',
   });
+
+  // Retornos do Comercial (specs/008, US7), num hotel à parte para não mudar as buscas acima.
+  await insertHotel(db, { code: 'H3', name: 'Hotel Três' });
+  for (const [reservationNumber, authorizationCode, state] of [
+    ['C-CONF', 'MAQ-5521', 'confirmed'],
+    ['C-AGUARD', 'MAQ-AGUARD', 'awaiting_validation'],
+    ['C-RECUS', 'MAQ-RECUS', 'rejected'],
+    ['C-SUBST', 'MAQ-SUBST', 'superseded'],
+    ['C-DESF', 'MAQ-DESF', 'confirmed'],
+  ] as const) {
+    const key = { hotelCode: 'H3', reservationNumber };
+    await insertReservation(db, { ...base, ...key, guestName: 'Carlos Teixeira' });
+    const row = await insertReturn(db, key, { authorizationCode, state });
+    // Confirmação desfeita: o retorno volta a aguardar validação (como `undoReturnConfirmation`).
+    if (reservationNumber === 'C-DESF') {
+      await db
+        .update(commercialReturns)
+        .set({ state: 'awaiting_validation', decidedAt: null, decidedByClientId: null })
+        .where(eq(commercialReturns.id, row.id));
+    }
+  }
 });
 
 afterAll(async () => {
@@ -174,6 +202,68 @@ describe('GET /v1/reservations — busca livre q (FR-020a)', () => {
 
     expect(response.statusCode).toBe(400);
     expect(problemCode(response)).toBe('validation_error');
+  });
+});
+
+describe('busca pelo código de autorização do Comercial (specs/008, US7, FR-029)', () => {
+  async function inject(url: string, query: Record<string, string>) {
+    const response = await test.app.inject({ method: 'GET', url, query, headers: reader.headers });
+    expect(response.statusCode).toBe(200);
+    return response;
+  }
+
+  it('acha pelo código do retorno confirmado, sem diferenciar maiúsculas (cenário 1)', async () => {
+    expect(await found({ q: 'MAQ-5521' })).toEqual(['H3/C-CONF']);
+    expect(await found({ q: 'maq-5521' })).toEqual(['H3/C-CONF']);
+    expect(await found({ q: '  Maq-5521 ' })).toEqual(['H3/C-CONF']);
+  });
+
+  it('é o código inteiro, não um pedaço', async () => {
+    expect(await found({ q: 'MAQ-552' })).toEqual([]);
+  });
+
+  it('lista, contagens e seleção dizem o mesmo (cenário 2)', async () => {
+    const counts = await inject('/v1/reservations/quick-filter-counts', { q: 'maq-5521' });
+    expectMatchesContract('countReservationQuickFilters', counts);
+    expect(counts.json<{ all: number }>().all).toBe(1);
+
+    const selection = await inject('/v1/reservations/selection', { q: 'maq-5521' });
+    expectMatchesContract('selectReservations', selection);
+    const body = selection.json<{
+      total: number;
+      items: Array<{ hotelCode: string; reservationNumber: string }>;
+    }>();
+    expect(body.total).toBe(1);
+    expect(body.items.map((item) => `${item.hotelCode}/${item.reservationNumber}`)).toEqual([
+      'H3/C-CONF',
+    ]);
+
+    // Combinada com filtros: o código acha só se a reserva também passa neles.
+    expect(await found({ q: 'MAQ-5521', hotelCode: 'H3' })).toEqual(['H3/C-CONF']);
+    expect(await found({ q: 'MAQ-5521', hotelCode: 'H1' })).toEqual([]);
+  });
+
+  it.each([
+    ['aguardando validação', 'MAQ-AGUARD'],
+    ['recusado', 'MAQ-RECUS'],
+    ['substituído', 'MAQ-SUBST'],
+    ['com a confirmação desfeita (cenário 4)', 'MAQ-DESF'],
+  ])('não acha pelo código de retorno %s (cenário 3)', async (_caso, code) => {
+    expect(await found({ q: code })).toEqual([]);
+    const counts = await inject('/v1/reservations/quick-filter-counts', { q: code });
+    expect(counts.json<{ all: number }>().all).toBe(0);
+  });
+
+  it('as buscas de antes continuam iguais (cenário 5)', async () => {
+    expect(await found({ q: 'aut-0042' })).toEqual(['H1/258-1234']);
+    expect(await found({ q: '7001' })).toEqual(['H2/7001']);
+    expect(await found({ q: 'teixeira' })).toEqual([
+      'H3/C-AGUARD',
+      'H3/C-CONF',
+      'H3/C-DESF',
+      'H3/C-RECUS',
+      'H3/C-SUBST',
+    ]);
   });
 });
 

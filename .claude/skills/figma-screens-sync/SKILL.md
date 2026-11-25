@@ -1,177 +1,101 @@
 ---
 name: figma-screens-sync
-description: Mantém o espelho do app desktop no Figma (página "Telas — app atual (espelho)") igual ao app implementado, a partir de prints do app real. Use depois de qualquer mudança visível no app desktop (apps/desktop/src/renderer, rótulos em presentation/, ícone, tema), ao concluir uma feature com interface, ou quando pedirem para atualizar as telas, os prints ou a identidade visual no Figma. Nunca altera a cópia de trabalho da UX nem implementa o design dela.
+description: Marca no Figma quais telas do app estão em uso (✅, visíveis) e quais ficaram obsoletas (❌, ocultas), varrendo todas as páginas de feature até a feature concluída. Use ao concluir uma feature que mudou telas do app desktop (antes do PR final ou logo depois do merge), ou quando pedirem para atualizar a marcação das telas no Figma. Só renomeia e oculta frames de tela; não desenha, não reconstrói e não altera o conteúdo das telas da UX.
 ---
 
-# Espelho do app no Figma
+# Marcação das telas no Figma
 
 Arquivo: [Hunit Control](https://www.figma.com/design/YCbxTAacFxbGuOF8uwoLtt/Hunit-Control) — `fileKey`
 `YCbxTAacFxbGuOF8uwoLtt`.
 
-## Quem é a fonte da verdade
+## Como o arquivo está organizado
 
-| O quê | Onde | Papel | O agente pode |
-|---|---|---|---|
-| **Espelho** | páginas `Identidade visual`, `Telas — app atual (espelho)` e `Componentes` | Como o app **está** no código | Ler e escrever (só por esta skill) |
-| **Design oficial** | cópia de trabalho da UX (outra página ou outro arquivo) | Como o app **deve ser**: fonte da verdade oficial do design | Só ler |
+Desde 18/11/2026, nenhuma spec começa sem passar pela PM, e toda feature que muda telas já chega com
+elas desenhadas pela UX no Figma. O agente **não desenha nem reconstrói telas**: leva o design para o
+código (trabalho da spec) e, ao concluir a feature, marca no Figma o que está em uso.
 
-- O espelho segue o código, nunca o contrário. Se o app mudou, o espelho muda.
-- Levar o design da UX para o código **não** é tarefa desta skill: é trabalho de uma spec (a de
-  alinhamento das telas, ou a da feature). Se notar diferença entre o app e a cópia da UX, liste-a
-  no relatório final; não corrija nada por conta própria.
+| Página | Quem cuida | O que tem |
+|---|---|---|
+| `NNN-<nome da branch>` (uma por feature) | UX (da 006 em diante); agente (002 a 005, espelhos antigos, congelados) | As telas que a feature criou ou mudou |
+| `Componentes — nova identidade` e outras sem número | UX | Biblioteca e guias. O agente só lê |
+| `Identidade visual`, `Componentes` | Ninguém (espelho antigo, até a 005) | Ficam como estão |
+
+- **Numeração única.** Cada tela tem um número `área.ordem` (`4.2`), o mesmo em todas as páginas,
+  nos prints do roteiro de captura e no catálogo ([references/screens.md](references/screens.md)).
+- **Uma tela ativa por número.** A versão ativa é a da página de feature mais recente, entre as
+  features concluídas, que tem aquele número. Ela fica com `✅ ` no começo do nome e visível; as
+  versões das páginas anteriores ficam com `❌ ` e ocultas (nunca são apagadas).
+- **Feature em desenvolvimento não entra.** As páginas de features posteriores à concluída ficam
+  como estão: o app ainda não mostra aquelas telas. Se uma feature de número menor ainda está em
+  desenvolvimento (a 008 foi concluída antes da 007), liste a página dela em `SKIP`.
 
 ## Quando usar
 
-- Ao concluir uma task ou feature que mudou o que aparece na tela: `apps/desktop/src/renderer/**`,
-  `presentation/labels.ts` (nomes e cores das situações), `apps/desktop/resources/icon.*`, o tema em
-  `src/renderer/src/main.tsx`. Uma vez por entrega (antes do PR), não a cada commit.
-- Quando o usuário pedir para atualizar as telas, os prints ou a identidade visual.
+Ao concluir uma feature que mudou telas do app desktop: depois que o app passou na comparação com o
+design da feature (prints do roteiro de captura ao lado dos frames), antes do PR final ou logo
+depois do merge. Também quando pedirem para refazer a marcação.
 
 ## Regras
 
-1. **Escreva só nas três páginas do espelho.** Nunca renomeie, mova ou apague outra página.
-2. **Componentes, variáveis e estilos são compartilhados.** Uma página duplicada dentro do mesmo
-   arquivo continua usando os componentes daqui. Antes de **alterar** um componente existente, rode
-   a verificação de uso (abaixo). Se houver uso fora do espelho, não altere: crie uma variante ou um
-   componente novo para o espelho e avise o usuário. Nunca mude o valor de uma variável ou de um
-   estilo de texto que já existe; crie outro.
-3. **Telas editáveis, sem imagem.** Nada de print colado no Figma. Os prints ficam fora do Git e
-   fora do Figma, numa pasta temporária.
-4. **Dados fictícios.** Use os hotéis, hóspedes e valores do roteiro de captura. Nunca use nomes
-   reais de hotéis, da empresa ou de hóspedes (o repositório é público; veja o AGENTS.md).
-5. **Uma tela é reconstruída inteira**, não remendada: o `rebuild()` apaga o frame antigo e cria o
-   novo no mesmo lugar, com o mesmo número.
+1. **Só nome e visibilidade.** O script troca o prefixo (`✅`/`❌`) e a visibilidade dos frames de
+   tela. Nunca apaga, move, redimensiona ou altera o conteúdo de um frame; nunca renomeia, move ou
+   apaga páginas.
+2. **Simule antes.** Rode primeiro com `DRY_RUN = true`, mostre o relatório ao usuário e só aplique
+   (`DRY_RUN = false`) depois do ok dele: as páginas da UX são compartilhadas.
+3. **Conflito não se resolve sozinho.** Duas telas com o mesmo número na mesma página aparecem em
+   `conflicts` e não são tocadas: avise o usuário (a UX decide qual fica).
+4. **Dados fictícios.** Nunca escreva nomes reais de hotéis, da empresa ou de hóspedes no Figma (o
+   repositório é público; veja o AGENTS.md).
 
 ## Passo a passo
 
-### 1. Descobrir as telas afetadas
+### 1. Conferir a feature
 
 ```bash
-git diff --stat master...HEAD -- apps/desktop/src/renderer apps/desktop/resources
+git branch --show-current     # a feature concluída (NNN-nome); o número define até onde varrer
 ```
 
-Cruze os arquivos com a coluna "Código" de [references/screens.md](references/screens.md). Se surgiu
-um estado novo de tela, dê a ele o próximo número livre da área (ex.: `2.11`) e registre-o no
-catálogo, no roteiro de captura e no arquivo de telas da área.
+A página do Figma com esse nome precisa existir. Se a feature não mudou telas, não há o que marcar.
 
-### 2. Capturar os prints do app real
+### 2. Simular
 
-Pré-requisitos: Docker rodando e o Chromium do Playwright instalado (veja o AGENTS.md). No
-PowerShell, a partir da raiz do repositório:
-
-```powershell
-Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-$env:HUNIT_SCREENS_DIR = "<pasta temporária>\telas"
-pnpm test --project desktop-e2e screens-capture
-```
-
-A captura leva uns 3 minutos e grava `<número>-<nome>.png` (1440 × 900, ou a página inteira nas
-telas mais altas). Abra `falhas.txt` na mesma pasta: um passo que falhou não interrompe os outros.
-Se a tela nova precisa de um estado que o roteiro não alcança, adicione o passo em
-`apps/desktop/test/e2e/screens-capture.test.ts` (função `shot('x.y', 'nome')`).
-
-### 3. Comparar
-
-Para cada tela afetada, olhe o PNG (Read) e o frame atual no Figma (`get_screenshot`, com o
-`node-id` do frame). Anote cada diferença: texto, ordem, componente, cor, estado novo.
-
-### 4. Atualizar o construtor da tela
-
-As telas são geradas por código em `references/screens/`, um arquivo por área, que registra
-`SCREENS['x.y'] = { name, h, profile, nav, active, build }`. Edite o `build` da tela para refletir o
-app. Use os auxiliares do prelúdio (`card`, `field`, `btn`, `badge`, `alert`, `table`, `statGrid`,
-`modal`, `drawer`, `overlay`, `row`, `rich`…) e os componentes existentes.
-
-- Componente novo ou variante nova: crie na página `Componentes` (respeitando a regra 2) e exponha
-  no `K`/`P` do prelúdio.
-- Cor ou estilo de texto novo: crie na coleção `Cores do app` ou nos estilos de texto e acrescente
-  na página `Identidade visual`.
-
-### 5. Aplicar no Figma
-
-1. Carregue as instruções do Figma: `get_figma_skill` com `skill://figma/figma-use/SKILL.md` e
-   `skill://figma/figma-generate-design/SKILL.md`.
+1. Carregue as instruções do Figma: `get_figma_skill` com `skill://figma/figma-use/SKILL.md`.
 2. `create_session` com o `fileKey` e uma descrição curta; reutilize o `sessionId`.
-3. `use_figma` com `skillNames: "resource:figma-use,resource:figma-generate-design"` e o `code`
-   montado assim, nesta ordem:
-   - o conteúdo de [references/figma-prelude.js](references/figma-prelude.js);
-   - o conteúdo do arquivo da área em `references/screens/`;
-   - `return { rebuilt: await rebuild(['2.4', '2.6']), created };`
-
-   O limite do `code` é de 50 mil caracteres: o prelúdio mais **todos** os arquivos passa disso.
-   Faça **uma área por chamada**. Uma chamada que dá erro é desfeita inteira; corrija e reenvie.
-
-### 6. Validar
-
-- `get_screenshot` de cada frame reconstruído, lado a lado com o print. Corrija no construtor e
-  reconstrua se algo ficou diferente.
-- Uma leitura rápida: nenhuma pintura `IMAGE` na página de telas; fontes só Noto Sans e Roboto Mono.
-
-### 7. Registrar no histórico do espelho
-
-Acrescente uma linha na tabela do frame `Histórico de atualizações do espelho`, no topo da página
-de telas:
+3. `use_figma` com `skillNames: "resource:figma-use"` e o `code`:
 
 ```js
-const page = figma.root.children.find((p) => p.name === 'Telas — app atual (espelho)');
-await figma.setCurrentPageAsync(page);
-const table = page.findOne((n) => n.name === 'Atualizações');
-const line = table.children.at(-1).clone(); table.appendChild(line);
-const cells = line.children.filter((n) => n.type === 'TEXT');
-for (const c of cells) await figma.loadFontAsync(c.fontName);
-['DD/MM/AAAA', 'spec 00N — <feature>', '2.4, 2.6', '<o que mudou, em uma frase>'].forEach((v, i) => { cells[i].characters = v; });
-return { line: line.id };
+const FEATURE = '<NNN-nome da branch>';
+const DRY_RUN = true;
+const SKIP = []; // páginas de features de número menor ainda em desenvolvimento (ex.: '007-…')
+// + o conteúdo de references/mark-screens.js
 ```
 
-### 8. Relatar
+Uma página com ❌ no próprio nome (as espelho antigas, 002 a 005) não é varrida.
 
-Diga ao usuário quais telas mudaram (com link `…?node-id=<id>`), o que mudou em cada uma e as
-diferenças que notou entre o app e o design da UX, se houver. Se você alterou o roteiro de captura
-ou os arquivos da skill, eles entram no commit da feature (os prints, nunca).
+O retorno lista `active` e `obsolete` (número, página, `id`, se muda) e `conflicts`. Mostre ao usuário
+um resumo: quantas telas ficam ativas em cada página, quais mudam de estado e os conflitos.
 
-## Verificação de uso fora do espelho (regra 2)
+### 3. Aplicar
 
-```js
-const OWN = ['Identidade visual', 'Telas — app atual (espelho)', 'Componentes'];
-const comps = figma.root.children.find((p) => p.name === 'Componentes');
-await comps.loadAsync();
-const set = comps.findOne((n) => n.type === 'COMPONENT_SET' && n.name === 'Botão'); // o que vai mudar
-const ids = new Set([set.id, ...set.children.map((c) => c.id)]);
-const usedIn = [];
-for (const page of figma.root.children) {
-  if (OWN.includes(page.name)) continue;
-  await page.loadAsync();
-  for (const inst of page.findAllWithCriteria({ types: ['INSTANCE'] })) {
-    const main = await inst.getMainComponentAsync();
-    if (main && ids.has(main.id)) { usedIn.push(page.name); break; }
-  }
-}
-return { usedIn }; // vazio = pode alterar
-```
+Com o ok do usuário, rode de novo com `DRY_RUN = false`. Confira o `changed` do retorno e, por
+amostragem, o `get_screenshot` de uma tela ativa e o `get_metadata` de uma página antiga (frames com
+❌ ocultos).
+
+### 4. Atualizar o catálogo e relatar
+
+- Em [references/screens.md](references/screens.md), atualize a coluna "Ativa em" das telas que
+  mudaram de página e acrescente as telas novas.
+- Relate ao usuário: telas ativas por página (com link `…?node-id=<id>`), as que viraram ❌ e os
+  conflitos. Os arquivos da skill alterados entram no commit da feature.
 
 ## Armadilhas conhecidas
 
-**API do Figma**
-- `resize()` volta o dimensionamento para fixo: chame-o **antes** de `primaryAxisSizingMode = 'AUTO'`
-  ou de `layoutSizing* = 'HUG'/'FILL'`.
-- Com a cor ligada a uma variável, a opacidade da pintura se perde. Use `node.opacity` (veja
-  `overlay()`).
-- Texto: `await node.setTextStyleIdAsync(id)` (a atribuição direta não funciona), sempre com as
-  fontes carregadas.
-- Ícones e a marca são formas dentro de componentes; para a instância escalar ao ser redimensionada,
-  as formas precisam de `constraints = { horizontal: 'SCALE', vertical: 'SCALE' }`.
-- Cada chamada começa na primeira página (`Identidade visual`). O prelúdio troca para a de telas;
-  não troque de página de novo na mesma chamada.
-
-**App e roteiro de captura**
-- O Segoe UI do app não existe no Figma: os estilos usam Noto Sans. O peso 500 do Segoe aparece
-  semi-negrito no Windows, por isso os rótulos usam SemiBold.
-- O resultado da execução só fica na tela Executar enquanto ela não é trocada por outra área: o
-  roteiro captura o resultado (2.7) sem sair dela.
-- Sem conexão com o servidor, o app não sabe o perfil da chave: o cliente some do cabeçalho e
-  "Executar" some do menu (tela 5.1).
-- O console do Vitest não mostra `console.log`; as falhas vão para `falhas.txt`.
-- O terminal do VS Code define `ELECTRON_RUN_AS_NODE=1`; o roteiro tira a variável do processo do app,
-  mas remova-a do terminal mesmo assim.
-- O app aberto pelo teste mostra "versão 45.2.3" (a versão do Electron, porque ele não é aberto pelo
-  instalador). No espelho use a versão do `apps/desktop/package.json`.
+- A UX trabalha no mesmo arquivo, ao mesmo tempo: o script procura páginas pelo nome a cada chamada,
+  nunca por posição ou ID guardado.
+- Cada chamada do `use_figma` começa na primeira página; o script carrega as outras com
+  `loadAsync()`, sem trocar de página.
+- Frames de tela podem estar soltos na página ou dentro de seções (as páginas da UX usam seções por
+  área); o script olha os dois níveis e ignora frames internos das telas.
+- O roteiro de captura (`apps/desktop/test/e2e/screens-capture.test.ts`) grava um PNG por tela, com o
+  número do Figma, em 1 440 × 900. Ele serve à comparação com o design durante a feature, não a esta
+  skill.

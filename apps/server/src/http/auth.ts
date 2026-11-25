@@ -29,6 +29,38 @@ export const OPERATOR_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   'sendTwoFactor',
   'cancelExecution',
   'resumeExecution',
+  // Tratativas manuais (specs/003, FR-014): o perfil consulta só vê e baixa.
+  'uploadTreatmentFile',
+  'checkTreatmentDocuments',
+  'registerTreatmentDocuments',
+  'removeTreatmentDocument',
+  'revertTreatmentDocument',
+  'setManualChargedAmount',
+  'clearManualChargedAmount',
+  'confirmTreatmentReview',
+  // Envio ao Comercial (specs/005, FR-021): o perfil consulta vê envios, retornos e a planilha,
+  // mas não envia, não confirma, não recusa e não pede leitura.
+  'confirmTreatmentReviews',
+  'checkCommercialDispatch',
+  'createCommercialDispatch',
+  'sendCommercialDispatchTwoFactor',
+  'cancelCommercialDispatch',
+  'resumeCommercialDispatch',
+  'cancelCommercialLine',
+  'restoreCommercialLine',
+  'confirmCommercialReturn',
+  'rejectCommercialReturn',
+  'undoCommercialReturnConfirmation',
+  'confirmCommercialReturns',
+  'readCommercialSheet',
+  // Ajustes de cobrança (specs/008): o perfil consulta vê a fila e a marcação, mas não marca, não
+  // desfaz e não pede a verificação no Hunit.
+  'markReservationNoCharge',
+  'undoReservationNoCharge',
+  'checkCommercialHunitCharges',
+  // A "Cancelada" do Comercial: só o operador confirma ou recusa (homologação, R-19).
+  'confirmCommercialCancellation',
+  'rejectCommercialCancellation',
 ]);
 
 /** Gera uma chave de API nova, com 256 bits aleatórios. */

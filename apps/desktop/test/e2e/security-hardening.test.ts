@@ -38,7 +38,63 @@ const BRIDGE = {
   ],
   twoFactor: ['onClosed', 'onRequested'],
   evidence: ['list', 'save'],
-  reservations: ['channels', 'get', 'list'],
+  // As contagens dos filtros rápidos (specs/006, T032).
+  // specs/008: marcar e desfazer "Cancelada sem cobrança".
+  reservations: [
+    'channels',
+    'get',
+    'list',
+    'markNoCharge',
+    'quickFilterCounts',
+    'selectAll',
+    'undoNoCharge',
+  ],
+  // Tratativas manuais (specs/003, contracts/ipc.md).
+  treatments: [
+    'apply',
+    'check',
+    'clearManualAmount',
+    'confirmReview',
+    'confirmReviews',
+    'discardFile',
+    'get',
+    'pickFile',
+    'remove',
+    'revert',
+    'saveDocument',
+    'setManualAmount',
+  ],
+  // Envio ao Comercial (specs/005, contracts/ipc.md).
+  dispatches: [
+    'cancel',
+    'check',
+    'get',
+    'list',
+    'onChanged',
+    'resume',
+    'sendToken',
+    'start',
+    'unwatch',
+    'watch',
+  ],
+  commercial: [
+    'cancelLine',
+    // specs/008: fila "Cobradas no Hunit" e o "Verificar agora".
+    'checkHunitCharges',
+    // Homologação da 008 (R-19): a "Cancelada" do Comercial.
+    'confirmCancellation',
+    'confirmReturn',
+    'confirmReturns',
+    'get',
+    'hunitCharges',
+    'readNow',
+    'rejectCancellation',
+    'rejectReturn',
+    'restoreLine',
+    'sheetStatus',
+    'undoConfirmation',
+  ],
+  clipboard: ['copyReservations'],
 };
 
 describe('janela endurecida', () => {

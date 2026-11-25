@@ -1,0 +1,355 @@
+/*
+ * Campos do design ("Campo", node 21:113; rótulo e ajuda como na tela 1.1, node 24:766): 40 px, fundo
+ * sutil, borda padrão, cantos de 12 px; no foco, fundo branco e contorno preto de 1,5 px. O design não
+ * desenha erro nem desabilitado: o erro usa o vermelho dos selos e o desabilitado o fundo do botão
+ * "Desabilitado".
+ */
+.label {
+  margin-bottom: 4px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+  letter-spacing: var(--hc-font-rotulo-tracking);
+}
+
+.description {
+  margin-bottom: 4px;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.error {
+  margin-top: 4px;
+  color: var(--hc-vermelho-9);
+  font: var(--hc-font-descricao);
+}
+
+/* 36 px: os campos das telas do design; 40 px (`md`) na barra de busca; 50 px (`lg`) no token. */
+.input {
+  height: 36px;
+  min-height: 36px;
+  padding-inline: 14px 12px;
+  border: 1px solid var(--hc-borda-padrao);
+  border-radius: var(--hc-radius-field);
+  background: var(--hc-fundo-sutil);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.inputMd {
+  height: 40px;
+  min-height: 40px;
+}
+
+.inputLg {
+  height: 50px;
+  min-height: 50px;
+}
+
+.input::placeholder,
+.input [data-placeholder] {
+  color: var(--hc-texto-placeholder);
+  opacity: 1;
+}
+
+.input:focus,
+.input:focus-within {
+  border-color: var(--hc-texto-padrao);
+  background: var(--hc-fundo-padrao);
+  box-shadow: 0 0 0 0.5px var(--hc-texto-padrao);
+}
+
+.input[data-error] {
+  border-color: var(--hc-vermelho-9);
+  color: var(--hc-texto-padrao);
+}
+
+.input:disabled,
+.input[data-disabled] {
+  border-color: var(--hc-borda-padrao);
+  background: var(--hc-fundo-desabilitado);
+  color: var(--hc-texto-placeholder);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.wrapper[data-with-left-section] .input {
+  padding-inline-start: 40px;
+}
+
+.wrapper[data-with-right-section] .input {
+  padding-inline-end: 40px;
+}
+
+.section {
+  width: 40px;
+  color: var(--hc-texto-icone);
+}
+
+/* Senha: a caixa visível é o .input; o campo de verdade fica dentro dela. */
+.innerInput {
+  padding-inline: 14px 40px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.visibilityToggle {
+  color: var(--hc-texto-padrao);
+}
+
+/* Lista suspensa do seletor (como "Opções — Ativa ou cancelada", node 125:3775). */
+.dropdown {
+  padding: 6px;
+  border: none;
+  border-radius: var(--hc-radius-box);
+  background: var(--hc-fundo-padrao);
+  box-shadow: var(--hc-shadow-dialogo);
+}
+
+.option {
+  padding: 8px 10px;
+  border-radius: var(--hc-radius-option);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.option:where([data-combobox-selected]) {
+  background: var(--hc-fundo-sutil);
+}
+
+.option:where([data-checked]) {
+  background: var(--hc-destaque-lima-suave);
+}
+
+.pill {
+  background: var(--hc-cinza-1);
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+}
+
+/* Caixa de seleção ("Caixa de seleção", node 76:71), Checkbox, Rádio e Switch. */
+.choiceLabel {
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-corpo);
+}
+
+.choiceDescription {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}
+
+.checkboxInput {
+  border: 1.5px solid var(--hc-borda-campo);
+  background: var(--hc-fundo-padrao);
+  cursor: pointer;
+}
+
+.checkboxInput:checked,
+.checkboxInput[data-indeterminate] {
+  border-color: transparent;
+  background: var(--hc-superficie-escura);
+}
+
+.checkboxIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--hc-destaque-lima);
+}
+
+.radio {
+  border: 1.5px solid var(--hc-borda-campo);
+  background: var(--hc-fundo-padrao);
+  cursor: pointer;
+}
+
+.radio:checked {
+  border-color: transparent;
+  background: var(--hc-superficie-escura);
+}
+
+.radioIcon {
+  color: var(--hc-destaque-lima);
+}
+
+.track {
+  border: none;
+  background: var(--hc-borda-campo);
+  cursor: pointer;
+}
+
+.switchInput:checked + .track {
+  background: var(--hc-superficie-escura);
+}
+
+.thumb {
+  border: none;
+  background: var(--hc-fundo-padrao);
+}
+
+.switchInput:checked + .track .thumb {
+  background: var(--hc-destaque-lima);
+}
+
+.switchInput:focus-visible + .track {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+.switchInput:disabled + .track {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/*
+ * Controle de volume (specs/008, "Controle de volume" da biblioteca, instância 242:1984): "Volume" na
+ * mesma linha, ícone de som baixo, trilho de 244 px (cinza, com o nível preto) e botão lima, ícone de
+ * som alto e o valor. Em conteúdo estreito, o trilho encolhe.
+ */
+.volume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 28px;
+}
+
+.volume > .label {
+  margin: 0;
+}
+
+/* Rótulo e descrição da chave na mesma linha (telas 1.1 a 1.3); quebra se não couber. */
+.inlineDescription {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+}
+
+.volumeRow {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--hc-texto-icone);
+}
+
+.volumeRow > svg {
+  flex-shrink: 0;
+}
+
+.volumeRow[data-disabled] {
+  color: var(--hc-texto-placeholder);
+}
+
+.volumeSlider {
+  flex: 0 1 244px;
+  width: 244px;
+  min-width: 80px;
+}
+
+.volumeTrack::before {
+  background: var(--hc-cinza-1);
+}
+
+.volumeBar {
+  background: var(--hc-superficie-escura);
+}
+
+.volumeThumb {
+  border: 2px solid var(--hc-superficie-escura);
+  background: var(--hc-destaque-lima);
+}
+
+.volumeThumb:focus-visible {
+  outline: 2px solid var(--hc-superficie-escura);
+  outline-offset: 2px;
+}
+
+/* O Slider marca `data-disabled` na barra e no botão (não na raiz). */
+.volumeBar[data-disabled] {
+  background: var(--hc-texto-placeholder);
+}
+
+.volumeThumb[data-disabled] {
+  border-color: var(--hc-texto-placeholder);
+  background: var(--hc-fundo-desabilitado);
+}
+
+.volumeValue {
+  min-width: 44px;
+  color: var(--hc-texto-padrao);
+  font: var(--hc-font-rotulo);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.volumeRow[data-disabled] .volumeValue {
+  color: var(--hc-texto-placeholder);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Dentro de um diálogo escuro (o token): rótulo claro e maior, erro no vermelho legível no escuro. */
+:global([data-dark]) .label {
+  color: var(--hc-texto-inverso);
+  font: var(--hc-font-rotulo-grande);
+  letter-spacing: var(--hc-font-rotulo-grande-tracking);
+}
+
+:global([data-dark]) .error {
+  color: var(--hc-vermelho-6);
+}
+
+/* Rótulo à esquerda do seletor, na mesma linha ("Origem" na barra de busca, tela 4.1). */
+.inline {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline > :last-child {
+  width: 200px;
+}
+
+.inlineLabel {
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+  white-space: nowrap;
+}
+
+/* Opção com descrição na segunda linha ("Ativa ou cancelada", tela 4.12). */
+.describedOption {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.describedOptionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Campo de texto longo (tela 7.6): o contador na linha do rótulo, à direita. */
+.textAreaFrame {
+  position: relative;
+}
+.textArea {
+  height: auto;
+  min-height: 72px;
+  padding-block: 10px;
+}
+.counter {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 0;
+  color: var(--hc-texto-apagado);
+  font: var(--hc-font-descricao);
+}

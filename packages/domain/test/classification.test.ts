@@ -119,10 +119,37 @@ describe('ordem das regras 2 a 7', () => {
     );
   });
 
-  it('7 — pré-pagamento sem cobrança e sem a ação de cobrar → erro de análise', () => {
+  it('6a — cartão no Hunit, sem cobrança e sem a ação de cobrar → cobrar na maquininha (19/11/2026)', () => {
+    expect(classifyReservation('1001', snapshot({ chargeActionVisible: false }))).toMatchObject({
+      classification: 'charge_at_terminal',
+      reason: CLASSIFICATION_REASONS.cardWithoutChargeAction,
+    });
+  });
+
+  it('6a — vale com ou sem forma de pagamento e na cancelada (FR-014a)', () => {
+    for (const paymentForm of [null, creditCardForm] as const) {
+      for (const reservationStatus of ['active', 'cancelled'] as const) {
+        expect(
+          classifyReservation(
+            '1001',
+            snapshot({ chargeActionVisible: false, paymentForm, reservationStatus }),
+          ),
+        ).toMatchObject({ classification: 'charge_at_terminal', reservationStatus });
+      }
+    }
+  });
+
+  it('6a — não vale com falha, cobrança ou validação registradas (regras 3 a 5 vêm antes)', () => {
     expect(
-      classifyReservation('1001', snapshot({ chargeActionVisible: false })).classification,
-    ).toBe('analysis_error');
+      classifyReservation('1001', snapshot({ chargeActionVisible: false, chargeFailed: true }))
+        .classification,
+    ).toBe('virtual_card_charge_error');
+    expect(classifyReservation('1001', snapshot(charged)).classification).toBe(
+      'virtual_card_already_charged',
+    );
+    expect(classifyReservation('1001', snapshot(validated)).classification).toBe(
+      'virtual_card_validated_only',
+    );
   });
 
   it('7 — cobrança e validação ao mesmo tempo é contraditório → erro de análise', () => {

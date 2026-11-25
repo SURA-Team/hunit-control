@@ -35,8 +35,8 @@ export const CLASSIFICATION_REASONS = {
   validatedOnly: 'Cartão apenas validado ("Validado em"), sem cobrança.',
   chargeActionUnknown: 'Não foi possível determinar se a ação de cobrar está disponível.',
   pendingCharge: 'Pré-pagamento sem registro de cobrança e com a ação de cobrar disponível.',
-  undetermined:
-    'Pré-pagamento sem registro de cobrança e sem a ação de cobrar: estado indeterminado.',
+  cardWithoutChargeAction:
+    'Cartão do hóspede disponível no Hunit, sem registro de cobrança e sem a ação de cobrar: cobrar na maquininha.',
 } as const;
 
 const HOTELBEDS_258_PREFIX = '258-';
@@ -78,6 +78,8 @@ function decideWithoutPrePayment(
 /**
  * Regras 2 a 7 da FR-013, na ordem. Cada sinal só é consultado quando a regra anterior não
  * decidiu; um sinal `null` consultado leva a erro de análise (FR-015: nunca presumir cobrança).
+ * A regra 7 (erro de análise) fica com os casos de estrutura não reconhecida, contraditória ou
+ * indeterminada, decididos acima.
  */
 function decide(snapshot: ReservationSnapshot, reservationStatus: ReservationStatus): Decision {
   const reasons = CLASSIFICATION_REASONS;
@@ -113,8 +115,10 @@ function decide(snapshot: ReservationSnapshot, reservationStatus: ReservationSta
     return { classification: 'virtual_card_pending_charge', reason: reasons.pendingCharge };
   }
 
-  // Regra 7 — qualquer outro caso.
-  return analysisError(reasons.undetermined);
+  // Regra 6a (clarificação de 2026-11-19, research R-24) — o cartão do hóspede está no Hunit (botão
+  // "Ver dados do cartão"), sem cobrança, sem validação e sem a ação de cobrar: o Hunit não cobra,
+  // e o Comercial cobra o cartão na maquininha.
+  return { classification: 'charge_at_terminal', reason: reasons.cardWithoutChargeAction };
 }
 
 /**

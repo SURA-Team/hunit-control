@@ -46,7 +46,7 @@ function storedConfig(): StoredConfig {
     certificatePem: certificates.authority.certificatePem,
     caFingerprint256: 'AA:BB',
     apiKeyCiphertext: 'cifrado',
-    preferences: { soundEnabled: true, idleHours: 8 },
+    preferences: { soundEnabled: true, soundVolume: 100, idleHours: 8 },
   };
 }
 
@@ -75,8 +75,13 @@ beforeEach(() => {
       return Promise.resolve(stored);
     },
   );
-  mocks.setPreferences.mockImplementation((input: { soundEnabled?: boolean; idleHours?: number }) =>
-    Promise.resolve({ soundEnabled: input.soundEnabled ?? true, idleHours: input.idleHours ?? 8 }),
+  mocks.setPreferences.mockImplementation(
+    (input: { soundEnabled?: boolean; soundVolume?: number; idleHours?: number }) =>
+      Promise.resolve({
+        soundEnabled: input.soundEnabled ?? true,
+        soundVolume: input.soundVolume ?? 100,
+        idleHours: input.idleHours ?? 8,
+      }),
   );
   mocks.remove.mockResolvedValue(undefined);
   mocks.reconnect.mockResolvedValue(undefined);
@@ -155,13 +160,18 @@ describe('entrada inválida → invalid_input, sem efeito', () => {
     expect(mocks.save).not.toHaveBeenCalled();
   });
 
-  it.each([{ idleHours: 0 }, { idleHours: 25 }, { idleHours: 2.5 }, { soundEnabled: 'sim' }])(
-    'preferences.set com %o',
-    async (input) => {
-      expect(codeOf(await invoke(INVOKE.preferencesSet, input))).toBe('invalid_input');
-      expect(mocks.setPreferences).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    { idleHours: 0 },
+    { idleHours: 25 },
+    { idleHours: 2.5 },
+    { soundEnabled: 'sim' },
+    { soundVolume: -1 },
+    { soundVolume: 101 },
+    { soundVolume: 50.5 },
+  ])('preferences.set com %o', async (input) => {
+    expect(codeOf(await invoke(INVOKE.preferencesSet, input))).toBe('invalid_input');
+    expect(mocks.setPreferences).not.toHaveBeenCalled();
+  });
 
   it.each([
     { username: '', password: PASSWORD },
@@ -244,6 +254,34 @@ describe('conexão: testar antes de salvar (FR-001)', () => {
     }
   });
 
+  it('o som escolhido antes da primeira conexão é gravado com ela (specs/008, tela 1.2)', async () => {
+    stored = null;
+    const onPreferences = vi.fn();
+    services.onPreferences = onPreferences;
+    handlers = createInvokeHandlers(services);
+
+    const draft = await invoke(INVOKE.preferencesSet, { soundEnabled: false, soundVolume: 40 });
+    expect(draft).toEqual({
+      ok: true,
+      data: { soundEnabled: false, soundVolume: 40, idleHours: 8 },
+    });
+    expect(onPreferences).toHaveBeenLastCalledWith({
+      soundEnabled: false,
+      soundVolume: 40,
+      idleHours: 8,
+    });
+    expect(mocks.setPreferences).not.toHaveBeenCalled();
+
+    await invoke(INVOKE.connectionTest, input());
+    await invoke(INVOKE.connectionSave, input());
+
+    expect(mocks.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preferences: { soundEnabled: false, soundVolume: 40, idleHours: 8 },
+      }),
+    );
+  });
+
   it('teste que falha não libera o salvar', async () => {
     mocks.getMe.mockResolvedValue({ ok: false, error: { code: 'unauthorized' } });
 
@@ -312,8 +350,21 @@ describe('outros canais da fundação', () => {
 
     const result = await invoke(INVOKE.preferencesSet, { idleHours: 4 });
 
-    expect(result).toEqual({ ok: true, data: { soundEnabled: true, idleHours: 4 } });
+    expect(result).toEqual({
+      ok: true,
+      data: { soundEnabled: true, soundVolume: 100, idleHours: 4 },
+    });
     expect(setIdleHours).toHaveBeenCalledWith(4);
+  });
+
+  it('preferences.set grava o volume na hora (specs/008, FR-006)', async () => {
+    const result = await invoke(INVOKE.preferencesSet, { soundVolume: 40 });
+
+    expect(result).toEqual({
+      ok: true,
+      data: { soundEnabled: true, soundVolume: 40, idleHours: 8 },
+    });
+    expect(mocks.setPreferences).toHaveBeenCalledWith({ soundVolume: 40 });
   });
 
   it('preferences.set sem configuração → not_configured', async () => {
