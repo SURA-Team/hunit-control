@@ -63,6 +63,12 @@ números, usar a área Reservas com o mesmo período.
 | 3.20 | Janela estreita (960 px) e zoom de 125 % | Grupos em coluna, sem rolagem horizontal, card de valor em aberto visível (Edge Cases) |
 | 3.21 | Mudar uma reserva entre o relatório e "Ver as N reservas" | A área Reservas mostra a situação atual e o aviso de que o relatório pode estar desatualizado (Edge Cases, R-07) |
 | 3.22 | Tempo de troca de período com a base de homologação | Relatório completo em até 3 s (SC-003) |
+| 3.23 | "Filtros" ao lado dos atalhos (app 0.5.1, servidor 1.11.0) | Painel "Filtros avançados" com Hotéis, Situação da reserva (sem Ignorada, A revisar e Faturada), Ativa ou cancelada, Canal, Origem e "Só as não encontradas…"; sem campo de período (FR-005a) |
+| 3.24 | Escolher um hotel e um canal | Números, ranking e "X de Y" trocam na hora; chips em "Filtros aplicados"; "Reservas" bate com a área Reservas com os mesmos filtros, menos as três situações (FR-028) |
+| 3.25 | "Ver reservas em aberto" e "Ver as N reservas" com filtros | A área Reservas abre com os mesmos filtros e a mesma quantidade, sem o aviso de divergência (FR-022) |
+| 3.26 | Voltar a Relatórios; tirar um chip; "Limpar filtros" | Filtros guardados ao voltar; cada chip tira o seu; "Limpar filtros" volta ao relatório do período (FR-005a) |
+| 3.27 | Filtros sem reservas | "Nenhuma reserva com estes filtros" e "Limpar filtros" (FR-024) |
+| 3.28 | "Personalizado" e fechar o calendário sem escolher | O atalho do período em vigor volta a ficar ativo (R-14) |
 
 O SC-007 (teste com as 4 usuárias) é feito pela PM depois da homologação; registrar o resultado no
 `research.md` ("Homologação").

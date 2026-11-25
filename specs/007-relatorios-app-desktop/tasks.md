@@ -188,6 +188,29 @@ produção.
 
 ---
 
+## Phase 10: Filtros do relatório (ajuste depois do merge, FR-005a, research R-14)
+
+**Purpose**: o botão "Filtros" ao lado do período, com o painel da área Reservas, pedido pelo usuário
+depois do merge do PR #12, sem esperar o design (branch `fix/007-filtros-relatorios`). Contrato
+1.11.0, app 0.5.1.
+
+- [X] T035 Spec: clarificação "ajuste depois do merge", FR-005a e os ajustes no FR-005, FR-011, FR-022 e FR-024; research R-14 e a linha na R-12; data-model §4; contracts/api-changes.md e ui-components.md; quickstart 3.23 a 3.28
+- [X] T036 Contrato 1.11.0 em `packages/contracts/openapi.yaml`: filtros opcionais em `GET /reports/overview`; `generate`; cópia em `specs/007-relatorios-app-desktop/contracts/openapi.yaml`; versão em `apps/server/test/unit/contract-frozen-enums.test.ts`
+- [X] T037 Servidor: `filterConditions` exportada em `reservations-repo.ts`; `ReportFilters` e o "X de Y" dos hotéis escolhidos em `reports-repo.ts`; o handler lê os filtros; testes em `test/contract/reports.test.ts` (hotel, paridade com a lista filtro a filtro, filtro inválido)
+- [X] T038 Ponte do app: `reportOverviewInputSchema` e `ReportOverviewInput` com os filtros; `story-handlers.ts`; testes em `test/main/api-client.test.ts` e `reports-overview.test.ts`
+- [X] T039 Tela: `PanelFields` extraído de `ReservationFilters.tsx` (com `withPeriod`, `situations` e `origin`); `AppliedFilterChips` com a Origem e `clearLabel`; `FilterAnchor` e `clearLabel` em `ui/FilterBar.tsx`; `screens/reports/ReportFilters.tsx`; botão e painel no `ReportPeriodBar`; filtros no `ReportsScreen` (consulta, gaveta do hotel, ida para Reservas, estado vazio) e no `App`; `ReservationsPreset` com `filters` e `origin`; correção do "Personalizado" ao fechar o calendário
+- [X] T040 Testes da interface: `test/renderer/reports-filters.test.tsx` (painel, chips, consulta, gaveta, ida para Reservas, estado vazio), `reservations-screen.test.tsx` (preset com filtros) e `reports-screen.test.tsx` ("Personalizado"); de ponta a ponta, `reports.test.ts` (jornada com filtro) e as capturas 8.8 e 8.9 em `screens-capture.test.ts`
+- [X] T041 Verificação: build, lint, typecheck e os grupos de teste; `responsive`; versão do app para 0.5.1; `AGENTS.md` (contrato 1.11.0)
+  - 25/11/2026: build, lint e typecheck verdes; `domain`, `server` e `contracts` (705), `desktop` (291), `desktop-ui` (582), `reports.test.ts` do banco (23); de ponta a ponta, `reports` (5), `responsive` (28, rodado sozinho: junto com outras rodadas a janela não chegou a 960 px), `us3-reservations` e `screens-capture` sem falhas. O teste longo de teclado do painel de Reservas ganhou 30 s (passava dos 15 s só na rodada em paralelo)
+- [X] T042 ⛔ FIGMA: telas de sugestão 8.8 (painel aberto) e 8.9 (relatório filtrado) na página 007, marcadas como sugestão do desenvolvimento para a UX, sem mexer nas telas da UX
+  - 25/11/2026: seção "💡 Sugestões do desenvolvimento" abaixo da seção "8. Relatórios", com uma nota e os prints 8.8 e 8.9 do roteiro de captura; os nomes começam por "💡", fora da marcação ✅/❌ do `figma-screens-sync`
+- [ ] T043 ⛔ USUÁRIO: homologação (quickstart 3.23 a 3.28) e produção (servidor 1.11.0 antes do instalador 0.5.1); registrar em `research.md`
+  - 25/11/2026: homologação aprovada (3.23 a 3.28); falta a produção
+- [X] T044 Doc da PM: o ajuste na lista de ajustes e bugs (regra da memória: todo ajuste pedido em conversa vai para o doc)
+  - 25/11/2026: item 14 (Ajuste, Relatórios, "Em desenvolvimento"), o detalhe e a linha no Histórico
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
