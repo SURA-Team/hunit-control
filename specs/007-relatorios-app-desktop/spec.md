@@ -61,6 +61,15 @@ relatórios por e-mail, e mudança nas regras de classificação e de tratativa.
 - Q: Quais ordenações a gaveta oferece? → A: As do design: "Maior valor" (valor em aberto), "Mais
   pendente" (maior valor pendente, sem tratativa) e "Nome A-Z".
 
+### Session 2026-11-25 (ajuste depois do merge)
+
+- Q: O relatório pode ser recortado também pelos filtros da área Reservas? → A: Sim (pedido do
+  usuário depois do merge, sem esperar o design; a tela vai como sugestão para a UX na página 007):
+  o botão "Filtros", ao lado dos atalhos do período, abre o painel "Filtros avançados" com Hotéis,
+  Situação da reserva (sem as três do FR-008a), Ativa ou cancelada, Canal, Origem e "Só as não
+  encontradas na última verificação", valendo na hora; os filtros em vigor aparecem em "Filtros
+  aplicados" e valem para todo o relatório e para a ida a Reservas (FR-005a).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ver o panorama do período e o valor em aberto (Priority: P1)
@@ -300,8 +309,15 @@ existe para o perfil operador.
 - **FR-004**: O topo MUST mostrar o selo de situação dos dados ("Dados atualizados" quando os números
   correspondem ao período e ao momento exibidos), o botão "Atualizar dados" e, no subtítulo, a hora da
   última atualização.
-- **FR-005**: O filtro MUST ser um único campo de período, com os atalhos "Últimos 7 dias", "Últimos 30
+- **FR-005**: O período MUST ser um único campo, com os atalhos "Últimos 7 dias", "Últimos 30
   dias", "Este mês" e "Personalizado", aplicados na hora, sem botões "Aplicar filtros" ou "Limpar".
+- **FR-005a**: Ao lado dos atalhos, o botão "Filtros" MUST abrir o painel "Filtros avançados", o mesmo
+  da área Reservas, com Hotéis, Situação da reserva (as dez do FR-008a), Ativa ou cancelada, Canal,
+  Origem e "Só as não encontradas na última verificação", aplicados na hora. Os filtros em vigor MUST
+  aparecer na linha "Filtros aplicados", um chip removível por filtro e "Limpar filtros", e MUST valer
+  para todos os números, o ranking, as gavetas e a ida para Reservas (FR-022). Com filtro de hotéis,
+  "Hotéis com dados" conta só os hotéis escolhidos (FR-011). Os filtros ficam guardados ao trocar de
+  área, como o período.
 - **FR-006**: O calendário do período MUST ser o mesmo componente dos filtros de período das outras
   telas, com o dia de hoje selecionado em lima; o app MUST impedir períodos com início posterior ao fim
   (o calendário ordena o intervalo escolhido).
@@ -325,7 +341,7 @@ existe para o perfil operador.
 - **FR-010**: Os indicadores MUST ser agrupados em: volume (Reservas, Tratativas enviadas, Hotéis com
   dados), valor em aberto e valor já cobrado.
 - **FR-011**: "Hotéis com dados" MUST ser escrito como "X de Y" (hotéis com reservas do relatório no
-  período, de todos os hotéis cadastrados).
+  período, de todos os hotéis cadastrados; com filtro de hotéis, dos hotéis escolhidos).
 - **FR-012**: O valor em aberto MUST ser o total das reservas que exigem cobrança e ainda não foram
   cobradas, ou seja, as que continuam como "Falta cobrar" na área Reservas, somando o que tem
   tratativa enviada ("solicitado") e o que não tem ("pendente").
@@ -362,14 +378,15 @@ existe para o perfil operador.
 - **FR-021**: A gaveta de detalhe do hotel MUST mostrar o valor em aberto, um resumo (solicitado e
   pendente) e as reservas em aberto, com o botão "Ver as N reservas em Reservas".
 - **FR-022**: "Ver as N reservas em Reservas" e "Ver reservas em aberto" MUST abrir a área Reservas já
-  filtrada pelo período do relatório e pelas reservas em aberto (e pelo hotel, no primeiro caso), e a
-  quantidade listada MUST ser igual à anunciada.
+  filtrada pelo período do relatório, pelos filtros em vigor (FR-005a) e pelas reservas em aberto (e
+  pelo hotel, no primeiro caso), e a quantidade listada MUST ser igual à anunciada.
 - **FR-023**: O fechamento de qualquer gaveta MUST devolver a pessoa ao relatório no mesmo estado.
 
 **Estados e perfis**
 
 - **FR-024**: Sem reservas no período, a tela MUST mostrar o estado vazio com explicação e o botão "Ver
-  os últimos 30 dias".
+  os últimos 30 dias"; com filtros em vigor (FR-005a), a explicação MUST citar os filtros e o botão
+  MUST ser "Limpar filtros".
 - **FR-025**: Com o servidor indisponível, o app MUST usar o mesmo alerta do resto do app, mostrar "dados
   de HH:MM", manter legíveis os números já exibidos e desabilitar as ações que dependem do servidor;
   sem dados anteriores, MUST mostrar só o alerta.

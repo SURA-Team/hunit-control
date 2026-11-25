@@ -670,7 +670,11 @@ function quickFilterCondition(filter: QuickFilter): SQL {
  * @throws InvalidCursorError
  */
 /** As condições SQL dos filtros combináveis (FR-020), comuns à lista e à seleção do filtro. */
-function filterConditions(options: ReservationFilters): SQL[] {
+/**
+ * Condições dos filtros da lista (FR-020). Exportada para o relatório usar os mesmos filtros
+ * (specs/007, FR-005a, research R-14).
+ */
+export function filterConditions(options: ReservationFilters): SQL[] {
   const conditions: SQL[] = [];
   const has = <T>(values: readonly T[] | undefined): values is readonly T[] =>
     values !== undefined && values.length > 0;

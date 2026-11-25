@@ -7,10 +7,15 @@
  * servidor indisponível com dados (8.5: o alerta do app, "dados de HH:MM", ações desabilitadas) e sem
  * dados (só o alerta do app). Sem atualização automática: só ao abrir, trocar o período ou
  * "Atualizar dados".
+ *
+ * Filtros (FR-005a, research R-14): o botão "Filtros" ao lado dos atalhos abre o painel da área
+ * Reservas (sem o período, com a Origem); valem para todo o relatório, para a gaveta do hotel e para
+ * a ida a Reservas, e ficam guardados com o período ao trocar de área.
  */
 import { Box, Group, SimpleGrid, Stack } from '@mantine/core';
 import { reportPeriod } from '@hunit/domain';
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useId, useMemo, useState } from 'react';
 import type { HotelReportRow } from '../../../../shared/ipc-types';
 import { formatMoney, formatTime } from '../../presentation/format';
 import {
@@ -20,6 +25,7 @@ import {
   rankingPosition,
   reportSubtitle,
 } from '../../presentation/report';
+import { unwrap, useHunit } from '../../hunit';
 import { useConnection } from '../../state/connection';
 import { useReportOverview } from '../../state/reports';
 import { Action, DataStatus, EmptyState, Notice, PageHeader, ReservationsIcon } from '../../ui';
@@ -27,6 +33,15 @@ import type { ReservationsPreset } from '../reservations/ReservationsScreen';
 import { AllHotelsDrawer } from './AllHotelsDrawer';
 import { HotelDetailDrawer } from './HotelDetailDrawer';
 import { HotelRankingCard } from './HotelRankingCard';
+import {
+  EMPTY_REPORT_FILTERS,
+  ReportAppliedFilters,
+  ReportFilterPanel,
+  ReportFiltersButton,
+  hasReportFilters,
+  reportFilterInput,
+  type ReportFilterState,
+} from './ReportFilters';
 import { ReportPeriodBar } from './ReportPeriodBar';
 import { ChargedValueCard, OpenValueCard, ValueDistributionCard, VolumeCards } from './ReportCards';
 
@@ -40,15 +55,29 @@ export function defaultReportPeriod(): ReportPeriod {
 export function ReportsScreen({
   period,
   onPeriodChange,
+  filters = EMPTY_REPORT_FILTERS,
+  onFiltersChange = () => undefined,
   onOpenReservations,
 }: {
   period: ReportPeriod;
   onPeriodChange: (period: ReportPeriod) => void;
+  filters?: ReportFilterState;
+  onFiltersChange?: (filters: ReportFilterState) => void;
   onOpenReservations: (preset: ReservationsPreset) => void;
 }) {
+  const hunit = useHunit();
   const { state } = useConnection();
   const offline = state?.status === 'offline';
-  const query = useReportOverview(period);
+  const filterInput = useMemo(() => reportFilterInput(filters), [filters]);
+  const filtered = hasReportFilters(filters);
+  const query = useReportOverview(period, filterInput);
+  const hotels = useQuery({ queryKey: ['hotels'], queryFn: () => unwrap(hunit.hotels.list()) });
+  const channels = useQuery({
+    queryKey: ['channels'],
+    queryFn: () => unwrap(hunit.reservations.channels()),
+  });
+  const panelId = useId();
+  const [panelOpen, setPanelOpen] = useState(false);
   const report = query.data ?? null;
   const [hotel, setHotel] = useState<HotelReportRow | null>(null);
   const [allOpen, setAllOpen] = useState(false);
@@ -95,12 +124,16 @@ export function ReportsScreen({
 
   const openReservations = (row: HotelReportRow | null) => {
     if (!report) return;
+    const { hotelCodes, situations, status, channel, notFound } = filters.panel;
+    const chosenHotels = row ? [row.hotelCode] : hotelCodes;
     onOpenReservations({
-      ...(row && { hotelCodes: [row.hotelCode] }),
+      ...(chosenHotels.length > 0 && { hotelCodes: chosenHotels }),
       checkInFrom: period.from,
       checkInTo: period.to,
       quickFilter: 'pending_charge',
       expectedCount: row ? row.openCount : report.open.count,
+      ...(filtered && { filters: { situations, status, channel, notFound } }),
+      ...(filters.origin !== 'all' && { origin: filters.origin }),
     });
   };
 
@@ -129,16 +162,50 @@ export function ReportsScreen({
         reservations={query.isFetching ? null : (report?.reservations ?? null)}
         lastVerifiedAt={query.isFetching ? null : (report?.lastVerifiedAt ?? null)}
         disabled={offline}
+        filterAction={
+          <ReportFiltersButton
+            panelId={panelId}
+            opened={panelOpen}
+            onOpenedChange={setPanelOpen}
+            disabled={offline}
+          />
+        }
+        filterPanel={
+          <ReportFilterPanel
+            panelId={panelId}
+            opened={panelOpen && !offline}
+            onClose={() => setPanelOpen(false)}
+            filters={filters}
+            onChange={onFiltersChange}
+            hotels={hotels.data ?? []}
+            channels={channels.data ?? []}
+          />
+        }
+      />
+      <ReportAppliedFilters
+        filters={filters}
+        onChange={onFiltersChange}
+        hotels={hotels.data ?? []}
       />
 
       {empty ? (
-        <EmptyState
-          icon={<ReservationsIcon size={32} />}
-          title="Nenhuma reserva neste período"
-          description={`Não há check-ins com cartão virtual entre ${periodBetween(period.from, period.to)}. Escolha outro período para ver os indicadores.`}
-          onClear={() => onPeriodChange(defaultReportPeriod())}
-          clearLabel="Ver os últimos 30 dias"
-        />
+        filtered ? (
+          <EmptyState
+            icon={<ReservationsIcon size={32} />}
+            title="Nenhuma reserva com estes filtros"
+            description={`Não há check-ins com cartão virtual entre ${periodBetween(period.from, period.to)} com os filtros aplicados. Tire algum filtro ou escolha outro período.`}
+            onClear={() => onFiltersChange(EMPTY_REPORT_FILTERS)}
+            clearLabel="Limpar filtros"
+          />
+        ) : (
+          <EmptyState
+            icon={<ReservationsIcon size={32} />}
+            title="Nenhuma reserva neste período"
+            description={`Não há check-ins com cartão virtual entre ${periodBetween(period.from, period.to)}. Escolha outro período para ver os indicadores.`}
+            onClear={() => onPeriodChange(defaultReportPeriod())}
+            clearLabel="Ver os últimos 30 dias"
+          />
+        )
       ) : (
         <>
           <VolumeCards report={query.isFetching ? null : report} />
@@ -178,6 +245,7 @@ export function ReportsScreen({
       <HotelDetailDrawer
         row={hotel}
         period={period}
+        filters={filterInput}
         position={hotel && report ? rankingPosition(report.hotelRows, hotel.hotelCode) : null}
         onClose={() => setHotel(null)}
         onOpenReservations={(row) => openReservations(row)}

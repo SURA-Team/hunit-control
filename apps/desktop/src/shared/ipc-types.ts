@@ -72,6 +72,13 @@ export type HotelReportRow = Schemas['HotelReportRow'];
 export interface ReportOverviewInput {
   checkInFrom: string;
   checkInTo: string;
+  /** Filtros do painel da área Reservas (contrato 1.11.0; specs/007, FR-005a). */
+  hotelCode?: string[];
+  detailedSituation?: ReservationDetailedSituation[];
+  reservationStatus?: ReservationStatus[];
+  channel?: string;
+  fromLegacy?: boolean;
+  notFound?: boolean;
 }
 export type ReservationQuickFilterCounts = Schemas['ReservationQuickFilterCounts'];
 export type SelectionItem = Schemas['SelectionItem'];

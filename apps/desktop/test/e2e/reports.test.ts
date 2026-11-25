@@ -3,7 +3,8 @@
  * API e reservas fictícias em dois hotéis: abrir Relatórios → conferir o valor em aberto → abrir o
  * hotel com mais valor em aberto → "Ver as N reservas em Reservas" → a lista mostra N reservas, com
  * os filtros; "Ver reservas em aberto" leva os dois hotéis; com o servidor fora do ar, os números
- * ficam com a hora e as ações desabilitadas; o perfil consulta vê o mesmo relatório.
+ * ficam com a hora e as ações desabilitadas; o perfil consulta vê o mesmo relatório. Desde o ajuste
+ * da 007 (FR-005a), os filtros do painel recortam o relatório e seguem para Reservas.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startE2eServer, type E2eServer } from '../../../server/test/helpers/e2e-server.js';
@@ -119,6 +120,41 @@ describe('Relatórios (specs/007)', () => {
     await openReports(window);
     await window.getByRole('button', { name: 'Ver reservas em aberto' }).click();
     await waitForReservationRows(window, 4);
+  }, 120_000);
+
+  it('filtros (FR-005a): o relatório, a ida para Reservas e a volta com os filtros guardados', async () => {
+    const { window } = launched;
+    await openReports(window);
+    await window.getByRole('button', { name: 'Filtros' }).click();
+    const panel = window.getByRole('region', { name: 'Filtros avançados' });
+    await panel.getByPlaceholder('Todas as situações').click();
+    await window.keyboard.type('erro na cobr');
+    await window.keyboard.press('ArrowDown');
+    await window.keyboard.press('Enter');
+    await window.keyboard.press('Escape');
+    await window.getByText('1 reserva no recorte').waitFor({ timeout: 20_000 });
+    const open = window.getByRole('region', { name: 'Valor em aberto' });
+    expect((await open.innerText()).replace(/\s/g, ' ')).toContain('R$ 300,00');
+    const applied = window.getByRole('group', { name: 'Filtros aplicados' });
+    await applied.getByText('Erro na cobrança').waitFor();
+    await panel.getByRole('button', { name: 'Fechar os filtros' }).click();
+
+    await window.getByRole('button', { name: 'Ver reservas em aberto' }).click();
+    await waitForReservationRows(window, 1);
+    await window
+      .getByRole('group', { name: 'Filtros aplicados' })
+      .getByText('Erro na cobrança')
+      .waitFor();
+    expect(await window.getByText(/relatório podem estar desatualizados/).count()).toBe(0);
+
+    // De volta ao relatório, os filtros continuam; "Limpar filtros" volta ao período inteiro.
+    await openReports(window);
+    await window.getByText('1 reserva no recorte').waitFor();
+    await window
+      .getByRole('group', { name: 'Filtros aplicados' })
+      .getByRole('button', { name: 'Limpar filtros' })
+      .click();
+    await window.getByText('5 reservas no recorte').waitFor({ timeout: 20_000 });
   }, 120_000);
 
   it('servidor fora do ar: números com a hora e ações desabilitadas; volta com "Atualizar dados"', async () => {

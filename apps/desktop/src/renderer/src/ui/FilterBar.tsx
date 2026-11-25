@@ -34,6 +34,19 @@ export function FilterBar({ children, panel }: FilterBarProps) {
   );
 }
 
+/**
+ * Âncora do painel "Filtros avançados" fora da `FilterBar` (specs/007, FR-005a): o card do período
+ * do relatório, com o painel aberto abaixo dele, à direita.
+ */
+export function FilterAnchor({ children, panel }: { children: ReactNode; panel?: ReactNode }) {
+  return (
+    <div className={classes.anchor}>
+      {children}
+      {panel}
+    </div>
+  );
+}
+
 /** A busca ocupa o espaço que sobra na linha da barra. */
 export function FilterBarSearch({ children }: { children: ReactNode }) {
   return <div className={classes.search}>{children}</div>;
@@ -123,16 +136,22 @@ export interface AppliedFiltersProps {
   children: ReactNode;
   /** "Limpar busca e filtros" (FR-021). */
   onClearAll?: () => void;
+  /** Texto do botão de limpar; no relatório, sem busca, "Limpar filtros" (specs/007). */
+  clearLabel?: string;
 }
 
-export function AppliedFilters({ children, onClearAll }: AppliedFiltersProps) {
+export function AppliedFilters({
+  children,
+  onClearAll,
+  clearLabel = 'Limpar busca e filtros',
+}: AppliedFiltersProps) {
   return (
     <div className={classes.applied} role="group" aria-label="Filtros aplicados">
       <span className={classes.appliedLabel}>Filtros aplicados</span>
       {children}
       {onClearAll && (
         <Action variant="text" size="xs" onClick={onClearAll}>
-          Limpar busca e filtros
+          {clearLabel}
         </Action>
       )}
     </div>

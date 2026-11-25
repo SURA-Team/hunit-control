@@ -222,6 +222,7 @@ andamento; os atalhos do período usam o `FilterChip` (sem contagem); a gaveta �
 | 8.7 | título "Hotéis com valor em aberto", só hotéis com valor | "Todos os hotéis", inclusive os de R$ 0,00, no fim | clarificação "plano" (FR-020) |
 | 8.1 | "Este mês" ativo | "Últimos 30 dias" ao abrir | premissa da spec (período padrão) |
 | 8.1 a 8.7 | campo do período com "→" | o texto do `PeriodPicker` de hoje | mesmo componente dos outros filtros (FR-006) |
+| — | botão "Filtros", painel e "Filtros aplicados" não desenhados | os da área Reservas (4.1 e 4.12), no card do período | pedido do usuário depois do merge (R-14); sugestão 8.8 e 8.9 na página 007 |
 | — | estado de carregamento não desenhado | esqueleto dos números e selo "Atualizando…" | US5; padrão da 006 |
 | — | aviso de divergência na área Reservas não desenhado | `Notice` âmbar no topo da lista | Edge Cases |
 | 8.4 | ícone do calendário com X | o ícone de Reservas (calendário) | o app não tem o ícone do design; troca quando a UX exportar o SVG |
@@ -234,6 +235,37 @@ roda com `FEATURE = '008-ajustes-cobranca-e-aviso'`, sem `SKIP`: assim a página
 varredura (telas 8.x, que não existem em outra página) e as telas 1.x e 7.x continuam com a versão da
 008. Rodar com `FEATURE = '007-…'` deixaria a 008 de fora e marcaria de novo as versões da 006 como
 ativas — não fazer.
+
+## R-14 — Filtros do relatório (ajuste depois do merge, 25/11/2026)
+
+**Pedido**: o usuário pediu, depois do merge do PR #12, o botão de filtro ao lado do período, "como
+é na parte de reservas", sem esperar o design; a tela vai para a UX como sugestão na página 007
+(FR-005a).
+
+**Decisão**:
+- **API 1.10.0 → 1.11.0, só acréscimos**: `GET /reports/overview` aceita os filtros opcionais da
+  lista (`hotelCode`, `detailedSituation`, `reservationStatus`, `channel`, `fromLegacy` e
+  `notFound`). O servidor usa as mesmas condições da lista (`filterConditions`, agora exportada) na
+  CTE dos fatos; a paridade relatório × lista é conferida filtro a filtro
+  (`test/contract/reports.test.ts`). Com `hotelCode`, "X de Y" conta só os hotéis escolhidos. Sem os
+  parâmetros, a resposta é a da 1.10.0; o app 0.5 continua funcionando.
+- **App 0.5.0 → 0.5.1**: botão "Filtros" no card do período, depois dos atalhos (primário com o
+  painel aberto, como em Reservas); o painel é o mesmo `FilterPanel` com os mesmos campos
+  (`PanelFields`, extraído de `ReservationFilters.tsx`), sem o período (o relatório tem o próprio)
+  e com a Origem (o relatório não tem a barra de busca); a Situação não oferece as três do FR-008a.
+  Os chips ficam em "Filtros aplicados", com "Limpar filtros". Os filtros ficam no `App`, como o
+  período, e vão no `ReservationsPreset` (`filters`, `origin`) e na lista da gaveta do hotel. Com
+  filtros e sem reservas, o estado vazio diz "Nenhuma reserva com estes filtros" e oferece "Limpar
+  filtros". Componente novo: `FilterAnchor` (âncora do painel fora da `FilterBar`); `AppliedFilters`
+  ganhou `clearLabel`.
+- **Busca e valor** ficam fora: o relatório é agregado, e a busca livre é da lista.
+- **Correção junto**: abrir "Personalizado" e fechar o calendário sem escolher deixava
+  "Personalizado" ativo com o período de um atalho; agora volta o atalho.
+- **Implantação**: servidor antes do app (o servidor 1.10.0 ignoraria os filtros e mostraria os
+  números sem eles). Sem migration e sem passo na planilha.
+
+**Alternativas**: filtros só no app sobre `hotelRows` (só daria para o hotel; os outros filtros
+precisam das reservas); uma rota nova (duplicaria a do resumo).
 
 ## Comparação com o design (T027, 25/11/2026)
 
@@ -260,3 +292,7 @@ Ambiente de homologação com o servidor da 1.10.0 e o app 0.5, nos dois perfis 
 O usuário aprovou os testes automáticos (§1), a montagem (§2) e todos os cenários, de 3.1 a 3.22. No
 3.22, o relatório completo apareceu em menos de 1 s na troca de período (meta do SC-003: até 3 s).
 Falta o SC-007 (as 4 usuárias, com a PM, T031).
+
+**Filtros do relatório (R-14, T043), 25/11/2026**: com o servidor da 1.11.0 e o app 0.5.1, o usuário
+aprovou os cenários 3.23 a 3.28 (painel, recorte dos números, ida para Reservas, chips e "Limpar
+filtros", estado vazio com filtros e o "Personalizado" ao fechar o calendário). Falta a produção.

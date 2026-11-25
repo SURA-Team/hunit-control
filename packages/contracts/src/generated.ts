@@ -520,6 +520,9 @@ export interface paths {
          *     tratativa); "Cancelada sem cobrança" conta em `reservations`, sem valor. Em aberto vale o
          *     valor a cobrar; cobrado vale o valor cobrado exibido ou, sem ele, o total. Os totais são a
          *     soma de `hotelRows`. Sem dado de hóspede. Para os dois perfis.
+         *     Desde a 1.11.0, aceita os filtros da lista de reservas (`hotelCode`, `detailedSituation`,
+         *     `reservationStatus`, `channel`, `fromLegacy` e `notFound`), com a mesma regra de
+         *     `GET /reservations`; com `hotelCode`, `hotels.total` conta só os hotéis informados.
          */
         get: operations["getReportOverview"];
         put?: never;
@@ -3054,6 +3057,18 @@ export interface operations {
             query: {
                 checkInFrom: string;
                 checkInTo: string;
+                /** @description Só os hotéis informados (1.11.0) */
+                hotelCode?: string[];
+                /** @description Situação detalhada, como em GET /reservations (1.11.0). As três que o relatório deixa de fora continuam fora. */
+                detailedSituation?: components["schemas"]["ReservationDetailedSituation"][];
+                /** @description Ativa, cancelada ou não identificada no Hunit (1.11.0) */
+                reservationStatus?: components["schemas"]["ReservationStatus"][];
+                /** @description Canal exatamente como em Reservation.channel (1.11.0) */
+                channel?: string;
+                /** @description true = só as importadas do sistema anterior; false = só as que não vieram de lá (1.11.0) */
+                fromLegacy?: boolean;
+                /** @description true = só as "não encontradas na última verificação" (1.11.0) */
+                notFound?: boolean;
             };
             header?: never;
             path?: never;

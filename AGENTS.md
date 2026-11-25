@@ -193,7 +193,7 @@ Regras ao mexer em dependências e no contrato:
   `specs/007-relatorios-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar
   idênticas. A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001
   continua na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0, a da 005 na 1.7.0, a
-  da 006 na 1.8.0 e a da 008 na 1.9.0, e não devem ser alteradas (a da 007 entrega a 1.10.0)
+  da 006 na 1.8.0 e a da 008 na 1.9.0, e não devem ser alteradas (a da 007 entrega a 1.11.0)
   (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
   research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
   `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).
@@ -337,5 +337,9 @@ Reservas com o hotel, o período e "Falta cobrar"; se a contagem não bater, a l
 relatório pode estar desatualizado. A regra das faixas fica no domínio (`packages/domain/src/report.ts`)
 e o servidor a monta em SQL com a mesma CTE das contagens (teste de paridade). O contrato passou para a
 1.10.0 (só acréscimos: `GET /reports/overview` e a ordem `amount_desc` das reservas), e o app para a
-0.5.0; o app 0.4 continua funcionando. Para marcar as telas no Figma, rode a skill com a 008 como
+0.5.0; o app 0.4 continua funcionando. Depois do merge, a pedido do usuário (research R-14), o
+relatório ganhou o botão "Filtros" ao lado do período, com o painel da área Reservas (sem o período,
+com a Origem), "Filtros aplicados" e os filtros levados à gaveta do hotel e à ida para Reservas: o
+contrato passou para a 1.11.0 (filtros opcionais da lista em `/reports/overview`, com as mesmas
+condições, `filterConditions`) e o app para a 0.5.1; o servidor sobe antes do app. Para marcar as telas no Figma, rode a skill com a 008 como
 feature concluída (a página 007 tem número menor: research R-13).

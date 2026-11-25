@@ -108,6 +108,7 @@ número]`. Usada pela gaveta do hotel com
 | Estado | Onde | Vida |
 |---|---|---|
 | Período escolhido e atalho ativo | `App` (área Relatórios) | enquanto o app está aberto |
-| Resumo por período | cache do TanStack Query, chave `['reports', from, to]` | até "Atualizar dados" ou fechar o app |
+| Filtros do painel e Origem (`ReportFilterState`, FR-005a, R-14) | `App` (área Relatórios) | enquanto o app está aberto |
+| Resumo por período e filtros | cache do TanStack Query, chave `['reports', 'overview', from, to, filtros]` | até "Atualizar dados" ou fechar o app |
 | Gaveta aberta (hotel ou todos), busca e ordenação da gaveta | `ReportsScreen` | enquanto a área está aberta |
-| `ReservationsPreset` (`hotelCodes?`, `checkInFrom`, `checkInTo`, `quickFilter: 'pending_charge'`, `expectedCount`) | `App` | até a próxima troca de área |
+| `ReservationsPreset` (`hotelCodes?`, `checkInFrom`, `checkInTo`, `quickFilter: 'pending_charge'`, `expectedCount` e, desde a R-14, `filters?` e `origin?`) | `App` | até a próxima troca de área |

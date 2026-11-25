@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.10.0
+  version: 1.11.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -43,7 +43,9 @@ info:
     verificações com `purpose`.
     A feature 007 (relatórios) acrescenta, sem quebrar os clientes existentes: o resumo do período
     de check-in, com os totais e uma linha por hotel (`/reports/overview`), e a ordem `amount_desc`
-    das reservas (valor do maior para o menor). Só leitura; nada disso acessa o Hunit.
+    das reservas (valor do maior para o menor). Só leitura; nada disso acessa o Hunit. A 1.11.0
+    acrescenta ao resumo os filtros opcionais da lista (`hotelCode`, `detailedSituation`,
+    `reservationStatus`, `channel`, `fromLegacy` e `notFound`); sem eles, responde como na 1.10.0.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -1042,6 +1044,9 @@ paths:
         tratativa); "Cancelada sem cobrança" conta em `reservations`, sem valor. Em aberto vale o
         valor a cobrar; cobrado vale o valor cobrado exibido ou, sem ele, o total. Os totais são a
         soma de `hotelRows`. Sem dado de hóspede. Para os dois perfis.
+        Desde a 1.11.0, aceita os filtros da lista de reservas (`hotelCode`, `detailedSituation`,
+        `reservationStatus`, `channel`, `fromLegacy` e `notFound`), com a mesma regra de
+        `GET /reservations`; com `hotelCode`, `hotels.total` conta só os hotéis informados.
       parameters:
         - name: checkInFrom
           in: query
@@ -1051,6 +1056,40 @@ paths:
           in: query
           required: true
           schema: { type: string, format: date }
+        - name: hotelCode
+          in: query
+          description: Só os hotéis informados (1.11.0)
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+        - name: detailedSituation
+          in: query
+          description: >-
+            Situação detalhada, como em GET /reservations (1.11.0). As três que o relatório deixa
+            de fora continuam fora.
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationDetailedSituation' } }
+          style: form
+          explode: true
+        - name: reservationStatus
+          in: query
+          description: Ativa, cancelada ou não identificada no Hunit (1.11.0)
+          schema: { type: array, items: { $ref: '#/components/schemas/ReservationStatus' } }
+          style: form
+          explode: true
+        - name: channel
+          in: query
+          description: Canal exatamente como em Reservation.channel (1.11.0)
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: fromLegacy
+          in: query
+          description: >-
+            true = só as importadas do sistema anterior; false = só as que não vieram de lá
+            (1.11.0)
+          schema: { type: boolean }
+        - name: notFound
+          in: query
+          description: true = só as "não encontradas na última verificação" (1.11.0)
+          schema: { type: boolean }
       responses:
         '200':
           description: Resumo do período

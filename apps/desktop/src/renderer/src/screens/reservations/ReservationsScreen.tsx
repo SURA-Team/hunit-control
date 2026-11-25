@@ -84,7 +84,8 @@ type SearchQuery = Pick<ReservationListInput, 'q' | 'amount'>;
  * Filtros iniciais vindos do módulo de Relatórios (specs/007, research R-07): período de check-in,
  * "Falta cobrar" e, a partir da gaveta de um hotel, o hotel. `expectedCount` é a quantidade que o
  * relatório anunciou: se a lista encontrar outra, a tela avisa que o relatório pode estar
- * desatualizado (Edge Cases).
+ * desatualizado (Edge Cases). Desde o ajuste da 007 (FR-005a, R-14), também os filtros do painel do
+ * relatório e a Origem.
  */
 export interface ReservationsPreset {
   hotelCodes?: string[];
@@ -92,6 +93,8 @@ export interface ReservationsPreset {
   checkInTo: string;
   quickFilter: 'pending_charge';
   expectedCount: number;
+  filters?: Pick<PanelFilters, 'situations' | 'status' | 'channel' | 'notFound'>;
+  origin?: OriginFilter;
 }
 
 export function ReservationsScreen({
@@ -110,11 +113,12 @@ export function ReservationsScreen({
   const [search, setSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState<SearchQuery>({});
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [origin, setOrigin] = useState<OriginFilter>('all');
+  const [origin, setOrigin] = useState<OriginFilter>(preset?.origin ?? 'all');
   const [panel, setPanel] = useState<PanelFilters>(() => ({
     ...EMPTY_PANEL,
     executionId: initialExecutionId,
     ...(preset && {
+      ...preset.filters,
       hotelCodes: preset.hotelCodes ?? [],
       checkInFrom: preset.checkInFrom,
       checkInTo: preset.checkInTo,
@@ -213,7 +217,7 @@ export function ReservationsScreen({
     panel === presetPanel &&
     quickFilter === preset.quickFilter &&
     Object.keys(searchQuery).length === 0 &&
-    origin === 'all' &&
+    origin === (preset.origin ?? 'all') &&
     counts.data !== undefined &&
     !counts.isPlaceholderData &&
     counts.data.pendingCharge !== preset.expectedCount;

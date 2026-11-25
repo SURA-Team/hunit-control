@@ -913,7 +913,7 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await closeOverlays();
     });
 
-    await step('8.1 a 8.4 e 8.7 relatórios', async () => {
+    await step('8.1 a 8.4, 8.7 e as sugestões 8.8 e 8.9 relatórios', async () => {
       const { db } = server.test.database;
       const dispatch = await insertDispatch(db, { clientId: server.operator.id });
       let n = 0;
@@ -981,6 +981,28 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         .waitFor();
       await shot('8.7', 'relatorios-todos-os-hoteis');
       await closeOverlays();
+
+      // Sugestão para a UX (ajuste da 007, FR-005a): o painel "Filtros" do relatório, aberto, com um
+      // hotel e um canal escolhidos, e depois o relatório filtrado com os chips.
+      await window.getByRole('button', { name: 'Filtros' }).click();
+      const filters = window.getByRole('region', { name: 'Filtros avançados' });
+      await filters.getByPlaceholder('Todos os hotéis').click();
+      await window.keyboard.type(`(${REPORT_HOTELS[1]?.code ?? ''})`);
+      await window.keyboard.press('ArrowDown');
+      await window.keyboard.press('Enter');
+      await window.keyboard.press('Escape');
+      await filters.getByPlaceholder('Todos os canais').click();
+      await window.getByRole('option', { name: 'Booking.com' }).click();
+      await window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
+      await shot('8.8', 'relatorios-filtros-sugestao');
+      await filters.getByRole('button', { name: 'Fechar os filtros' }).click();
+      await window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
+      await shot('8.9', 'relatorios-filtrado-sugestao', true);
+      await window
+        .getByRole('group', { name: 'Filtros aplicados' })
+        .getByRole('button', { name: 'Limpar filtros' })
+        .click();
+      await window.getByTestId('report-loaded').waitFor({ timeout: 20_000 });
 
       // Um período sem reservas (antes das que o roteiro gravou).
       await pickPeriod(window, daysFromToday(-28), daysFromToday(-25));

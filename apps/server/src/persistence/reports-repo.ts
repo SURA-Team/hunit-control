@@ -10,14 +10,30 @@ import {
   REPORT_EXCLUDED_SITUATIONS,
   type Period,
 } from '@hunit/domain';
-import { and, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { and, gte, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import type { Database } from './db.js';
 import {
   factsDetailedSituation,
+  filterConditions,
   treatmentFactsColumns,
   treatmentFactsCte,
+  type ReservationFilters,
 } from './reservations-repo.js';
 import { hotels, reservations } from './schema.js';
+
+/**
+ * Filtros do relatório (specs/007, FR-005a, research R-14): os do painel "Filtros avançados" da área
+ * Reservas e a Origem, com a mesma regra da lista. O período vem à parte.
+ */
+export type ReportFilters = Pick<
+  ReservationFilters,
+  | 'hotelCodes'
+  | 'detailedSituations'
+  | 'reservationStatuses'
+  | 'channel'
+  | 'fromLegacy'
+  | 'notFound'
+>;
 
 /** Valores em reais como no banco: texto decimal com duas casas (`"1234.56"`). */
 export type Amount = string;
@@ -96,16 +112,28 @@ interface RawRow extends Record<string, unknown> {
 }
 
 /**
- * Resumo do período de check-in (as duas pontas incluídas). O período já vem validado
- * (`validatePeriod`).
+ * Resumo do período de check-in (as duas pontas incluídas), com os filtros da lista, se vierem. O
+ * período já vem validado (`validatePeriod`).
  */
 export async function reportOverview(
   db: Database,
   period: Period,
+  filters: ReportFilters = {},
   now: Date = new Date(),
 ): Promise<ReportOverview> {
   const where =
-    and(gte(reservations.checkIn, period.from), lte(reservations.checkIn, period.to)) ?? sql`true`;
+    and(
+      gte(reservations.checkIn, period.from),
+      lte(reservations.checkIn, period.to),
+      ...filterConditions({
+        hotelCodes: filters.hotelCodes,
+        detailedSituations: filters.detailedSituations,
+        reservationStatuses: filters.reservationStatuses,
+        channel: filters.channel,
+        fromLegacy: filters.fromLegacy,
+        notFound: filters.notFound,
+      }),
+    ) ?? sql`true`;
   const facts = treatmentFactsColumns();
   const situation = factsDetailedSituation(facts);
   const pendingCharge = sql`(${facts.classification} in (${listSql(CLASSIFICATIONS_REQUIRING_CHARGE)}) and not ${facts.hasProof})`;
@@ -167,11 +195,17 @@ export async function reportOverview(
     lastVerifiedAt: dateOf(row.last_verified_at),
   }));
 
-  // "X de Y" (research R-05): disponíveis mais os indisponíveis com dados no período.
+  // "X de Y" (research R-05): disponíveis mais os indisponíveis com dados no período; com filtro de
+  // hotéis, só os escolhidos (FR-011, R-14).
+  const chosen = filters.hotelCodes !== undefined && filters.hotelCodes.length > 0;
   const available = await db
     .select({ code: hotels.code })
     .from(hotels)
-    .where(sql`${hotels.available}`);
+    .where(
+      chosen
+        ? and(sql`${hotels.available}`, inArray(hotels.code, [...(filters.hotelCodes ?? [])]))
+        : sql`${hotels.available}`,
+    );
   const catalog = new Set(available.map((hotel) => hotel.code));
   for (const row of hotelRows) catalog.add(row.hotelCode);
 

@@ -56,7 +56,8 @@ describe('reports.overview', () => {
     ['início depois do fim', { checkInFrom: '2026-11-30', checkInTo: '2026-11-01' }],
     [
       'campo desconhecido',
-      { checkInFrom: '2026-11-01', checkInTo: '2026-11-30', hotelCode: ['31'] },
+      // `hotelCode` e os outros filtros do painel valem desde a 1.11.0 (FR-005a); a busca, não.
+      { checkInFrom: '2026-11-01', checkInTo: '2026-11-30', q: 'Ana' },
     ],
     ['não é objeto', 'mês'],
   ])('%s → invalid_input, sem chamar a API', async (_, input) => {
