@@ -295,4 +295,17 @@ Falta o SC-007 (as 4 usuárias, com a PM, T031).
 
 **Filtros do relatório (R-14, T043), 25/11/2026**: com o servidor da 1.11.0 e o app 0.5.1, o usuário
 aprovou os cenários 3.23 a 3.28 (painel, recorte dos números, ida para Reservas, chips e "Limpar
-filtros", estado vazio com filtros e o "Personalizado" ao fechar o calendário). Falta a produção.
+filtros", estado vazio com filtros e o "Personalizado" ao fechar o calendário). Produção em 27/11 ("Produção").
+
+## Produção (T033 e T043, relatada em 27/11/2026)
+
+No PC de produção, com a master no merge do PR #17, pelo quickstart §5. A 1.10.0 e o app 0.5 não
+subiram sozinhos: a produção foi direto para a versão com os filtros do relatório (R-14). O usuário
+relatou que deu tudo certo, sem ajuste no roteiro.
+
+| Passo | Resultado |
+|---|---|
+| Versão | Master no merge do PR #17 (contrato 1.11.0) |
+| Ordem | Servidor antes do app (o servidor 1.10.0 ignoraria os filtros sem avisar) |
+| Subida | Servidor no ar; sem migration e sem `commercial-sheet setup` |
+| App | Instalador 0.5.1 |

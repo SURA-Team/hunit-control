@@ -22,6 +22,12 @@ marcação mudou 17 frames, sem conflitos: as dez da 008 com ✅ e as sete vers�
 A 007 (relatórios), ainda em desenvolvimento, ficou de fora com `SKIP`. As páginas 002 a 005 agora
 têm ❌ no nome da página e não são mais varridas (as telas delas já estavam com ❌ desde a 006).
 
+Na conclusão da 007 (T032, 27/11/2026, com a 008 como feature concluída e sem `SKIP`, research R-13 da
+007): as telas 8.1 a 8.7 da página `007-relatorios-app-desktop` ganharam ✅, visíveis; nenhuma outra
+mudou (7 frames, sem conflitos). As sugestões do desenvolvimento 💡 8.8 (painel "Filtros") e 💡 8.9
+(relatório filtrado), na mesma página, começam por "💡" e ficam fora da marcação e deste catálogo
+até a UX desenhar a tela.
+
 ## Catálogo
 
 Código: caminhos relativos a `apps/desktop/src/renderer/src/`. Altura: altura do frame no Figma
@@ -78,6 +84,13 @@ Código: caminhos relativos a `apps/desktop/src/renderer/src/`. Altura: altura d
 | 7.15 | Comercial — Cobradas no Hunit (fila de verificação) | Fila com uma reserva em cada situação (aguardando verificação, confirmada no Hunit, não encontrada no Hunit) e "Verificar agora" | `screens/commercial/HunitChargesTab.tsx` | 900 | `008` |
 | 7.17 | Reservas — marcar como cancelada sem cobrança | Diálogo "Marcar como cancelada sem cobrança?" sobre a gaveta: aviso, valor → R$ 0,00, observação opcional | `screens/reservations/NoChargeSection.tsx` | 1560 | `008` |
 | 7.18 | Reservas — cancelada sem cobrança (em Concluídas) | Gaveta com o selo, o card "Cancelada sem cobrança" (valor e o anterior, quem marcou, onde está, observação, "Desfazer") e o histórico | idem, `ReservationDetail.tsx`, `TreatmentSection.tsx` | 1560 | `008` |
+| 8.1 | Relatórios — visão geral | Período "Últimos 30 dias", números do período, valor em aberto (solicitado e pendente), valor já cobrado, distribuição dos valores e o ranking dos hotéis | `screens/reports/ReportsScreen.tsx`, `ReportCards.tsx`, `HotelRankingCard.tsx`, `ui/charts/` | 1236 | `007` |
+| 8.2 | Relatórios — escolhendo o período | Calendário de dois meses aberto sobre o card do período, com os atalhos | `screens/reports/ReportPeriodBar.tsx`, `ui/PeriodPicker` | 1236 | `007` |
+| 8.3 | Relatórios — detalhe do hotel | Gaveta do hotel com os números dele e as reservas em aberto, maiores primeiro, e "Ver as N reservas" | `screens/reports/HotelDetailDrawer.tsx` | 1236 | `007` |
+| 8.4 | Relatórios — nenhuma reserva no período | Estado vazio: nenhuma reserva no período escolhido | `screens/reports/ReportsScreen.tsx` | 900 | `007` |
+| 8.5 | Relatórios — servidor indisponível | Aviso de servidor indisponível no lugar dos números | idem | 1334 | `007` |
+| 8.6 | Consulta — relatórios | O mesmo relatório no perfil consulta | idem | 1236 | `007` |
+| 8.7 | Relatórios — todos os hotéis | Gaveta "Todos os hotéis" com busca e ordenação | `screens/reports/AllHotelsDrawer.tsx` | 1236 | `007` |
 
 Rótulos e cores das situações (todas as telas): `presentation/labels.ts`. Tema e ícone até a 005:
 `main.tsx` e `apps/desktop/resources/icon.png`; com a 006, `renderer/src/ui/` e a marca
