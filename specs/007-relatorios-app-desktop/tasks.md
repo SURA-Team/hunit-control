@@ -181,7 +181,8 @@ produção.
   - 25/11/2026: build, lint e typecheck verdes. Na rodada completa, 11 testes de banco passaram do tempo (a máquina roda também a produção e a homologação no Docker); rodados de novo, sozinhos, os arquivos passaram (100 + 19 testes), como `domain`, `server`, `desktop` e `desktop-ui` (1 572). De ponta a ponta: `reports`, `responsive` (28) e `screens-capture` passaram
 - [X] T030 ⛔ HOMOLOGAÇÃO: quickstart §2 e §3 — servidor de homologação na 1.10.0, instalador 0.5; cenários 3.1 a 3.22 com os dois perfis; o app 0.4 contra a 1.10.0 continua funcionando. Registrar em `research.md` ("Homologação")
   - 25/11/2026: cenários 3.1 a 3.22 aprovados pelo usuário; 3.22 em menos de 1 s
-- [ ] T031 ⛔ USUÁRIO: SC-007 com a PM — as 4 usuárias respondem, sem ajuda, "qual hotel tem mais valor em aberto?" e "quanto já foi cobrado?" em até 30 s; registrar em `research.md` ("Homologação")
+- [X] T031 ⛔ USUÁRIO: SC-007 com a PM — as 4 usuárias respondem, sem ajuda, "qual hotel tem mais valor em aberto?" e "quanto já foi cobrado?" em até 30 s; registrar em `research.md` ("Homologação")
+  - 27/11/2026: aprovado (relato do usuário): as 4 usuárias responderam as duas perguntas sem ajuda, em até 30 s
 - [X] T032 ⛔ FIGMA: skill `figma-screens-sync` com `FEATURE = '008-ajustes-cobranca-e-aviso'` e sem `SKIP` (research R-13): simulação, relatório ao usuário e, com o ok dele, aplicação — 8.1 a 8.7 com ✅ e nenhuma outra tela mudando
   - 27/11/2026: simulação aprovada pelo usuário e aplicada: 8.1 a 8.7 com ✅ (7 frames), 56 telas em uso (39 da 006, 10 da 008, 7 da 007), sem conflitos; 💡 8.8 e 8.9 fora da marcação; catálogo da skill atualizado
 - [X] T033 ⛔ PRODUÇÃO: quickstart §5 — servidor na 1.10.0 e instalador 0.5 nas máquinas do Financeiro e da Controladoria. Registrar em `research.md` ("Produção")

@@ -291,7 +291,8 @@ do ar. A lista vai para a UX.
 Ambiente de homologação com o servidor da 1.10.0 e o app 0.5, nos dois perfis (quickstart §2 e §3).
 O usuário aprovou os testes automáticos (§1), a montagem (§2) e todos os cenários, de 3.1 a 3.22. No
 3.22, o relatório completo apareceu em menos de 1 s na troca de período (meta do SC-003: até 3 s).
-Falta o SC-007 (as 4 usuárias, com a PM, T031).
+SC-007 (T031) aprovado em 27/11/2026: com a PM, as 4 usuárias responderam sem ajuda, em até 30 s,
+"qual hotel tem mais valor em aberto?" e "quanto já foi cobrado?" (relato do usuário).
 
 **Filtros do relatório (R-14, T043), 25/11/2026**: com o servidor da 1.11.0 e o app 0.5.1, o usuário
 aprovou os cenários 3.23 a 3.28 (painel, recorte dos números, ida para Reservas, chips e "Limpar
