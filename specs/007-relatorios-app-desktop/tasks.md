@@ -182,7 +182,8 @@ produção.
 - [X] T030 ⛔ HOMOLOGAÇÃO: quickstart §2 e §3 — servidor de homologação na 1.10.0, instalador 0.5; cenários 3.1 a 3.22 com os dois perfis; o app 0.4 contra a 1.10.0 continua funcionando. Registrar em `research.md` ("Homologação")
   - 25/11/2026: cenários 3.1 a 3.22 aprovados pelo usuário; 3.22 em menos de 1 s
 - [ ] T031 ⛔ USUÁRIO: SC-007 com a PM — as 4 usuárias respondem, sem ajuda, "qual hotel tem mais valor em aberto?" e "quanto já foi cobrado?" em até 30 s; registrar em `research.md` ("Homologação")
-- [ ] T032 ⛔ FIGMA: skill `figma-screens-sync` com `FEATURE = '008-ajustes-cobranca-e-aviso'` e sem `SKIP` (research R-13): simulação, relatório ao usuário e, com o ok dele, aplicação — 8.1 a 8.7 com ✅ e nenhuma outra tela mudando
+- [X] T032 ⛔ FIGMA: skill `figma-screens-sync` com `FEATURE = '008-ajustes-cobranca-e-aviso'` e sem `SKIP` (research R-13): simulação, relatório ao usuário e, com o ok dele, aplicação — 8.1 a 8.7 com ✅ e nenhuma outra tela mudando
+  - 27/11/2026: simulação aprovada pelo usuário e aplicada: 8.1 a 8.7 com ✅ (7 frames), 56 telas em uso (39 da 006, 10 da 008, 7 da 007), sem conflitos; 💡 8.8 e 8.9 fora da marcação; catálogo da skill atualizado
 - [X] T033 ⛔ PRODUÇÃO: quickstart §5 — servidor na 1.10.0 e instalador 0.5 nas máquinas do Financeiro e da Controladoria. Registrar em `research.md` ("Produção")
   - 27/11/2026: a produção foi direto para a 1.11.0 e o app 0.5.1 (T043), com tudo certo; registro em `research.md` ("Produção")
 - [X] T034 ⛔ USUÁRIO: atualizar o doc "HUNIT Control — ajustes e bugs para a PM" com a 007 na tabela "Andamento do desenvolvimento" e no Histórico (o doc pode não abrir pelo Claude Code; nesse caso, o texto vai para o usuário colar)
