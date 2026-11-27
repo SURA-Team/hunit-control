@@ -8,9 +8,12 @@
  */
 import type { SheetCellValue } from '@hunit/domain';
 
-/** Aba da planilha: "A cobrar" ou "Concluídas" (FR-009). */
-export type SheetTab = 'toCharge' | 'done';
-export const SHEET_TABS: readonly SheetTab[] = ['toCharge', 'done'];
+/**
+ * Aba da planilha (FR-009): "A cobrar", "Aguardando validação do Financeiro" (specs/009, research
+ * R-06) e "Concluídas", na ordem em que aparecem.
+ */
+export type SheetTab = 'toCharge' | 'awaitingValidation' | 'done';
+export const SHEET_TABS: readonly SheetTab[] = ['toCharge', 'awaitingValidation', 'done'];
 
 export interface SheetTabSnapshot {
   /** Identificador numérico da aba (usado nas escritas). */
@@ -20,10 +23,7 @@ export interface SheetTabSnapshot {
 }
 
 /** A planilha lida de uma vez. `null` = a aba não existe. */
-export interface SheetSnapshot {
-  toCharge: SheetTabSnapshot | null;
-  done: SheetTabSnapshot | null;
-}
+export type SheetSnapshot = Record<SheetTab, SheetTabSnapshot | null>;
 
 /**
  * Uma mudança, com as posições da leitura. O gateway aplica tudo num pedido só e nesta ordem:
@@ -58,7 +58,7 @@ export interface LayoutInspection {
 }
 
 export interface CommercialSheetGateway {
-  /** Lê as duas abas inteiras, num pedido só. */
+  /** Lê as abas inteiras, num pedido só. */
   read(): Promise<SheetSnapshot>;
   /** Aplica as mudanças num pedido só: todas ou nenhuma (ordem: ver `SheetChange`). */
   apply(changes: readonly SheetChange[]): Promise<void>;

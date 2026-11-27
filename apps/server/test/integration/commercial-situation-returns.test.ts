@@ -58,7 +58,11 @@ async function sent(n: number, hotel: { code: string } = HOTEL_ONE): Promise<voi
 }
 
 /** O Comercial preenche K a P. */
-function fill(n: number, cells: readonly (string | number)[], hotel = HOTEL_ONE): void {
+function fill(
+  n: number,
+  cells: readonly (string | number)[],
+  hotel: { name: string } = HOTEL_ONE,
+): void {
   test.sheet?.fillReturn(hotel.name, number(n), cells);
 }
 

@@ -827,7 +827,11 @@ export function noChargeMarkedCondition(
 }
 
 /** Todas as linhas que ainda podem estar na planilha (as que saíram ficam de fora). */
-export async function listSheetLines(db: Database): Promise<SheetLineSource[]> {
+/** As linhas que estão na planilha; com `key`, só a da reserva (a aba na API, specs/009). */
+export async function listSheetLines(
+  db: Database,
+  key?: ReservationKey,
+): Promise<SheetLineSource[]> {
   const rows = await db
     .select({
       hotelCode: commercialLines.hotelCode,
@@ -872,7 +876,16 @@ export async function listSheetLines(db: Database): Promise<SheetLineSource[]> {
         eq(commercialReports.reservationNumber, commercialLines.reservationNumber),
       ),
     )
-    .where(isNull(commercialLines.removedFromSheetAt))
+    .where(
+      and(
+        isNull(commercialLines.removedFromSheetAt),
+        key &&
+          and(
+            eq(commercialLines.hotelCode, key.hotelCode),
+            eq(commercialLines.reservationNumber, key.reservationNumber),
+          ),
+      ),
+    )
     .orderBy(asc(commercialLines.firstSentAt), asc(commercialLines.hotelCode));
   return rows.map(
     ({

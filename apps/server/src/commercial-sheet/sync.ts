@@ -7,7 +7,12 @@
  * Regras que protegem o que o Comercial digita:
  * - numa linha que continua em "A cobrar", só as colunas do sistema (A a J) são escritas;
  * - as colunas de retorno (K a P; O e P desde a 008) só são escritas ao criar a linha ou ao movê-la
- *   para "Concluídas" (cópia do que foi lido).
+ *   de aba (cópia do que foi lido).
+ *
+ * Desde a 009 (research R-06), a aba "Aguardando validação do Financeiro": a linha vai para ela
+ * quando espera o Financeiro (ou a verificação no Hunit) há 10 minutos sem mudança (`sheetTabOf`),
+ * e volta para "A cobrar" na recusa. A aba é só para consulta: K a P que não batem mais com o que foi
+ * lido são restaurados, como as colunas do sistema.
  *
  * Uma rodada por vez, neste processo (o servidor é um só, constitution V). Gatilhos: mudanças
  * pendentes (verificadas a cada 30 s), a leitura a cada 10 min, "Ler retornos agora" e as novas
@@ -16,6 +21,11 @@
 import {
   amountToCharge,
   detailedSituation,
+  readReturn,
+  reportChanged,
+  returnChanged,
+  returnSnapshot,
+  sheetTabOf,
   effectiveClassification,
   HUNIT_NOT_FOUND_REASON,
   hunitChargeStatus,
@@ -389,7 +399,11 @@ export class CommercialSheetSync {
     const removed: ReservationKey[] = [];
     const issues: Array<{ key: ReservationKey; text: string }> = [];
     const roundProblems: SheetRoundProblem[] = [];
-    const appends: Record<SheetTab, SheetCellValue[][]> = { toCharge: [], done: [] };
+    const appends: Record<SheetTab, SheetCellValue[][]> = {
+      toCharge: [],
+      awaitingValidation: [],
+      done: [],
+    };
     const summaries = await loadTreatmentSummaries(this.options.db, lines);
     const retentionCutoff = now.getTime() - this.options.doneRetentionDays * DAY_MS;
     const handled = new Set<string>();
@@ -413,7 +427,13 @@ export class CommercialSheetSync {
         continue;
       }
 
-      const target: SheetTab = line.state === 'open' ? 'toCharge' : 'done';
+      const validation = this.validationOf(line, summaries);
+      const target: SheetTab = sheetTabOf({
+        lineState: line.state,
+        validation,
+        awaitingSince: this.awaitingSince(line, validation, summaries),
+        now,
+      });
       const desired = sheetSystemRow({
         hotelName: hotelNames.get(line.hotelCode) ?? line.hotelCode,
         reservationNumber: line.reservationNumber,
@@ -426,7 +446,7 @@ export class CommercialSheetSync {
         detailedSituation: this.situationOf(line, summaries),
         lineState: line.state,
         lastSentAt: line.lastSentAt,
-        validation: this.validationOf(line, summaries),
+        validation,
       });
 
       const inTarget = found.filter((entry) => entry.tab === target);
@@ -460,6 +480,20 @@ export class CommercialSheetSync {
               text: 'Célula do sistema alterada na planilha e restaurada.',
             });
           }
+        }
+        // Aba só para consulta (specs/009, FR-012): o retorno que não bate mais com o lido volta.
+        if (target === 'awaitingValidation' && !this.returnCellsMatchStored(kept.row, line)) {
+          changes.push({
+            kind: 'update',
+            tab: target,
+            rowIndex: kept.rowIndex,
+            columnIndex: SYSTEM_COLUMN_COUNT,
+            values: this.lastReadCells(line),
+          });
+          issues.push({
+            key: line,
+            text: 'Retorno alterado na aba "Aguardando validação do Financeiro" e restaurado.',
+          });
         }
         for (const entry of elsewhere)
           changes.push({ kind: 'delete', tab: entry.tab, rowIndex: entry.rowIndex });
@@ -499,6 +533,23 @@ export class CommercialSheetSync {
       if (appends[tab].length > 0) changes.push({ kind: 'append', tab, rows: appends[tab] });
     }
     return { changes, removed, issues, roundProblems };
+  }
+
+  /**
+   * A aba em que a linha da reserva deve estar agora, pela mesma regra da rodada (specs/009,
+   * research R-06), para a API (`CommercialLine.sheetTab`). `null` = fora da planilha.
+   */
+  async sheetTabOfLine(key: ReservationKey): Promise<SheetTab | null> {
+    const [line] = await listSheetLines(this.options.db, key);
+    if (!line) return null;
+    const summaries = await loadTreatmentSummaries(this.options.db, [line]);
+    const validation = this.validationOf(line, summaries);
+    return sheetTabOf({
+      lineState: line.state,
+      validation,
+      awaitingSince: this.awaitingSince(line, validation, summaries),
+      now: this.now(),
+    });
   }
 
   private situationOf(
@@ -562,6 +613,53 @@ export class CommercialSheetSync {
     }
     // Enviada e sem retorno (ou com o retorno encerrado): a "nova tratativa", em lima (FR-010a).
     return { kind: 'awaiting_return' };
+  }
+
+  /**
+   * Desde quando a linha espera o Financeiro ou a verificação no Hunit (specs/009, research R-06):
+   * quando o servidor leu a versão que espera (o retorno ou o relato). Uma mudança do Comercial é uma
+   * leitura nova, então a contagem dos 10 minutos recomeça.
+   */
+  private awaitingSince(
+    line: SheetLineSource,
+    validation: FinanceValidation,
+    summaries: Awaited<ReturnType<typeof loadTreatmentSummaries>>,
+  ): Date | null {
+    if (validation.kind === 'awaiting') {
+      return summaries.get(reservationKeyOf(line))?.commercial?.currentReturn?.readAt ?? null;
+    }
+    if (validation.kind === 'cancellation_awaiting' || validation.kind === 'hunit_awaiting') {
+      return line.report?.readAt ?? null;
+    }
+    return null;
+  }
+
+  /**
+   * As colunas K a P da linha ainda dizem o que o servidor leu? Compara a leitura (não o texto),
+   * para não restaurar à toa um valor digitado como texto ("1.234,56") que foi lido igual.
+   */
+  private returnCellsMatchStored(row: readonly SheetCellValue[], line: SheetLineSource): boolean {
+    const reading = readReturn(returnCellsOf(row));
+    if (reading.kind === 'complete' || reading.kind === 'situation') {
+      return (
+        line.report === null && !returnChanged(line.lastReadReturn ?? null, returnSnapshot(reading))
+      );
+    }
+    if (reading.kind === 'report') {
+      return (
+        line.report !== null &&
+        !reportChanged(
+          {
+            kind: line.report.kind,
+            situationText: line.report.situationText,
+            chargedBy: line.report.chargedBy,
+            chargeDate: line.report.chargeDate,
+          },
+          reading.report,
+        )
+      );
+    }
+    return false;
   }
 
   /**

@@ -34,6 +34,8 @@ export type ReservationDetailedSituation = Schemas['ReservationDetailedSituation
 // Envio ao Comercial (specs/005).
 export type CommercialSummary = Schemas['CommercialSummary'];
 export type CommercialReturnBrief = Schemas['CommercialReturnBrief'];
+/** Retorno com situação livre do Comercial (specs/009). */
+export type CommercialSituationReturn = Schemas['CommercialSituationReturn'];
 export type CommercialLine = Schemas['CommercialLine'];
 export type CommercialLineState = Schemas['CommercialLineState'];
 export type CommercialReturn = Schemas['CommercialReturn'];

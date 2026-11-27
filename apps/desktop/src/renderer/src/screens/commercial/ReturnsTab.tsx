@@ -15,6 +15,11 @@
  * selo "Cancelada" em vermelho, a situação como ele escreveu, o valor a cobrar (vira R$ 0,00 ao
  * confirmar), "Confirmar" (o nome acessível é "Confirmar cancelamento"; o texto curto cabe na coluna
  * de ações, como nos retornos) e "Recusar" (com o motivo). Entram em "Confirmar marcados".
+ *
+ * Desde a 009 (specs/009, US1; FR-006 a FR-009; research R-08): a situação livre do Comercial vem
+ * logo depois das "Cancelada", com o selo "Outra situação" em âmbar, a situação como ele escreveu, o
+ * responsável e o que mais ele preencheu, e as três decisões ("Cobrada", "Sem cobrança" e "Recusar"),
+ * uma reserva por vez: sem caixa de marcar e fora de "Confirmar marcados" (FR-007).
  */
 import { Group, Stack, Text } from '@mantine/core';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,8 +31,13 @@ import type {
   Result,
 } from '../../../../shared/ipc-types';
 import { messageOf, unwrap, useHunit } from '../../hunit';
-import { formatDateTime, formatMoney } from '../../presentation/format';
-import { CANCELLATION_BADGE, describeCharge, errorMessage } from '../../presentation/labels';
+import { formatDate, formatDateTime, formatMoney } from '../../presentation/format';
+import {
+  CANCELLATION_BADGE,
+  describeCharge,
+  errorMessage,
+  SITUATION_RETURN_BADGE,
+} from '../../presentation/labels';
 import { badgeOf } from '../../presentation/reservations';
 import { useConnection } from '../../state/connection';
 import { selectionKey, toSelected } from '../../state/selection';
@@ -48,6 +58,7 @@ import { AmountDifference, ChargeHotel, RejectDialog } from '../reservations/Com
 import { ConfirmBatchDialog } from '../reservations/ConfirmBatchDialog';
 import { ReservationDetailLoader } from '../reservations/ReservationsScreen';
 import { useSheetStatus } from './SheetTab';
+import { SituationReturnActions } from './SituationReturnDialogs';
 
 /** "Cancelada" do Comercial aguardando validação (homologação da 008, R-19). */
 type Cancellation = CommercialSheetStatus['reports'][number];
@@ -99,12 +110,20 @@ export function ReturnsTab() {
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
   });
-  const items = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const all = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // A situação livre do Comercial (specs/009) fica numa linha própria, fora da seleção em lote.
+  const situations = all.filter(
+    (item) => item.commercial?.situationReturn?.state === 'awaiting_validation',
+  );
+  const items = all.filter(
+    (item) => item.commercial?.situationReturn?.state !== 'awaiting_validation',
+  );
   const marked = items.filter((item) => checked.has(selectionKey(item)));
   const cancellations = useSheetStatus().data?.reports ?? [];
   const markedCancellations = cancellations.filter((item) => checked.has(selectionKey(item)));
   const markedCount = marked.length + markedCancellations.length;
-  const rowCount = items.length + cancellations.length;
+  const selectableCount = items.length + cancellations.length;
+  const rowCount = selectableCount + situations.length;
 
   function refresh() {
     for (const queryKey of [['reservations'], ['reservation'], ['treatment'], ['commercial']]) {
@@ -135,7 +154,7 @@ export function ReturnsTab() {
     });
 
   const columns = canWrite ? [...COLUMNS, ACTIONS_COLUMN] : COLUMNS;
-  const allMarked = rowCount > 0 && markedCount === rowCount;
+  const allMarked = selectableCount > 0 && markedCount === selectableCount;
 
   return (
     <Stack gap={16}>
@@ -158,6 +177,7 @@ export function ReturnsTab() {
               <>
                 <SelectionBox
                   aria-label="Marcar todos os retornos listados"
+                  disabled={selectableCount === 0}
                   checked={allMarked}
                   indeterminate={markedCount > 0 && !allMarked}
                   onChange={(event) =>
@@ -176,7 +196,7 @@ export function ReturnsTab() {
                 >
                   Confirmar marcados ({markedCount})
                 </Action>
-                <span>A recusa é uma a uma, com o motivo.</span>
+                <span>A recusa e as outras situações do Comercial são uma a uma.</span>
               </>
             )
           }
@@ -265,6 +285,75 @@ export function ReturnsTab() {
                         Recusar
                       </Action>
                     </ListActions>
+                  ),
+                }}
+              />
+            );
+          })}
+          {situations.map((reservation) => {
+            const situation = reservation.commercial?.situationReturn;
+            if (!situation) return null;
+            const number = reservation.reservationNumber;
+            return (
+              <ListRow
+                key={`situacao/${selectionKey(reservation)}`}
+                columns={columns}
+                block={`Outra situação ${number}`}
+                {...(canWrite && { select: <span aria-hidden="true" /> })}
+                cells={{
+                  reservation: (
+                    <ListCell
+                      strong
+                      primary={number}
+                      onOpen={() => setOpened({ initial: reservation })}
+                      openLabel={`Abrir a reserva ${number}`}
+                      secondary={
+                        situation.authorizationCode ?? `lido em ${formatDateTime(situation.readAt)}`
+                      }
+                      narrow={situation.chargedBy}
+                    />
+                  ),
+                  chargeHotel: (
+                    <Stack gap={2} align="flex-start">
+                      <StatusBadge tone={badgeOf(SITUATION_RETURN_BADGE).tone}>
+                        {SITUATION_RETURN_BADGE.name}
+                      </StatusBadge>
+                      <Text size="sm">{`"${situation.situationText}"`}</Text>
+                      <Text size="xs" c="dimmed">
+                        {situation.chargeHotel
+                          ? `Cobrança em ${situation.chargeHotel}`
+                          : `Hotel da reserva: ${hotel(reservation.hotelCode)}`}
+                      </Text>
+                    </Stack>
+                  ),
+                  amounts: (
+                    <ListCell
+                      primary={
+                        situation.chargedAmount === null
+                          ? 'valor não informado'
+                          : `${formatMoney(situation.chargedAmount)} cobrado`
+                      }
+                      secondary={`${formatMoney(reservation.amountToCharge)} a cobrar`}
+                    />
+                  ),
+                  difference: '—',
+                  responsible: (
+                    <ListCell
+                      primary={situation.chargedBy}
+                      secondary={
+                        situation.chargeDate
+                          ? `cobrança em ${formatDate(situation.chargeDate)}`
+                          : 'situação informada pelo Comercial'
+                      }
+                    />
+                  ),
+                  actions: (
+                    <SituationReturnActions
+                      reservation={reservation}
+                      situation={situation}
+                      busy={busy}
+                      decide={decide}
+                    />
                   ),
                 }}
               />

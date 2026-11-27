@@ -278,9 +278,17 @@ export const LINE_STATE_LABELS: Record<CommercialLineState, Label> = {
   cancelled: { name: 'Pedido cancelado pelo Financeiro', tone: 'neutral' },
 };
 
-export const SHEET_TAB_NAMES: Record<NonNullable<CommercialLine['tab']>, string> = {
+export const SHEET_TAB_NAMES: Record<NonNullable<CommercialLine['sheetTab']>, string> = {
   to_charge: 'A cobrar',
+  // specs/009: a linha que espera o Financeiro (ou a verificação no Hunit) há 10 minutos.
+  awaiting_validation: 'Aguardando validação do Financeiro',
   done: 'Concluídas',
+};
+
+/** O que a situação livre virou depois da decisão do Financeiro (specs/009). */
+export const SITUATION_DECISION_NAMES: Record<'charged' | 'no_charge', string> = {
+  charged: 'Confirmada como cobrada',
+  no_charge: 'Confirmada como cancelada sem cobrança',
 };
 
 export const RETURN_STATE_LABELS: Record<CommercialReturnState, Label> = {
@@ -330,6 +338,19 @@ export const HUNIT_CHARGE_STATUS_LABELS: Record<HunitChargeStatus, Label> = {
  * "Cancelada" é vermelho, para se destacar dos retornos de cobrança em "Retornos a validar".
  */
 export const CANCELLATION_BADGE: Label = { name: 'Cancelada', tone: 'error' };
+
+/**
+ * Selo da situação livre do Comercial em "Retornos a validar" e na gaveta (specs/009, FR-006): âmbar,
+ * a cor de atenção, porque cada uma pede uma decisão do Financeiro.
+ */
+export const SITUATION_RETURN_BADGE: Label = { name: 'Outra situação', tone: 'warning' };
+
+/** As três decisões sobre a situação livre (specs/009, FR-007). */
+export const SITUATION_RETURN_ACTIONS = {
+  charged: 'Confirmar como cobrada',
+  noCharge: 'Confirmar como cancelada sem cobrança',
+  reject: 'Recusar',
+} as const;
 
 export const CANCELLATION_VALIDATION_LABELS: Record<
   'awaiting_validation' | 'confirmed' | 'rejected',

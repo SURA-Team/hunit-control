@@ -1,8 +1,8 @@
 /**
  * A "Cancelada" do Comercial de ponta a ponta (homologação da 008, research R-19; spec FR-007c,
  * US2-7), com o app compilado contra a API e a planilha do Comercial em memória: o Comercial
- * preenche só a situação "Cancelada" em duas reservas (uma sem responsável, outra com o texto
- * "Cancelada na Expedia") → as duas aparecem no topo de "Retornos a validar", com o selo
+ * preenche a situação "Cancelada" e o responsável em duas reservas (uma com o texto "Cancelada na
+ * Expedia"; desde a 009, o responsável é obrigatório) → as duas aparecem no topo de "Retornos a validar", com o selo
  * "Cancelada" → o Financeiro confirma uma (a reserva fica "Cancelada sem cobrança", em
  * "Concluídas", e a linha vai para a aba "Concluídas" da planilha) e recusa a outra com o motivo,
  * que aparece na coluna J. Dados fictícios.
@@ -53,8 +53,8 @@ beforeAll(async () => {
     await insertLine(db, key, { dispatchId: dispatch.id, clientId: dispatch.clientId });
   }
   expect((await server.test.sync?.runRound())?.ok).toBe(true);
-  // Só a situação: o responsável é opcional, e "Cancelada …" vale como "Cancelada".
-  server.sheet?.fillReturn(HOTEL.name, CONFIRMED, ['', '', '', '', 'Cancelada']);
+  // A situação e o responsável (obrigatório desde a 009); "Cancelada …" vale como "Cancelada".
+  server.sheet?.fillReturn(HOTEL.name, CONFIRMED, ['', '', '', 'Paula (Comercial)', 'Cancelada']);
   server.sheet?.fillReturn(HOTEL.name, REJECTED, [
     '',
     '',

@@ -896,7 +896,14 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
         )
       ).rows;
       if (!line) throw new Error('nenhuma linha aberta sem retorno para a "Cancelada"');
-      server.sheet?.fillReturn(line.hotel, line.number, ['', '', '', '', 'Cancelada']);
+      // Desde a 009, o responsável é obrigatório também na "Cancelada".
+      server.sheet?.fillReturn(line.hotel, line.number, [
+        '',
+        '',
+        '',
+        'Paula (Comercial)',
+        'Cancelada',
+      ]);
       await server.test.sync?.runRound();
 
       await goTo('Comercial');
@@ -910,6 +917,63 @@ describe.skipIf(!OUT)('captura das telas para o Figma', () => {
       await block.waitFor({ timeout: 15_000 });
       await block.scrollIntoViewIfNeeded();
       await shot('7.5a', 'reservas-detalhe-cancelada-pelo-comercial', true);
+      await closeOverlays();
+    });
+
+    await step('7.8b, 7.5b, 7.8c e 7.8d situação livre do Comercial', async () => {
+      // specs/009 (research R-08): números provisórios até o desenho da UX. O Comercial escreve uma
+      // situação livre e o responsável numa linha aberta sem retorno.
+      const [line] = (
+        await server.test.database.pool.query<{ number: string; hotel: string }>(
+          `select l.reservation_number as number, h.name as hotel from commercial_lines l
+           join hotels h on h.code = l.hotel_code
+           where l.state = 'open' and l.return_problem is null
+             and not exists (select 1 from commercial_returns r
+               where r.hotel_code = l.hotel_code and r.reservation_number = l.reservation_number)
+             and not exists (select 1 from commercial_reports p
+               where p.hotel_code = l.hotel_code and p.reservation_number = l.reservation_number)
+           order by l.reservation_number limit 1`,
+        )
+      ).rows;
+      if (!line) throw new Error('nenhuma linha aberta sem retorno para a situação livre');
+      server.sheet?.fillReturn(line.hotel, line.number, [
+        '',
+        '',
+        '',
+        'Paula (Comercial)',
+        'Cobrada pela OTA',
+      ]);
+      await server.test.sync?.runRound();
+
+      await goTo('Comercial');
+      await window.getByRole('tab', { name: /^Retornos a validar/ }).click();
+      const returns = window.getByRole('table', { name: 'Retornos a validar' });
+      await returns.getByText(line.number, { exact: true }).waitFor({ timeout: 15_000 });
+      await shot('7.8b', 'comercial-retornos-a-validar-outra-situacao');
+
+      await returns
+        .getByRole('button', { name: `Confirmar como cobrada a reserva ${line.number}` })
+        .click();
+      await window.getByRole('dialog', { name: 'Confirmar como cobrada?' }).waitFor();
+      await shot('7.8c', 'comercial-confirmar-como-cobrada');
+      await closeOverlays();
+
+      await returns
+        .getByRole('button', {
+          name: `Confirmar como cancelada sem cobrança a reserva ${line.number}`,
+        })
+        .click();
+      await window
+        .getByRole('dialog', { name: 'Confirmar como cancelada sem cobrança?' })
+        .waitFor();
+      await shot('7.8d', 'comercial-confirmar-como-cancelada-sem-cobranca');
+      await closeOverlays();
+
+      await returns.getByRole('button', { name: `Abrir a reserva ${line.number}` }).click();
+      const block = window.getByTestId('commercial-situation');
+      await block.waitFor({ timeout: 15_000 });
+      await block.scrollIntoViewIfNeeded();
+      await shot('7.5b', 'reservas-detalhe-outra-situacao', true);
       await closeOverlays();
     });
 

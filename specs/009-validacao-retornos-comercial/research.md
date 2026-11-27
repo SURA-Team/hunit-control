@@ -225,3 +225,34 @@ não chega.
 - Nenhuma variável de ambiente, volume ou serviço novo (constitution V).
 - Colunas A a P e a cópia para e-mail continuam as mesmas; a planilha continua sem dado do hóspede (FR-016).
 - A anonimização já apaga o texto da situação `other` (008); o valor à mão segue a regra da 003.
+
+## Notas da implementação (27/11/2026)
+
+O que a implementação decidiu ou descobriu além do plano:
+
+- **Contrato**: `CommercialSituationReturn.chargedAmount` usa `$ref: Money` direto. `Money` já aceita
+  nulo, e um `oneOf` com `null` ficava ambíguo (as duas opções valiam para nulo), o que fazia o
+  servidor responder 500 ao validar a resposta. O teste de enums congeladas mudou só a versão esperada
+  (1.12.0).
+- **Aba na API**: `CommercialLine.sheetTab` vem do método `sheetTabOfLine` do sincronizador, que usa a
+  mesma regra da rodada (`validationOf` e `awaitingSince`). `listSheetLines` ganhou o filtro opcional
+  por reserva. Sem planilha configurada, `sheetTab` segue o estado da linha.
+- **Desfazer a marcação** (`undoNoCharge`): o retorno de situação volta a aguardar validação só se
+  ainda é o mais recente da reserva. O vínculo `no_charge_mark_id` é limpo na mesma transação.
+- **Valor à mão**: a gravação foi extraída para `writeManualAmountTx` (`treatments-repo.ts`), usada
+  pela tela da 003 e pela confirmação como cobrada.
+- **Restauração na aba nova**: K a P são comparados pela leitura (`readReturn` contra o último lido),
+  não pelo texto das células. Assim, "1.234,56" digitado como texto e lido igual não é restaurado à toa.
+- **Telas, até o desenho da UX (R-08)**:
+  - Na lista "Retornos a validar", as três decisões ficam uma embaixo da outra. Lado a lado, elas não
+    cabem na coluna de ações de 180 px, e o "Recusar" saía do card (achado no e2e).
+  - Na gaveta, as decisões ficam lado a lado.
+  - Rótulos curtos nos botões ("Cobrada", "Sem cobrança", "Recusar"). O nome acessível é completo,
+    com o número da reserva.
+  - Números provisórios das telas no roteiro de captura: 7.8b (lista com a situação livre), 7.8c
+    (diálogo "Confirmar como cobrada"), 7.8d (diálogo "Confirmar como cancelada sem cobrança") e 7.5b
+    (bloco na gaveta).
+- **Testes**: os da US1 no servidor ficaram em `apps/server/test/integration/commercial-situation-returns.test.ts`
+  (rotas validadas contra o OpenAPI) e os da US2 em `commercial-awaiting-tab.test.ts`, com o relógio
+  simulado. Os testes da 008 que descreviam as regras antigas foram atualizados
+  (`commercial-reports.test.ts` e os e2e `cancellation.test.ts` e `screens-capture.test.ts`).

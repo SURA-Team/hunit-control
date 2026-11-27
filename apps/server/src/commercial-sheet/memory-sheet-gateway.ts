@@ -77,7 +77,11 @@ export class MemorySheetGateway implements CommercialSheetGateway {
       const found = this.tabs.get(tab);
       return found ? { sheetId: found.sheetId, rows: clone(found.rows) } : null;
     };
-    return { toCharge: snapshot('toCharge'), done: snapshot('done') };
+    return {
+      toCharge: snapshot('toCharge'),
+      awaitingValidation: snapshot('awaitingValidation'),
+      done: snapshot('done'),
+    };
   }
 
   private applyNow(changes: readonly SheetChange[]): void {
@@ -163,7 +167,11 @@ export class MemorySheetGateway implements CommercialSheetGateway {
       };
     };
     return {
-      tabs: { toCharge: describe('toCharge'), done: describe('done') },
+      tabs: {
+        toCharge: describe('toCharge'),
+        awaitingValidation: describe('awaitingValidation'),
+        done: describe('done'),
+      },
       protectedTabs: SHEET_TABS.filter((tab) => this.tabs.get(tab)?.protectedSystemColumns),
       serviceAccountHint: 'co…@….iam.gserviceaccount.com',
     };
@@ -214,7 +222,8 @@ export class MemorySheetGateway implements CommercialSheetGateway {
 
   /**
    * O Comercial preenche as colunas de retorno (K a P, specs/008) de uma linha. Recusa escrever nas
-   * colunas do sistema e na aba "Concluídas", como as proteções da planilha real (FR-011).
+   * colunas do sistema e nas abas "Concluídas" e "Aguardando validação do Financeiro" (specs/009),
+   * como as proteções da planilha real (FR-011).
    */
   fillReturn(hotelName: string, reservationNumber: string, cells: readonly SheetCellValue[]): void {
     const index = this.rowIndexOf('toCharge', hotelName, reservationNumber);

@@ -114,7 +114,19 @@ export function toDispatchEventView(event: DispatchEvent): Schemas['CommercialDi
   };
 }
 
-export function toCommercialLineView(line: CommercialLineDetail, now: Date): CommercialLineView {
+/** Aba da planilha no formato da API (specs/009). */
+const SHEET_TAB_VIEW = {
+  toCharge: 'to_charge',
+  awaitingValidation: 'awaiting_validation',
+  done: 'done',
+} as const;
+
+export function toCommercialLineView(
+  line: CommercialLineDetail,
+  now: Date,
+  /** A aba calculada pela regra da rodada (specs/009); sem ela, a do estado da linha. */
+  sheetTab?: keyof typeof SHEET_TAB_VIEW | null,
+): CommercialLineView {
   const inSheet = line.removedFromSheetAt === null;
   const restorable =
     line.state === 'cancelled' &&
@@ -124,7 +136,13 @@ export function toCommercialLineView(line: CommercialLineDetail, now: Date): Com
     state: line.state,
     inSheet,
     tab: inSheet ? (line.state === 'open' ? 'to_charge' : 'done') : null,
-    sheetTab: inSheet ? (line.state === 'open' ? 'to_charge' : 'done') : null,
+    sheetTab: !inSheet
+      ? null
+      : sheetTab
+        ? SHEET_TAB_VIEW[sheetTab]
+        : line.state === 'open'
+          ? 'to_charge'
+          : 'done',
     firstSentAt: iso(line.firstSentAt),
     lastSentAt: iso(line.lastSentAt),
     lastDispatchId: line.lastDispatchId,

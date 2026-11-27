@@ -34,6 +34,7 @@ describe('commercial-sheet (T023)', () => {
     const first = await run(['setup'], ENV, sheet);
     expect(first.code).toBe(EXIT.ok);
     expect(first.stdout).toContain('Aba "A cobrar": criada');
+    expect(first.stdout).toContain('Aba "Aguardando validação do Financeiro": criada');
     expect(first.stdout).toContain('Aba "Concluídas": criada');
     expect(first.stdout).toContain(
       'Aparência: cabeçalho preto e lima, listras, bordas tracejadas e cores da Validação do Financeiro',
@@ -100,5 +101,20 @@ describe('commercial-sheet (T023)', () => {
   it('nunca mostra o identificador da planilha', async () => {
     const result = await run(['check'], ENV);
     expect(result.stdout + result.stderr).not.toContain(SECRET);
+  });
+
+  it('planilha da 008, sem a aba nova: check aponta a aba; setup cria (specs/009, FR-014)', async () => {
+    const gateway = new MemorySheetGateway();
+    gateway.removeTab('awaitingValidation');
+    const checked = await run(['check'], ENV, gateway);
+    expect(checked.code).toBe(EXIT.layoutInvalid);
+    expect(checked.stdout).toContain(
+      'Aba "Aguardando validação do Financeiro": a aba "Aguardando validação do Financeiro" não existe',
+    );
+    const setup = await run(['setup'], ENV, gateway);
+    expect(setup.code).toBe(EXIT.ok);
+    expect(setup.stdout).toContain('Aba "Aguardando validação do Financeiro": criada');
+    expect(setup.stdout).toContain('Aba "A cobrar": já existia');
+    expect((await run(['check'], ENV, gateway)).code).toBe(EXIT.ok);
   });
 });

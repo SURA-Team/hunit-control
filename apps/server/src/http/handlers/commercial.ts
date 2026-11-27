@@ -231,7 +231,14 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
       const detail = await getCommercialDetail(db, key);
       const at = now();
       return {
-        line: detail.line ? toCommercialLineView(detail.line, at) : null,
+        line: detail.line
+          ? toCommercialLineView(
+              detail.line,
+              at,
+              // A aba "Aguardando validação do Financeiro" vem da regra da rodada (specs/009).
+              (await dependencies.commercialSheet?.sheetTabOfLine(key)) ?? null,
+            )
+          : null,
         // Retornos de situação livre (specs/009, R-03) só em situationReturns.
         returns: detail.returns.flatMap((row) => {
           const view = toCommercialReturnView(row, reservation.totalAmount);

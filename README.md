@@ -222,6 +222,12 @@ produção, no PowerShell:
    cobrança") e P ("Data da cobrança"), obrigatórias. **Avise o Comercial antes**: na primeira
    leitura, os retornos abertos sem elas (inclusive os que já aguardavam validação) vão para
    **Retornos com problema**, e a coluna J diz o que falta, até ele preencher as duas colunas.
+   A 009 mudou: a aba **Aguardando validação do Financeiro**. **Avise o Comercial antes**: a
+   situação da cobrança passa a aceitar o que aconteceu de fato; o responsável é obrigatório em toda
+   situação; só a maquininha pede código, hotel, valor e data; uma "Cancelada" sem responsável que
+   já aguardava validação continua para o Financeiro decidir, mas a coluna J pede o responsável; e a
+   aba nova é só para consulta (as linhas que aguardam há 10 minutos passam para ela na primeira
+   leitura depois do `setup`).
 4. Gere o instalador nesta mesma pasta ("App desktop" → "Gerar o instalador") e instale-o nas
    máquinas do Financeiro e da Controladoria. **Sempre o servidor antes do app**: o app novo pode
    usar rotas novas da API; o app antigo continua funcionando com o servidor novo, porque a API só
@@ -408,7 +414,8 @@ Financeiro envia os pedidos de cobrança direto para ela:
 ## Planilha do Comercial
 
 Feita uma vez, no PC de produção, por quem administra a implantação (specs/005, FR-008a). A planilha
-é uma planilha do Google com duas abas ("A cobrar" e "Concluídas"); o servidor escreve nela com uma
+é uma planilha do Google com três abas ("A cobrar", "Aguardando validação do Financeiro", desde a
+specs/009, e "Concluídas"); o servidor escreve nela com uma
 **conta de serviço** do Google, e a chave dessa conta fica só no servidor, numa pasta montada só para
 leitura. Sem as duas variáveis da planilha, o envio ao Comercial fica desligado e o resto funciona.
 
@@ -429,27 +436,36 @@ leitura. Sem as duas variáveis da planilha, o envio ao Comercial fica desligado
    docker compose exec server node dist/cli.js commercial-sheet setup
    docker compose exec server node dist/cli.js commercial-sheet check
    ```
-   O `check` deve dizer "acesso OK" e "OK" nas duas abas, com a quantidade de linhas: o "OK" já
+   O `check` deve dizer "acesso OK" e "OK" nas três abas, com a quantidade de linhas: o "OK" já
    quer dizer que o cabeçalho e as proteções estão certos. Ele não muda nada; se alguém alterar o
    formato da planilha, ele aponta o que mudou (rode o `setup` de novo).
    A aparência (cabeçalho preto e lima, listras, bordas tracejadas e a coluna "Validação do
    Financeiro" em lima, laranja ou vermelho, conforme o status) não é conferida: se alguém mudá-la,
-   o `setup` a refaz. As regras de formatação condicional das duas abas são do sistema: o `setup`
+   o `setup` a refaz. As regras de formatação condicional das abas são do sistema: o `setup`
    apaga as que alguém tiver criado ali.
 6. Compartilhe a planilha com as contas do Comercial no Google, como **Editor**: as colunas do
-   sistema (A a J de "A cobrar") e a aba "Concluídas" ficam protegidas; o Comercial só preenche as
-   colunas de retorno (K a P). Na coluna O, **Situação da cobrança**, ele escolhe (ou escreve):
-   - **Cobrada na maquininha**: o retorno completo, de K a N, e a data (P) vão para **Retornos a
-     validar**;
-   - **Cobrada no Hunit**: o responsável (N) e a data (P); a reserva entra na fila **Cobradas no
-     Hunit**;
-   - **Cancelada** (ou um texto que comece por "Cancelada"): basta a situação; o responsável é
-     opcional e a data não é pedida. A reserva vai para **Retornos a validar**, com o selo
-     "Cancelada", e a coluna J mostra "Cancelada: aguardando validação do Financeiro";
-   - outro texto: aparece como foi escrito e segue a regra da maquininha.
-   A situação (O) é obrigatória, e a **Data da cobrança** (P) também, menos na "Cancelada": o que
-   faltar leva o retorno para **Retornos com problema**, e a coluna J diz o que falta. A data não
-   bloqueia a confirmação do Financeiro.
+   sistema (A a J de "A cobrar") e as abas "Aguardando validação do Financeiro" e "Concluídas"
+   ficam protegidas; o Comercial só preenche as colunas de retorno (K a P) de "A cobrar". Na coluna
+   O, **Situação da cobrança**, ele escreve o que de fato aconteceu (a lista sugere três situações),
+   e o **Responsável pela cobrança** (N) é sempre obrigatório (specs/009):
+   - **Cobrada na maquininha**: também o código (K), o hotel da cobrança (L), o valor (M) e a data
+     (P); vai para **Retornos a validar**;
+   - **Cobrada no Hunit**: basta o responsável (a data é opcional); a reserva entra na fila
+     **Cobradas no Hunit**;
+   - **Cancelada** (ou um texto que comece por "Cancelada"): basta o responsável. A reserva vai para
+     **Retornos a validar**, com o selo "Cancelada", e a coluna J mostra "Cancelada: aguardando
+     validação do Financeiro";
+   - **outra situação** (por exemplo, "Cobrada pela OTA"): basta o responsável; código, hotel, valor
+     e data, se preenchidos, aparecem para o Financeiro. A reserva vai para **Retornos a validar**,
+     com o selo "Outra situação", e o Financeiro confirma como cobrada (com o valor do Comercial ou
+     o que ele digitar), confirma como cancelada sem cobrança ou recusa com o motivo.
+   O que faltar leva o retorno para **Retornos com problema**, e a coluna J diz só o que falta para a
+   situação escrita. A data não bloqueia a confirmação do Financeiro.
+   Quando o retorno vai para o Financeiro (ou para a verificação no Hunit) e fica **10 minutos sem
+   mudança**, a linha sai de "A cobrar" e passa para **Aguardando validação do Financeiro**, só para
+   consulta. Se o Financeiro recusar (ou a verificação não encontrar a cobrança no Hunit), a linha
+   volta para o fim de "A cobrar", com o motivo; se confirmar, vai para "Concluídas". Para mudar um
+   retorno que já está na aba nova, o Comercial pede ao Financeiro que o recuse.
 7. No app, a área **Comercial → Planilha** deve mostrar "Funcionando".
 
 Se a planilha ficar fora do ar, nada se perde: o servidor guarda as atualizações e as aplica quando

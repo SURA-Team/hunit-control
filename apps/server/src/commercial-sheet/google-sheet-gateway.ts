@@ -48,7 +48,22 @@ export const PROTECTION_DESCRIPTIONS = {
   systemColumns: 'HUNIT Control: colunas do sistema',
   header: 'HUNIT Control: cabeçalho',
   done: 'HUNIT Control: aba Concluídas',
+  // specs/009: a aba "Aguardando validação do Financeiro" é só para consulta, como "Concluídas".
+  awaitingValidation: 'HUNIT Control: aba Aguardando validação do Financeiro',
 } as const;
+
+/** Proteção que marca cada aba como preparada (a da aba inteira, menos em "A cobrar"). */
+const TAB_PROTECTION: Readonly<Record<SheetTab, string>> = {
+  toCharge: PROTECTION_DESCRIPTIONS.systemColumns,
+  awaitingValidation: PROTECTION_DESCRIPTIONS.awaitingValidation,
+  done: PROTECTION_DESCRIPTIONS.done,
+};
+
+const EMPTY_SNAPSHOT = (): SheetSnapshot => ({
+  toCharge: null,
+  awaitingValidation: null,
+  done: null,
+});
 
 export interface GoogleSheetGatewayOptions {
   spreadsheetId: string;
@@ -129,12 +144,12 @@ export class GoogleSheetGateway implements CommercialSheetGateway {
   async read(): Promise<SheetSnapshot> {
     const tabs = await this.loadTabs('sheets.properties(sheetId,title)');
     const existing = SHEET_TABS.filter((tab) => tabs.has(tab));
-    if (existing.length === 0) return { toCharge: null, done: null };
+    if (existing.length === 0) return EMPTY_SNAPSHOT();
 
     const rows = await this.batchGet(
       existing.map((tab) => `${quoteTitle(COMMERCIAL_SHEET_TABS[tab])}!A1:${LAST_COLUMN}`),
     );
-    const snapshot: SheetSnapshot = { toCharge: null, done: null };
+    const snapshot = EMPTY_SNAPSHOT();
     existing.forEach((tab, index) => {
       const sheetId = tabs.get(tab)?.sheetId;
       if (sheetId === undefined) return;
@@ -202,8 +217,11 @@ export class GoogleSheetGateway implements CommercialSheetGateway {
     const tabsCreated = SHEET_TABS.filter((tab) => !this.sheetIds.has(tab));
     if (tabsCreated.length > 0) {
       await this.batchUpdate(
+        // Na posição da aba na ordem (a nova fica entre "A cobrar" e "Concluídas", specs/009).
         tabsCreated.map((tab) => ({
-          addSheet: { properties: { title: COMMERCIAL_SHEET_TABS[tab] } },
+          addSheet: {
+            properties: { title: COMMERCIAL_SHEET_TABS[tab], index: SHEET_TABS.indexOf(tab) },
+          },
         })),
       );
       meta = await this.loadMeta(SETUP_FIELDS);
@@ -284,7 +302,8 @@ export class GoogleSheetGateway implements CommercialSheetGateway {
         });
         protect(PROTECTION_DESCRIPTIONS.header, { startRowIndex: 0, endRowIndex: 1 });
       } else {
-        protect(PROTECTION_DESCRIPTIONS.done, {});
+        // "Concluídas" e "Aguardando validação do Financeiro": a aba inteira (specs/009, FR-012).
+        protect(TAB_PROTECTION[tab], {});
       }
     });
     await this.batchUpdate(requests);
@@ -319,12 +338,16 @@ export class GoogleSheetGateway implements CommercialSheetGateway {
     const protectedTabs = SHEET_TABS.filter((tab) => {
       const sheetId = this.sheetIds.get(tab);
       const sheet = meta.sheets?.find((candidate) => candidate.properties?.sheetId === sheetId);
-      const expected =
-        tab === 'toCharge' ? PROTECTION_DESCRIPTIONS.systemColumns : PROTECTION_DESCRIPTIONS.done;
-      return (sheet?.protectedRanges ?? []).some((range) => range.description === expected);
+      return (sheet?.protectedRanges ?? []).some(
+        (range) => range.description === TAB_PROTECTION[tab],
+      );
     });
     return {
-      tabs: { toCharge: describe('toCharge'), done: describe('done') },
+      tabs: {
+        toCharge: describe('toCharge'),
+        awaitingValidation: describe('awaitingValidation'),
+        done: describe('done'),
+      },
       protectedTabs,
       serviceAccountHint: maskServiceAccount(this.options.key.clientEmail),
     };

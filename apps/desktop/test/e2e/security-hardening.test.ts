@@ -87,6 +87,8 @@ const BRIDGE = {
     'confirmCancellation',
     'confirmReturn',
     'confirmReturns',
+    // specs/009: a decisão sobre a situação livre do Comercial.
+    'confirmSituationReturn',
     'get',
     'hunitCharges',
     'readNow',

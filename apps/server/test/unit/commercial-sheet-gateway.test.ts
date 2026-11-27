@@ -285,6 +285,10 @@ describe('GoogleSheetGateway (T022)', () => {
     const afterAdd = {
       sheets: [
         existingMeta.sheets[0],
+        {
+          properties: { sheetId: 33, title: 'Aguardando validação do Financeiro' },
+          protectedRanges: [],
+        },
         { properties: { sheetId: 22, title: 'Concluídas' }, protectedRanges: [] },
       ],
     };
@@ -292,24 +296,47 @@ describe('GoogleSheetGateway (T022)', () => {
       { status: 200, body: existingMeta },
       { status: 200, body: {} }, // addSheet
       { status: 200, body: afterAdd },
-      { status: 200, body: { valueRanges: [{ values: [[...COMMERCIAL_SHEET_HEADERS]] }, {}] } },
+      { status: 200, body: { valueRanges: [{ values: [[...COMMERCIAL_SHEET_HEADERS]] }, {}, {}] } },
       { status: 200, body: {} }, // formatação e proteções
     ]);
     const report = await gateway(fetch).setupLayout();
 
     expect(report).toEqual({
-      tabsCreated: ['done'],
-      headersWritten: ['done'],
-      protectionsAdded: 2,
+      tabsCreated: ['awaitingValidation', 'done'],
+      headersWritten: ['awaitingValidation', 'done'],
+      protectionsAdded: 3,
       serviceAccountHint: 'co…@….iam.gserviceaccount.com',
     });
+    // A aba nova entre "A cobrar" e "Concluídas" (specs/009, research R-06).
     const addSheet = calls[1]?.body as { requests: unknown[] };
-    expect(addSheet.requests).toEqual([{ addSheet: { properties: { title: 'Concluídas' } } }]);
+    expect(addSheet.requests).toEqual([
+      { addSheet: { properties: { title: 'Aguardando validação do Financeiro', index: 1 } } },
+      { addSheet: { properties: { title: 'Concluídas', index: 2 } } },
+    ]);
     const format = calls[4]?.body as {
-      requests: Array<Record<string, { protectedRange?: { editors: unknown } }>>;
+      requests: Array<
+        Record<
+          string,
+          {
+            protectedRange?: {
+              editors: unknown;
+              description: string;
+              range: Record<string, number>;
+            };
+          }
+        >
+      >;
     };
     const protections = format.requests.filter((request) => 'addProtectedRange' in request);
-    expect(protections).toHaveLength(2);
+    expect(protections).toHaveLength(3);
+    // A aba nova é protegida inteira, como "Concluídas" (FR-012).
+    expect(
+      protections.find(
+        (request) =>
+          request['addProtectedRange']?.protectedRange?.description ===
+          PROTECTION_DESCRIPTIONS.awaitingValidation,
+      )?.['addProtectedRange']?.protectedRange?.range,
+    ).toEqual({ sheetId: 33 });
     expect(protections[0]?.['addProtectedRange']?.protectedRange?.editors).toEqual({
       users: [KEY.clientEmail],
     });
@@ -321,6 +348,7 @@ describe('GoogleSheetGateway (T022)', () => {
     const meta = {
       sheets: [
         { properties: { sheetId: 11, title: 'A cobrar' }, conditionalFormats: [{}, {}] },
+        { properties: { sheetId: 33, title: 'Aguardando validação do Financeiro' } },
         { properties: { sheetId: 22, title: 'Concluídas' } },
       ],
     };
@@ -330,7 +358,11 @@ describe('GoogleSheetGateway (T022)', () => {
       {
         status: 200,
         body: {
-          valueRanges: [{ values: [header, ['H', '1'], ['H', '2']] }, { values: [header] }],
+          valueRanges: [
+            { values: [header, ['H', '1'], ['H', '2']] },
+            { values: [header] },
+            { values: [header] },
+          ],
         },
       },
       { status: 200, body: {} },
@@ -463,12 +495,16 @@ describe('GoogleSheetGateway (T022)', () => {
       rule: { condition: { type: 'DATE_IS_VALID' }, strict: true },
     });
     expect(of('setDataValidation', 22)).toHaveLength(2);
+    // A aba nova recebe a mesma aparência (specs/009, FR-010).
+    expect(of('setDataValidation', 33)).toHaveLength(2);
+    expect(of('addConditionalFormatRule', 33)).toHaveLength(added.length);
   });
 
   it('a preparação numa planilha da 005 acrescenta O e P sem mexer nas linhas (specs/008)', async () => {
     const meta = {
       sheets: [
         { properties: { sheetId: 11, title: 'A cobrar' } },
+        { properties: { sheetId: 33, title: 'Aguardando validação do Financeiro' } },
         { properties: { sheetId: 22, title: 'Concluídas' } },
       ],
     };
@@ -481,6 +517,7 @@ describe('GoogleSheetGateway (T022)', () => {
           valueRanges: [
             { values: [header005, ['H', '1', '', '', '', '', '', '', '', '', 'AUT1']] },
             { values: [header005] },
+            { values: [header005] },
           ],
         },
       },
@@ -488,14 +525,14 @@ describe('GoogleSheetGateway (T022)', () => {
     ]);
     const report = await gateway(fetch).setupLayout();
 
-    expect(report.headersWritten).toEqual(['toCharge', 'done']);
+    expect(report.headersWritten).toEqual(['toCharge', 'awaitingValidation', 'done']);
     type Request = Record<string, Record<string, unknown>>;
     const requests = (calls[2]?.body as { requests: Request[] }).requests;
     const cellUpdates = requests
       .filter((request) => 'updateCells' in request)
       .map((request) => request['updateCells'] as { start: { rowIndex: number } });
     // Só o cabeçalho (linha 0) é escrito; as linhas de dados ficam como estão.
-    expect(cellUpdates.map((update) => update.start.rowIndex)).toEqual([0, 0]);
+    expect(cellUpdates.map((update) => update.start.rowIndex)).toEqual([0, 0, 0]);
     expect(requests.some((request) => 'deleteDimension' in request)).toBe(false);
   });
 });

@@ -11,9 +11,51 @@ import { COMMERCIAL_RETURN_COLUMNS, RETURN_PROBLEM_PREFIXES } from './commercial
 import type { CommercialLineState, ReservationDetailedSituation } from './treatment.js';
 import type { Classification, IsoDate, Money, ReservationStatus } from './types.js';
 
-/** Abas da planilha (FR-009). */
-export const COMMERCIAL_SHEET_TABS = { toCharge: 'A cobrar', done: 'Concluídas' } as const;
+/**
+ * Abas da planilha (FR-009), na ordem em que aparecem. Desde a 009 (research R-06), "Aguardando
+ * validação do Financeiro", entre as duas: as linhas que o Comercial já respondeu e esperam o
+ * Financeiro (ou a verificação no Hunit).
+ */
+export const COMMERCIAL_SHEET_TABS = {
+  toCharge: 'A cobrar',
+  awaitingValidation: 'Aguardando validação do Financeiro',
+  done: 'Concluídas',
+} as const;
 export type CommercialSheetTab = keyof typeof COMMERCIAL_SHEET_TABS;
+
+/**
+ * Minutos sem mudança no retorno até a linha sair de "A cobrar" para "Aguardando validação do
+ * Financeiro" (specs/009, decisão S7): o Comercial não perde a linha enquanto ainda preenche.
+ */
+export const AWAITING_TAB_DELAY_MINUTES = 10;
+
+/** Validações da coluna J que esperam o Financeiro ou a verificação no Hunit (specs/009, FR-010). */
+const AWAITING_KINDS: ReadonlySet<FinanceValidation['kind']> = new Set([
+  'awaiting',
+  'cancellation_awaiting',
+  'hunit_awaiting',
+]);
+
+/**
+ * Em que aba fica a linha (specs/009, FR-010 a FR-013; data-model §4): concluída ou cancelada em
+ * "Concluídas"; aberta e esperando o Financeiro (ou a verificação no Hunit) há
+ * `AWAITING_TAB_DELAY_MINUTES` ou mais, contados do `awaitingSince` (quando o servidor leu a versão
+ * que espera), em "Aguardando validação do Financeiro"; o resto (sem retorno, com problema, recusada
+ * ou aguardando há menos tempo) em "A cobrar".
+ */
+export function sheetTabOf(input: {
+  lineState: CommercialLineState;
+  validation: FinanceValidation;
+  awaitingSince: Date | null;
+  now: Date;
+}): CommercialSheetTab {
+  if (input.lineState !== 'open') return 'done';
+  if (!AWAITING_KINDS.has(input.validation.kind) || input.awaitingSince === null) {
+    return 'toCharge';
+  }
+  const waitedMs = input.now.getTime() - input.awaitingSince.getTime();
+  return waitedMs >= AWAITING_TAB_DELAY_MINUTES * 60_000 ? 'awaitingValidation' : 'toCharge';
+}
 
 /** Colunas, na ordem (FR-010; nomes confirmados pelo usuário em 2026-11-17). */
 export const COMMERCIAL_SHEET_HEADERS = [

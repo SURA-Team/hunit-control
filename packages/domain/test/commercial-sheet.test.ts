@@ -4,11 +4,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  AWAITING_TAB_DELAY_MINUTES,
   CANCELLED_LINE_SITUATION_NAME,
   CLASSIFICATION_NAMES,
   COMMERCIAL_SHEET_HEADERS,
   COMMERCIAL_SHEET_TABS,
   COPY_HEADERS,
+  sheetTabOf,
+  type FinanceValidation,
   copyTable,
   DETAILED_SITUATION_NAMES,
   FINANCE_VALIDATION_TONES,
@@ -43,7 +46,13 @@ const source: SheetRowSource = {
 
 describe('abas e colunas (FR-009, FR-010)', () => {
   it('duas abas com os nomes da spec', () => {
-    expect(COMMERCIAL_SHEET_TABS).toEqual({ toCharge: 'A cobrar', done: 'Concluídas' });
+    expect(COMMERCIAL_SHEET_TABS).toEqual({
+      toCharge: 'A cobrar',
+      awaitingValidation: 'Aguardando validação do Financeiro',
+      done: 'Concluídas',
+    });
+    // A ordem das chaves é a das abas na planilha (specs/009).
+    expect(Object.keys(COMMERCIAL_SHEET_TABS)).toEqual(['toCharge', 'awaitingValidation', 'done']);
   });
 
   it('16 colunas, na ordem e com os nomes confirmados (O e P da 008 no fim)', () => {
@@ -264,5 +273,54 @@ describe('copyTable — cópia para e-mail (FR-027)', () => {
   it('nunca leva o nome do hóspede', () => {
     const text = JSON.stringify(copyTable(rows));
     expect(text).not.toContain('Hóspede Fictício');
+  });
+});
+
+describe('sheetTabOf: a aba da linha (specs/009, FR-010 a FR-013; data-model §4)', () => {
+  const now = new Date('2026-11-27T12:00:00.000Z');
+  const minutesAgo = (minutes: number) => new Date(now.getTime() - minutes * 60_000);
+  const awaiting: FinanceValidation = { kind: 'awaiting' };
+
+  it('o atraso é de 10 minutos', () => {
+    expect(AWAITING_TAB_DELAY_MINUTES).toBe(10);
+  });
+
+  it('concluída ou cancelada: "Concluídas", qualquer que seja a validação', () => {
+    for (const lineState of ['concluded', 'cancelled'] as const) {
+      expect(
+        sheetTabOf({ lineState, validation: awaiting, awaitingSince: minutesAgo(60), now }),
+      ).toBe('done');
+    }
+  });
+
+  it.each<[FinanceValidation, string]>([
+    [{ kind: 'awaiting' }, 'retorno ou situação livre aguardando o Financeiro'],
+    [{ kind: 'cancellation_awaiting' }, 'Cancelada aguardando o Financeiro'],
+    [{ kind: 'hunit_awaiting' }, 'Cobrada no Hunit aguardando a verificação'],
+  ])('%j (%s): a aba nova só depois de 10 minutos sem mudança', (validation) => {
+    const base = { lineState: 'open' as const, validation, now };
+    expect(sheetTabOf({ ...base, awaitingSince: new Date(now.getTime() - 599_999) })).toBe(
+      'toCharge',
+    );
+    expect(sheetTabOf({ ...base, awaitingSince: minutesAgo(10) })).toBe('awaitingValidation');
+    expect(sheetTabOf({ ...base, awaitingSince: minutesAgo(90) })).toBe('awaitingValidation');
+  });
+
+  it.each([
+    { kind: 'awaiting_return' },
+    { kind: 'problem', text: 'Retorno incompleto: falta o responsável pela cobrança' },
+    { kind: 'rejected', reason: 'Falta o comprovante' },
+    { kind: 'confirmed' },
+    { kind: 'none' },
+  ] as const)('aberta com %j: continua em "A cobrar"', (validation) => {
+    expect(sheetTabOf({ lineState: 'open', validation, awaitingSince: minutesAgo(60), now })).toBe(
+      'toCharge',
+    );
+  });
+
+  it('aguardando sem saber desde quando: "A cobrar"', () => {
+    expect(sheetTabOf({ lineState: 'open', validation: awaiting, awaitingSince: null, now })).toBe(
+      'toCharge',
+    );
   });
 });

@@ -13,6 +13,10 @@
  * e a diferença de valor em âmbar quando chamam atenção, "Confirmar" como principal e "Recusar" em
  * vermelho suave (como no design; a tarefa dizia contorno); a recusa num diálogo estreito com o aviso,
  * os motivos mais comuns em pílulas, o motivo com o contador e "Recusar retorno" em vermelho cheio.
+ *
+ * Desde a 009 (specs/009, US1 e US2; FR-006 a FR-008, FR-015): a situação livre do Comercial num bloco
+ * próprio, com o selo "Outra situação", o que ele preencheu, as três decisões (operador) e, depois,
+ * a decisão, quem decidiu e quando; e a aba "Aguardando validação do Financeiro" da linha (`sheetTab`).
  */
 import { Group, Stack, Text } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +37,8 @@ import {
   REJECTION_SUGGESTIONS,
   RETURN_STATE_LABELS,
   SHEET_TAB_NAMES,
+  SITUATION_DECISION_NAMES,
+  SITUATION_RETURN_BADGE,
   chargeDateText,
   chargeSituationText,
 } from '../../presentation/labels';
@@ -52,6 +58,7 @@ import {
   StatusBadge,
   TextAreaField,
 } from '../../ui';
+import { SituationReturnActions } from '../commercial/SituationReturnDialogs';
 
 const MAX_REASON = 500;
 
@@ -155,6 +162,9 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
   // A "Cancelada" do Comercial, com a validação do Financeiro (homologação da 008, R-19).
   const report = detail.data?.report ?? null;
   const cancellation = report?.kind === 'cancelled' && report.validation ? report : null;
+  // A situação livre do Comercial atual e as anteriores (specs/009).
+  const situations = detail.data?.situationReturns ?? [];
+  const situation = reservation.commercial?.situationReturn ?? null;
   const canWrite = isOperator && state?.status !== 'offline';
 
   function refresh() {
@@ -183,7 +193,9 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
   }
 
   // Nunca enviada pela planilha e sem histórico: a seção não aparece.
-  if (detail.isSuccess && line === null && returns.length === 0) return null;
+  if (detail.isSuccess && line === null && returns.length === 0 && situations.length === 0) {
+    return null;
+  }
 
   const lineBadge = line ? badgeOf(LINE_STATE_LABELS[line.state]) : null;
   const currentBadge = current ? badgeOf(RETURN_STATE_LABELS[current.state]) : null;
@@ -247,7 +259,9 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
       {line && (
         <DataGrid label="Envio ao Comercial">
           <DataField label="Aba da planilha">
-            {line.tab ? SHEET_TAB_NAMES[line.tab] : 'Fora da planilha'}
+            {(line.sheetTab ?? line.tab)
+              ? SHEET_TAB_NAMES[line.sheetTab ?? line.tab ?? 'to_charge']
+              : 'Fora da planilha'}
           </DataField>
           <DataField label="Último envio">
             {formatDateTime(line.lastSentAt)}
@@ -376,6 +390,99 @@ export function CommercialSection({ reservation }: { reservation: Reservation })
                   void run(
                     () => hunit.commercial.undoConfirmation(current.id),
                     'Confirmação desfeita: o retorno volta a aguardar validação.',
+                  )
+                }
+              >
+                Desfazer confirmação
+              </Action>
+            </Group>
+          )}
+        </Card>
+      )}
+
+      {situation && (
+        <Card
+          tone="subtle"
+          padding={12}
+          block="Outra situação do Comercial"
+          data-testid="commercial-situation"
+        >
+          <CardHeader
+            title="Situação informada pelo Comercial"
+            aside={
+              <Group gap={8}>
+                <StatusBadge tone={badgeOf(SITUATION_RETURN_BADGE).tone}>
+                  {SITUATION_RETURN_BADGE.name}
+                </StatusBadge>
+                <StatusBadge tone={badgeOf(RETURN_STATE_LABELS[situation.state]).tone}>
+                  {situation.decision
+                    ? SITUATION_DECISION_NAMES[situation.decision]
+                    : RETURN_STATE_LABELS[situation.state].name}
+                </StatusBadge>
+              </Group>
+            }
+            actions={
+              <Text size="xs" c="dimmed">
+                lido em {formatDateTime(situation.readAt)}
+              </Text>
+            }
+          />
+          <DataGrid>
+            <DataField label="Situação da cobrança">{situation.situationText}</DataField>
+            <DataField label="Responsável pela cobrança">{situation.chargedBy}</DataField>
+            <DataField label="Código de autorização">
+              {situation.authorizationCode ?? '—'}
+            </DataField>
+            <DataField label="Hotel da cobrança">
+              {situation.chargeHotel ? (
+                <ChargeHotel chargeHotel={situation.chargeHotel} hotelName={hotelName} />
+              ) : (
+                '—'
+              )}
+            </DataField>
+            <DataField label="Data da cobrança">{chargeDateText(situation.chargeDate)}</DataField>
+          </DataGrid>
+          <DataGrid>
+            <DataField label="Valor cobrado">
+              {situation.chargedAmount === null
+                ? 'não informado'
+                : formatMoney(situation.chargedAmount)}
+            </DataField>
+            <DataField label="Valor a cobrar">{formatMoney(reservation.amountToCharge)}</DataField>
+          </DataGrid>
+          {situation.decidedAt && (
+            <Text size="xs" c="dimmed">
+              {situation.decision
+                ? SITUATION_DECISION_NAMES[situation.decision]
+                : RETURN_STATE_LABELS[situation.state].name}{' '}
+              em {formatDateTime(situation.decidedAt)}
+              {situation.decidedBy ? ` por ${situation.decidedBy}` : ''}
+              {situation.rejectionReason ? `: ${situation.rejectionReason}` : ''}
+            </Text>
+          )}
+          {canWrite && situation.state === 'awaiting_validation' && (
+            <Group gap={8} mt={8}>
+              <SituationReturnActions
+                reservation={reservation}
+                situation={situation}
+                busy={busy}
+                layout="row"
+                decide={async (action, success) => {
+                  await run(action, success);
+                }}
+              />
+            </Group>
+          )}
+          {canWrite && situation.state === 'confirmed' && (
+            <Group gap={8} mt={8}>
+              <Action
+                size="xs"
+                variant="danger-light"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => hunit.commercial.undoConfirmation(situation.id),
+                    'Confirmação desfeita: a situação volta a aguardar validação.',
                   )
                 }
               >

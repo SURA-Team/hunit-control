@@ -26,7 +26,7 @@ funcionar porque o Hunit mudou a UI.
 | `.specify/templates/` | Templates de spec, plan, tasks (não editar sem motivo) |
 | `specs/NNN-<feature>/` | `spec.md`, `plan.md`, `tasks.md` de cada feature |
 | `apps/server/` | Servidor: API HTTP e executor da automação no mesmo processo (Fastify, Playwright, Drizzle). `src/legacy-import/` tem o comando `legacy-import` (importação do histórico do sistema anterior, specs/004). Da 005: `src/commercial-sheet/` (planilha do Comercial: adaptador do Google Sheets, sincronizador, leitura dos retornos e o comando `commercial-sheet`), `src/dispatches/` (envios ao Comercial com a verificação no Hunit) e `src/hunit-session/` (sessão do Hunit compartilhada por execuções e envios). Da 008: `src/persistence/no-charge-repo.ts` (marcação "Cancelada sem cobrança") e `src/persistence/commercial-reports-repo.ts` (relatos do Comercial e a fila "Cobradas no Hunit", verificada pelo executor dos envios). Da 007: `src/persistence/reports-repo.ts` (resumo do período do módulo de Relatórios, sobre a mesma CTE das contagens dos filtros rápidos) |
-| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca. Da 008, `src/main/app-identity.ts` (AUMID e ícone da janela por modo, para a marca na barra de tarefas do Windows). Da 007, `src/renderer/src/screens/reports/` (módulo de Relatórios) e `src/renderer/src/ui/charts/` (barras, legendas e cards de valor; catálogo em `specs/007-relatorios-app-desktop/contracts/ui-components.md`) |
+| `apps/desktop/` | App desktop (Electron + React + Mantine) que opera o servidor só pela API: `src/main` (processo principal: rede, disco e segredos), `src/preload` (ponte `window.hunit`), `src/renderer` (interface, sem Node e sem rede), `src/shared` (contrato da ponte). Estrutura em `specs/002-app-desktop/plan.md`. Desde a 006, `src/renderer/src/ui/` tem os componentes únicos do visual (tokens, tema, ícones, botões, campos, listas, diálogos e gavetas; catálogo em `specs/006-redesign-app-desktop/contracts/ui-components.md`): telas e `components/` só montam a interface com eles e com o layout neutro do Mantine (`Stack`, `Group`, `Text`…), e o ESLint barra nelas os componentes visuais do Mantine (`Button`, `Modal`, `Table`, `Badge`…). `scripts/generate-icon.mjs` gera o ícone a partir da marca. Da 008, `src/main/app-identity.ts` (AUMID e ícone da janela por modo, para a marca na barra de tarefas do Windows). Da 007, `src/renderer/src/screens/reports/` (módulo de Relatórios) e `src/renderer/src/ui/charts/` (barras, legendas e cards de valor; catálogo em `specs/007-relatorios-app-desktop/contracts/ui-components.md`). Da 009, `src/renderer/src/screens/commercial/SituationReturnDialogs.tsx` (as três decisões sobre a situação livre do Comercial) |
 | `packages/domain/` | Regras de negócio puras, sem I/O — o ESLint bloqueia importações de navegador, banco e HTTP |
 | `packages/contracts/` | `openapi.yaml` (fonte da verdade da API) e tipos gerados a partir dele |
 | `docker-compose.yml`, `apps/server/Dockerfile` | Containers `server`, `db`, `proxy` (HTTPS) e `backup` |
@@ -190,10 +190,11 @@ Regras ao mexer em dependências e no contrato:
   (há um teste que confere).
 - Mudou o contrato da API? Edite `packages/contracts/openapi.yaml` (fonte da verdade), rode o
   `generate` e copie o arquivo para a pasta `contracts/` da feature em andamento (hoje
-  `specs/007-relatorios-app-desktop/contracts/openapi.yaml`) — as duas cópias devem ficar
+  `specs/009-validacao-retornos-comercial/contracts/openapi.yaml`) — as duas cópias devem ficar
   idênticas. A cópia de cada feature encerrada fica congelada no contrato que ela entregou: a da 001
   continua na 1.3.0, a da 002 na 1.4.0, a da 003 na 1.5.0, a da 004 na 1.6.0, a da 005 na 1.7.0, a
-  da 006 na 1.8.0 e a da 008 na 1.9.0, e não devem ser alteradas (a da 007 entrega a 1.11.0)
+  da 006 na 1.8.0, a da 008 na 1.9.0 e a da 007 na 1.11.0, e não devem ser alteradas (a da 009
+  entrega a 1.12.0)
   (specs/002, research R-15; specs/003, research R-12; specs/004, research R-12; specs/005,
   research R-13). Desde a 1.7.0, enums que o app em uso trata como chave (`ReservationSituation`,
   `TreatmentEvent.type`, `TreatmentStatus`) não ganham valores: um teste confere (specs/005, R-09).
@@ -343,3 +344,22 @@ com a Origem), "Filtros aplicados" e os filtros levados à gaveta do hotel e à 
 contrato passou para a 1.11.0 (filtros opcionais da lista em `/reports/overview`, com as mesmas
 condições, `filterConditions`) e o app para a 0.5.1; o servidor sobe antes do app. Para marcar as telas no Figma, rode a skill com a 008 como
 feature concluída (a página 007 tem número menor: research R-13).
+
+Desde a feature 009 (`specs/009-validacao-retornos-comercial/`), o Comercial escreve na "Situação da
+cobrança" o que de fato aconteceu: toda situação exige o responsável, e só "Cobrada na maquininha" exige
+também código, hotel, valor e data ("Cobrada no Hunit" sem data obrigatória; "Cancelada" com
+responsável). Outro texto é a **situação livre**: um retorno do Comercial com `charge_situation_kind =
+other` e código, hotel e valor opcionais (`readReturn` devolve a leitura `situation`), que o Financeiro
+decide em "Retornos a validar", uma reserva por vez e fora do lote: "Confirmar como cobrada" (vale como
+comprovante; sem valor do Comercial, o digitado vira o valor informado à mão), "Confirmar como cancelada
+sem cobrança" (a marcação da 008; desfazer a devolve para validar) ou "Recusar"
+(`POST /commercial-returns/{id}/situation/confirm` e a recusa de sempre). Para os apps 0.3 a 0.5.1, a
+situação livre não aparece em `currentReturn` (fica em `situationReturn` e `situationReturns`), o
+`/confirm` antigo a recusa (409 `situation_return_needs_decision`) e o lote a deixa de fora. A planilha
+ganhou a aba **"Aguardando validação do Financeiro"**, entre "A cobrar" e "Concluídas", protegida
+inteira: a linha vai para ela quando espera o Financeiro (ou a verificação no Hunit) há 10 minutos sem
+mudança (`sheetTabOf`, no domínio, a partir do `read_at` da versão que espera; nenhuma coluna nova), e
+volta para "A cobrar" na recusa; K a P alterados nela são restaurados. Sem a aba, a planilha fica
+"Formato alterado" até o `commercial-sheet setup`. O contrato passou para a 1.12.0 (só acréscimos:
+`situationReturn`, `situationReturns`, `CommercialLine.sheetTab` e a rota da decisão) e o app para a
+0.6.0; o servidor sobe antes do app.
