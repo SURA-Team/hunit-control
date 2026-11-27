@@ -100,6 +100,11 @@ CommercialSituationReturn:
 | `CommercialDetail` | `situationReturns` | lista de `CommercialSituationReturn`, do mais recente ao mais antigo (os retornos de situação não aparecem em `returns`) |
 | `CommercialLine` | `sheetTab` | `to_charge \| awaiting_validation \| done \| null`. `tab` continua com `to_charge \| done \| null` (a aba nova aparece como `to_charge` para os apps antigos) |
 
+`CommercialHistoryEvent` (sem valor novo): `cancellation_confirmed` passa a vir também da decisão "Confirmar
+como cancelada sem cobrança" de um retorno de situação, com o `returnId` preenchido e `reason` = a situação
+do Comercial (vindo de uma "Cancelada" da 008, o `returnId` continua nulo). `return_confirmed` e
+`return_rejected` de um retorno de situação aparecem como os de hoje. A descrição do schema é atualizada.
+
 `CommercialSheetStatus.awaitingValidation` continua contando todos os retornos aguardando validação,
 inclusive os de situação, e as "Cancelada" (descrição atualizada).
 

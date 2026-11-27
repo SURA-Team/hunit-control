@@ -97,7 +97,7 @@ aba cada linha fica; recusar uma e confirmar outra no app e conferir para onde v
 **Acceptance Scenarios**:
 
 1. **Given** a planilha preparada para esta feature, **When** o Comercial a abre, **Then** há três abas: "A cobrar", "Aguardando validação do Financeiro" e "Concluídas", e a aba nova tem as mesmas colunas, cabeçalhos, larguras, cores e formatos de "A cobrar".
-2. **Given** um retorno que foi para a validação do Financeiro, **When** o retorno fica alguns minutos sem mudança (FR-010), **Then** a linha sai de "A cobrar" e aparece na aba nova, com os mesmos valores.
+2. **Given** um retorno que foi para a validação do Financeiro, **When** o retorno fica 10 minutos sem mudança (FR-010), **Then** a linha sai de "A cobrar" e aparece na aba nova, com os mesmos valores.
 3. **Given** um retorno "Cobrada no Hunit" com o responsável, **When** ele espera a conferência no Hunit, **Then** a linha também fica na aba nova, com "Aguardando verificação no Hunit"; ela não passa pela validação do Financeiro.
 4. **Given** uma linha na aba nova, **When** o Financeiro recusa o retorno (ou a conferência no Hunit não encontra a cobrança), **Then** a linha volta para o fim de "A cobrar", com o motivo na coluna "Validação do Financeiro", para o Comercial corrigir.
 5. **Given** uma linha na aba nova, **When** o Financeiro confirma (ou a conferência no Hunit confirma a cobrança), **Then** a linha vai para "Concluídas", como hoje.
@@ -108,12 +108,12 @@ aba cada linha fica; recusar uma e confirmar outra no app e conferir para onde v
 
 ### Edge Cases
 
-- **Comercial ainda digitando quando a linha mudaria de aba**: a linha só muda de aba depois que o retorno fica alguns minutos sem mudança (FR-010), para não sumir enquanto ele preenche. Se o Financeiro decidir antes disso, a linha vai direto para o destino da decisão.
+- **Comercial ainda digitando quando a linha mudaria de aba**: a linha só muda de aba depois que o retorno fica 10 minutos sem mudança (FR-010), para não sumir enquanto ele preenche. Se o Financeiro decidir antes disso, a linha vai direto para o destino da decisão.
 - **Situação livre que contém "maquininha"** (ex.: "Cobrada na maquininha do hotel"): segue a regra da maquininha (FR-002).
 - **Situação livre que começa com "Cancelada"**: vale como "Cancelada", como desde a 008.
 - **Situação livre com valor ou data preenchidos**: o app lê os dois; valor ou data que não forem entendidos levam o retorno para "Retornos com problema" ("Retorno não entendido: …"), como hoje. Preenchidos e entendidos, aparecem na validação, e o valor vira a sugestão de valor cobrado.
 - **"Confirmar como cobrada" sem valor do Comercial**: a confirmação pede o valor cobrado; sem ele, não confirma.
-- **Situação livre numa reserva que já não exige cobrança** (cobrada no Hunit, faturada, com comprovante): segue a regra de hoje dos retornos de reservas que deixaram de exigir cobrança; as ações de validação que não fizerem sentido são recusadas com explicação.
+- **Situação livre numa reserva que já não exige cobrança** (cobrada no Hunit, faturada, com comprovante): como os outros retornos, o que aguardava validação é encerrado sem validação, sai de "Retornos a validar" e a reserva fica com o alerta "Verificar" quando for o caso; as decisões pedidas depois disso são recusadas porque o retorno não aguarda mais validação.
 - **Retorno recusado e o Comercial não muda a linha**: continua recusado, em "A cobrar", com o motivo. Se ele mudar a situação, o responsável ou outro campo, a leitura nova segue a regra da situação nova.
 - **Comercial edita a linha direto na aba nova** (por alguém com permissão de dono do arquivo, por exemplo): o app restaura o que estava, como faz hoje com as células do sistema.
 - **Linhas já abertas na atualização**: na primeira leitura depois da atualização, valem as regras novas: uma situação livre que estava em "Retornos com problema" por falta dos dados da maquininha passa a "Retornos a validar"; uma "Cancelada" sem responsável que aguardava validação continua em "Retornos a validar" (uma leitura com problema não desfaz o que já aguardava, regra da 005), e a coluna "Validação do Financeiro" pede o responsável ao Comercial; o Financeiro ainda pode decidir. As linhas que aguardam validação mudam para a aba nova. A implantação avisa o Comercial antes.

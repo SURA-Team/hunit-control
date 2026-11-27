@@ -73,8 +73,8 @@ feature concluída (regra do `AGENTS.md`).
 
 1. **Avisar o Comercial antes** (R-07): a situação da cobrança passa a aceitar o que aconteceu de fato; o
    responsável é obrigatório em toda situação; só a maquininha pede código, hotel, valor e data; uma
-   "Cancelada" sem responsável que aguardava validação volta a pedir o responsável; e a aba nova é só para
-   consulta.
+   "Cancelada" sem responsável que aguardava validação continua para o Financeiro decidir, mas a coluna J
+   pede o responsável; e a aba nova é só para consulta.
 2. Atualizar o servidor (migration automática ao subir).
 3. Rodar `docker compose exec server node dist/cli.js commercial-sheet setup`, logo depois do servidor: até
    ele rodar, a planilha fica "Formato alterado" e nada é escrito nela.

@@ -25,7 +25,9 @@ Restrições:
   diferente de `other`, código, hotel e valor são obrigatórios. Retornos da 008 com `other` já têm os três e
   continuam válidos.
 - **Nova** `commercial_returns_no_charge_check`: `no_charge_mark_id is null or (state = 'closed' and
-  charge_situation_kind = 'other')`.
+  charge_situation_kind = 'other')`. Por isso, desfazer a marcação **limpa** o vínculo na mesma transação
+  em que o retorno volta a `awaiting_validation`; o vínculo antigo fica no histórico (evento com o
+  `returnId`).
 - `commercial_returns_one_current` (índice único) não muda.
 
 Nenhum valor novo nos enums do banco: as decisões usam `confirmed`, `closed` e `rejected`, e os eventos
@@ -94,8 +96,12 @@ a reserva em "Validar comprovante" (`return_pending`), e o confirmado como cobra
              │          desfazer a marcação
    desfazer a confirmação         │
              │                    ▼
-             └──────────► awaiting_validation (se a linha mantém a mesma leitura)
+             └──────────► awaiting_validation (se a linha mantém a mesma leitura;
+                          no_charge_mark_id volta a nulo)
 ```
+
+Se o Hunit deixar de exigir cobrança enquanto o retorno de situação aguarda validação, ele é encerrado
+(`closed`, sem `no_charge_mark_id`), como os outros retornos (`commercial-repo.ts`).
 
 ## 4. Aba da linha na planilha
 

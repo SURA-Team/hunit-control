@@ -56,7 +56,7 @@ no tempo de hoje (a aba nova só acrescenta comparações na memória)
 sem confirmar uma situação livre por engano; planilha sem dado do hóspede; servidor antes do app e `setup` logo
 depois do servidor; linha muda de aba só depois de 10 minutos sem mudança; dados fictícios em prints e testes
 
-**Scale/Scope**: 4 telas alteradas e 2 diálogos novos; 1 rota nova, 3 rotas com comportamento novo; 1 schema
+**Scale/Scope**: 3 telas alteradas (7.8, 7.5 e o card "Comercial" da reserva) e 2 diálogos novos; 1 rota nova, 3 rotas com comportamento novo; 1 schema
 novo e 3 campos novos na API; 1 aba nova na planilha; 4 usuárias no app e o Comercial na planilha
 
 ## Constitution Check
