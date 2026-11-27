@@ -55,6 +55,7 @@ function setup(vaultResult?: Result<{ username: string; password: string }>) {
     checkHunitCharges: vi.fn(() => ok(dispatchFixture({ purpose: 'hunit_check' }))),
     confirmCommercialCancellation: vi.fn((key: ReservationKey) => ok(key)),
     rejectCommercialCancellation: vi.fn((key: ReservationKey) => ok(key)),
+    confirmCommercialSituationReturn: vi.fn(() => ok({})),
   };
   const watcher = {
     track: vi.fn(),
@@ -278,5 +279,57 @@ describe('"Cancelada" do Comercial (homologação da 008, R-19)', () => {
         includeCancellations: 'sim',
       }),
     ).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
+  });
+});
+
+describe('situação livre do Comercial (specs/009, contracts/ipc.md)', () => {
+  const RETURN = '55555555-5555-4555-8555-555555555555';
+
+  it('como cobrada: repassa o valor só quando informado; valor inválido não chega à API', async () => {
+    const { api, call } = setup();
+    const confirm = api.confirmCommercialSituationReturn;
+    await call(INVOKE.commercialConfirmSituationReturn, { returnId: RETURN, as: 'charged' });
+    await call(INVOKE.commercialConfirmSituationReturn, {
+      returnId: RETURN,
+      as: 'charged',
+      chargedAmount: '321.00',
+    });
+    expect(confirm).toHaveBeenNthCalledWith(1, RETURN, { as: 'charged', chargedAmount: undefined });
+    expect(confirm).toHaveBeenNthCalledWith(2, RETURN, { as: 'charged', chargedAmount: '321.00' });
+    for (const chargedAmount of ['0.00', '12,30', 'abc']) {
+      expect(
+        await call(INVOKE.commercialConfirmSituationReturn, {
+          returnId: RETURN,
+          as: 'charged',
+          chargedAmount,
+        }),
+      ).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
+    }
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('como cancelada sem cobrança: observação opcional, sem valor; id inválido não chega à API', async () => {
+    const { api, call } = setup();
+    const confirm = api.confirmCommercialSituationReturn;
+    await call(INVOKE.commercialConfirmSituationReturn, {
+      returnId: RETURN,
+      as: 'no_charge',
+      note: ' Conferido com o hotel ',
+    });
+    expect(confirm).toHaveBeenCalledWith(RETURN, {
+      as: 'no_charge',
+      note: 'Conferido com o hotel',
+    });
+    for (const input of [
+      { returnId: RETURN, as: 'no_charge', chargedAmount: '1.00' },
+      { returnId: 'x', as: 'charged' },
+      { returnId: RETURN, as: 'outra' },
+    ]) {
+      expect(await call(INVOKE.commercialConfirmSituationReturn, input)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_input' },
+      });
+    }
+    expect(confirm).toHaveBeenCalledTimes(1);
   });
 });

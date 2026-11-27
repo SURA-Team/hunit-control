@@ -214,7 +214,14 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
     },
     commercial: {
       get: vi.fn(() =>
-        okResult({ line: null, returns: [], events: [], report: null, history: [] }),
+        okResult({
+          line: null,
+          returns: [],
+          events: [],
+          report: null,
+          history: [],
+          situationReturns: [],
+        }),
       ),
       cancelLine: vi.fn(() => errorResult('internal_error')),
       restoreLine: vi.fn(() => errorResult('internal_error')),
@@ -230,6 +237,7 @@ export function fakeHunit(state: ConnectionState = ONLINE_OPERATOR): FakeHunit {
       checkHunitCharges: vi.fn(() => errorResult('internal_error')),
       confirmCancellation: vi.fn(() => errorResult('internal_error')),
       rejectCancellation: vi.fn(() => errorResult('internal_error')),
+      confirmSituationReturn: vi.fn(() => errorResult('internal_error')),
     },
     clipboard: {
       copyReservations: vi.fn(() => errorResult('internal_error')),

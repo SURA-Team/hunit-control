@@ -72,6 +72,8 @@ export const INVOKE = {
   // A "Cancelada" do Comercial (homologação da 008, R-19).
   commercialConfirmCancellation: 'commercial:confirmCancellation',
   commercialRejectCancellation: 'commercial:rejectCancellation',
+  // A situação livre do Comercial (specs/009).
+  commercialConfirmSituationReturn: 'commercial:confirmSituationReturn',
   commercialSheetStatus: 'commercial:sheetStatus',
   commercialReadNow: 'commercial:readNow',
   // Ajustes de cobrança (specs/008, contracts/ipc.md).

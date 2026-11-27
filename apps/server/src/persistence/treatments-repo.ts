@@ -668,29 +668,41 @@ export async function setManualAmount(
     if (!(await findVigente(tx, key, 'proof')) && !(await hasConfirmedReturn(tx, key))) {
       return 'proof_required';
     }
+    await writeManualAmountTx(tx, input);
+    return 'ok';
+  });
+}
 
-    await tx
-      .insert(reservationManualAmounts)
-      .values({
-        hotelCode: key.hotelCode,
-        reservationNumber: key.reservationNumber,
-        amount: input.amount,
-        setAt: input.now,
-        setByClientId: input.clientId,
-      })
-      .onConflictDoUpdate({
-        target: [reservationManualAmounts.hotelCode, reservationManualAmounts.reservationNumber],
-        set: { amount: input.amount, setAt: input.now, setByClientId: input.clientId },
-      });
-    await tx.insert(treatmentEvents).values({
+/**
+ * Grava o valor informado à mão e o evento, numa transação já aberta, sem conferir o comprovante:
+ * quem chama garante que ele existe (também usado na confirmação de um retorno de situação livre
+ * sem valor do Comercial, specs/009, research R-04).
+ */
+export async function writeManualAmountTx(
+  tx: Transaction,
+  input: { key: ReservationKey; amount: string; clientId: string; now: Date },
+): Promise<void> {
+  const { key } = input;
+  await tx
+    .insert(reservationManualAmounts)
+    .values({
       hotelCode: key.hotelCode,
       reservationNumber: key.reservationNumber,
-      type: 'amount_set',
       amount: input.amount,
-      clientId: input.clientId,
-      at: input.now,
+      setAt: input.now,
+      setByClientId: input.clientId,
+    })
+    .onConflictDoUpdate({
+      target: [reservationManualAmounts.hotelCode, reservationManualAmounts.reservationNumber],
+      set: { amount: input.amount, setAt: input.now, setByClientId: input.clientId },
     });
-    return 'ok';
+  await tx.insert(treatmentEvents).values({
+    hotelCode: key.hotelCode,
+    reservationNumber: key.reservationNumber,
+    type: 'amount_set',
+    amount: input.amount,
+    clientId: input.clientId,
+    at: input.now,
   });
 }
 

@@ -241,7 +241,14 @@ describe('seção "Comercial" do detalhe (FR-023)', () => {
 
   it('reserva nunca enviada pela planilha: a seção não aparece', async () => {
     mocked(hunit.api.commercial.get).mockImplementation(() =>
-      okResult({ line: null, returns: [], events: [], report: null, history: [] }),
+      okResult({
+        line: null,
+        returns: [],
+        events: [],
+        report: null,
+        history: [],
+        situationReturns: [],
+      }),
     );
     renderWithApp(<CommercialSection reservation={reservation} />, hunit);
     await waitFor(() => expect(hunit.api.commercial.get).toHaveBeenCalled());
@@ -311,6 +318,7 @@ describe('confirmação de retornos em lote (FR-016a)', () => {
             lastSentAt: '2026-11-14T12:00:00.000Z',
             lastDispatchId: '44444444-4444-4444-8444-444444444444',
             returnState: 'awaiting_validation',
+            situationReturn: null,
             currentReturn: returnBrief({
               chargeSituation: { kind: 'charged_at_terminal', text: 'Cobrada na maquininha' },
               chargeDate: '2026-11-03',

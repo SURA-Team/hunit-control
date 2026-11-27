@@ -264,6 +264,24 @@ export const rejectCancellationInputSchema = z.strictObject({
   reason: z.string().trim().min(1, 'informe o motivo').max(500),
 });
 
+/** Decisão sobre a situação livre do Comercial (specs/009, contracts/ipc.md). */
+export const confirmSituationReturnInputSchema = z.discriminatedUnion('as', [
+  z.strictObject({
+    returnId: uuid,
+    as: z.literal('charged'),
+    chargedAmount: z
+      .string()
+      .regex(/^[0-9]+\.[0-9]{2}$/, 'valor no formato 1234.56')
+      .refine((value) => Number(value) > 0, 'o valor deve ser maior que zero')
+      .optional(),
+  }),
+  z.strictObject({
+    returnId: uuid,
+    as: z.literal('no_charge'),
+    note: z.string().trim().min(1).max(500).optional(),
+  }),
+]);
+
 /** Filtros de "selecionar todas do filtro" e da cópia: os da lista, sem paginação. */
 export const reservationFiltersSchema = reservationListInputSchema.omit({
   cursor: true,

@@ -12,12 +12,12 @@ import {
   type NoChargeIneligibility,
   type ReservationDetailedSituation,
 } from '@hunit/domain';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { refreshCommercialLine, type ReservationKey } from './commercial-repo.js';
 import type { Transaction } from './account-lock.js';
 import type { Database } from './db.js';
 import { findDatabaseError, PG_UNIQUE_VIOLATION } from './errors.js';
-import { commercialReports, noChargeMarks, reservations } from './schema.js';
+import { commercialReports, commercialReturns, noChargeMarks, reservations } from './schema.js';
 import { loadTreatmentSummary, treatmentFlags } from './treatments-repo.js';
 
 export type MarkNoChargeResult =
@@ -163,7 +163,47 @@ export async function undoNoCharge(
         noChargeMarkId: null,
       })
       .where(eq(commercialReports.noChargeMarkId, input.markId));
+    await restoreSituationReturn(tx, key, input.markId);
     await refreshCommercialLine(tx, key, now);
     return { ok: true };
   });
+}
+
+/**
+ * Marcação feita pela confirmação de um retorno de situação livre (specs/009, FR-008; research
+ * R-04): ele volta a aguardar validação se ainda é o retorno mais recente da reserva e nenhum
+ * outro está aguardando ou confirmado (o Comercial não mudou a linha depois). O vínculo com a
+ * marcação é limpo na mesma transação (`commercial_returns_no_charge_check`).
+ */
+async function restoreSituationReturn(
+  tx: Transaction,
+  key: ReservationKey,
+  markId: string,
+): Promise<void> {
+  const [latest] = await tx
+    .select({ id: commercialReturns.id, state: commercialReturns.state })
+    .from(commercialReturns)
+    .where(
+      and(
+        eq(commercialReturns.hotelCode, key.hotelCode),
+        eq(commercialReturns.reservationNumber, key.reservationNumber),
+      ),
+    )
+    .orderBy(desc(commercialReturns.readAt))
+    .limit(1)
+    .for('update');
+  const [linked] = await tx
+    .select({ id: commercialReturns.id })
+    .from(commercialReturns)
+    .where(eq(commercialReturns.noChargeMarkId, markId));
+  if (!linked || latest?.id !== linked.id) return;
+  await tx
+    .update(commercialReturns)
+    .set({
+      state: 'awaiting_validation',
+      decidedAt: null,
+      decidedByClientId: null,
+      noChargeMarkId: null,
+    })
+    .where(eq(commercialReturns.id, linked.id));
 }

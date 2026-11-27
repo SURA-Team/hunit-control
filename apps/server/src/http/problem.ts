@@ -105,6 +105,24 @@ export const PROBLEMS: Readonly<Record<ProblemCode, ProblemDefinition>> = {
     status: 409,
     title: 'A reserva não tem "Cancelada" do Comercial aguardando validação',
   },
+  // Retorno com situação livre do Comercial (specs/009, research R-03 e R-04).
+  situation_return_needs_decision: {
+    status: 409,
+    title:
+      'O retorno tem uma situação livre do Comercial: confirme como cobrado ou como cancelado sem cobrança',
+  },
+  not_a_situation_return: {
+    status: 409,
+    title: 'O retorno não tem uma situação livre do Comercial',
+  },
+  charged_amount_required: {
+    status: 400,
+    title: 'Informe o valor cobrado: o Comercial não informou',
+  },
+  charged_amount_from_commercial: {
+    status: 400,
+    title: 'O valor cobrado é o informado pelo Comercial; para corrigir, recuse o retorno',
+  },
   internal_error: { status: 500, title: 'Erro interno' },
 };
 

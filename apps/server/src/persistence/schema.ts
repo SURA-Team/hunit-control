@@ -971,9 +971,10 @@ export const commercialDispatchEvents = pgTable(
 
 /** Retorno lido da planilha, já normalizado (research R-08). Só para detectar mudanças. */
 export interface StoredReturnValues {
-  authorizationCode: string;
-  chargeHotel: string;
-  chargedAmount: string;
+  /** Ausentes só numa situação livre sem o campo preenchido (specs/009). */
+  authorizationCode?: string;
+  chargeHotel?: string;
+  chargedAmount?: string;
   chargedBy: string;
   /** Situação da cobrança normalizada (specs/008); ausente nas leituras da 005. */
   chargeSituation?: string;
@@ -1053,10 +1054,15 @@ export const commercialReturns = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     hotelCode: text('hotel_code').notNull(),
     reservationNumber: text('reservation_number').notNull(),
-    authorizationCode: text('authorization_code').notNull(),
+    /**
+     * Código, hotel e valor: obrigatórios no retorno da maquininha; opcionais (nulos quando o
+     * Comercial não preencheu) só no retorno de situação livre, `charge_situation_kind = 'other'`
+     * (specs/009, data-model §1.1).
+     */
+    authorizationCode: text('authorization_code'),
     /** "Hotel da cobrança": o estabelecimento da maquininha, texto livre (clarify 2026-11-17). */
-    chargeHotel: text('charge_hotel').notNull(),
-    chargedAmount: money('charged_amount').notNull(),
+    chargeHotel: text('charge_hotel'),
+    chargedAmount: money('charged_amount'),
     chargedBy: text('charged_by').notNull(),
     readAt: timestamptz('read_at').notNull(),
     state: commercialReturnStateEnum('state').notNull().default('awaiting_validation'),
@@ -1074,6 +1080,12 @@ export const commercialReturns = pgTable(
     chargeSituationKind: chargeSituationKindEnum('charge_situation_kind'),
     /** Data da cobrança informada pelo Comercial (specs/008); nula = não informada. */
     chargeDate: isoDate('charge_date'),
+    /**
+     * Marcação "Cancelada sem cobrança" criada ao confirmar um retorno de situação livre como
+     * cancelado sem cobrança (specs/009, research R-04); limpa quando a marcação é desfeita e o
+     * retorno volta a aguardar validação.
+     */
+    noChargeMarkId: uuid('no_charge_mark_id').references(() => noChargeMarks.id),
   },
   (table) => [
     foreignKey({
@@ -1083,11 +1095,27 @@ export const commercialReturns = pgTable(
     }),
     check(
       'commercial_returns_texts_check',
-      sql`char_length(${table.authorizationCode}) between 1 and 100
-        and char_length(${table.chargeHotel}) between 1 and 100
+      sql`(${table.authorizationCode} is null or char_length(${table.authorizationCode}) between 1 and 100)
+        and (${table.chargeHotel} is null or char_length(${table.chargeHotel}) between 1 and 100)
         and char_length(${table.chargedBy}) between 1 and 100`,
     ),
-    check('commercial_returns_amount_check', sql`${table.chargedAmount} > 0`),
+    check(
+      'commercial_returns_amount_check',
+      sql`${table.chargedAmount} is null or ${table.chargedAmount} > 0`,
+    ),
+    // Fora do retorno de situação livre (specs/009), código, hotel e valor são obrigatórios.
+    check(
+      'commercial_returns_terminal_fields_check',
+      sql`coalesce(${table.chargeSituationKind}::text, '') = 'other'
+        or (${table.authorizationCode} is not null and ${table.chargeHotel} is not null
+          and ${table.chargedAmount} is not null)`,
+    ),
+    check(
+      'commercial_returns_no_charge_check',
+      sql`${table.noChargeMarkId} is null
+        or (${table.state}::text = 'closed'
+          and coalesce(${table.chargeSituationKind}::text, '') = 'other')`,
+    ),
     check(
       'commercial_returns_rejection_reason_check',
       sql`${table.rejectionReason} is null or char_length(${table.rejectionReason}) between 1 and 500`,

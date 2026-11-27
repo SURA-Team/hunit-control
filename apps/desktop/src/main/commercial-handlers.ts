@@ -14,6 +14,7 @@ import {
   dispatchListInputSchema,
   dispatchTokenInputSchema,
   confirmReturnsInputSchema,
+  confirmSituationReturnInputSchema,
   rejectCancellationInputSchema,
   rejectReturnInputSchema,
   reservationFiltersSchema,
@@ -57,6 +58,7 @@ type CommercialApi = Pick<
   | 'listHunitCharges'
   | 'checkHunitCharges'
   | 'confirmCommercialCancellation'
+  | 'confirmCommercialSituationReturn'
   | 'rejectCommercialCancellation'
 >;
 
@@ -199,6 +201,18 @@ export function createCommercialHandlers(services: CommercialServices): InvokeHa
 
     [INVOKE.commercialRejectCancellation]: handle(rejectCancellationInputSchema, (input) =>
       withApi((api) => api.rejectCommercialCancellation(input.key, input.reason)),
+    ),
+
+    // A situação livre do Comercial (specs/009).
+    [INVOKE.commercialConfirmSituationReturn]: handle(confirmSituationReturnInputSchema, (input) =>
+      withApi((api) =>
+        api.confirmCommercialSituationReturn(
+          input.returnId,
+          input.as === 'charged'
+            ? { as: 'charged', chargedAmount: input.chargedAmount }
+            : { as: 'no_charge', note: input.note },
+        ),
+      ),
     ),
 
     [INVOKE.commercialSheetStatus]: handleNoInput(() =>

@@ -475,6 +475,15 @@ export interface RejectReturnInput {
 }
 
 /**
+ * Decisão do Financeiro sobre um retorno com situação livre do Comercial (specs/009, FR-007):
+ * `charged` = "Confirmar como cobrada" (`chargedAmount` só quando o Comercial não informou o
+ * valor); `no_charge` = "Confirmar como cancelada sem cobrança" (`note` opcional).
+ */
+export type ConfirmSituationReturnInput =
+  | { returnId: string; as: 'charged'; chargedAmount?: string | undefined }
+  | { returnId: string; as: 'no_charge'; note?: string | undefined };
+
+/**
  * Uma reserva copiada para o e-mail (FR-027): só as colunas da cópia. Não existe campo de hóspede
  * de propósito; o principal recusa qualquer campo a mais.
  */
@@ -630,6 +639,8 @@ export interface HunitApi {
     /** Confirma a "Cancelada" do Comercial: a reserva vira "Cancelada sem cobrança" (R-19). */
     confirmCancellation: (key: ReservationKey) => Promise<Result<Reservation>>;
     rejectCancellation: (input: RejectCancellationInput) => Promise<Result<Reservation>>;
+    /** Decide a situação livre do Comercial: como cobrada ou como cancelada sem cobrança (specs/009). */
+    confirmSituationReturn: (input: ConfirmSituationReturnInput) => Promise<Result<Reservation>>;
     sheetStatus: () => Promise<Result<CommercialSheetStatus>>;
     readNow: () => Promise<Result<SheetReadResult>>;
     /** Fila "Cobradas no Hunit" (specs/008, `GET /commercial-hunit-charges`). */

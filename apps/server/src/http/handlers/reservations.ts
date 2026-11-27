@@ -4,6 +4,7 @@ import type { FastifyRequest } from 'fastify';
 import type { CommercialSheetSync } from '../../commercial-sheet/sync.js';
 import type { Database } from '../../persistence/db.js';
 import { markNoCharge, undoNoCharge } from '../../persistence/no-charge-repo.js';
+import { confirmSituationReturn } from '../../persistence/commercial-returns-repo.js';
 import {
   confirmCancellation,
   rejectCancellation,
@@ -45,6 +46,9 @@ type UndoNoChargeBody =
   operations['undoReservationNoCharge']['requestBody']['content']['application/json'];
 type CancellationRejectBody =
   operations['rejectCommercialCancellation']['requestBody']['content']['application/json'];
+type SituationReturnParams = operations['confirmCommercialSituationReturn']['parameters']['path'];
+type SituationConfirmBody =
+  operations['confirmCommercialSituationReturn']['requestBody']['content']['application/json'];
 
 /** Por que a reserva não aceita a marcação "Cancelada sem cobrança" (specs/008, FR-022). */
 const NO_CHARGE_REASONS: Readonly<Record<NoChargeIneligibility, string>> = {
@@ -184,6 +188,62 @@ export function createReservationHandlers(dependencies: {
       request.log.info('"Cancelada" do Comercial confirmada');
       dependencies.commercialSheet?.requestRound();
       return reservationView(key.hotelCode, key.reservationNumber);
+    },
+
+    /**
+     * POST /v1/commercial-returns/{returnId}/situation/confirm — decide um retorno com situação
+     * livre do Comercial: como cobrado ou como cancelado sem cobrança (specs/009, FR-007; research
+     * R-04). Só operador.
+     */
+    async confirmCommercialSituationReturn(request: FastifyRequest) {
+      const { returnId } = request.params as SituationReturnParams;
+      const body = request.body as SituationConfirmBody;
+      if (body.as === 'charged' && body.note !== undefined) {
+        throw new ProblemError(
+          'validation_error',
+          'A observação (note) vale só com as = no_charge.',
+        );
+      }
+      if (body.as === 'no_charge' && body.chargedAmount !== undefined) {
+        throw new ProblemError(
+          'validation_error',
+          'O valor cobrado (chargedAmount) vale só com as = charged.',
+        );
+      }
+      const note = body.note?.trim();
+      const result = await confirmSituationReturn(db, {
+        returnId,
+        decision:
+          body.as === 'charged'
+            ? { as: 'charged', chargedAmount: body.chargedAmount ?? undefined }
+            : { as: 'no_charge', note: note === '' ? undefined : note },
+        clientId: clientIdOf(request),
+        now: now(),
+      });
+      if (!result.ok) {
+        switch (result.reason) {
+          case 'not_found':
+            throw new ProblemError('not_found', 'Retorno não encontrado.');
+          case 'not_a_situation_return':
+            throw new ProblemError('not_a_situation_return');
+          case 'not_awaiting_validation':
+            throw new ProblemError(
+              'return_not_awaiting_validation',
+              'O retorno não está mais aguardando validação (já foi decidido, substituído ou encerrado).',
+            );
+          case 'charged_amount_required':
+            throw new ProblemError('charged_amount_required');
+          case 'charged_amount_from_commercial':
+            throw new ProblemError('charged_amount_from_commercial');
+          case 'no_charge_not_accepted':
+            throw new ProblemError('no_charge_not_accepted', NO_CHARGE_REASONS[result.detail], {
+              reason: result.detail,
+            });
+        }
+      }
+      request.log.info(`retorno com situação livre confirmado (${body.as})`);
+      dependencies.commercialSheet?.requestRound();
+      return reservationView(result.key.hotelCode, result.key.reservationNumber);
     },
 
     /** POST .../commercial/cancellation/reject — recusa a "Cancelada" com o motivo (R-19). */

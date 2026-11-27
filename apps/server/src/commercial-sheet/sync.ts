@@ -582,9 +582,10 @@ export class CommercialSheetSync {
     const values = line.lastReadReturn;
     if (!values) return [];
     return [
-      values.authorizationCode,
-      values.chargeHotel,
-      Number(values.chargedAmount),
+      values.authorizationCode ?? '',
+      values.chargeHotel ?? '',
+      // Situação livre sem valor (specs/009): a célula fica vazia.
+      values.chargedAmount === undefined ? '' : Number(values.chargedAmount),
       values.chargedBy,
       values.chargeSituation ?? '',
       values.chargeDate === undefined ? '' : serialDate(values.chargeDate),

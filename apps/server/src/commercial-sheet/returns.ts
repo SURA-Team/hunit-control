@@ -26,7 +26,8 @@ import { commercialLines } from '../persistence/schema.js';
 import type { ReturnsProcessor, ReturnsRoundSummary } from './sync.js';
 
 /**
- * A leitura é a mesma já gravada? Retorno completo igual ao último lido e sem relato; relato igual
+ * A leitura é a mesma já gravada? Retorno completo (ou de situação livre, specs/009) igual ao último
+ * lido e sem relato; relato igual
  * ao guardado; vazio sem relato; com problema, o relato (se houver) fica como está.
  */
 function sameAsStored(
@@ -36,6 +37,7 @@ function sameAsStored(
 ): boolean {
   switch (reading.kind) {
     case 'complete':
+    case 'situation':
       return report === null && !returnChanged(lastRead, returnSnapshot(reading));
     case 'report':
       return report !== null && !reportChanged(reportValuesOf(report), reading.report);

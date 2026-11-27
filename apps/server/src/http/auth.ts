@@ -61,6 +61,8 @@ export const OPERATOR_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
   // A "Cancelada" do Comercial: só o operador confirma ou recusa (homologação, R-19).
   'confirmCommercialCancellation',
   'rejectCommercialCancellation',
+  // A situação livre do Comercial: só o operador decide (specs/009, FR-009).
+  'confirmCommercialSituationReturn',
 ]);
 
 /** Gera uma chave de API nova, com 256 bits aleatórios. */

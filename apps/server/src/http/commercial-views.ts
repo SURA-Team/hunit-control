@@ -3,7 +3,7 @@
  * contracts/api-changes.md). Datas em ISO 8601; nenhum campo fora do contrato.
  */
 import type { components } from '@hunit/contracts';
-import { amountToCharge, lineRestoreDeadline } from '@hunit/domain';
+import { amountToCharge, isSituationReturn, lineRestoreDeadline } from '@hunit/domain';
 import type { DispatchEvent } from '../dispatches/events.js';
 import type {
   CommercialEventRecord,
@@ -124,6 +124,7 @@ export function toCommercialLineView(line: CommercialLineDetail, now: Date): Com
     state: line.state,
     inSheet,
     tab: inSheet ? (line.state === 'open' ? 'to_charge' : 'done') : null,
+    sheetTab: inSheet ? (line.state === 'open' ? 'to_charge' : 'done') : null,
     firstSentAt: iso(line.firstSentAt),
     lastSentAt: iso(line.lastSentAt),
     lastDispatchId: line.lastDispatchId,
@@ -223,10 +224,22 @@ export function toReportProblemView(
   };
 }
 
+/**
+ * Retorno do Comercial no formato da 1.7.0; `null` para o retorno de situação livre (specs/009,
+ * research R-03), que vai em `situationReturns`.
+ */
 export function toCommercialReturnView(
   row: CommercialReturnDetail,
   expectedAmount: string | null,
-): CommercialReturnView {
+): CommercialReturnView | null {
+  if (
+    isSituationReturn(row.chargeSituationKind) ||
+    row.authorizationCode === null ||
+    row.chargeHotel === null ||
+    row.chargedAmount === null
+  ) {
+    return null;
+  }
   return {
     id: row.id,
     authorizationCode: row.authorizationCode,

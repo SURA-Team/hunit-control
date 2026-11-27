@@ -80,7 +80,8 @@ CommercialSituationReturn:
     authorizationCode: { type: [string, 'null'] }
     chargeHotel: { type: [string, 'null'] }
     chargedAmount:
-      oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/Money' }]
+      # Money já aceita nulo; um oneOf com null ficaria ambíguo (as duas opções valem para null).
+      $ref: '#/components/schemas/Money'
     chargeDate: { type: [string, 'null'], format: date }
     readAt: { type: string, format: date-time }
     decidedAt: { type: [string, 'null'], format: date-time }

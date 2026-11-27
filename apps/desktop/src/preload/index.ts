@@ -128,6 +128,7 @@ const hunit: HunitApi = {
     confirmReturns: (input) => invoke(INVOKE.commercialConfirmReturns, input),
     confirmCancellation: (key) => invoke(INVOKE.commercialConfirmCancellation, key),
     rejectCancellation: (input) => invoke(INVOKE.commercialRejectCancellation, input),
+    confirmSituationReturn: (input) => invoke(INVOKE.commercialConfirmSituationReturn, input),
     sheetStatus: () => invoke(INVOKE.commercialSheetStatus),
     readNow: () => invoke(INVOKE.commercialReadNow),
     hunitCharges: () => invoke(INVOKE.commercialHunitCharges),

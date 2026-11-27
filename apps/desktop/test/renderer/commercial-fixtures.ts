@@ -20,6 +20,7 @@ export function line(overrides: Partial<CommercialLine> = {}): CommercialLine {
     state: 'open',
     inSheet: true,
     tab: 'to_charge',
+    sheetTab: 'to_charge',
     firstSentAt: '2026-11-13T12:00:00.000Z',
     lastSentAt: '2026-11-14T12:00:00.000Z',
     lastDispatchId: DISPATCH_ID,
@@ -93,6 +94,7 @@ export function detail(overrides: Partial<CommercialDetail> = {}): CommercialDet
     events: [commercialEvent()],
     report: null,
     history: [commercialEvent()],
+    situationReturns: [],
     ...overrides,
   };
 }

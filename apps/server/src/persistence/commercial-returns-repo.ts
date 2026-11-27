@@ -8,9 +8,11 @@
  */
 import {
   describeReturnReading,
+  isSituationReturn,
   returnChanged,
   returnSnapshot,
   type CommercialReturnReading,
+  type NoChargeIneligibility,
 } from '@hunit/domain';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Transaction } from './account-lock.js';
@@ -23,7 +25,10 @@ import {
 } from './commercial-repo.js';
 import { clearReport, confirmCancellationTx, recordReport } from './commercial-reports-repo.js';
 import type { Database } from './db.js';
+import { findDatabaseError, PG_UNIQUE_VIOLATION } from './errors.js';
+import { markNoChargeTx } from './no-charge-repo.js';
 import { commercialLines, commercialReturns, reservations, treatmentDocuments } from './schema.js';
+import { writeManualAmountTx } from './treatments-repo.js';
 
 export type ReturnRow = typeof commercialReturns.$inferSelect;
 
@@ -65,8 +70,10 @@ async function hasProofDocument(tx: Transaction, key: ReservationKey): Promise<b
  *   aguardando ou recusado (FR-015, FR-017, FR-019). Se a reserva já tem comprovante, o retorno só
  *   vai para o histórico (`return_ignored`);
  * - relato ("Cobrada no Hunit" ou "Cancelada", specs/008): grava em `commercial_reports`, sem
- *   retorno a validar; o retorno anterior aguardando ou recusado deixa de valer (`superseded`).
- * O relato sai quando a leitura fica vazia ou vira um retorno completo (FR-012); com problema, fica.
+ *   retorno a validar; o retorno anterior aguardando ou recusado deixa de valer (`superseded`);
+ * - situação livre (specs/009, research R-03): como o completo, um retorno aguardando validação,
+ *   com o tipo `other` e o código, o hotel e o valor só se o Comercial preencheu.
+ * O relato sai quando a leitura fica vazia ou vira um retorno (FR-012); com problema, fica.
  */
 export async function recordReturnReading(
   db: Database,
@@ -117,7 +124,7 @@ export async function recordReturnReading(
     }
 
     const reportCleared =
-      (reading.kind === 'empty' || reading.kind === 'complete') &&
+      (reading.kind === 'empty' || reading.kind === 'complete' || reading.kind === 'situation') &&
       (await clearReport(tx, key, now));
     if (reportCleared) {
       await tx
@@ -125,7 +132,7 @@ export async function recordReturnReading(
         .set({ version: sql`${commercialLines.version} + 1`, changedAt: now })
         .where(ofReservation(commercialLines, key));
     }
-    if (reading.kind !== 'complete') return 'none';
+    if (reading.kind !== 'complete' && reading.kind !== 'situation') return 'none';
 
     const snapshot = returnSnapshot(reading);
     if (!reportCleared && !returnChanged(line.lastReadReturn ?? null, snapshot)) return 'none';
@@ -170,8 +177,8 @@ export async function recordReturnReading(
       .values({
         ...key,
         ...reading.values,
-        chargeSituationText: reading.chargeSituation?.text ?? null,
-        chargeSituationKind: reading.chargeSituation?.kind ?? null,
+        chargeSituationText: reading.chargeSituation.text,
+        chargeSituationKind: reading.chargeSituation.kind,
         chargeDate: reading.chargeDate,
         readAt: now,
         state: 'awaiting_validation',
@@ -192,7 +199,10 @@ export async function recordReturnReading(
 
 export type DecisionResult =
   | { ok: true; key: ReservationKey }
-  | { ok: false; reason: 'not_found' | 'not_awaiting_validation' | 'not_confirmed' };
+  | {
+      ok: false;
+      reason: 'not_found' | 'not_awaiting_validation' | 'not_confirmed' | 'situation_return';
+    };
 
 async function lockReturn(tx: Transaction, returnId: string): Promise<ReturnRow | null> {
   const [row] = await tx
@@ -240,9 +250,116 @@ export async function confirmReturn(
     if (!row) return { ok: false, reason: 'not_found' };
     if (row.state !== 'awaiting_validation')
       return { ok: false, reason: 'not_awaiting_validation' };
+    // Situação livre (specs/009, R-03): pede uma das decisões de `confirmSituationReturn`.
+    if (isSituationReturn(row.chargeSituationKind))
+      return { ok: false, reason: 'situation_return' };
     await confirmLocked(tx, row, input);
     return { ok: true, key: row };
   });
+}
+
+export type SituationDecision =
+  | { as: 'charged'; chargedAmount?: string | undefined }
+  | { as: 'no_charge'; note?: string | undefined };
+
+export type SituationDecisionResult =
+  | { ok: true; key: ReservationKey }
+  | {
+      ok: false;
+      reason:
+        | 'not_found'
+        | 'not_awaiting_validation'
+        | 'not_a_situation_return'
+        | 'charged_amount_required'
+        | 'charged_amount_from_commercial';
+    }
+  | { ok: false; reason: 'no_charge_not_accepted'; detail: NoChargeIneligibility };
+
+/**
+ * Decide um retorno de situação livre aguardando validação (specs/009, FR-007; research R-04):
+ * - `charged`: confirma como a maquininha (vale como comprovante). Sem o valor do Comercial, o
+ *   valor digitado é obrigatório e vira o valor informado à mão, na mesma transação; com o valor
+ *   do Comercial, não se manda outro;
+ * - `no_charge`: marca a reserva como "Cancelada sem cobrança" (as regras da marcação, menos a do
+ *   retorno aguardando, que é este) e encerra o retorno com o vínculo da marcação.
+ */
+export async function confirmSituationReturn(
+  db: Database,
+  input: { returnId: string; decision: SituationDecision; clientId: string; now: Date },
+): Promise<SituationDecisionResult> {
+  try {
+    return await db.transaction(async (tx): Promise<SituationDecisionResult> => {
+      const row = await lockReturn(tx, input.returnId);
+      if (!row) return { ok: false, reason: 'not_found' };
+      if (!isSituationReturn(row.chargeSituationKind)) {
+        return { ok: false, reason: 'not_a_situation_return' };
+      }
+      if (row.state !== 'awaiting_validation') {
+        return { ok: false, reason: 'not_awaiting_validation' };
+      }
+      const key = { hotelCode: row.hotelCode, reservationNumber: row.reservationNumber };
+      const { decision, clientId, now } = input;
+
+      if (decision.as === 'charged') {
+        if (row.chargedAmount === null && decision.chargedAmount === undefined) {
+          return { ok: false, reason: 'charged_amount_required' };
+        }
+        if (row.chargedAmount !== null && decision.chargedAmount !== undefined) {
+          return { ok: false, reason: 'charged_amount_from_commercial' };
+        }
+        await confirmLocked(tx, row, { clientId, now });
+        if (decision.chargedAmount !== undefined) {
+          await writeManualAmountTx(tx, { key, amount: decision.chargedAmount, clientId, now });
+        }
+        return { ok: true, key };
+      }
+
+      // Encerrado antes da marcação: a regra "retorno aguardando validação" não o barra.
+      await tx
+        .update(commercialReturns)
+        .set({ state: 'closed', decidedAt: now, decidedByClientId: clientId })
+        .where(eq(commercialReturns.id, row.id));
+      const note = decision.note
+        ? `Situação informada pelo Comercial: ${row.chargeSituationText ?? ''}. ${decision.note}`
+        : `Situação informada pelo Comercial: ${row.chargeSituationText ?? ''}`;
+      const marked = await markNoChargeTx(tx, { key, note: note.slice(0, 500), clientId, now });
+      if (!marked.ok) {
+        // Nada pode ficar gravado: desfaz a transação inteira.
+        throw new SituationDecisionAbort(
+          marked.reason === 'not_accepted'
+            ? { ok: false, reason: 'no_charge_not_accepted', detail: marked.detail }
+            : { ok: false, reason: 'not_found' },
+        );
+      }
+      await tx
+        .update(commercialReturns)
+        .set({ noChargeMarkId: marked.markId })
+        .where(eq(commercialReturns.id, row.id));
+      await insertCommercialEvent(tx, {
+        ...key,
+        type: 'cancellation_confirmed',
+        clientId,
+        returnId: row.id,
+        reason: row.chargeSituationText,
+        at: now,
+      });
+      return { ok: true, key };
+    });
+  } catch (error) {
+    if (error instanceof SituationDecisionAbort) return error.result;
+    // Outra marcação entrou ao mesmo tempo (índice único da marcação ativa).
+    if (findDatabaseError(error)?.code === PG_UNIQUE_VIOLATION) {
+      return { ok: false, reason: 'no_charge_not_accepted', detail: 'already_marked' };
+    }
+    throw error;
+  }
+}
+
+/** Interrompe a transação de uma decisão recusada, devolvendo o resultado a quem chamou. */
+class SituationDecisionAbort extends Error {
+  constructor(readonly result: SituationDecisionResult) {
+    super('decisão recusada');
+  }
 }
 
 /** Recusa o retorno com o motivo (FR-017): a reserva volta a "Tratativa enviada". */
@@ -367,6 +484,15 @@ export async function confirmReturnsBatch(
               ),
             )
             .for('update');
+          // Situação livre (specs/009, FR-007): cada uma pede uma decisão própria, fora do lote.
+          if (awaiting && isSituationReturn(awaiting.chargeSituationKind)) {
+            return {
+              ...key,
+              outcome: 'ignored',
+              reason: 'no_return_awaiting_validation',
+              classification: reservation.classification,
+            };
+          }
           if (!awaiting && input.includeCancellations) {
             const cancellation = await confirmCancellationTx(tx, {
               key,

@@ -1,7 +1,8 @@
 /**
  * Leitura do retorno preenchido pelo Comercial na planilha (specs/005, FR-015, FR-018, FR-019;
- * research R-08) — tasks.md, T006. Desde a homologação da 008 (R-19), a situação é obrigatória, a
- * data também (menos na "Cancelada") e "Não cobrada" virou "Cancelada".
+ * research R-08) — tasks.md, T006. Desde a homologação da 008 (R-19), a situação é obrigatória e
+ * "Não cobrada" virou "Cancelada". Desde a 009 (research R-02; tasks.md, T005), toda situação exige o
+ * responsável, só a maquininha exige código, hotel, valor e data, e outro texto é a situação livre.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -16,6 +17,7 @@ import {
   reportChanged,
   returnChanged,
   returnSnapshot,
+  isSituationReturn,
   type CommercialReportValues,
   type CommercialReturnCells,
 } from '../src/commercial-return.js';
@@ -237,11 +239,14 @@ describe('situação e data da cobrança (specs/008, research R-06 e R-19)', () 
     expect(readReturn({ chargeSituation: ' ', chargeDate: null })).toEqual({ kind: 'empty' });
   });
 
-  it('sem situação e sem data: incompleto, com o que falta (homologação, cenário 3.7)', () => {
+  it('sem situação: incompleto, pedindo a situação (e o responsável, se faltar)', () => {
     const reading = readReturn({ ...complete, chargeSituation: '', chargeDate: null });
-    expect(reading).toEqual({ kind: 'incomplete', missing: ['chargeSituation', 'chargeDate'] });
-    expect(describeReturnReading(reading)).toBe(
-      'Retorno incompleto: faltam a situação da cobrança e a data da cobrança',
+    expect(reading).toEqual({ kind: 'incomplete', missing: ['chargeSituation'] });
+    expect(describeReturnReading(reading)).toBe('Retorno incompleto: falta a situação da cobrança');
+    const both = readReturn({ authorizationCode: 'AUT1' });
+    expect(both).toEqual({ kind: 'incomplete', missing: ['chargedBy', 'chargeSituation'] });
+    expect(describeReturnReading(both)).toBe(
+      'Retorno incompleto: faltam o responsável pela cobrança e a situação da cobrança',
     );
   });
 
@@ -265,15 +270,85 @@ describe('situação e data da cobrança (specs/008, research R-06 e R-19)', () 
     });
   });
 
-  it('outro texto segue a regra dos quatro campos e é guardado como veio', () => {
-    expect(readReturn({ ...complete, chargeSituation: ' Paga em dinheiro ' })).toMatchObject({
-      kind: 'complete',
-      chargeSituation: { kind: 'other', text: 'Paga em dinheiro' },
+  it('situação livre: basta o responsável; o resto, se preenchido, é lido (specs/009)', () => {
+    expect(readReturn({ chargeSituation: ' Cobrada pela OTA ', chargedBy: 'Comercial' })).toEqual({
+      kind: 'situation',
+      values: {
+        chargedBy: 'Comercial',
+        authorizationCode: null,
+        chargeHotel: null,
+        chargedAmount: null,
+      },
+      chargeSituation: { kind: 'other', text: 'Cobrada pela OTA' },
+      chargeDate: null,
     });
-    expect(readReturn({ chargeSituation: 'Paga em dinheiro', chargedBy: 'Comercial' })).toEqual({
+    expect(readReturn({ ...complete, chargeSituation: 'Paga em dinheiro' })).toEqual({
+      kind: 'situation',
+      values: {
+        chargedBy: 'Comercial Fictício 1',
+        authorizationCode: 'AUT123',
+        chargeHotel: 'Estabelecimento Fictício',
+        chargedAmount: '1234.50',
+      },
+      chargeSituation: { kind: 'other', text: 'Paga em dinheiro' },
+      chargeDate: '2026-11-19',
+    });
+  });
+
+  it('situação livre sem o responsável: pede só o responsável', () => {
+    const reading = readReturn({ chargeSituation: 'Cobrada pela OTA', chargedAmount: 100 });
+    expect(reading).toEqual({ kind: 'incomplete', missing: ['chargedBy'] });
+    expect(describeReturnReading(reading)).toBe(
+      'Retorno incompleto: falta o responsável pela cobrança',
+    );
+  });
+
+  it('situação livre com valor ou data não entendidos: não entendido', () => {
+    expect(
+      readReturn({
+        chargeSituation: 'Paga em dinheiro',
+        chargedBy: 'Comercial',
+        chargedAmount: 'abc',
+        chargeDate: 'ontem',
+      }),
+    ).toEqual({
+      kind: 'illegible',
+      problems: [
+        { field: 'chargedAmount', problem: 'not_a_value' },
+        { field: 'chargeDate', problem: 'not_a_date' },
+      ],
+    });
+    expect(
+      readReturn({
+        chargeSituation: 'Paga em dinheiro',
+        chargedBy: 'Comercial',
+        authorizationCode: 'x'.repeat(MAX_RETURN_TEXT_LENGTH + 1),
+      }),
+    ).toEqual({
+      kind: 'illegible',
+      problems: [{ field: 'authorizationCode', problem: 'too_long' }],
+    });
+  });
+
+  it('"maquininha" no meio do texto segue a regra da maquininha', () => {
+    const reading = readReturn({
+      chargeSituation: 'Cobrada na maquininha do hotel',
+      chargedBy: 'Comercial',
+    });
+    expect(reading).toEqual({
       kind: 'incomplete',
       missing: ['authorizationCode', 'chargeHotel', 'chargedAmount', 'chargeDate'],
     });
+    expect(describeReturnReading(reading)).toBe(
+      'Retorno incompleto: faltam o código de autorização, o hotel da cobrança, o valor cobrado e a data da cobrança',
+    );
+  });
+
+  it('isSituationReturn: só o tipo "other"', () => {
+    expect(isSituationReturn('other')).toBe(true);
+    for (const kind of ['charged_at_terminal', 'charged_in_hunit', 'cancelled', null, undefined]) {
+      expect(isSituationReturn(kind as never)).toBe(false);
+    }
   });
 
   it('"Cobrada no Hunit" com o responsável é relato, mesmo com os quatro campos preenchidos', () => {
@@ -294,10 +369,20 @@ describe('situação e data da cobrança (specs/008, research R-06 e R-19)', () 
     });
   });
 
-  it('"Cancelada": basta a situação; o responsável e a data, se houver, são guardados', () => {
-    expect(readReturn({ chargeSituation: 'Cancelada' })).toEqual({
+  it('"Cancelada": exige o responsável (specs/009); a data, se houver, é guardada', () => {
+    const missing = readReturn({ chargeSituation: 'Cancelada' });
+    expect(missing).toEqual({ kind: 'incomplete', missing: ['chargedBy'] });
+    expect(describeReturnReading(missing)).toBe(
+      'Retorno incompleto: falta o responsável pela cobrança',
+    );
+    expect(readReturn({ chargeSituation: 'Cancelada', chargedBy: 'Comercial' })).toEqual({
       kind: 'report',
-      report: { kind: 'cancelled', situationText: 'Cancelada', chargedBy: null, chargeDate: null },
+      report: {
+        kind: 'cancelled',
+        situationText: 'Cancelada',
+        chargedBy: 'Comercial',
+        chargeDate: null,
+      },
     });
     expect(
       readReturn({
@@ -318,17 +403,22 @@ describe('situação e data da cobrança (specs/008, research R-06 e R-19)', () 
     });
   });
 
-  it('"Não cobrada" agora é outro texto: segue a regra da maquininha', () => {
-    expect(readReturn({ chargeSituation: 'Não cobrada', chargedBy: 'Comercial' })).toEqual({
-      kind: 'incomplete',
-      missing: ['authorizationCode', 'chargeHotel', 'chargedAmount', 'chargeDate'],
+  it('"Não cobrada" é outro texto: situação livre (specs/009)', () => {
+    expect(readReturn({ chargeSituation: 'Não cobrada', chargedBy: 'Comercial' })).toMatchObject({
+      kind: 'situation',
+      chargeSituation: { kind: 'other', text: 'Não cobrada' },
     });
   });
 
-  it('"Cobrada no Hunit" sem a data: incompleto', () => {
+  it('"Cobrada no Hunit" sem a data: relato, a data é opcional (specs/009)', () => {
     expect(readReturn({ chargeSituation: 'Cobrada no Hunit', chargedBy: 'Comercial' })).toEqual({
-      kind: 'incomplete',
-      missing: ['chargeDate'],
+      kind: 'report',
+      report: {
+        kind: 'charged_in_hunit',
+        situationText: 'Cobrada no Hunit',
+        chargedBy: 'Comercial',
+        chargeDate: null,
+      },
     });
   });
 
@@ -417,6 +507,18 @@ describe('returnChanged e returnSnapshot com situação e data (specs/008)', () 
     expect(returnChanged(values, withSituation)).toBe(true);
     expect(returnChanged(withSituation, { ...withSituation })).toBe(false);
     expect(returnChanged(withSituation, { ...withSituation, chargeDate: '2026-11-19' })).toBe(true);
+  });
+});
+
+describe('returnSnapshot e returnChanged com situação livre (specs/009)', () => {
+  it('guarda só os campos preenchidos; preencher um depois é mudança', () => {
+    const reading = readReturn({ chargeSituation: 'Cobrada pela OTA', chargedBy: 'Comercial' });
+    if (reading.kind !== 'situation') throw new Error('esperava situação livre');
+    const snapshot = returnSnapshot(reading);
+    expect(snapshot).toEqual({ chargedBy: 'Comercial', chargeSituation: 'Cobrada pela OTA' });
+    expect(returnChanged(snapshot, { ...snapshot })).toBe(false);
+    expect(returnChanged(snapshot, { ...snapshot, chargedAmount: '10.00' })).toBe(true);
+    expect(returnChanged({ ...snapshot, chargedAmount: '10.00' }, snapshot)).toBe(true);
   });
 });
 

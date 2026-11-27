@@ -1,7 +1,8 @@
 /**
  * Situação e data da cobrança e os relatos do Comercial (specs/008, US2 e US3; research R-06, R-07;
  * data-model §1.2) — tasks.md, T015, T016 e T021. Desde a homologação (R-19, T050): situação e data
- * obrigatórias e a "Cancelada", validada pelo Financeiro. Planilha em memória; dados fictícios.
+ * obrigatórias e a "Cancelada", validada pelo Financeiro. Desde a 009 (research R-02), toda situação
+ * exige o responsável e a data só é exigida na maquininha. Planilha em memória; dados fictícios.
  */
 import type { components } from '@hunit/contracts';
 import { HUNIT_NOT_FOUND_REASON, type Classification } from '@hunit/domain';
@@ -153,13 +154,11 @@ describe('retorno com situação e data (US2, research R-06)', () => {
     expect(columnJ('toCharge', 1)).toBe('Aguardando validação do Financeiro');
   });
 
-  it('sem situação e sem data: "Retornos com problema" até o Comercial preencher (R-19)', async () => {
+  it('sem situação: "Retornos com problema" até o Comercial preencher (R-19; specs/009)', async () => {
     await sent(2);
     fill(2, ['AUT2', 'Maquininha Fictícia', 100, 'Comercial Fictício 1']);
     await round();
-    expect(columnJ('toCharge', 2)).toBe(
-      'Retorno incompleto: faltam a situação da cobrança e a data da cobrança',
-    );
+    expect(columnJ('toCharge', 2)).toBe('Retorno incompleto: falta a situação da cobrança');
     expect((await commercial(2)).returns).toEqual([]);
 
     fill(2, [
@@ -248,10 +247,10 @@ describe('relatos "Cobrada no Hunit" e "Cancelada" (US2, FR-007a a FR-007c, FR-0
     expect((await storedReport(12))?.situationText).toBe('cobrado no HUNIT');
   });
 
-  it('"Cancelada" (só a situação): "Retornos a validar" e a coluna J em laranja (R-19)', async () => {
+  it('"Cancelada" com o responsável: "Retornos a validar" e a coluna J em laranja (R-19; specs/009)', async () => {
     await sent(13);
     const before = (await sheetStatus()).awaitingValidation;
-    fill(13, ['', '', '', '', 'Cancelada']);
+    fill(13, ['', '', '', 'Comercial Fictício 1', 'Cancelada']);
     await round();
     await round();
     expect(columnJ('toCharge', 13)).toBe('Cancelada: aguardando validação do Financeiro');
@@ -261,7 +260,7 @@ describe('relatos "Cobrada no Hunit" e "Cancelada" (US2, FR-007a a FR-007c, FR-0
         hotelCode: 'hml_um',
         reservationNumber: number(13),
         situationText: 'Cancelada',
-        chargedBy: null,
+        chargedBy: 'Comercial Fictício 1',
         chargeDate: null,
       }),
     );
@@ -273,13 +272,11 @@ describe('relatos "Cobrada no Hunit" e "Cancelada" (US2, FR-007a a FR-007c, FR-0
     expect((await reservation(13)).noCharge).toBeNull();
   });
 
-  it('"Cobrada no Hunit" sem responsável e sem data: incompleto', async () => {
+  it('"Cobrada no Hunit" sem responsável: incompleto, pedindo só o responsável (specs/009)', async () => {
     await sent(14);
     fill(14, ['', '', '', '', 'Cobrada no Hunit']);
     await round();
-    expect(columnJ('toCharge', 14)).toBe(
-      'Retorno incompleto: faltam o responsável pela cobrança e a data da cobrança',
-    );
+    expect(columnJ('toCharge', 14)).toBe('Retorno incompleto: falta o responsável pela cobrança');
     expect(await storedReport(14)).toBeNull();
   });
 
@@ -440,7 +437,7 @@ describe('"Cancelada" validada pelo Financeiro (homologação, R-19; spec FR-007
 
   async function cancelled(n: number, text = 'Cancelada'): Promise<void> {
     await sent(n);
-    fill(n, ['', '', '', '', text]);
+    fill(n, ['', '', '', 'Comercial Fictício 1', text]);
     await round();
   }
 
