@@ -168,6 +168,11 @@ const API_ERROR_CODES: ReadonlySet<string> = new Set(
     no_charge_not_active: true,
     no_reports_to_check: true,
     no_cancellation_awaiting_validation: true,
+    // specs/009: a situação livre do Comercial.
+    situation_return_needs_decision: true,
+    not_a_situation_return: true,
+    charged_amount_required: true,
+    charged_amount_from_commercial: true,
     internal_error: true,
   } satisfies Record<Schemas['Problem']['code'], true>),
 );
@@ -640,6 +645,28 @@ export class ApiClient {
   }
 
   /** Confirma a "Cancelada" do Comercial (homologação da 008, R-19). */
+  /** Decide a situação livre do Comercial (specs/009, `POST …/situation/confirm`). */
+  confirmCommercialSituationReturn(
+    returnId: string,
+    decision:
+      | { as: 'charged'; chargedAmount?: string | undefined }
+      | { as: 'no_charge'; note?: string | undefined },
+  ): Promise<Result<Reservation>> {
+    const body =
+      decision.as === 'charged'
+        ? {
+            as: decision.as,
+            ...(decision.chargedAmount !== undefined && { chargedAmount: decision.chargedAmount }),
+          }
+        : { as: decision.as, ...(decision.note !== undefined && { note: decision.note }) };
+    return this.call(() =>
+      this.http.POST('/commercial-returns/{returnId}/situation/confirm', {
+        params: { path: { returnId } },
+        body,
+      }),
+    );
+  }
+
   confirmCommercialCancellation(key: ReservationKey): Promise<Result<Reservation>> {
     return this.call(() =>
       this.http.POST(

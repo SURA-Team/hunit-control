@@ -102,6 +102,7 @@ const SCREENS: Record<string, ScreenCase> = {
                 lastSentAt: '2026-11-14T12:00:00.000Z',
                 lastDispatchId: '44444444-4444-4444-8444-444444444444',
                 returnState: 'awaiting_validation',
+                situationReturn: null,
                 currentReturn: returnBrief(),
                 returnProblem: null,
                 syncPending: false,

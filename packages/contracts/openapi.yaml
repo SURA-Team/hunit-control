@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HUNIT Control API
-  version: 1.11.0
+  version: 1.12.0
   license:
     name: Uso interno — proprietário
     identifier: LicenseRef-Proprietary
@@ -46,6 +46,13 @@ info:
     das reservas (valor do maior para o menor). Só leitura; nada disso acessa o Hunit. A 1.11.0
     acrescenta ao resumo os filtros opcionais da lista (`hotelCode`, `detailedSituation`,
     `reservationStatus`, `channel`, `fromLegacy` e `notFound`); sem eles, responde como na 1.10.0.
+    A feature 009 (validação dos retornos do Comercial) acrescenta, sem quebrar os clientes
+    existentes: o retorno com uma situação livre do Comercial (`situationReturn`,
+    `situationReturns`), que o Financeiro confirma como cobrado ou como cancelado sem cobrança
+    (`/commercial-returns/{returnId}/situation/confirm`) ou recusa, e a aba "Aguardando validação
+    do Financeiro" da planilha (`sheetTab`). Os campos e as rotas da 1.11.0 não mostram nem
+    confirmam esse retorno (`currentReturn` nulo, 409 no `/confirm` e fora do lote). Nada disso
+    acessa o Hunit.
     Credenciais e token 2FA do Hunit são aceitos apenas nos corpos de requisição indicados,
     usados em memória e nunca armazenados nem devolvidos.
     Datas em ISO 8601 (YYYY-MM-DD); valores monetários como string decimal em BRL.
@@ -1555,6 +1562,8 @@ paths:
         do Comercial aguardando validação é confirmada como em
         `/reservations/{h}/{n}/commercial/cancellation/confirm` (marcada como "Cancelada sem
         cobrança"); a que não aceita a marcação fica de fora com `cancellation_not_accepted`.
+        Desde a 1.12.0, a reserva com um retorno de situação livre (feature 009) fica de fora com
+        `no_return_awaiting_validation`: cada uma pede uma decisão própria.
       requestBody:
         required: true
         content:
@@ -1591,6 +1600,10 @@ paths:
       tags: [commercial]
       operationId: confirmCommercialReturn
       summary: Confirma o retorno do Comercial; a reserva passa a "Comprovante enviado" (feature 005, FR-016) — somente operador
+      description: |
+        Desde a 1.12.0, um retorno com situação livre (feature 009) não é confirmado por aqui: a
+        resposta é 409 `situation_return_needs_decision`; use
+        `/commercial-returns/{returnId}/situation/confirm`.
       responses:
         '200':
           description: Tratativa atualizada
@@ -1602,7 +1615,75 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: O retorno não está aguardando validação (`return_not_awaiting_validation`)
+          description: >-
+            O retorno não está aguardando validação (`return_not_awaiting_validation`) ou é um
+            retorno com situação livre (`situation_return_needs_decision`, desde a 1.12.0)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /commercial-returns/{returnId}/situation/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ReturnId'
+    post:
+      tags: [commercial]
+      operationId: confirmCommercialSituationReturn
+      summary: Confirma o retorno com situação livre do Comercial como cobrado ou como cancelado sem cobrança (feature 009) — somente operador
+      description: |
+        Só para o retorno com uma situação livre (`situationReturn`) aguardando validação. Com
+        `as = charged`, vale como comprovante, como a confirmação de um retorno da maquininha; se
+        o Comercial não informou o valor cobrado, `chargedAmount` é obrigatório e é gravado como
+        valor informado à mão (`chargedAmountOrigin = manual`). Com `as = no_charge`, marca a
+        reserva como "Cancelada sem cobrança" (as regras de `POST /reservations/{h}/{n}/no-charge`,
+        com a observação de que a situação veio do Comercial); desfazer a marcação devolve o
+        retorno para validar. A recusa é `POST /commercial-returns/{returnId}/reject`. Não acessa o
+        Hunit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [as]
+              additionalProperties: false
+              properties:
+                as:
+                  type: string
+                  description: >-
+                    charged = "Confirmar como cobrada" (vale como comprovante); no_charge =
+                    "Confirmar como cancelada sem cobrança"
+                  enum: [charged, no_charge]
+                chargedAmount:
+                  $ref: '#/components/schemas/Money'
+                  description: >-
+                    Só com as = charged e só quando o Comercial não informou o valor; gravado como
+                    valor informado à mão
+                note:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Só com as = no_charge; observação opcional da marcação
+      responses:
+        '200':
+          description: Reserva atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400':
+          description: >-
+            Corpo fora do contrato, valor cobrado faltando (`charged_amount_required`) ou mandado
+            quando o Comercial já informou (`charged_amount_from_commercial`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: >-
+            O retorno não tem situação livre (`not_a_situation_return`), não está aguardando
+            validação (`return_not_awaiting_validation`) ou a reserva não aceita a marcação
+            (`no_charge_not_accepted`, com `reason`)
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -1951,6 +2032,10 @@ components:
             - no_charge_not_active
             - no_reports_to_check
             - no_cancellation_awaiting_validation
+            - situation_return_needs_decision
+            - not_a_situation_return
+            - charged_amount_required
+            - charged_amount_from_commercial
             - internal_error
         reason:
           type: string
@@ -2692,7 +2777,7 @@ components:
       type: object
       description: Resumo do envio ao Comercial de uma reserva (feature 005)
       required:
-        [lineState, inSheet, lastSentAt, lastDispatchId, returnState, currentReturn, returnProblem, syncPending, report]
+        [lineState, inSheet, lastSentAt, lastDispatchId, returnState, currentReturn, returnProblem, syncPending, report, situationReturn]
       properties:
         lineState: { $ref: '#/components/schemas/CommercialLineState' }
         inSheet:
@@ -2708,6 +2793,7 @@ components:
           description: >-
             O retorno atual (o mesmo de returnState), para a lista de revisão da confirmação em lote
             (FR-016a) e a lista de retornos a validar, sem uma consulta por reserva; null = sem retorno
+            ou, desde a 1.12.0, quando o retorno atual tem uma situação livre (ver situationReturn)
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/CommercialReturnBrief'
@@ -2726,6 +2812,60 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/CommercialReportBrief'
+        situationReturn:
+          description: >-
+            O retorno atual quando ele tem uma situação livre do Comercial (feature 009); então
+            currentReturn é null e returnState traz o estado dele. null = sem retorno de situação
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CommercialSituationReturn'
+
+    CommercialSituationReturn:
+      type: object
+      description: >-
+        Retorno do Comercial com uma situação livre (feature 009): só a situação e o responsável
+        são obrigatórios; código, hotel, valor e data aparecem se o Comercial preencheu
+      required:
+        - id
+        - state
+        - situationText
+        - chargedBy
+        - authorizationCode
+        - chargeHotel
+        - chargedAmount
+        - chargeDate
+        - readAt
+        - decidedAt
+        - decidedBy
+        - rejectionReason
+        - decision
+      properties:
+        id: { type: string, format: uuid }
+        state:
+          type: string
+          description: >-
+            awaiting_validation = aguardando o Financeiro; confirmed = confirmado como cobrado
+            (vale como comprovante); rejected = recusado (ver rejectionReason); closed = encerrado
+            (confirmado como cancelado sem cobrança, ou o Hunit deixou de exigir cobrança)
+          enum: [awaiting_validation, confirmed, rejected, closed]
+        situationText: { type: string, maxLength: 100, description: A situação como o Comercial escreveu }
+        chargedBy: { type: string, description: Responsável pela cobrança no Comercial }
+        authorizationCode: { type: [string, 'null'] }
+        chargeHotel: { type: [string, 'null'] }
+        chargedAmount:
+          description: Valor cobrado informado pelo Comercial; null = não informado
+          $ref: '#/components/schemas/Money'
+        chargeDate: { type: [string, 'null'], format: date }
+        readAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decidedBy: { type: [string, 'null'], description: Cliente da API que decidiu }
+        rejectionReason: { type: [string, 'null'] }
+        decision:
+          type: [string, 'null']
+          description: >-
+            charged = confirmado como cobrado; no_charge = confirmado como cancelado sem cobrança;
+            null = não decidido, recusado ou encerrado sem decisão
+          enum: [charged, no_charge, null]
 
     CommercialReturnBrief:
       type: object
@@ -2773,13 +2913,22 @@ components:
         - returnProblem
         - sheetIssue
         - syncPending
+        - sheetTab
       properties:
         state: { $ref: '#/components/schemas/CommercialLineState' }
         inSheet: { type: boolean }
         tab:
           type: [string, 'null']
-          description: to_charge = "A cobrar"; done = "Concluídas"; null = fora da planilha
+          description: >-
+            to_charge = "A cobrar"; done = "Concluídas"; null = fora da planilha. A aba "Aguardando
+            validação do Financeiro" (feature 009) aparece aqui como to_charge; ver sheetTab
           enum: [to_charge, done, null]
+        sheetTab:
+          type: [string, 'null']
+          description: >-
+            Aba da linha na planilha (feature 009): to_charge = "A cobrar"; awaiting_validation =
+            "Aguardando validação do Financeiro"; done = "Concluídas"; null = fora da planilha
+          enum: [to_charge, awaiting_validation, done, null]
         firstSentAt: { type: string, format: date-time }
         lastSentAt: { type: string, format: date-time }
         lastDispatchId: { type: string, format: uuid }
@@ -2887,7 +3036,7 @@ components:
 
     CommercialDetail:
       type: object
-      required: [line, returns, events, report, history]
+      required: [line, returns, events, report, history, situationReturns]
       properties:
         line:
           oneOf:
@@ -2895,7 +3044,14 @@ components:
             - $ref: '#/components/schemas/CommercialLine'
         returns:
           type: array
+          description: Retornos do Comercial, sem os de situação livre (ver situationReturns)
           items: { $ref: '#/components/schemas/CommercialReturn' }
+        situationReturns:
+          type: array
+          description: >-
+            Retornos com situação livre do Comercial (feature 009), do mais recente para o mais
+            antigo
+          items: { $ref: '#/components/schemas/CommercialSituationReturn' }
         events:
           type: array
           description: Histórico com os tipos da 1.7.0 (os eventos novos da 008 ficam só em history)
@@ -3235,7 +3391,7 @@ components:
           type: integer
           description: >-
             Retornos aguardando a validação do Financeiro; desde a 008, com as "Cancelada" aguardando
-            validação (os itens de `reports`)
+            validação (os itens de `reports`); desde a 009, com os retornos de situação livre
         problems:
           type: array
           items: { $ref: '#/components/schemas/CommercialSheetProblem' }
@@ -3453,7 +3609,9 @@ components:
         apagou) e hunit_checked (verificação no Hunit; classification = a lida; reason = "cobrança
         encontrada" ou "cobrança não encontrada"); da homologação, cancellation_confirmed e
         cancellation_rejected (o Financeiro confirmou ou recusou a "Cancelada"; reason = o motivo da
-        recusa)
+        recusa). Desde a 1.12.0 (feature 009), cancellation_confirmed com returnId é a confirmação
+        de um retorno de situação livre como cancelado sem cobrança (reason = a situação do
+        Comercial); sem returnId, é a "Cancelada" da 008
       required: [id, type, actor, at, dispatchId, returnId, classification, reason, batchId]
       properties:
         id: { type: integer }

@@ -451,6 +451,13 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   no_reports_to_check: 'Nenhuma reserva da fila precisa ser conferida agora.',
   no_cancellation_awaiting_validation:
     'Esta "Cancelada" não está mais aguardando validação (outra pessoa decidiu ou o Comercial mudou a linha).',
+  // A situação livre do Comercial (specs/009, contracts/ipc.md).
+  situation_return_needs_decision:
+    'Este retorno tem uma situação livre do Comercial: confirme como cobrada ou como cancelada sem cobrança.',
+  not_a_situation_return: 'Este retorno não é de uma situação livre. Atualize a lista.',
+  charged_amount_required: 'Informe o valor cobrado: o Comercial não informou.',
+  charged_amount_from_commercial:
+    'O valor cobrado é o informado pelo Comercial. Para corrigir, recuse o retorno.',
   internal_error: 'Erro interno do servidor.',
   offline: 'Servidor indisponível.',
   untrusted_server: 'Não foi possível confirmar a identidade do servidor.',

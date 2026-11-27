@@ -8,9 +8,12 @@
  * 005 preenchidas e entendidas; um retorno com problema nunca muda a reserva — só é relatado.
  *
  * Desde a 008 (research R-06 e R-19), mais duas colunas: "Situação da cobrança" (obrigatória) e
- * "Data da cobrança". A situação manda: "Cobrada no Hunit" (responsável e data) e "Cancelada" (só a
- * situação) são **relatos**; "Cobrada na maquininha" e outro texto seguem a regra dos quatro campos,
- * com a data. A data não é comparada com hoje em lugar nenhum (FR-011).
+ * "Data da cobrança". A situação manda. A data não é comparada com hoje em lugar nenhum (FR-011).
+ *
+ * Desde a 009 (research R-02): toda situação exige o responsável; só "Cobrada na maquininha" exige
+ * também código, hotel, valor e data. "Cobrada no Hunit" e "Cancelada" são **relatos** (a data fica
+ * opcional); outro texto é a **situação livre**, que o Financeiro valida (código, hotel, valor e
+ * data opcionais).
  */
 import type { IsoDate, Money } from './types.js';
 
@@ -74,6 +77,14 @@ export const CHARGE_SITUATIONS = [
 export interface ChargeSituation {
   kind: ChargeSituationKind;
   text: string;
+}
+
+/**
+ * O retorno é de uma situação livre do Comercial ("retorno de situação", specs/009, research R-03)?
+ * Código, hotel e valor são opcionais, e o Financeiro decide o que ele significa.
+ */
+export function isSituationReturn(kind: ChargeSituationKind | null | undefined): boolean {
+  return kind === 'other';
 }
 
 /**
@@ -172,10 +183,21 @@ export interface CommercialReportValues {
   kind: CommercialReportKind;
   /** A situação como o Comercial escreveu. */
   situationText: string;
-  /** Obrigatório em "Cobrada no Hunit"; na "Cancelada", só se o Comercial preencheu. */
+  /**
+   * Obrigatório nos relatos lidos desde a 009 (research R-02); nulo só numa "Cancelada" lida antes
+   * (na 008 bastava a situação).
+   */
   chargedBy: string | null;
-  /** Obrigatória em "Cobrada no Hunit"; na "Cancelada", só se o Comercial preencheu. */
+  /** Opcional desde a 009 (era obrigatória em "Cobrada no Hunit"). */
   chargeDate: IsoDate | null;
+}
+
+/** Retorno de situação livre entendido (specs/009, research R-02): só o responsável é obrigatório. */
+export interface SituationReturnValues {
+  chargedBy: string;
+  authorizationCode: string | null;
+  chargeHotel: string | null;
+  chargedAmount: Money | null;
 }
 
 export type CommercialReturnReading =
@@ -186,9 +208,16 @@ export type CommercialReturnReading =
   | {
       kind: 'complete';
       values: CommercialReturnValues;
-      /** Situação informada ("Cobrada na maquininha" ou outro texto), obrigatória desde R-19. */
+      /** "Cobrada na maquininha" (desde a 009, outro texto é a leitura `situation`). */
       chargeSituation: ChargeSituation;
       chargeDate: IsoDate;
+    }
+  | {
+      kind: 'situation';
+      values: SituationReturnValues;
+      /** Situação livre (`other`), como o Comercial escreveu. */
+      chargeSituation: ChargeSituation;
+      chargeDate: IsoDate | null;
     };
 
 /** Célula vazia: nula, ausente ou só com espaços. */
@@ -279,66 +308,82 @@ function sortProblems(problems: ReturnProblem[]): ReturnProblem[] {
   );
 }
 
+/** Ordena as colunas como na planilha (K a P). */
+function inColumnOrder(columns: CommercialReturnColumn[]): CommercialReturnColumn[] {
+  return columns.sort(
+    (a, b) => COMMERCIAL_RETURN_COLUMNS.indexOf(a) - COMMERCIAL_RETURN_COLUMNS.indexOf(b),
+  );
+}
+
 /**
  * Interpreta as seis colunas de retorno de uma linha (FR-015, FR-018; specs/008, research R-06 e
- * R-19, sessão de 23/11 da spec):
+ * R-19; specs/009, research R-02):
  * - `empty` — as seis vazias: não há retorno;
- * - `report` — "Cancelada" (basta a situação; o responsável e a data, se houver, são guardados) ou
- *   "Cobrada no Hunit" com o responsável e a data: relato, sem retorno de cobrança;
- * - `incomplete` — falta a situação, ou algum campo que a situação exige: "Cobrada na maquininha" e
- *   outro texto exigem os quatro campos e a data; "Cobrada no Hunit", o responsável e a data (vale
- *   antes de qualquer problema de leitura);
- * - `illegible` — preenchidas, mas algum valor exigido não foi entendido (inclusive a data);
- * - `complete` — os quatro valores normalizados, com a situação e a data.
+ * - `incomplete` — falta a situação ou o responsável (exigidos sempre), ou, em "Cobrada na
+ *   maquininha", o código, o hotel, o valor ou a data; lista só o que a situação exige (vale antes
+ *   de qualquer problema de leitura);
+ * - `illegible` — preenchidas, mas algum valor lido não foi entendido;
+ * - `report` — "Cobrada no Hunit" ou "Cancelada", com o responsável (a data é opcional; na
+ *   "Cancelada", os campos de cobrança são ignorados, como na 008);
+ * - `complete` — "Cobrada na maquininha" com os quatro valores e a data;
+ * - `situation` — outro texto (situação livre) com o responsável; código, hotel, valor e data,
+ *   se preenchidos, lidos com as mesmas regras.
  */
 export function readReturn(cells: CommercialReturnCells): CommercialReturnReading {
   if (COMMERCIAL_RETURN_COLUMNS.every((column) => isBlank(cells[column]))) return { kind: 'empty' };
 
   let chargeSituation: ChargeSituation | null = null;
-  const situationProblems: ReturnProblem[] = [];
+  let situationProblem: ReturnProblem | null = null;
   if (!isBlank(cells.chargeSituation)) {
     const result = readText('chargeSituation', cells.chargeSituation);
     if (result.ok) {
       chargeSituation = { kind: recognizeChargeSituation(result.text), text: result.text };
-    } else situationProblems.push(result.problem);
+    } else situationProblem = result.problem;
   }
+  const chargedByBlank = isBlank(cells.chargedBy);
+
+  // Situação e responsável: exigidos em toda situação.
+  if (chargeSituation === null) {
+    const missing: CommercialReturnColumn[] = [];
+    if (chargedByBlank) missing.push('chargedBy');
+    if (situationProblem === null) missing.push('chargeSituation');
+    if (missing.length > 0) return { kind: 'incomplete', missing: inColumnOrder(missing) };
+    return { kind: 'illegible', problems: situationProblem ? [situationProblem] : [] };
+  }
+
   const dateCell = cells.chargeDate;
   const date = isBlank(dateCell) ? null : parseChargeDate(dateCell);
 
-  // "Cancelada": basta a situação; o resto, se preenchido e entendido, é guardado.
-  if (chargeSituation?.kind === 'cancelled') {
-    let chargedBy: string | null = null;
-    if (!isBlank(cells.chargedBy)) {
-      const result = readText('chargedBy', cells.chargedBy);
-      if (!result.ok) return { kind: 'illegible', problems: [result.problem] };
-      chargedBy = result.text;
-    }
+  if (chargeSituation.kind === 'charged_at_terminal') {
+    const missing = COMMERCIAL_RETURN_COLUMNS.filter((column) => isBlank(cells[column]));
+    if (missing.length > 0) return { kind: 'incomplete', missing };
+  } else if (chargedByBlank) {
+    return { kind: 'incomplete', missing: ['chargedBy'] };
+  }
+
+  const problems: ReturnProblem[] = [];
+  const chargedBy = readText('chargedBy', cells.chargedBy);
+  if (!chargedBy.ok) problems.push(chargedBy.problem);
+
+  // "Cancelada": basta a situação e o responsável; o resto, como na 008, não é conferido.
+  if (chargeSituation.kind === 'cancelled') {
+    if (!chargedBy.ok) return { kind: 'illegible', problems };
     return {
       kind: 'report',
       report: {
         kind: 'cancelled',
         situationText: chargeSituation.text,
-        chargedBy,
+        chargedBy: chargedBy.text,
         chargeDate: date?.ok ? date.date : null,
       },
     };
   }
 
-  // Campos exigidos pela situação; sem situação, os da maquininha (a regra de antes).
-  const hunit = chargeSituation?.kind === 'charged_in_hunit';
-  const required: readonly CommercialReturnColumn[] = hunit
-    ? ['chargedBy', 'chargeSituation', 'chargeDate']
-    : COMMERCIAL_RETURN_COLUMNS;
-  const missing = required.filter((column) => isBlank(cells[column]));
-  if (missing.length > 0) return { kind: 'incomplete', missing };
-
-  const problems: ReturnProblem[] = [...situationProblems];
   if (date && !date.ok) problems.push({ field: 'chargeDate', problem: 'not_a_date' });
+  const chargeDate = date?.ok ? date.date : null;
 
-  if (hunit) {
-    const chargedBy = readText('chargedBy', cells.chargedBy);
-    if (!chargedBy.ok) problems.push(chargedBy.problem);
-    if (problems.length > 0 || !chargedBy.ok || !chargeSituation || !date?.ok) {
+  if (chargeSituation.kind === 'charged_in_hunit') {
+    if (!chargedBy.ok || problems.length > 0) {
       return { kind: 'illegible', problems: sortProblems(problems) };
     }
     return {
@@ -347,53 +392,85 @@ export function readReturn(cells: CommercialReturnCells): CommercialReturnReadin
         kind: 'charged_in_hunit',
         situationText: chargeSituation.text,
         chargedBy: chargedBy.text,
-        chargeDate: date.date,
+        chargeDate,
       },
     };
   }
 
-  const texts: Partial<Record<TextField, string>> = {};
-  for (const field of ['authorizationCode', 'chargeHotel', 'chargedBy'] as const) {
+  // Maquininha (todos presentes) e situação livre (os presentes): as mesmas regras de leitura.
+  const texts: Partial<Record<'authorizationCode' | 'chargeHotel', string>> = {};
+  for (const field of ['authorizationCode', 'chargeHotel'] as const) {
+    if (isBlank(cells[field])) continue;
     const result = readText(field, cells[field]);
     if (result.ok) texts[field] = result.text;
     else problems.push(result.problem);
   }
-  const amount = parseChargedAmount(cells.chargedAmount);
-  if (!amount.ok) problems.push({ field: 'chargedAmount', problem: amount.problem });
-
-  if (problems.length > 0 || !amount.ok || !chargeSituation || !date?.ok) {
+  let chargedAmount: Money | null = null;
+  if (!isBlank(cells.chargedAmount)) {
+    const amount = parseChargedAmount(cells.chargedAmount);
+    if (amount.ok) chargedAmount = amount.amount;
+    else problems.push({ field: 'chargedAmount', problem: amount.problem });
+  }
+  if (!chargedBy.ok || problems.length > 0) {
     return { kind: 'illegible', problems: sortProblems(problems) };
   }
 
+  if (chargeSituation.kind === 'charged_at_terminal') {
+    return {
+      kind: 'complete',
+      values: {
+        authorizationCode: texts.authorizationCode ?? '',
+        chargeHotel: texts.chargeHotel ?? '',
+        chargedAmount: chargedAmount ?? '',
+        chargedBy: chargedBy.text,
+      },
+      chargeSituation,
+      chargeDate: chargeDate ?? '',
+    };
+  }
   return {
-    kind: 'complete',
+    kind: 'situation',
     values: {
-      authorizationCode: texts.authorizationCode ?? '',
-      chargeHotel: texts.chargeHotel ?? '',
-      chargedAmount: amount.amount,
-      chargedBy: texts.chargedBy ?? '',
+      chargedBy: chargedBy.text,
+      authorizationCode: texts.authorizationCode ?? null,
+      chargeHotel: texts.chargeHotel ?? null,
+      chargedAmount,
     },
     chargeSituation,
-    chargeDate: date.date,
+    chargeDate,
   };
 }
 
 /**
- * O último retorno completo lido, como o servidor guarda para detectar mudança: os quatro valores
- * mais a situação e a data (specs/008). Leituras da 005 não têm os dois campos novos.
+ * O último retorno lido (completo ou de situação livre), como o servidor guarda para detectar
+ * mudança: os valores mais a situação e a data (specs/008). Leituras da 005 não têm os dois campos
+ * novos; as de situação livre (specs/009) não têm o código, o hotel ou o valor não preenchidos.
  */
-export interface ReturnSnapshot extends CommercialReturnValues {
+export interface ReturnSnapshot {
+  authorizationCode?: string | undefined;
+  chargeHotel?: string | undefined;
+  chargedAmount?: Money | undefined;
+  chargedBy: string;
   chargeSituation?: string | undefined;
   chargeDate?: IsoDate | undefined;
 }
 
-/** O retorno completo lido, no formato guardado (sem os campos não informados). */
+/** O retorno lido, no formato guardado (sem os campos não informados). */
 export function returnSnapshot(
-  reading: Extract<CommercialReturnReading, { kind: 'complete' }>,
+  reading: Extract<CommercialReturnReading, { kind: 'complete' | 'situation' }>,
 ): ReturnSnapshot {
+  const values: {
+    authorizationCode: string | null;
+    chargeHotel: string | null;
+    chargedAmount: Money | null;
+    chargedBy: string;
+  } = reading.values;
   return {
-    ...reading.values,
-    ...(reading.chargeSituation !== null && { chargeSituation: reading.chargeSituation.text }),
+    ...(values.authorizationCode !== null && { authorizationCode: values.authorizationCode }),
+    ...(values.chargeHotel !== null && { chargeHotel: values.chargeHotel }),
+    ...(values.chargedAmount !== null && { chargedAmount: values.chargedAmount }),
+    chargedBy: values.chargedBy,
+    chargeSituation: reading.chargeSituation.text,
     ...(reading.chargeDate !== null && { chargeDate: reading.chargeDate }),
   };
 }
@@ -402,7 +479,9 @@ export function returnSnapshot(
 export function returnChanged(previous: ReturnSnapshot | null, current: ReturnSnapshot): boolean {
   if (previous === null) return true;
   return (
-    COMMERCIAL_RETURN_FIELDS.some((field) => previous[field] !== current[field]) ||
+    COMMERCIAL_RETURN_FIELDS.some(
+      (field) => (previous[field] ?? null) !== (current[field] ?? null),
+    ) ||
     (previous.chargeSituation ?? null) !== (current.chargeSituation ?? null) ||
     (previous.chargeDate ?? null) !== (current.chargeDate ?? null)
   );

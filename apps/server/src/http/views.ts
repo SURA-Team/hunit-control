@@ -11,13 +11,17 @@ import {
   effectiveClassification,
   hunitShowsCharge,
   isRevertible,
+  isSituationReturn,
   revertDeadline,
   needsReview,
   reservationSituation,
   treatmentStatus,
   type Classification,
 } from '@hunit/domain';
-import type { CommercialSummaryRecord } from '../persistence/commercial-repo.js';
+import type {
+  CommercialSummaryRecord,
+  CurrentReturnSummary,
+} from '../persistence/commercial-repo.js';
 import { difference, toChargeSituationView, toCommercialReportView } from './commercial-views.js';
 import type { ExecutionEvent } from '../executions/events.js';
 import type { ExecutionTiming } from '../executions/timing.js';
@@ -273,31 +277,82 @@ export function toCommercialSummaryView(
   totalAmount: string | null,
 ): Schemas['CommercialSummary'] | null {
   if (commercial === null) return null;
-  const current = commercial.currentReturn;
+  const latest = commercial.currentReturn;
+  // Retorno de situação livre (specs/009, research R-03): fica fora de currentReturn, que os apps
+  // da 1.11.0 confirmariam como um retorno da maquininha, e vai para situationReturn.
+  const situation = latest !== null && isSituationReturn(latest.chargeSituationKind);
+  const current = situation ? null : latest;
+  // Fora da situação livre, o banco garante código, hotel e valor (commercial_returns_terminal_fields_check).
+  const brief =
+    current !== null &&
+    current.authorizationCode !== null &&
+    current.chargeHotel !== null &&
+    current.chargedAmount !== null
+      ? {
+          id: current.id,
+          state: current.state,
+          authorizationCode: current.authorizationCode,
+          chargeHotel: current.chargeHotel,
+          chargedAmount: current.chargedAmount,
+          chargedBy: current.chargedBy,
+          readAt: iso(current.readAt),
+          difference: difference(current.chargedAmount, totalAmount),
+          chargeSituation: toChargeSituationView(
+            current.chargeSituationText,
+            current.chargeSituationKind,
+          ),
+          chargeDate: current.chargeDate,
+        }
+      : null;
   return {
     lineState: commercial.lineState,
     inSheet: commercial.inSheet,
     lastSentAt: iso(commercial.lastSentAt),
     lastDispatchId: commercial.lastDispatchId,
-    returnState: current?.state ?? null,
-    currentReturn: current && {
-      id: current.id,
-      state: current.state,
-      authorizationCode: current.authorizationCode,
-      chargeHotel: current.chargeHotel,
-      chargedAmount: current.chargedAmount,
-      chargedBy: current.chargedBy,
-      readAt: iso(current.readAt),
-      difference: difference(current.chargedAmount, totalAmount),
-      chargeSituation: toChargeSituationView(
-        current.chargeSituationText,
-        current.chargeSituationKind,
-      ),
-      chargeDate: current.chargeDate,
-    },
+    returnState: latest?.state ?? null,
+    currentReturn: brief,
     returnProblem: commercial.returnProblem,
     syncPending: commercial.syncPending,
     report: toCommercialReportView(commercial.report),
+    situationReturn: situation && latest ? toSituationReturnView(latest) : null,
+  };
+}
+
+/** Retorno com situação livre do Comercial no formato da API (specs/009, contracts/api-changes.md). */
+export function toSituationReturnView(
+  row: Pick<
+    CurrentReturnSummary,
+    | 'id'
+    | 'state'
+    | 'chargeSituationText'
+    | 'chargedBy'
+    | 'authorizationCode'
+    | 'chargeHotel'
+    | 'chargedAmount'
+    | 'chargeDate'
+    | 'readAt'
+    | 'decidedAt'
+    | 'decidedBy'
+    | 'rejectionReason'
+    | 'noChargeMarkId'
+  >,
+): Schemas['CommercialSituationReturn'] {
+  const decision =
+    row.state === 'confirmed' ? 'charged' : row.noChargeMarkId !== null ? 'no_charge' : null;
+  return {
+    id: row.id,
+    state: row.state,
+    situationText: row.chargeSituationText ?? '',
+    chargedBy: row.chargedBy,
+    authorizationCode: row.authorizationCode,
+    chargeHotel: row.chargeHotel,
+    chargedAmount: row.chargedAmount,
+    chargeDate: row.chargeDate,
+    readAt: iso(row.readAt),
+    decidedAt: iso(row.decidedAt),
+    decidedBy: row.decidedBy,
+    rejectionReason: row.rejectionReason,
+    decision,
   };
 }
 

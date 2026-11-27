@@ -640,3 +640,118 @@ describe('ajustes de cobrança (specs/008, data-model §1 e §2)', () => {
     ).resolves.toBeDefined();
   });
 });
+
+describe('validação dos retornos do Comercial (specs/009, data-model §1.1)', () => {
+  async function returnValues(reservationNumber: string) {
+    const reservation = await insertReservation({ reservationNumber });
+    return {
+      hotelCode: reservation.hotelCode,
+      reservationNumber,
+      chargedBy: 'Comercial Fictício 1',
+      readAt: new Date(),
+      state: 'rejected' as const,
+    };
+  }
+
+  it('retorno da 005 (sem tipo) e da maquininha exigem código, hotel e valor', async () => {
+    const value = await returnValues('RETSIT9-1');
+    for (const kind of [null, 'charged_at_terminal'] as const) {
+      expect(
+        await violation(
+          database.db.insert(commercialReturns).values({
+            ...value,
+            authorizationCode: 'AUT1',
+            chargeHotel: null,
+            chargedAmount: '10.00',
+            chargeSituationKind: kind,
+          }),
+        ),
+      ).toEqual({
+        code: PG_CHECK_VIOLATION,
+        constraint: 'commercial_returns_terminal_fields_check',
+      });
+    }
+  });
+
+  it('retorno de situação livre ("other") aceita código, hotel e valor nulos', async () => {
+    const value = await returnValues('RETSIT9-2');
+    const [row] = await database.db
+      .insert(commercialReturns)
+      .values({
+        ...value,
+        chargeSituationText: 'Cobrada pela OTA',
+        chargeSituationKind: 'other',
+      })
+      .returning();
+    expect(row).toMatchObject({ authorizationCode: null, chargeHotel: null, chargedAmount: null });
+  });
+
+  it('textos presentes de 1 a 100 e valor maior que zero continuam valendo', async () => {
+    const value = await returnValues('RETSIT9-3');
+    const other = { ...value, chargeSituationText: 'Outra', chargeSituationKind: 'other' as const };
+    expect(
+      await violation(
+        database.db.insert(commercialReturns).values({ ...other, authorizationCode: '' }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'commercial_returns_texts_check' });
+    expect(
+      await violation(
+        database.db.insert(commercialReturns).values({ ...other, chargedAmount: '0' }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'commercial_returns_amount_check' });
+  });
+
+  it('retornos "other" da 008, com os três campos, continuam válidos', async () => {
+    const value = await returnValues('RETSIT9-4');
+    await expect(
+      database.db.insert(commercialReturns).values({
+        ...value,
+        authorizationCode: 'AUT1',
+        chargeHotel: 'Estabelecimento Fictício',
+        chargedAmount: '10.00',
+        chargeSituationText: 'Texto livre da 008',
+        chargeSituationKind: 'other',
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('no_charge_mark_id só em retorno de situação livre encerrado', async () => {
+    const client = await insertClient(database.db);
+    const value = await returnValues('RETSIT9-5');
+    const [mark] = await database.db
+      .insert(noChargeMarks)
+      .values({
+        hotelCode: value.hotelCode,
+        reservationNumber: value.reservationNumber,
+        markedByClientId: client.id,
+        previousAmount: '655.00',
+      })
+      .returning();
+    const other = {
+      ...value,
+      chargeSituationText: 'Hóspede não compareceu',
+      chargeSituationKind: 'other' as const,
+      noChargeMarkId: mark?.id ?? null,
+    };
+    expect(
+      await violation(
+        database.db.insert(commercialReturns).values({ ...other, state: 'awaiting_validation' }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'commercial_returns_no_charge_check' });
+    expect(
+      await violation(
+        database.db.insert(commercialReturns).values({
+          ...other,
+          state: 'closed',
+          authorizationCode: 'AUT1',
+          chargeHotel: 'Estabelecimento Fictício',
+          chargedAmount: '10.00',
+          chargeSituationKind: 'charged_at_terminal',
+        }),
+      ),
+    ).toEqual({ code: PG_CHECK_VIOLATION, constraint: 'commercial_returns_no_charge_check' });
+    await expect(
+      database.db.insert(commercialReturns).values({ ...other, state: 'closed' }),
+    ).resolves.toBeDefined();
+  });
+});

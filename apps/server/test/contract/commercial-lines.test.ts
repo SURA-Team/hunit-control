@@ -59,6 +59,7 @@ describe('GET .../commercial', () => {
       events: [],
       history: [],
       report: null,
+      situationReturns: [],
     });
   });
 

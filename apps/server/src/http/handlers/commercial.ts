@@ -5,7 +5,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { components, operations } from '@hunit/contracts';
-import { RETURN_PROBLEM_PREFIXES } from '@hunit/domain';
+import { isSituationReturn, RETURN_PROBLEM_PREFIXES } from '@hunit/domain';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SHEET_ERROR_MESSAGES, type SheetErrorCode } from '../../commercial-sheet/gateway.js';
 import type { CommercialSheetSync } from '../../commercial-sheet/sync.js';
@@ -25,7 +25,7 @@ import {
 } from '../../persistence/commercial-reports-repo.js';
 import type { ClassificationCounts } from '../../persistence/schema.js';
 import { loadTreatmentSummary } from '../../persistence/treatments-repo.js';
-import { toReservationTreatmentView } from '../views.js';
+import { toReservationTreatmentView, toSituationReturnView } from '../views.js';
 import {
   cancelLine,
   countAwaitingReturns,
@@ -114,6 +114,9 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
       if (result.reason === 'not_found')
         throw new ProblemError('not_found', 'Retorno não encontrado.');
       if (result.reason === 'not_confirmed') throw new ProblemError('return_not_confirmed');
+      if (result.reason === 'situation_return') {
+        throw new ProblemError('situation_return_needs_decision');
+      }
       throw new ProblemError(
         'return_not_awaiting_validation',
         'O retorno não está mais aguardando validação (já foi decidido, substituído ou encerrado).',
@@ -229,7 +232,16 @@ export function createCommercialHandlers(dependencies: CommercialHandlerDependen
       const at = now();
       return {
         line: detail.line ? toCommercialLineView(detail.line, at) : null,
-        returns: detail.returns.map((row) => toCommercialReturnView(row, reservation.totalAmount)),
+        // Retornos de situação livre (specs/009, R-03) só em situationReturns.
+        returns: detail.returns.flatMap((row) => {
+          const view = toCommercialReturnView(row, reservation.totalAmount);
+          return view === null ? [] : [view];
+        }),
+        situationReturns: detail.returns.flatMap((row) =>
+          isSituationReturn(row.chargeSituationKind) && row.state !== 'superseded'
+            ? [toSituationReturnView({ ...row, state: row.state })]
+            : [],
+        ),
         events: detail.events.filter(isEventType1_8_0).map(toCommercialEventView),
         history: detail.events.map(toCommercialHistoryEventView),
         report: toCommercialReportView(detail.report),

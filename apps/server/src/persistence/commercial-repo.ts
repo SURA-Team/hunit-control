@@ -87,11 +87,17 @@ function inReservations(
 export interface CurrentReturnSummary {
   id: string;
   state: Exclude<CommercialReturnState, 'superseded'>;
-  authorizationCode: string;
-  chargeHotel: string;
-  chargedAmount: string;
+  /** Nulos só no retorno de situação livre (`chargeSituationKind = 'other'`, specs/009). */
+  authorizationCode: string | null;
+  chargeHotel: string | null;
+  chargedAmount: string | null;
   chargedBy: string;
   readAt: Date;
+  /** Decisão do Financeiro: quando e quem (nome do cliente da API). */
+  decidedAt: Date | null;
+  decidedBy: string | null;
+  /** Marcação criada ao confirmar a situação livre como cancelada sem cobrança (specs/009). */
+  noChargeMarkId: string | null;
   /** Motivo da recusa, quando recusado (vai para a coluna "Validação do Financeiro"). */
   rejectionReason: string | null;
   /** Situação e data da cobrança informadas pelo Comercial (specs/008); nulas = não informadas. */
@@ -237,6 +243,7 @@ export async function loadCommercialSummaries(
     if (summary) summary.report = report;
   }
 
+  const returnDecidedBy = alias(apiClients, 'return_decided_by');
   const returns = await executor
     .select({
       id: commercialReturns.id,
@@ -252,8 +259,12 @@ export async function loadCommercialSummaries(
       chargeSituationText: commercialReturns.chargeSituationText,
       chargeSituationKind: commercialReturns.chargeSituationKind,
       chargeDate: commercialReturns.chargeDate,
+      decidedAt: commercialReturns.decidedAt,
+      decidedBy: returnDecidedBy.name,
+      noChargeMarkId: commercialReturns.noChargeMarkId,
     })
     .from(commercialReturns)
+    .leftJoin(returnDecidedBy, eq(returnDecidedBy.id, commercialReturns.decidedByClientId))
     .where(and(inReservations(commercialReturns, keys), ne(commercialReturns.state, 'superseded')))
     .orderBy(desc(commercialReturns.readAt), desc(commercialReturns.id));
   for (const row of returns) {
@@ -271,6 +282,9 @@ export async function loadCommercialSummaries(
       chargeSituationText: row.chargeSituationText,
       chargeSituationKind: row.chargeSituationKind,
       chargeDate: row.chargeDate,
+      decidedAt: row.decidedAt,
+      decidedBy: row.decidedBy,
+      noChargeMarkId: row.noChargeMarkId,
     };
   }
   return summaries;

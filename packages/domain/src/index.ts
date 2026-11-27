@@ -85,6 +85,7 @@ export {
   MAX_RETURN_TEXT_LENGTH,
   RETURN_PROBLEM_PREFIXES,
   describeReturnReading,
+  isSituationReturn,
   parseChargeDate,
   parseChargedAmount,
   readReturn,
@@ -106,6 +107,7 @@ export {
   type ReturnProblem,
   type ReturnSnapshot,
   type SheetCellValue,
+  type SituationReturnValues,
 } from './commercial-return.js';
 export {
   DISPATCH_INELIGIBILITY_REASONS,
