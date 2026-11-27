@@ -45,6 +45,10 @@ sem cobrança" em si e as colunas A a P da planilha.
 - Q: Quanto tempo depois de o Comercial preencher o retorno a linha deve sair de "A cobrar" e ir para a aba nova? (S7) → A: Quando o retorno fica 10 minutos sem mudança; a mudança acontece na leitura seguinte (no total, até cerca de 20 minutos). Se o Financeiro decidir antes, a linha vai direto para o destino da decisão.
 - Q: Para "Cobrada no Hunit" e "Cancelada", o que passa a ser obrigatório para o retorno ir adiante? (S2 e S3) → A: As duas exigem só a situação e o responsável; a data fica opcional. Muda a regra da homologação da 008 ("Cobrada no Hunit" exigia a data; "Cancelada" bastava sozinha).
 
+### Session 2026-11-27 (plano)
+
+- Q: Na atualização, uma "Cancelada" sem responsável que já aguardava validação sai de "Retornos a validar"? (research R-07) → A: Não. Vale a regra da 005: uma leitura com problema não desfaz o que já aguardava validação. A "Cancelada" continua em "Retornos a validar", a coluna "Validação do Financeiro" pede o responsável e o Financeiro ainda pode decidir.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Registrar a situação real e o Financeiro validar (Priority: P1)
@@ -112,7 +116,7 @@ aba cada linha fica; recusar uma e confirmar outra no app e conferir para onde v
 - **Situação livre numa reserva que já não exige cobrança** (cobrada no Hunit, faturada, com comprovante): segue a regra de hoje dos retornos de reservas que deixaram de exigir cobrança; as ações de validação que não fizerem sentido são recusadas com explicação.
 - **Retorno recusado e o Comercial não muda a linha**: continua recusado, em "A cobrar", com o motivo. Se ele mudar a situação, o responsável ou outro campo, a leitura nova segue a regra da situação nova.
 - **Comercial edita a linha direto na aba nova** (por alguém com permissão de dono do arquivo, por exemplo): o app restaura o que estava, como faz hoje com as células do sistema.
-- **Linhas já abertas na atualização**: na primeira leitura depois da atualização, valem as regras novas: uma situação livre que estava em "Retornos com problema" por falta dos dados da maquininha passa a "Retornos a validar"; uma "Cancelada" sem responsável que aguardava validação passa a "Retornos com problema", pedindo o responsável. As linhas que aguardam validação mudam para a aba nova. A implantação avisa o Comercial antes.
+- **Linhas já abertas na atualização**: na primeira leitura depois da atualização, valem as regras novas: uma situação livre que estava em "Retornos com problema" por falta dos dados da maquininha passa a "Retornos a validar"; uma "Cancelada" sem responsável que aguardava validação continua em "Retornos a validar" (uma leitura com problema não desfaz o que já aguardava, regra da 005), e a coluna "Validação do Financeiro" pede o responsável ao Comercial; o Financeiro ainda pode decidir. As linhas que aguardam validação mudam para a aba nova. A implantação avisa o Comercial antes.
 - **Confirmação em lote**: as situações livres não entram no lote, porque cada uma exige uma decisão (FR-007). O lote continua aceitando os retornos da maquininha e as "Cancelada", como hoje.
 
 ## Requirements *(mandatory)*
