@@ -31,8 +31,8 @@
 
 ## Notes
 
-- Rascunho para a PM: em vez de marcadores [NEEDS CLARIFICATION], os pontos abertos estão resolvidos
-  com sugestões do desenvolvimento (S1 a S7, seção "Pontos para a PM"), aplicadas no texto. A spec só
-  segue para `/speckit-clarify` ou `/speckit-plan` depois que a PM aceitar ou trocar cada sugestão.
+- Rascunho para a PM: em vez de marcadores [NEEDS CLARIFICATION], os pontos abertos foram resolvidos
+  com sugestões do desenvolvimento (S1 a S7, seção "Pontos para a PM"), todas decididas com o usuário
+  no `/speckit-clarify` de 27/11.
 - As telas que mudam precisam do desenho da UX no Figma (regra do projeto desde 18/11/2026); está nas
   premissas.

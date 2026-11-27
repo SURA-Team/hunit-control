@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-27
 
-**Status**: Draft — rascunho para a PM (as decisões marcadas como "sugestão" esperam a PM; ver "Pontos para a PM")
+**Status**: Draft — sugestões S1 a S7 decididas em 27/11 (Clarifications); falta a revisão da PM e o desenho da UX
 
 **Input**: User description: "Ajustes na planilha do Comercial (itens 15 e 16 do doc da PM): (1) nova aba 'Aguardando validação do Financeiro', com as mesmas colunas e formatação de 'A cobrar'; toda reserva cujo retorno vai para validação do Financeiro sai de 'A cobrar' e passa para a aba nova, para diminuir a fila do Comercial; (2) situação da cobrança livre: o Comercial escreve a situação real; com situação e responsável preenchidos o retorno vai para a validação do Financeiro, que age de acordo com o que foi escrito; só 'Cobrada na maquininha' exige também código de autorização, hotel da cobrança, valor cobrado e data ('Retorno incompleto: faltam ...'); outra situação sem responsável → 'Retorno incompleto: falta o responsável pela cobrança'. Rascunho para a PM, com as sugestões do agente nos pontos abertos."
 
@@ -35,6 +35,16 @@ Ficam **fora do escopo**: cobrar ou alterar qualquer coisa no Hunit (o app conti
 mudar o envio ao Comercial, a fila "Cobradas no Hunit" (além do que o FR-004 diz), a marcação "Cancelada
 sem cobrança" em si e as colunas A a P da planilha.
 
+## Clarifications
+
+### Session 2026-11-27
+
+- Q: Quando o Comercial escreve uma situação livre e o Financeiro valida, o que ele pode fazer com a reserva? (S1) → A: Três decisões, uma reserva por vez: "Confirmar como cobrada" (vale como comprovante; valor do Comercial ou, se ele não informou, digitado pelo Financeiro, obrigatório), "Confirmar como cancelada sem cobrança" ou "Recusar" com motivo. As situações livres ficam fora da confirmação em lote.
+- Q: "Cobrada no Hunit" passa pela validação do Financeiro ou vai direto para a conferência no Hunit, e a linha vai para a aba nova enquanto espera? (S4) → A: Vai direto para a conferência no Hunit, como hoje (sem validação do Financeiro), e a linha fica na aba "Aguardando validação do Financeiro" enquanto espera.
+- Q: Depois que a linha vai para a aba "Aguardando validação do Financeiro", o Comercial ainda pode mudar o retorno nela? (S6) → A: Não: a aba fica protegida inteira, só para consulta, como "Concluídas"; para corrigir, o Comercial pede ao Financeiro que recuse o retorno, e a linha volta para "A cobrar".
+- Q: Quanto tempo depois de o Comercial preencher o retorno a linha deve sair de "A cobrar" e ir para a aba nova? (S7) → A: Quando o retorno fica 10 minutos sem mudança; a mudança acontece na leitura seguinte (no total, até cerca de 20 minutos). Se o Financeiro decidir antes, a linha vai direto para o destino da decisão.
+- Q: Para "Cobrada no Hunit" e "Cancelada", o que passa a ser obrigatório para o retorno ir adiante? (S2 e S3) → A: As duas exigem só a situação e o responsável; a data fica opcional. Muda a regra da homologação da 008 ("Cobrada no Hunit" exigia a data; "Cancelada" bastava sozinha).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Registrar a situação real e o Financeiro validar (Priority: P1)
@@ -61,7 +71,7 @@ cada uma das três decisões e conferir o resultado na reserva e na planilha.
 5. **Given** uma situação livre em "Retornos a validar", **When** o Financeiro escolhe "Confirmar como cobrada", **Then** a reserva fica cobrada (vale como comprovante), com o valor que o Comercial informou ou, se ele não informou, o valor que o Financeiro digita na confirmação; a planilha mostra "Confirmado pelo Financeiro" e a linha vai para "Concluídas".
 6. **Given** uma situação livre em "Retornos a validar", **When** o Financeiro escolhe "Confirmar como cancelada sem cobrança", **Then** a reserva é marcada como "Cancelada sem cobrança" (como a "Cancelada" da 008: R$ 0,00, "Concluídas", com "Desfazer").
 7. **Given** uma situação livre em "Retornos a validar", **When** o Financeiro escolhe "Recusar" e escreve o motivo, **Then** a planilha mostra "Recusado pelo Financeiro: <motivo>" e a reserva sai de "Retornos a validar" até o Comercial mudar a linha.
-8. **Given** um retorno "Cancelada" sem o responsável, **When** o app lê os retornos, **Then** ele vai para "Retornos com problema" com "Retorno incompleto: falta o responsável pela cobrança" (sugestão S3).
+8. **Given** um retorno "Cancelada" sem o responsável, **When** o app lê os retornos, **Then** ele vai para "Retornos com problema" com "Retorno incompleto: falta o responsável pela cobrança".
 9. **Given** um retorno sem situação, **When** o app lê os retornos, **Then** ele vai para "Retornos com problema" dizendo que falta a situação (e o responsável, se também faltar).
 10. **Given** o perfil consulta, **When** abre "Retornos a validar", **Then** vê as situações livres, mas não tem as ações de validação.
 
@@ -84,11 +94,11 @@ aba cada linha fica; recusar uma e confirmar outra no app e conferir para onde v
 
 1. **Given** a planilha preparada para esta feature, **When** o Comercial a abre, **Then** há três abas: "A cobrar", "Aguardando validação do Financeiro" e "Concluídas", e a aba nova tem as mesmas colunas, cabeçalhos, larguras, cores e formatos de "A cobrar".
 2. **Given** um retorno que foi para a validação do Financeiro, **When** o retorno fica alguns minutos sem mudança (FR-010), **Then** a linha sai de "A cobrar" e aparece na aba nova, com os mesmos valores.
-3. **Given** um retorno "Cobrada no Hunit" com o responsável, **When** ele espera a conferência no Hunit, **Then** a linha também fica na aba nova, com "Aguardando verificação no Hunit" (sugestão S4).
-4. **Given** uma linha na aba nova, **When** o Financeiro recusa o retorno (ou a conferência no Hunit não encontra a cobrança), **Then** a linha volta para o fim de "A cobrar", com o motivo na coluna "Validação do Financeiro", para o Comercial corrigir (sugestão S5).
+3. **Given** um retorno "Cobrada no Hunit" com o responsável, **When** ele espera a conferência no Hunit, **Then** a linha também fica na aba nova, com "Aguardando verificação no Hunit"; ela não passa pela validação do Financeiro.
+4. **Given** uma linha na aba nova, **When** o Financeiro recusa o retorno (ou a conferência no Hunit não encontra a cobrança), **Then** a linha volta para o fim de "A cobrar", com o motivo na coluna "Validação do Financeiro", para o Comercial corrigir.
 5. **Given** uma linha na aba nova, **When** o Financeiro confirma (ou a conferência no Hunit confirma a cobrança), **Then** a linha vai para "Concluídas", como hoje.
 6. **Given** uma linha com retorno incompleto ou não entendido, ou ainda sem retorno, **When** o app lê os retornos, **Then** ela continua em "A cobrar".
-7. **Given** a aba nova, **When** o Comercial tenta editar uma célula, **Then** a planilha não deixa: a aba fica só para consulta, como "Concluídas" (sugestão S6). Para mudar um retorno, o Comercial pede ao Financeiro que o recuse.
+7. **Given** a aba nova, **When** o Comercial tenta editar uma célula, **Then** a planilha não deixa: a aba fica só para consulta, como "Concluídas". Para mudar um retorno, o Comercial pede ao Financeiro que o recuse.
 
 ---
 
@@ -114,19 +124,20 @@ aba cada linha fica; recusar uma e confirmar outra no app e conferir para onde v
 - **FR-001**: O Comercial MUST poder escrever na "Situação da cobrança" a situação real, com as próprias palavras, até 100 caracteres. As três situações sugeridas continuam na lista da coluna.
 - **FR-002**: O que cada situação exige para ir à validação:
   - **"Cobrada na maquininha"** (o texto contém "maquininha"): responsável, código de autorização, hotel da cobrança, valor cobrado e data da cobrança, como hoje.
-  - **"Cobrada no Hunit"**: responsável (sugestão S2: a data deixa de ser obrigatória).
-  - **"Cancelada"** (o texto começa com "Cancelada"): responsável (sugestão S3: hoje basta a situação).
+  - **"Cobrada no Hunit"**: responsável; a data fica opcional (era obrigatória desde a 008).
+  - **"Cancelada"** (o texto começa com "Cancelada"): responsável (na 008 bastava a situação).
   - **Qualquer outra situação**: responsável. Código, hotel, valor e data são opcionais.
 - **FR-003**: Retorno que não tem o que a situação exige MUST ir para "Retornos com problema" e mostrar na coluna "Validação do Financeiro" só o que falta, na ordem das colunas: por exemplo, "Retorno incompleto: falta o responsável pela cobrança" numa situação livre e "Retorno incompleto: faltam o código de autorização, o hotel da cobrança, o valor cobrado e a data da cobrança" na maquininha. Sem situação, a mensagem MUST pedir a situação (e o responsável, se também faltar).
 - **FR-004**: Com o que a situação exige, o retorno MUST ir para:
   - "Retornos a validar": maquininha, "Cancelada" e situação livre;
-  - a fila "Cobradas no Hunit": "Cobrada no Hunit", como hoje (sugestão S4).
+  - a fila "Cobradas no Hunit": "Cobrada no Hunit", como hoje, direto para a conferência no Hunit, sem
+    validação do Financeiro.
 - **FR-005**: Valor e data preenchidos numa situação livre MUST seguir as regras de leitura de hoje (valor em reais maior que zero e data válida). O que não for entendido leva o retorno a "Retornos com problema" ("Retorno não entendido: …").
 
 **Validação da situação livre pelo Financeiro (história 1)**
 
-- **FR-006**: A situação livre MUST aparecer em "Retornos a validar" (lista, gaveta da reserva) com um selo próprio (sugestão S1: "Outra situação", na cor de atenção) e com a situação como o Comercial escreveu, o responsável e, se preenchidos, o código, o hotel, o valor e a data.
-- **FR-007**: Para uma situação livre, o Financeiro MUST escolher uma de três decisões (sugestão S1), uma reserva por vez:
+- **FR-006**: A situação livre MUST aparecer em "Retornos a validar" (lista, gaveta da reserva) com um selo próprio ("Outra situação", na cor de atenção; o desenho final é da UX) e com a situação como o Comercial escreveu, o responsável e, se preenchidos, o código, o hotel, o valor e a data.
+- **FR-007**: Para uma situação livre, o Financeiro MUST escolher uma de três decisões, uma reserva por vez (fora da confirmação em lote):
   - **Confirmar como cobrada**: vale como comprovante, como a confirmação de um retorno da maquininha. O valor cobrado é o do Comercial ou, se ele não informou, o que o Financeiro digita (obrigatório). A origem do valor fica registrada.
   - **Confirmar como cancelada sem cobrança**: marca a reserva como "Cancelada sem cobrança", com as mesmas regras e recusas da "Cancelada" da 008.
   - **Recusar**: pede o motivo, que o Comercial vê na coluna "Validação do Financeiro" ("Recusado pelo Financeiro: <motivo>").
@@ -135,13 +146,14 @@ aba cada linha fica; recusar uma e confirmar outra no app e conferir para onde v
 
 **Aba "Aguardando validação do Financeiro" (história 2)**
 
-- **FR-010**: A planilha MUST ter a aba "Aguardando validação do Financeiro", entre "A cobrar" e "Concluídas", com as mesmas colunas, cabeçalhos, larguras, cores, formatos e regras de cor da coluna "Validação do Financeiro" de "A cobrar". Uma linha MUST passar de "A cobrar" para a aba nova quando o retorno dela foi para "Retornos a validar" ou para a fila "Cobradas no Hunit" e está sem mudança há pelo menos 10 minutos.
+- **FR-010**: A planilha MUST ter a aba "Aguardando validação do Financeiro", entre "A cobrar" e "Concluídas", com as mesmas colunas, cabeçalhos, larguras, cores, formatos e regras de cor da coluna "Validação do Financeiro" de "A cobrar". Uma linha MUST passar de "A cobrar" para a aba nova quando o retorno dela foi para "Retornos a validar" ou para a fila "Cobradas no Hunit" e está sem mudança há pelo menos 10 minutos (a mudança acontece na leitura seguinte). Se o Financeiro
+  decidir antes disso, a linha vai direto de "A cobrar" para o destino da decisão.
 - **FR-011**: Uma linha da aba nova MUST:
   - ir para "Concluídas" quando o Financeiro confirma (ou a conferência no Hunit confirma a cobrança), como hoje;
-  - voltar para o fim de "A cobrar" quando o retorno é recusado (pelo Financeiro ou porque a conferência no Hunit não encontrou a cobrança), com o motivo (sugestão S5);
+  - voltar para o fim de "A cobrar" quando o retorno é recusado (pelo Financeiro ou porque a conferência no Hunit não encontrou a cobrança), com o motivo;
   - quando uma confirmação é desfeita, a linha sai de "Concluídas" e volta para a aba nova, porque o
     retorno volta a esperar validação (FR-008).
-- **FR-012**: A aba nova MUST ficar protegida inteira, como "Concluídas": o Comercial só consulta (sugestão S6). Célula alterada nela MUST ser restaurada pelo app, como as células do sistema hoje.
+- **FR-012**: A aba nova MUST ficar protegida inteira, como "Concluídas": o Comercial só consulta. Célula alterada nela MUST ser restaurada pelo app, como as células do sistema hoje.
 - **FR-013**: Linhas sem retorno, com retorno incompleto, com retorno não entendido ou recusadas MUST ficar em "A cobrar".
 - **FR-014**: A planilha em uso MUST ganhar a aba nova quando o comando de preparação da planilha rodar de novo, sem perder nem duplicar linhas; na primeira leitura depois disso, as linhas que já aguardavam validação MUST passar para a aba nova. Enquanto a aba nova não existir, a planilha MUST ser apontada como fora do formato esperado, como hoje acontece com colunas faltando.
 
@@ -181,15 +193,16 @@ aba cada linha fica; recusar uma e confirmar outra no app e conferir para onde v
 
 ## Pontos para a PM
 
-O usuário pediu este rascunho com as sugestões do desenvolvimento nos pontos que ele não definiu. Cada
-sugestão está aplicada no texto acima e pode ser trocada sem mudar o resto da spec.
+O rascunho saiu com sugestões do desenvolvimento nos pontos que o pedido não definia; todas foram
+decididas com o usuário em 27/11 (Clarifications). Se a PM trocar alguma, a troca vale sem mudar o resto
+da spec.
 
 | # | Ponto | Sugestão | Onde |
 |---|---|---|---|
-| S1 | O que o Financeiro faz com uma situação livre | Três decisões, uma reserva por vez: "Confirmar como cobrada" (com o valor do Comercial ou digitado), "Confirmar como cancelada sem cobrança" e "Recusar" com motivo; selo "Outra situação" | FR-006, FR-007 |
-| S2 | "Cobrada no Hunit" exige a data? | Não: basta o responsável, como as outras situações; quem confirma a cobrança é a leitura do Hunit | FR-002 |
-| S3 | "Cancelada" passa a exigir o responsável? | Sim, como todas as situações (hoje basta a situação) | FR-002, história 1 cenário 8 |
-| S4 | "Cobrada no Hunit" passa pelo Financeiro? E vai para a aba nova? | Continua indo direto para a conferência no Hunit (sem validação do Financeiro) e fica na aba nova enquanto espera, porque não depende mais do Comercial | FR-004, FR-010, história 2 cenário 3 |
-| S5 | Recusa volta para "A cobrar"? | Sim, no fim da aba, com o motivo, para o Comercial corrigir | FR-011, história 2 cenário 4 |
-| S6 | O Comercial edita na aba nova? | Não: a aba fica só para consulta; para mudar, ele pede a recusa ao Financeiro | FR-012, história 2 cenário 7 |
-| S7 | Quando a linha muda de aba | Depois de 10 minutos sem mudança no retorno, para não sumir enquanto o Comercial preenche | FR-010 |
+| S1 | O que o Financeiro faz com uma situação livre | **Decidido em 27/11 (Clarifications)**: três decisões, uma reserva por vez: "Confirmar como cobrada" (com o valor do Comercial ou digitado), "Confirmar como cancelada sem cobrança" e "Recusar" com motivo; selo "Outra situação" | FR-006, FR-007 |
+| S2 | "Cobrada no Hunit" exige a data? | **Decidido em 27/11 (Clarifications)**: não, basta o responsável, como as outras situações; quem confirma a cobrança é a leitura do Hunit | FR-002 |
+| S3 | "Cancelada" passa a exigir o responsável? | **Decidido em 27/11 (Clarifications)**: sim, como todas as situações (hoje basta a situação) | FR-002, história 1 cenário 8 |
+| S4 | "Cobrada no Hunit" passa pelo Financeiro? E vai para a aba nova? | **Decidido em 27/11 (Clarifications)**: continua indo direto para a conferência no Hunit (sem validação do Financeiro) e fica na aba nova enquanto espera, porque não depende mais do Comercial | FR-004, FR-010, história 2 cenário 3 |
+| S5 | Recusa volta para "A cobrar"? | **Decidido em 27/11 (Clarifications, junto da S6)**: sim, no fim da aba, com o motivo, para o Comercial corrigir | FR-011, história 2 cenário 4 |
+| S6 | O Comercial edita na aba nova? | **Decidido em 27/11 (Clarifications)**: não, a aba fica só para consulta; para mudar, ele pede a recusa ao Financeiro | FR-012, história 2 cenário 7 |
+| S7 | Quando a linha muda de aba | **Decidido em 27/11 (Clarifications)**: depois de 10 minutos sem mudança no retorno, para não sumir enquanto o Comercial preenche | FR-010 |
